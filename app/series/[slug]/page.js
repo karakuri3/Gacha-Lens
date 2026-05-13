@@ -1,0 +1,250 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getRelatedSeries, getSeriesBySlug } from "@/lib/series";
+import SeriesCard from "@/components/SeriesCard";
+
+export async function generateMetadata({ params }) {
+  const resolvedParams = await params;
+  const item = await getSeriesBySlug(resolvedParams.slug);
+  return {
+    title: item ? `${item.name} | Gacha Lens` : "単品詳細 | Gacha Lens",
+    description: item?.summary ?? "ガチャ単品の詳細です。",
+  };
+}
+
+export default async function VariantDetailPage({ params }) {
+  const resolvedParams = await params;
+  const item = await getSeriesBySlug(resolvedParams.slug);
+  if (!item) notFound();
+
+  const isReleased = Boolean(item.is_released);
+  const related = (await getRelatedSeries(item.slug, 8))
+    .filter((entry) => Boolean(entry.is_released) === isReleased)
+    .slice(0, 3);
+
+  return (
+    <main className="site-main">
+      <div className="site-shell">
+        <div className="tag-row" style={{ marginBottom: 18 }}>
+          <Link href="/series" className="pill-link">単品一覧</Link>
+          <Link href={isReleased ? "/ranking?tab=released" : "/ranking?tab=upcoming"} className="pill-link">
+            {isReleased ? "発売中ランキング" : "発売予定ランキング"}
+          </Link>
+        </div>
+
+        <section className="detail-hero">
+          <div className="detail-image">
+            <img src={item.image_url} alt={item.name} />
+          </div>
+          <div className="card detail-panel">
+            <div className="tag-row">
+              <span className="tag">{isReleased ? "発売中" : "発売予定"}</span>
+              <span className="tag">{item.rarity}</span>
+              <span className="tag">{item.schedule_month} {item.schedule_week === "未定" ? "未定" : `${item.schedule_week}より順次`}</span>
+            </div>
+            <h1 className="page-title" style={{ marginTop: 18, fontSize: "clamp(30px, 4vw, 48px)" }}>{item.name}</h1>
+            <p className="page-lead" style={{ marginTop: 12 }}>{item.series_name}</p>
+
+            <div className="metric-grid" style={{ marginTop: 22 }}>
+              {isReleased ? (
+                <>
+                  <Metric label="単品相場" value={formatYen(item.market_summary?.single)} tone="highlight" />
+                  <Metric label="利益目安" value={formatDiff(item.profit_estimate)} tone={getDiffTone(item.profit_estimate)} />
+                  <Metric label="レア単品" value={formatYen(item.market_summary?.rare_single)} />
+                  <Metric label="シークレット" value={formatYen(item.market_summary?.secret_single)} />
+                  <Metric label="コンプセット" value={formatYen(item.market_summary?.complete_set)} />
+                  <Metric label="人気セット" value={formatYen(item.market_summary?.popular_set)} />
+                </>
+              ) : (
+                <>
+                  <Metric label="予想スコア" value={formatScore(item.forecast_score)} tone="highlight" />
+                  <Metric label="コンプ需要" value={formatScore(item.complete_set_score)} />
+                  <Metric label="当たり枠需要" value={formatScore(item.ace_character_score)} />
+                  <Metric label="互換性" value={formatScore(item.compatibility_score)} />
+                  <Metric label="限定性" value={formatScore(item.limitedness_score)} />
+                  <Metric label="予約気配" value={formatScore(item.preorder_signal_score)} />
+                  <Metric label="X反応" value={formatScore(item.x_signal_score)} />
+                </>
+              )}
+            </div>
+
+            <div className="tag-row" style={{ marginTop: 18 }}>
+              {(item.forecast_tags ?? []).map((tag) => (
+                <span key={tag} className="tag">{tag}</span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="detail-sections">
+          <div className="card panel">
+            <h2>{isReleased ? "出品分類" : "予想の根拠"}</h2>
+            {isReleased ? (
+              <ul className="plain-list">
+                {(item.listing_groups ?? []).map((group) => (
+                  <li key={group.type}>
+                    <strong>{group.label}</strong>
+                    <br />
+                    {formatYen(group.value)}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="metric-grid">
+                <Metric label="コンプ需要" value={formatScore(item.forecast_breakdown.complete)} />
+                <Metric label="当たり枠需要" value={formatScore(item.forecast_breakdown.ace)} />
+                <Metric label="互換性" value={formatScore(item.forecast_breakdown.compatibility)} />
+                <Metric label="限定性" value={formatScore(item.forecast_breakdown.limited)} />
+                <Metric label="予約転売気配" value={formatScore(item.forecast_breakdown.preorder)} />
+                <Metric label="X反応強度" value={formatScore(item.forecast_breakdown.x)} />
+              </div>
+            )}
+          </div>
+
+          <div className="card panel">
+            <h2>親シリーズ内の個別種</h2>
+            <ul className="plain-list">
+              {(item.sibling_variants ?? []).map((entry) => (
+                <li key={entry.id}>
+                  <strong>{entry.name}</strong>
+                  <br />
+                  <span style={{ color: "var(--muted)" }}>{entry.rarity} / {entry.role}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {isReleased ? (
+          <section className="detail-sections">
+            <div className="card panel">
+              <h2>市場データ</h2>
+              <ul className="plain-list">
+                {(item.market_listings ?? []).map((listing) => (
+                  <li key={listing.id}>
+                    <strong>{listingTypeLabel(listing.listing_type)}</strong> {formatYen(listing.price)}
+                    <br />
+                    <span style={{ color: "var(--muted)" }}>{listing.source} / {listing.status} / 信頼度 {Math.round(listing.confidence * 100)}%</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <StockPanel item={item} />
+          </section>
+        ) : (
+          <section className="detail-sections">
+            <div className="card panel">
+              <h2>発売前シグナル</h2>
+              <ul className="plain-list">
+                {(item.market_listings ?? []).map((listing) => (
+                  <li key={listing.id}>
+                    <strong>{listingTypeLabel(listing.listing_type)}</strong>
+                    <br />
+                    予約/予告出品シグナルとして使用
+                  </li>
+                ))}
+                {(item.market_listings ?? []).length === 0 ? <li>予約転売シグナルはまだ弱めです。</li> : null}
+              </ul>
+            </div>
+            <StockPanel item={item} />
+          </section>
+        )}
+
+        <section style={{ marginTop: 28 }}>
+          <div className="section-head">
+            <div>
+              <h2 className="section-title">関連単品</h2>
+              <p className="section-sub">同じ状態の商品だけを比較します。</p>
+            </div>
+          </div>
+          <div className="grid grid--cards">
+            {related.map((entry) => (
+              <SeriesCard key={entry.slug} series={entry} />
+            ))}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function StockPanel({ item }) {
+  const reports = item.stock_reports ?? [];
+  const events = item.restock_events ?? [];
+  return (
+    <div className="card panel">
+      <h2>再入荷・在庫</h2>
+      <ul className="plain-list">
+        {events.map((event) => (
+          <li key={event.id}>
+            <strong>{event.event_type}</strong>
+            <br />
+            {event.region} / {event.shop_name} / {sourceLabel(event.source_type)}
+          </li>
+        ))}
+        {reports.map((report) => (
+          <li key={report.id}>
+            <strong>{report.status}</strong>
+            <br />
+            {report.region} / {report.shop_name} / {sourceLabel(report.source_type)}
+          </li>
+        ))}
+        {events.length + reports.length === 0 ? <li>接続用の枠だけ用意済みです。</li> : null}
+      </ul>
+    </div>
+  );
+}
+
+function Metric({ label, value, tone = "" }) {
+  return (
+    <div className="metric">
+      <div className="metric__label">{label}</div>
+      <div className={`metric__value ${tone ? `is-${tone}` : ""}`}>{value}</div>
+    </div>
+  );
+}
+
+function listingTypeLabel(type) {
+  const labels = {
+    single: "単品",
+    rare_single: "レア単品",
+    secret_single: "シークレット",
+    complete_set: "コンプセット",
+    partial_set: "一部セット",
+    popular_set: "人気キャラセット",
+    sealed_bulk: "未開封まとめ",
+    loose_bulk: "バラまとめ",
+  };
+  return labels[type] ?? type;
+}
+
+function sourceLabel(type) {
+  const labels = {
+    official: "公式",
+    official_x: "公式X",
+    shop_x: "店舗X",
+    user_x: "一般報告",
+  };
+  return labels[type] ?? type;
+}
+
+function formatYen(value) {
+  return Number.isFinite(value) ? `${Math.round(value).toLocaleString("ja-JP")}円` : "未登録";
+}
+
+function formatDiff(value) {
+  if (!Number.isFinite(value)) return "未登録";
+  const rounded = Math.round(value);
+  return `${rounded > 0 ? "+" : ""}${rounded.toLocaleString("ja-JP")}円`;
+}
+
+function formatScore(value) {
+  return Number.isFinite(value) ? `${Math.round(value)}点` : "未登録";
+}
+
+function getDiffTone(value) {
+  if (!Number.isFinite(value)) return "";
+  if (value > 0) return "positive";
+  if (value < 0) return "negative";
+  return "";
+}
