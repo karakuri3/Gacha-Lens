@@ -1,5 +1,5 @@
 import { getDataModel } from "@/lib/series";
-import { buildImportIssueBreakdown, buildImportReviewCsv, buildImportReviewReport } from "@/lib/data/import-review";
+import { buildImportIssueBreakdown, buildImportReviewCsv, buildImportReviewReport, buildMarketListingBreakdown } from "@/lib/data/import-review";
 
 export function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -18,6 +18,7 @@ export function GET(request) {
   return Response.json({
     count: issues.length,
     breakdown: buildImportIssueBreakdown(issues),
+    marketListingBreakdown: buildMarketListingBreakdown(dataModel.marketListings ?? []),
     records: {
       series: dataModel.series?.length ?? 0,
       variants: dataModel.variants?.length ?? 0,
@@ -25,6 +26,8 @@ export function GET(request) {
       xReactions: dataModel.xReactions?.length ?? 0,
       restockEvents: dataModel.restockEvents?.length ?? 0,
       stockReports: dataModel.stockReports?.length ?? 0,
+      linkedMarketListings: (dataModel.marketListings ?? []).filter((listing) => listing.variant_id).length,
+      reviewRequiredMarketListings: (dataModel.marketListings ?? []).filter((listing) => listing.review_required).length,
     },
     sampleVariants: (dataModel.variants ?? []).slice(0, 5).map((variant) => ({
       id: variant.id,
@@ -37,6 +40,9 @@ export function GET(request) {
       releaseWeek: variant.schedule_week,
       officialUrl: variant.official_url,
       imageUrl: variant.image_url,
+      marketSummary: variant.market_summary,
+      marketPriceMedian: variant.market_price_median,
+      profitEstimate: variant.profit_estimate,
       reviewRequired: Boolean(variant.review_required),
     })),
     issues: buildImportReviewReport(issues),
