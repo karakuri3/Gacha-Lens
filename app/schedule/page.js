@@ -3,21 +3,21 @@ import { getSeriesList } from "@/lib/series";
 
 export const metadata = {
   title: "発売スケジュール | Gacha Lens",
-  description: "10月から3月までの発売予定単品を月別、週別に確認できます。",
+  description: "登録済みの発売予定データがある月だけを表示する単品主役の発売スケジュールです。",
 };
 
-const months = ["10月", "11月", "12月", "1月", "2月", "3月"];
 const weeks = ["第1週", "第2週", "第3週", "第4週", "第5週", "未定"];
 
 export default async function SchedulePage({ searchParams }) {
   const params = await searchParams;
-  const selectedMonth = months.includes(params?.month) ? params.month : "10月";
   const allSeries = await getSeriesList();
-  const items = allSeries
-    .filter((item) => !item.is_released)
+  const upcomingItems = allSeries.filter((item) => !item.is_released && item.schedule_month);
+  const months = buildMonthsFromItems(upcomingItems);
+  const selectedMonth = months.includes(params?.month) ? params.month : months[0];
+  const items = upcomingItems
     .filter((item) => item.schedule_month === selectedMonth)
     .sort((a, b) => {
-      const weekDiff = weeks.indexOf(a.schedule_week) - weeks.indexOf(b.schedule_week);
+      const weekDiff = weekIndex(a.schedule_week) - weekIndex(b.schedule_week);
       if (weekDiff !== 0) return weekDiff;
       return (b.forecast_score ?? 0) - (a.forecast_score ?? 0);
     });
@@ -26,7 +26,7 @@ export default async function SchedulePage({ searchParams }) {
     .map((week) => ({
       week,
       label: week === "未定" ? "未定" : `${week}より順次`,
-      items: items.filter((item) => item.schedule_week === week),
+      items: items.filter((item) => normalizeWeek(item.schedule_week) === week),
     }))
     .filter((group) => group.items.length > 0);
 
@@ -38,17 +38,19 @@ export default async function SchedulePage({ searchParams }) {
           <h1 className="page-title">発売予定の単品を週単位で追う</h1>
         </section>
 
-        <div className="tabs" aria-label="月切り替え">
-          {months.map((month) => (
-            <Link
-              key={month}
-              href={{ pathname: "/schedule", query: { month } }}
-              className={`pill-link ${month === selectedMonth ? "is-active" : ""}`}
-            >
-              {month}
-            </Link>
-          ))}
-        </div>
+        {months.length > 0 ? (
+          <div className="tabs" aria-label="月を切り替え">
+            {months.map((month) => (
+              <Link
+                key={month}
+                href={{ pathname: "/schedule", query: { month } }}
+                className={`pill-link ${month === selectedMonth ? "is-active" : ""}`}
+              >
+                {month}
+              </Link>
+            ))}
+          </div>
+        ) : null}
 
         {groups.length > 0 ? (
           <section className="month-board">
@@ -71,7 +73,7 @@ export default async function SchedulePage({ searchParams }) {
             ))}
           </section>
         ) : (
-          <div className="card empty">この月の発売予定はまだ登録されていません。</div>
+          <div className="card empty">発売予定データはまだ登録されていません。</div>
         )}
       </div>
     </main>
@@ -79,6 +81,7 @@ export default async function SchedulePage({ searchParams }) {
 }
 
 function ScheduleCard({ item }) {
+  const week = normalizeWeek(item.schedule_week);
   return (
     <Link href={`/series/${item.slug}`} className="card product-card">
       <div className="product-image">
@@ -87,7 +90,7 @@ function ScheduleCard({ item }) {
       <div>
         <div className="tag-row" style={{ marginBottom: 10 }}>
           <span className="tag">
-            {item.schedule_week === "未定" ? "未定" : `${item.schedule_week}より順次`}
+            {week === "未定" ? "未定" : `${week}より順次`}
           </span>
           <span className="tag">{item.rarity}</span>
         </div>
@@ -122,6 +125,46 @@ function Metric({ label, value, tone = "" }) {
       <div className={`metric__value ${tone ? `is-${tone}` : ""}`}>{value}</div>
     </div>
   );
+}
+
+function buildMonthsFromItems(items = []) {
+  const monthMap = new Map();
+
+  for (const item of items) {
+    const month = item.schedule_month;
+    if (!month) continue;
+    const current = monthMap.get(month);
+    const sortValue = getMonthSortValue(item);
+    monthMap.set(month, current == null ? sortValue : Math.min(current, sortValue));
+  }
+
+  return [...monthMap.entries()]
+    .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0], "ja"))
+    .map(([month]) => month);
+}
+
+function getMonthSortValue(item) {
+  const dateTime = Date.parse(item.release_date || item.releaseDate || "");
+  if (Number.isFinite(dateTime)) return dateTime;
+  const monthNumber = extractNumber(item.schedule_month);
+  return monthNumber || Number.MAX_SAFE_INTEGER;
+}
+
+function normalizeWeek(value = "") {
+  if (String(value).includes("未定")) return "未定";
+  const number = extractNumber(value);
+  return number ? `第${number}週` : "未定";
+}
+
+function weekIndex(value = "") {
+  const normalized = normalizeWeek(value);
+  const index = weeks.indexOf(normalized);
+  return index >= 0 ? index : weeks.length;
+}
+
+function extractNumber(value = "") {
+  const matched = String(value).match(/\d{1,2}/);
+  return matched ? Number(matched[0]) : null;
 }
 
 function formatYen(value) {

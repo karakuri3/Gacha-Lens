@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "db:upsert-official": "node scripts/upsert-official-data.mjs",
+    "db:upsert-market": "node scripts/upsert-market-data.mjs",
     "start": "next start",
     "lint": "eslint"
   },

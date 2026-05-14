@@ -4,7 +4,6 @@ const navItems = [
   { label: "ランキング", href: "/ranking" },
   { label: "スケジュール", href: "/schedule" },
   { label: "単品一覧", href: "/series" },
-  { label: "Review", href: "/review" },
 ];
 
 export default function Header() {

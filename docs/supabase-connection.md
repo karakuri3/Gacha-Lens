@@ -50,6 +50,16 @@ npm run db:upsert-official
 
 This upserts only `series` and `variants` from `lib/data/official-input.js`. Market, X, restock, and stock rows remain file-backed until their own ingestion phase.
 
+## First market-data upsert
+
+After `series` and `variants` exist, run:
+
+```bash
+npm run db:upsert-market
+```
+
+This classifies `lib/data/market-input.js` into `market_listings`, preserving `single`, `partial_set`, `full_set`, `rare_or_secret`, and `unknown`. Any `review_required` rows are also upserted into `import_issues` so `/review` can stay the human correction queue.
+
 ## Review flow
 
 - Human page: `/review`

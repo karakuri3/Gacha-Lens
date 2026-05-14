@@ -5,6 +5,10 @@ import { getDataModel } from "@/lib/series";
 export const metadata = {
   title: "Import Review | Gacha Lens",
   description: "Review queue for unknown and review_required import records.",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default async function ImportReviewPage() {
