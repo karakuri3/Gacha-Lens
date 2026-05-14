@@ -518,6 +518,131 @@ button.button-link {
   overflow: hidden;
 }
 
+.review-board {
+  display: grid;
+  gap: 18px;
+}
+
+.review-group {
+  padding: 18px;
+}
+
+.review-group__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.review-group__head h2 {
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.review-count {
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  padding: 7px 10px;
+}
+
+.review-list {
+  display: grid;
+  gap: 12px;
+}
+
+.review-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.review-item--high {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.review-item--medium {
+  border-color: #fed7aa;
+  background: #fffaf5;
+}
+
+.review-item__top {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.review-item h3 {
+  margin: 10px 0;
+  font-size: 16px;
+  line-height: 1.55;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.review-priority {
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: #ffffff;
+  background: #667085;
+}
+
+.review-priority--high {
+  background: var(--red);
+}
+
+.review-priority--medium {
+  background: #c2410c;
+}
+
+.review-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 10px;
+}
+
+.review-meta div {
+  min-width: 0;
+}
+
+.review-meta dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.review-meta dd {
+  margin: 3px 0 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.review-action {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.review-source {
+  display: inline-flex;
+  margin-top: 10px;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 850;
+}
+
 .review-table {
   display: grid;
 }
@@ -728,6 +853,15 @@ button.button-link {
   .review-row {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+
+  .review-group__head,
+  .review-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .review-group__head {
+    flex-direction: column;
   }
 
   .detail-panel {

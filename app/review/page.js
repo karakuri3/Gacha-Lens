@@ -26,6 +26,7 @@ export default async function ImportReviewPage() {
   const dataModel = await getDataModel();
   const issues = buildImportReviewReport(dataModel.importIssues ?? []);
   const unresolved = issues.filter((issue) => !issue.resolved);
+  const groupedIssues = groupIssues(unresolved.length ? unresolved : issues);
 
   return (
     <main className="site-main">
@@ -52,26 +53,48 @@ export default async function ImportReviewPage() {
           <ReviewMetric label="Stock / restock" value={issues.filter((issue) => issue.table === "stock_reports" || issue.table === "restock_events").length} />
         </section>
 
-        <section className="card review-panel">
-          <div className="review-table">
-            <div className="review-row review-row--head">
-              <span>Table</span>
-              <span>Type</span>
-              <span>Record</span>
-              <span>Raw</span>
-              <span>Action</span>
-            </div>
-            {issues.map((issue) => (
-              <div key={issue.id} className="review-row">
-                <span>{issue.table}</span>
-                <span>{issue.issueType}</span>
-                <span>{issue.recordId || issue.source || "-"}</span>
-                <span className="review-raw">{issue.rawTitle || "-"}</span>
-                <span>{issue.suggestedAction}</span>
+        <section className="review-board">
+          {groupedIssues.map(([group, groupIssues]) => (
+            <div key={group} className="card review-group">
+              <div className="review-group__head">
+                <div>
+                  <p className="eyebrow">{group}</p>
+                  <h2>{groupIssues.length} issues</h2>
+                </div>
+                <span className="review-count">{groupIssues.filter((issue) => issue.priority === "high").length} high</span>
               </div>
-            ))}
-            {issues.length === 0 ? <div className="empty">No review issues.</div> : null}
-          </div>
+
+              <div className="review-list">
+                {groupIssues.map((issue) => (
+                  <article key={issue.id} className={`review-item review-item--${issue.priority}`}>
+                    <div className="review-item__top">
+                      <span className={`review-priority review-priority--${issue.priority}`}>{issue.priority}</span>
+                      <span>{issue.issueType}</span>
+                      <span>{issue.table}</span>
+                    </div>
+                    <h3>{issue.rawTitle || issue.recordId || "No raw title"}</h3>
+                    <dl className="review-meta">
+                      <div>
+                        <dt>Record</dt>
+                        <dd>{issue.recordId || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt>Source</dt>
+                        <dd>{issue.source || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt>Variant</dt>
+                        <dd>{issue.rawVariantId || "-"}</dd>
+                      </div>
+                    </dl>
+                    <p className="review-action">{issue.suggestedAction}</p>
+                    {issue.sourceUrl ? <a className="review-source" href={issue.sourceUrl}>Source</a> : null}
+                  </article>
+                ))}
+              </div>
+            </div>
+          ))}
+          {issues.length === 0 ? <div className="card empty">No review issues.</div> : null}
         </section>
       </div>
     </main>
@@ -117,4 +140,25 @@ function ReviewMetric({ label, value }) {
       <div className="metric__value is-highlight">{value}</div>
     </div>
   );
+}
+
+function groupIssues(issues) {
+  const order = ["Official master", "Market", "X reactions", "Stock", "Other"];
+  const groups = issues.reduce((result, issue) => {
+    const group = issue.group || "Other";
+    if (!result.has(group)) result.set(group, []);
+    result.get(group).push(issue);
+    return result;
+  }, new Map());
+
+  return [...groups.entries()]
+    .sort(([left], [right]) => order.indexOf(left) - order.indexOf(right))
+    .map(([group, groupIssues]) => [
+      group,
+      groupIssues.sort((left, right) => priorityScore(left.priority) - priorityScore(right.priority)),
+    ]);
+}
+
+function priorityScore(priority) {
+  return { high: 0, medium: 1, low: 2 }[priority] ?? 3;
 }

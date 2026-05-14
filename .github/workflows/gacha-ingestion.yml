@@ -23,4 +23,19 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run db:upsert-all
+      - name: Run ingestion
+        run: npm run db:upsert-all 2>&1 | tee ingestion.log
+      - name: Write summary
+        if: always()
+        run: |
+          echo "## Gacha ingestion" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Status: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Review queue: /review" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Next check: import_issues high/medium items" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload ingestion log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingestion-log
+          path: ingestion.log

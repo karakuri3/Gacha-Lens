@@ -8,13 +8,40 @@ const steps = [
   { name: "stock", file: "./upsert-stock-data.mjs" },
 ];
 
-for (const step of steps) {
-  await runStep(step);
+const startedAt = new Date();
+const results = [];
+
+try {
+  for (const step of steps) {
+    results.push(await runStep(step));
+  }
+} catch (error) {
+  const failedAt = new Date();
+  console.error("");
+  console.error("[ingestion] failed");
+  console.error(JSON.stringify({
+    ok: false,
+    startedAt: startedAt.toISOString(),
+    failedAt: failedAt.toISOString(),
+    durationMs: failedAt - startedAt,
+    completedSteps: results,
+    failedStep: error.stepName || "unknown",
+    message: error.message,
+    nextAction: "Open GitHub Actions logs, fix the failed source or env, then rerun npm run db:upsert-all. Check /review after the rerun.",
+  }, null, 2));
+  process.exitCode = 1;
+  throw error;
 }
+
+const finishedAt = new Date();
 
 console.log(JSON.stringify({
   ok: true,
-  steps: steps.map((step) => step.name),
+  startedAt: startedAt.toISOString(),
+  finishedAt: finishedAt.toISOString(),
+  durationMs: finishedAt - startedAt,
+  steps: results,
+  nextAction: "Open /review and handle high or medium import issues first.",
 }, null, 2));
 
 function runStep(step) {
@@ -30,11 +57,18 @@ function runStep(step) {
 
     child.on("error", reject);
     child.on("close", (code) => {
+      const finishedAt = new Date();
       if (code === 0) {
-        resolve();
+        resolve({
+          name: step.name,
+          ok: true,
+          finishedAt: finishedAt.toISOString(),
+        });
         return;
       }
-      reject(new Error(`${step.name} exited with code ${code}`));
+      const error = new Error(`${step.name} exited with code ${code}`);
+      error.stepName = step.name;
+      reject(error);
     });
   });
 }
