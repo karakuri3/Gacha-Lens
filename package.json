@@ -2,6 +2,7 @@
   "name": "gacha-site-start",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,6 +11,7 @@
     "db:upsert-x": "node scripts/upsert-x-reactions.mjs",
     "db:upsert-stock": "node scripts/upsert-stock-data.mjs",
     "db:upsert-all": "node scripts/run-ingestion.mjs",
+    "db:check-schema": "node scripts/check-remote-schema.mjs",
     "start": "next start",
     "lint": "eslint"
   },

@@ -122,3 +122,13 @@ For GitHub Actions, use `.github/workflows/gacha-ingestion.yml` and set reposito
 - `SUPABASE_SERVICE_ROLE_KEY`
 
 The workflow is manually runnable and also runs daily. Keep `import_issues` review as a daily human step before trusting new unknown data in ranking decisions.
+
+## Remote schema check
+
+After applying `supabase/schema.sql` in the Supabase SQL editor, verify that the remote schema exposes the latest columns:
+
+```bash
+npm run db:check-schema
+```
+
+The check confirms `matched_variant_id` is readable on `market_listings`, `x_reactions`, `restock_events`, and `stock_reports`. Once this passes, the upsert scripts should no longer print schema-cache fallback warnings for `matched_variant_id`.
