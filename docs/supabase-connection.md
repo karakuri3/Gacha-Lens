@@ -16,9 +16,39 @@ The site remains variant-first. `series` is the parent product master, and every
 
 ## Repository swap point
 
-Current UI reads from `lib/series.js`. The production swap should replace the initial records source with `createSupabaseGachaDataSource` from `lib/data/supabase-gacha-repository.js`, then pass those records into `createGachaRepository`.
+Current UI reads from `lib/series.js`. Set `GACHA_DATA_SOURCE=supabase` to make it try `createSupabaseGachaDataSource` from `lib/data/supabase-gacha-repository.js` first. If Supabase is not configured, cannot be reached, or does not yet contain `series` and `variants`, the site falls back to the file-based official input.
 
 Keep ingestion adapters in `lib/data/ingestion-adapters.js` as the boundary for raw official, market, X, restock, and stock inputs.
+
+## Environment
+
+Required for UI reads:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-or-publishable-key
+GACHA_DATA_SOURCE=supabase
+```
+
+Required only for local/server upsert scripts:
+
+```bash
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+Never expose the service role key to the browser.
+
+## First official-data upsert
+
+1. Apply `supabase/schema.sql` in Supabase SQL editor.
+2. Put the env vars above in `.env.local`.
+3. Run:
+
+```bash
+npm run db:upsert-official
+```
+
+This upserts only `series` and `variants` from `lib/data/official-input.js`. Market, X, restock, and stock rows remain file-backed until their own ingestion phase.
 
 ## Review flow
 

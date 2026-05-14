@@ -1,10 +1,10 @@
 import { getDataModel } from "@/lib/series";
 import { buildImportIssueBreakdown, buildImportReviewCsv, buildImportReviewReport, buildMarketListingBreakdown, buildXIntentBreakdown } from "@/lib/data/import-review";
 
-export function GET(request) {
+export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const format = searchParams.get("format");
-  const dataModel = getDataModel();
+  const dataModel = await getDataModel();
   const issues = dataModel.importIssues ?? [];
 
   if (format === "csv") {

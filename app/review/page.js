@@ -7,8 +7,8 @@ export const metadata = {
   description: "Review queue for unknown and review_required import records.",
 };
 
-export default function ImportReviewPage() {
-  const dataModel = getDataModel();
+export default async function ImportReviewPage() {
+  const dataModel = await getDataModel();
   const issues = buildImportReviewReport(dataModel.importIssues ?? []);
   const unresolved = issues.filter((issue) => !issue.resolved);
 
