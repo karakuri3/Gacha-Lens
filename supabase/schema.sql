@@ -93,6 +93,7 @@ create table if not exists market_listings (
 create table if not exists x_reactions (
   id text primary key,
   variant_id text references variants(id) on delete set null,
+  matched_variant_id text references variants(id) on delete set null,
   series_id text references series(id) on delete set null,
   source_type text not null default 'user_x',
   author_type text not null default 'user',

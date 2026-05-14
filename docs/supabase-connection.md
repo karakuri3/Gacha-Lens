@@ -60,6 +60,16 @@ npm run db:upsert-market
 
 This classifies `lib/data/market-input.js` into `market_listings`, preserving `single`, `partial_set`, `full_set`, `rare_or_secret`, and `unknown`. Any `review_required` rows are also upserted into `import_issues` so `/review` can stay the human correction queue.
 
+## First X-reaction upsert
+
+After `series` and `variants` exist, run:
+
+```bash
+npm run db:upsert-x
+```
+
+This normalizes `lib/data/x-input.js` into `x_reactions`, keeps `source_type`, `intent_tags`, `confidence`, and `matched_variant_id`, and writes unresolved rows to `import_issues`. Forecast scoring already reads `x_reactions` from the repository, so DB-loaded X rows feed the upcoming score automatically.
+
 ## Review flow
 
 - Human page: `/review`
