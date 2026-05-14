@@ -1,0 +1,23 @@
+name: Gacha ingestion
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "10 18 * * *"
+
+jobs:
+  upsert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GACHA_DATA_SOURCE: supabase
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:upsert-all

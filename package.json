@@ -8,6 +8,8 @@
     "db:upsert-official": "node scripts/upsert-official-data.mjs",
     "db:upsert-market": "node scripts/upsert-market-data.mjs",
     "db:upsert-x": "node scripts/upsert-x-reactions.mjs",
+    "db:upsert-stock": "node scripts/upsert-stock-data.mjs",
+    "db:upsert-all": "node scripts/run-ingestion.mjs",
     "start": "next start",
     "lint": "eslint"
   },

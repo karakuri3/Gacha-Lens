@@ -69,6 +69,7 @@ create table if not exists variants (
 create table if not exists market_listings (
   id text primary key,
   variant_id text references variants(id) on delete set null,
+  matched_variant_id text references variants(id) on delete set null,
   series_id text references series(id) on delete set null,
   title text not null,
   listing_type text not null default 'unknown',
@@ -115,6 +116,7 @@ create table if not exists x_reactions (
 create table if not exists restock_events (
   id text primary key,
   variant_id text references variants(id) on delete set null,
+  matched_variant_id text references variants(id) on delete set null,
   series_id text references series(id) on delete set null,
   source_type text not null default 'user_x',
   source_weight numeric not null default 0.48,
@@ -137,6 +139,7 @@ create table if not exists restock_events (
 create table if not exists stock_reports (
   id text primary key,
   variant_id text references variants(id) on delete set null,
+  matched_variant_id text references variants(id) on delete set null,
   series_id text references series(id) on delete set null,
   source_type text not null default 'user_x',
   source_weight numeric not null default 0.48,
@@ -186,10 +189,19 @@ create table if not exists forecast_snapshots (
   calculated_at timestamptz not null default now()
 );
 
+alter table market_listings add column if not exists matched_variant_id text references variants(id) on delete set null;
+alter table x_reactions add column if not exists matched_variant_id text references variants(id) on delete set null;
+alter table restock_events add column if not exists matched_variant_id text references variants(id) on delete set null;
+alter table stock_reports add column if not exists matched_variant_id text references variants(id) on delete set null;
+
 create index if not exists variants_series_id_idx on variants(series_id);
 create index if not exists market_listings_variant_id_idx on market_listings(variant_id);
+create index if not exists market_listings_matched_variant_id_idx on market_listings(matched_variant_id);
 create index if not exists market_listings_review_required_idx on market_listings(review_required);
 create index if not exists x_reactions_variant_id_idx on x_reactions(variant_id);
+create index if not exists x_reactions_matched_variant_id_idx on x_reactions(matched_variant_id);
 create index if not exists restock_events_variant_id_idx on restock_events(variant_id);
+create index if not exists restock_events_matched_variant_id_idx on restock_events(matched_variant_id);
 create index if not exists stock_reports_variant_id_idx on stock_reports(variant_id);
+create index if not exists stock_reports_matched_variant_id_idx on stock_reports(matched_variant_id);
 create index if not exists import_issues_resolved_idx on import_issues(resolved);

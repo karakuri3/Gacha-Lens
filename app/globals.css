@@ -467,6 +467,20 @@ select {
   padding: 18px;
 }
 
+.admin-login {
+  max-width: 520px;
+}
+
+.admin-login__form {
+  display: grid;
+  gap: 14px;
+}
+
+button.pill-link,
+button.button-link {
+  cursor: pointer;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr;

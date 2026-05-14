@@ -1,7 +1,14 @@
 import { getDataModel } from "@/lib/series";
+import { getReviewTokenFromRequest, REVIEW_COOKIE_NAME, verifyReviewSession, verifyReviewToken } from "@/lib/admin-auth";
 import { buildImportIssueBreakdown, buildImportReviewCsv, buildImportReviewReport, buildMarketListingBreakdown, buildXIntentBreakdown } from "@/lib/data/import-review";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request) {
+  if (!isAuthorizedReviewRequest(request)) {
+    return Response.json({ error: "Unauthorized review endpoint" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const format = searchParams.get("format");
   const dataModel = await getDataModel();
@@ -94,4 +101,10 @@ export async function GET(request) {
     })),
     issues: buildImportReviewReport(issues),
   });
+}
+
+function isAuthorizedReviewRequest(request) {
+  const headerToken = getReviewTokenFromRequest(request);
+  const cookieValue = request.cookies?.get(REVIEW_COOKIE_NAME)?.value;
+  return verifyReviewToken(headerToken) || verifyReviewSession(cookieValue);
 }

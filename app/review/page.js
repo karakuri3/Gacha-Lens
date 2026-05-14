@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { isReviewAuthConfigured, REVIEW_COOKIE_NAME, verifyReviewSession } from "@/lib/admin-auth";
 import { buildImportReviewReport } from "@/lib/data/import-review";
 import { getDataModel } from "@/lib/series";
 
@@ -11,7 +13,16 @@ export const metadata = {
   },
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function ImportReviewPage() {
+  const cookieStore = await cookies();
+  const authenticated = verifyReviewSession(cookieStore.get(REVIEW_COOKIE_NAME)?.value);
+
+  if (!authenticated) {
+    return <ReviewLogin configured={isReviewAuthConfigured()} />;
+  }
+
   const dataModel = await getDataModel();
   const issues = buildImportReviewReport(dataModel.importIssues ?? []);
   const unresolved = issues.filter((issue) => !issue.resolved);
@@ -30,6 +41,9 @@ export default async function ImportReviewPage() {
         <div className="tag-row" style={{ marginBottom: 18 }}>
           <Link href="/api/import-issues" className="pill-link">JSON</Link>
           <Link href="/api/import-issues?format=csv" className="pill-link">CSV</Link>
+          <form action="/review/logout" method="post">
+            <button className="pill-link" type="submit">Logout</button>
+          </form>
         </div>
 
         <section className="grid grid--3" style={{ marginBottom: 18 }}>
@@ -58,6 +72,38 @@ export default async function ImportReviewPage() {
             ))}
             {issues.length === 0 ? <div className="empty">No review issues.</div> : null}
           </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function ReviewLogin({ configured }) {
+  return (
+    <main className="site-main">
+      <div className="site-shell">
+        <section className="page-hero">
+          <p className="eyebrow">ADMIN</p>
+          <h1 className="page-title">Review access</h1>
+          <p className="page-lead">
+            Import issues are an internal queue. Enter the review token to inspect unknown and review_required records.
+          </p>
+        </section>
+
+        <section className="card form-panel admin-login">
+          {configured ? (
+            <form action="/review/login" method="post" className="admin-login__form">
+              <div className="field">
+                <label htmlFor="review-token">Review token</label>
+                <input id="review-token" name="token" type="password" autoComplete="current-password" required />
+              </div>
+              <button className="button-link button-link--dark" type="submit">Unlock review</button>
+            </form>
+          ) : (
+            <div className="empty">
+              REVIEW_ADMIN_TOKEN is not configured. Set it in the server environment before using the review queue.
+            </div>
+          )}
         </section>
       </div>
     </main>

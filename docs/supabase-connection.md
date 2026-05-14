@@ -36,6 +36,12 @@ Required only for local/server upsert scripts:
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
+Required for the admin review queue:
+
+```bash
+REVIEW_ADMIN_TOKEN=your-long-random-review-token
+```
+
 Never expose the service role key to the browser.
 
 ## First official-data upsert
@@ -70,6 +76,16 @@ npm run db:upsert-x
 
 This normalizes `lib/data/x-input.js` into `x_reactions`, keeps `source_type`, `intent_tags`, `confidence`, and `matched_variant_id`, and writes unresolved rows to `import_issues`. Forecast scoring already reads `x_reactions` from the repository, so DB-loaded X rows feed the upcoming score automatically.
 
+## First restock / stock upsert
+
+After `series` and `variants` exist, run:
+
+```bash
+npm run db:upsert-stock
+```
+
+This normalizes `lib/data/stock-input.js` into `restock_events` and `stock_reports`, keeps `source_type`, `confidence`, `matched_variant_id`, `series_id`, and `review_required`, and writes unresolved rows to `import_issues`. `lib/series.js` already builds each variant's `availability_summary` from repository-loaded restock and stock rows, so DB-loaded stock signals feed the UI summary without changing the public screens.
+
 ## Review flow
 
 - Human page: `/review`
@@ -77,3 +93,32 @@ This normalizes `lib/data/x-input.js` into `x_reactions`, keeps `source_type`, `
 - CSV: `/api/import-issues?format=csv`
 
 Unknown records should stay in `import_issues` until a human assigns the correct `variant_id`, fixes the raw source, or marks the issue resolved.
+
+`/review` and `/api/import-issues` are admin surfaces. They are noindexed, kept out of the public navigation, and require `REVIEW_ADMIN_TOKEN`. For API access, send either the review session cookie from `/review` or:
+
+```bash
+curl -H "x-review-admin-token: $REVIEW_ADMIN_TOKEN" https://your-site.example/api/import-issues
+```
+
+## Semi-automated operation
+
+Run the full ingestion chain with one command:
+
+```bash
+npm run db:upsert-all
+```
+
+The command runs official master data first, then market listings, X reactions, and stock/restock signals. This order keeps `series` and `variants` as the source of truth before looser external signals are attached.
+
+For local cron, schedule:
+
+```bash
+cd /path/to/gacha-site-start && npm run db:upsert-all
+```
+
+For GitHub Actions, use `.github/workflows/gacha-ingestion.yml` and set repository secrets:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+The workflow is manually runnable and also runs daily. Keep `import_issues` review as a daily human step before trusting new unknown data in ranking decisions.
