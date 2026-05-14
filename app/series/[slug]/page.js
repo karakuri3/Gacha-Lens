@@ -171,9 +171,16 @@ export default async function VariantDetailPage({ params }) {
 function StockPanel({ item }) {
   const reports = item.stock_reports ?? [];
   const events = item.restock_events ?? [];
+  const summary = item.stock_summary || item.availability_summary;
   return (
     <div className="card panel">
       <h2>再入荷・在庫</h2>
+      {summary?.has_stock_signal || summary?.has_restock_signal ? (
+        <div className={`stock-signal stock-signal--${summary.latest_stock_status || "unknown"}`} style={{ marginBottom: 12 }}>
+          <strong>{stockSignalLabel(summary.latest_stock_status)}</strong>
+          <span>{summary.latest_region || summary.latest_shop_name || "signal"} / {summary.source_strength ?? 0}</span>
+        </div>
+      ) : null}
       <ul className="plain-list">
         {events.map((event) => (
           <li key={event.id}>
@@ -202,6 +209,14 @@ function Metric({ label, value, tone = "" }) {
       <div className={`metric__value ${tone ? `is-${tone}` : ""}`}>{value}</div>
     </div>
   );
+}
+
+function stockSignalLabel(status) {
+  if (status === "sold_out") return "売り切れ報告";
+  if (status === "low") return "残り少なめ";
+  if (status === "in_stock") return "在庫あり";
+  if (status === "restocked") return "補充あり";
+  return "在庫シグナル";
 }
 
 function listingTypeLabel(type) {

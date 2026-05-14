@@ -1,6 +1,15 @@
 import { supabase } from "../../lib/supabase";
 
 export default async function SupabaseSeriesPage() {
+  if (!supabase) {
+    return (
+      <main style={{ padding: "24px", fontFamily: "sans-serif" }}>
+        <h1>Supabase connection</h1>
+        <p>NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are not configured.</p>
+      </main>
+    );
+  }
+
   const { data, error } = await supabase
     .from("series")
     .select("*")

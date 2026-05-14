@@ -85,6 +85,7 @@ function RankingCard({ item, mode }) {
         </div>
       </div>
       {mode === "upcoming" ? <ForecastTags item={item} /> : null}
+      {mode === "released" ? <StockSignal summary={item.stock_summary || item.availability_summary} /> : null}
       <MetricGrid metrics={metrics} />
     </Link>
   );
@@ -103,6 +104,7 @@ function RankingRow({ item, mode }) {
           {item.series_name} / {item.rarity}
         </div>
         {mode === "upcoming" ? <ForecastTags item={item} compact /> : null}
+        {mode === "released" ? <StockSignal summary={item.stock_summary || item.availability_summary} /> : null}
       </div>
       <MetricGrid metrics={getMetrics(item, mode)} />
     </Link>
@@ -117,6 +119,16 @@ function ForecastTags({ item, compact = false }) {
           {tag}
         </span>
       ))}
+    </div>
+  );
+}
+
+function StockSignal({ summary }) {
+  if (!summary?.has_stock_signal && !summary?.has_restock_signal) return null;
+  return (
+    <div className={`stock-signal stock-signal--${summary.latest_stock_status || "unknown"}`} style={{ marginTop: 10 }}>
+      <strong>{stockSignalLabel(summary.latest_stock_status)}</strong>
+      <span>{summary.latest_region || summary.latest_shop_name || "signal"} / {summary.source_strength ?? 0}</span>
     </div>
   );
 }
@@ -178,4 +190,12 @@ function getDiffTone(value) {
   if (value > 0) return "positive";
   if (value < 0) return "negative";
   return "";
+}
+
+function stockSignalLabel(status) {
+  if (status === "sold_out") return "売り切れ報告";
+  if (status === "low") return "残り少なめ";
+  if (status === "in_stock") return "在庫あり";
+  if (status === "restocked") return "補充あり";
+  return "在庫シグナル";
 }

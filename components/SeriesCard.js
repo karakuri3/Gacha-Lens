@@ -41,6 +41,7 @@ export default function SeriesCard({ series }) {
           </div>
         ))}
       </div>
+      {isReleased ? <StockSignal summary={series.stock_summary || series.availability_summary} /> : null}
       {!isReleased && Array.isArray(series.forecast_tags) ? (
         <div className="tag-row">
           {series.forecast_tags.slice(0, 3).map((tag) => (
@@ -51,6 +52,16 @@ export default function SeriesCard({ series }) {
         </div>
       ) : null}
     </Link>
+  );
+}
+
+function StockSignal({ summary }) {
+  if (!summary?.has_stock_signal && !summary?.has_restock_signal) return null;
+  return (
+    <div className={`stock-signal stock-signal--${summary.latest_stock_status || "unknown"}`}>
+      <strong>{stockSignalLabel(summary.latest_stock_status)}</strong>
+      <span>{summary.latest_region || summary.latest_shop_name || "signal"} / {summary.source_strength ?? 0}</span>
+    </div>
   );
 }
 
@@ -73,6 +84,14 @@ function getDiffTone(value) {
   if (value > 0) return "positive";
   if (value < 0) return "negative";
   return "";
+}
+
+function stockSignalLabel(status) {
+  if (status === "sold_out") return "売り切れ報告";
+  if (status === "low") return "残り少なめ";
+  if (status === "in_stock") return "在庫あり";
+  if (status === "restocked") return "補充あり";
+  return "在庫シグナル";
 }
 
 function formatMonthWeek(series) {
