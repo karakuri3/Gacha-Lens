@@ -4,13 +4,15 @@ This project is intentionally semi-automated. Official master data stays first, 
 
 ## Every morning
 
-1. Open the latest GitHub Actions run for `Gacha ingestion`.
-2. Confirm `npm run db:upsert-all` finished successfully.
-3. If it failed, download `ingestion-log` and check the `failedStep` field.
-4. Open `/review` with the admin token.
-5. Clear or annotate `high` issues first, especially official master or missing variant records.
-6. Check `medium` unknown variant issues for market, X, restock, and stock rows.
-7. Leave truly ambiguous records unresolved until the source can be verified.
+1. Check Supabase Cron run history for the four ingestion jobs.
+2. Check the `ingest` Edge Function logs for non-200 responses.
+3. If the primary Cron path failed, open the latest GitHub Actions run for `Gacha ingestion`.
+4. Confirm `npm run db:upsert-all` finished successfully as the fallback.
+5. If it failed, download `ingestion-log` and check the `failedStep` field.
+6. Open `/review` with the admin token.
+7. Clear or annotate `high` issues first, especially official master or missing variant records.
+8. Check `medium` unknown variant issues for market, X, restock, and stock rows.
+9. Leave truly ambiguous records unresolved until the source can be verified.
 
 ## What good looks like
 
