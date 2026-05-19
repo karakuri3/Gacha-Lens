@@ -8,7 +8,7 @@ Deno.serve(async (request) => {
     return json({ ok: false, error: `Unknown task: ${task}` }, 404);
   }
 
-  const cronSecret = Deno.env.get("SUPABASE_CRON_SECRET") || "";
+  const cronSecret = Deno.env.get("CRON_SHARED_SECRET") || "";
   if (cronSecret) {
     const suppliedSecret = request.headers.get("x-cron-secret") || "";
     if (suppliedSecret !== cronSecret) {

@@ -1,5 +1,6 @@
 -- Supabase Cron templates for high-frequency ingestion.
--- Replace <PROJECT_REF>, <SUPABASE_CRON_SECRET>, and deploy supabase/functions/ingest first.
+-- Project ref confirmed by deploy: ihcudkfspzuixsqsvoku
+-- Replace only 9nAVQj2UefY46xhB8iTmGlL5w0p1FacIvyWCkbZoEXdrgODJ with the same value set on the ingest Edge Function.
 -- These jobs call the Edge Function, which forwards to /api/ingest/:task on the app.
 
 create extension if not exists pg_cron;
@@ -10,10 +11,10 @@ select cron.schedule(
   '7 * * * *',
   $$
   select net.http_post(
-    url := 'https://<PROJECT_REF>.functions.supabase.co/ingest?task=official',
+    url := 'https://ihcudkfspzuixsqsvoku.functions.supabase.co/ingest?task=official',
     headers := jsonb_build_object(
       'content-type', 'application/json',
-      'x-cron-secret', '<SUPABASE_CRON_SECRET>'
+      'x-cron-secret', '9nAVQj2UefY46xhB8iTmGlL5w0p1FacIvyWCkbZoEXdrgODJ'
     ),
     body := jsonb_build_object('source', 'supabase-cron', 'task', 'official')
   );
@@ -25,10 +26,10 @@ select cron.schedule(
   '*/15 * * * *',
   $$
   select net.http_post(
-    url := 'https://<PROJECT_REF>.functions.supabase.co/ingest?task=market',
+    url := 'https://ihcudkfspzuixsqsvoku.functions.supabase.co/ingest?task=market',
     headers := jsonb_build_object(
       'content-type', 'application/json',
-      'x-cron-secret', '<SUPABASE_CRON_SECRET>'
+      'x-cron-secret', '9nAVQj2UefY46xhB8iTmGlL5w0p1FacIvyWCkbZoEXdrgODJ'
     ),
     body := jsonb_build_object('source', 'supabase-cron', 'task', 'market')
   );
@@ -40,10 +41,10 @@ select cron.schedule(
   '*/10 * * * *',
   $$
   select net.http_post(
-    url := 'https://<PROJECT_REF>.functions.supabase.co/ingest?task=x',
+    url := 'https://ihcudkfspzuixsqsvoku.functions.supabase.co/ingest?task=x',
     headers := jsonb_build_object(
       'content-type', 'application/json',
-      'x-cron-secret', '<SUPABASE_CRON_SECRET>'
+      'x-cron-secret', '9nAVQj2UefY46xhB8iTmGlL5w0p1FacIvyWCkbZoEXdrgODJ'
     ),
     body := jsonb_build_object('source', 'supabase-cron', 'task', 'x')
   );
@@ -55,10 +56,10 @@ select cron.schedule(
   '5,20,35,50 * * * *',
   $$
   select net.http_post(
-    url := 'https://<PROJECT_REF>.functions.supabase.co/ingest?task=stock',
+    url := 'https://ihcudkfspzuixsqsvoku.functions.supabase.co/ingest?task=stock',
     headers := jsonb_build_object(
       'content-type', 'application/json',
-      'x-cron-secret', '<SUPABASE_CRON_SECRET>'
+      'x-cron-secret', '9nAVQj2UefY46xhB8iTmGlL5w0p1FacIvyWCkbZoEXdrgODJ'
     ),
     body := jsonb_build_object('source', 'supabase-cron', 'task', 'stock')
   );

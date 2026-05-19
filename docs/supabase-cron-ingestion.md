@@ -46,10 +46,10 @@ Set these for `supabase/functions/ingest`:
 ```bash
 APP_INGEST_BASE_URL=https://your-app.example
 INGEST_CRON_TOKEN=same-token-as-the-app
-SUPABASE_CRON_SECRET=another-long-random-secret
+CRON_SHARED_SECRET=another-long-random-secret
 ```
 
-`SUPABASE_CRON_SECRET` protects the Edge Function itself. Cron jobs send it as `x-cron-secret`.
+`CRON_SHARED_SECRET` protects the Edge Function itself. Cron jobs send it as `x-cron-secret`.
 
 ## Deploy function
 
@@ -57,12 +57,26 @@ SUPABASE_CRON_SECRET=another-long-random-secret
 supabase functions deploy ingest
 supabase secrets set APP_INGEST_BASE_URL=https://your-app.example
 supabase secrets set INGEST_CRON_TOKEN=your-long-random-ingest-token
-supabase secrets set SUPABASE_CRON_SECRET=another-long-random-secret
+supabase secrets set CRON_SHARED_SECRET=another-long-random-secret
 ```
 
 ## Create Cron jobs
 
 Use `supabase/cron-ingestion.sql` as the template.
+
+Current deployed project ref:
+
+```text
+ihcudkfspzuixsqsvoku
+```
+
+The SQL template already uses that project ref. Replace only:
+
+```text
+<PASTE_CRON_SHARED_SECRET_HERE>
+```
+
+with the same `CRON_SHARED_SECRET` value set on the Edge Function.
 
 Recommended jobs:
 
