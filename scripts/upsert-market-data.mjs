@@ -76,6 +76,7 @@ function normalizeMarketListing(raw, catalog) {
   return {
     id: text(raw.id) || stableId("market", raw.source_url, raw.title, raw.listed_at),
     variant_id: classification.variantId || null,
+    matched_variant_id: classification.variantId || null,
     series_id: classification.seriesId || matchedVariant?.series_id || matchedSeries?.id || null,
     title: text(raw.title || raw.name),
     listing_type: classification.listingType,
@@ -110,6 +111,7 @@ function applyDbReferenceSafety(row, referenceIds) {
 
   if (next.variant_id && !referenceIds.variantIds.has(next.variant_id)) {
     next.variant_id = null;
+    next.matched_variant_id = null;
     droppedReference = true;
   }
 
