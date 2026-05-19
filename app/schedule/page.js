@@ -85,7 +85,7 @@ function ScheduleCard({ item }) {
   return (
     <Link href={`/series/${item.slug}`} className="card product-card">
       <div className="product-image">
-        <img src={item.image_url} alt={item.name} />
+        <ProductImage src={item.image_url} alt={item.name} />
       </div>
       <div>
         <div className="tag-row" style={{ marginBottom: 10 }}>
@@ -116,6 +116,10 @@ function ScheduleCard({ item }) {
       </div>
     </Link>
   );
+}
+
+function ProductImage({ src, alt }) {
+  return src ? <img src={src} alt={alt} /> : <span className="image-placeholder">NO IMAGE</span>;
 }
 
 function Metric({ label, value, tone = "" }) {

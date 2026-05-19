@@ -19,7 +19,7 @@ export default function SeriesCard({ series }) {
   return (
     <Link href={`/series/${series.slug}`} className="card product-card">
       <div className="product-image">
-        <img src={series.image_url || series.imageUrl} alt={series.name} />
+        <ProductImage src={series.image_url || series.imageUrl} alt={series.name} />
       </div>
       <div>
         <div className="tag-row" style={{ marginBottom: 10 }}>
@@ -53,6 +53,10 @@ export default function SeriesCard({ series }) {
       ) : null}
     </Link>
   );
+}
+
+function ProductImage({ src, alt }) {
+  return src ? <img src={src} alt={alt} /> : <span className="image-placeholder">NO IMAGE</span>;
 }
 
 function StockSignal({ summary }) {

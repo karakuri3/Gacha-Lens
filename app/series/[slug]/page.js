@@ -34,7 +34,7 @@ export default async function VariantDetailPage({ params }) {
 
         <section className="detail-hero">
           <div className="detail-image">
-            <img src={item.image_url} alt={item.name} />
+            <ProductImage src={item.image_url} alt={item.name} />
           </div>
           <div className="card detail-panel">
             <div className="tag-row">
@@ -200,6 +200,10 @@ function StockPanel({ item }) {
       </ul>
     </div>
   );
+}
+
+function ProductImage({ src, alt }) {
+  return src ? <img src={src} alt={alt} /> : <span className="image-placeholder">NO IMAGE</span>;
 }
 
 function Metric({ label, value, tone = "" }) {

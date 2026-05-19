@@ -76,7 +76,7 @@ function RankingCard({ item, mode }) {
     <Link href={`/series/${item.slug}`} className={`card product-card rank-${item.rank}`}>
       <span className={`rank-medal rank-medal--${item.rank}`}>{item.rank}位</span>
       <div className="product-image">
-        <img src={item.image_url} alt={item.name} />
+        <ProductImage src={item.image_url} alt={item.name} />
       </div>
       <div>
         <h2 className="product-name">{item.name}</h2>
@@ -96,7 +96,7 @@ function RankingRow({ item, mode }) {
     <Link href={`/series/${item.slug}`} className="card rank-row">
       <div className="rank-number">#{item.rank}</div>
       <div className="product-image">
-        <img src={item.image_url} alt={item.name} />
+        <ProductImage src={item.image_url} alt={item.name} />
       </div>
       <div>
         <h2 className="product-name">{item.name}</h2>
@@ -109,6 +109,10 @@ function RankingRow({ item, mode }) {
       <MetricGrid metrics={getMetrics(item, mode)} />
     </Link>
   );
+}
+
+function ProductImage({ src, alt }) {
+  return src ? <img src={src} alt={alt} /> : <span className="image-placeholder">NO IMAGE</span>;
 }
 
 function ForecastTags({ item, compact = false }) {
