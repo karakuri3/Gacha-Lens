@@ -302,6 +302,70 @@ select {
   padding: 6px 9px;
 }
 
+.tag--signal {
+  border-color: #fedf89;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.signal-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 22px;
+}
+
+.signal-chip {
+  min-height: 74px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--ink);
+  text-decoration: none;
+  padding: 12px 14px;
+  box-shadow: 0 14px 34px rgba(16, 24, 40, 0.08);
+}
+
+.signal-chip strong {
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.signal-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.market-snapshot {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.market-snapshot span {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f9fafb;
+  padding: 7px 8px;
+  text-align: center;
+}
+
+.market-snapshot--compact {
+  grid-column: 1 / -1;
+}
+
 .stock-signal {
   display: flex;
   align-items: center;
@@ -696,6 +760,15 @@ button.button-link {
 
   .podium .rank-1 {
     transform: none;
+    order: -1;
+  }
+
+  .podium .rank-2 {
+    order: 0;
+  }
+
+  .podium .rank-3 {
+    order: 1;
   }
 
   .rank-row {
@@ -786,6 +859,14 @@ button.button-link {
 
   .grid {
     gap: 14px;
+  }
+
+  .signal-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .market-snapshot {
+    grid-template-columns: 1fr 1fr;
   }
 
   .product-card {

@@ -4,18 +4,22 @@ import { getSeriesList } from "@/lib/series";
 
 export const metadata = {
   title: "単品一覧 | Gacha Lens",
-  description: "発売中、発売予定のガチャ個別種を検索、絞り込みできます。",
+  description: "発売中・発売予定のガチャ単品を相場、流通、トレンド、予想スコアで探せます。",
 };
 
 const filters = [
   { value: "all", label: "すべて" },
   { value: "released", label: "発売中" },
+  { value: "circulating", label: "今出回っている" },
+  { value: "trending", label: "急上昇" },
+  { value: "profitable", label: "利益目安あり" },
   { value: "upcoming", label: "発売予定" },
-  { value: "profitable", label: "利益あり" },
 ];
 
 const sorts = [
   { value: "recommended", label: "おすすめ順" },
+  { value: "circulation", label: "流通順" },
+  { value: "trend", label: "急上昇順" },
   { value: "forecast", label: "予想スコア順" },
   { value: "profit", label: "利益目安順" },
   { value: "release", label: "発売月順" },
@@ -33,12 +37,7 @@ export default async function SeriesPage({ searchParams }) {
     .filter((item) => matchesKeyword(item, q))
     .sort((a, b) => compareSeries(a, b, sort));
 
-  const counts = {
-    all: series.length,
-    released: series.filter((item) => item.is_released).length,
-    upcoming: series.filter((item) => !item.is_released).length,
-    profitable: series.filter((item) => item.is_released && (item.profit_estimate ?? 0) > 0).length,
-  };
+  const counts = Object.fromEntries(filters.map((item) => [item.value, series.filter((entry) => matchesFilter(entry, item.value)).length]));
 
   return (
     <main className="site-main">
@@ -46,7 +45,7 @@ export default async function SeriesPage({ searchParams }) {
         <section className="page-hero">
           <p className="eyebrow">SEARCH</p>
           <h1 className="page-title">単品を探す</h1>
-          <p className="page-lead">キャラ、レア、シークレット、限定カラーを個別に比較できます。</p>
+          <p className="page-lead">キャラ、レア、シークレット、流通、相場、発売予定を単品単位で比較できます。</p>
         </section>
 
         <form className="card form-panel" action="/series" method="get">
@@ -105,7 +104,7 @@ export default async function SeriesPage({ searchParams }) {
             ))}
           </section>
         ) : (
-          <div className="card empty">条件に合う商品がありません。</div>
+          <div className="card empty">条件に合う単品がありません。</div>
         )}
       </div>
     </main>
@@ -115,28 +114,34 @@ export default async function SeriesPage({ searchParams }) {
 function matchesFilter(item, filter) {
   if (filter === "released") return item.is_released;
   if (filter === "upcoming") return !item.is_released;
-  if (filter === "profitable") return item.is_released && (item.profit_estimate ?? 0) > 0;
+  if (filter === "profitable") return item.is_released && Number.isFinite(item.profit_estimate) && item.profit_estimate > 0;
+  if (filter === "circulating") return item.is_released && ((item.circulation_score ?? 0) > 0 || (item.sold_count ?? 0) > 0 || (item.active_listing_count ?? 0) > 0);
+  if (filter === "trending") return (item.trend_score ?? 0) >= 45 || (item.trend_tags ?? []).length > 0;
   return true;
 }
 
 function matchesKeyword(item, q) {
   if (!q) return true;
-  const target = [item.name, item.variant_name, item.series_name, item.brand, item.character, item.category, item.rarity, item.role].join(" ").toLowerCase();
+  const target = [item.name, item.variant_name, item.series_name, item.brand, item.character, item.category, item.rarity, item.role, ...(item.trend_tags ?? [])].join(" ").toLowerCase();
   return target.includes(q.toLowerCase());
 }
 
 function compareSeries(a, b, sort) {
   if (sort === "forecast") return (b.forecast_score ?? 0) - (a.forecast_score ?? 0);
   if (sort === "profit") return (b.profit_estimate ?? -Infinity) - (a.profit_estimate ?? -Infinity);
+  if (sort === "circulation") return (b.circulation_score ?? 0) - (a.circulation_score ?? 0);
+  if (sort === "trend") return (b.trend_score ?? 0) - (a.trend_score ?? 0);
   if (sort === "release") return getReleaseSortValue(a) - getReleaseSortValue(b);
+  return displayPriority(b) - displayPriority(a);
+}
 
-  const scoreA = a.is_released ? a.profit_estimate ?? 0 : a.forecast_score ?? 0;
-  const scoreB = b.is_released ? b.profit_estimate ?? 0 : b.forecast_score ?? 0;
-  return scoreB - scoreA;
+function displayPriority(item) {
+  if (!item.is_released) return (item.forecast_score ?? 0) * 10 + (item.trend_score ?? 0) * 4;
+  return Math.max(0, item.profit_estimate ?? 0) * 0.8 + (item.circulation_score ?? 0) * 18 + (item.trend_score ?? 0) * 12 + (item.sold_count ?? 0) * 45;
 }
 
 function getReleaseSortValue(item) {
   if (item.release_date) return new Date(item.release_date).getTime();
-  const order = ["10月", "11月", "12月", "1月", "2月", "3月"].indexOf(item.schedule_month);
-  return order >= 0 ? order : 999;
+  const matched = String(item.schedule_month || "").match(/\d+/);
+  return matched ? Number(matched[0]) : 999;
 }

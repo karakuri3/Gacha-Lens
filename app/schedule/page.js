@@ -3,7 +3,7 @@ import { getSeriesList } from "@/lib/series";
 
 export const metadata = {
   title: "発売スケジュール | Gacha Lens",
-  description: "登録済みの発売予定データがある月だけを表示する単品主役の発売スケジュールです。",
+  description: "公式データにある発売予定だけを月別、週別、単品単位で確認できます。",
 };
 
 const weeks = ["第1週", "第2週", "第3週", "第4週", "第5週", "未定"];
@@ -82,6 +82,8 @@ export default async function SchedulePage({ searchParams }) {
 
 function ScheduleCard({ item }) {
   const week = normalizeWeek(item.schedule_week);
+  const tags = [...(item.trend_tags ?? []), ...(item.forecast_tags ?? [])];
+
   return (
     <Link href={`/series/${item.slug}`} className="card product-card">
       <div className="product-image">
@@ -89,10 +91,9 @@ function ScheduleCard({ item }) {
       </div>
       <div>
         <div className="tag-row" style={{ marginBottom: 10 }}>
-          <span className="tag">
-            {week === "未定" ? "未定" : `${week}より順次`}
-          </span>
+          <span className="tag">{week === "未定" ? "未定" : `${week}より順次`}</span>
           <span className="tag">{item.rarity}</span>
+          {item.official_url ? <span className="tag">公式あり</span> : null}
         </div>
         <h2 className="product-name">{item.name}</h2>
         <div className="product-meta">
@@ -101,14 +102,15 @@ function ScheduleCard({ item }) {
       </div>
       <div className="metric-grid">
         <Metric label="価格" value={formatYen(item.price)} />
+        <Metric label="予想スコア" value={formatScore(item.forecast_score)} tone="highlight" />
         <Metric label="コンプ需要" value={formatScore(item.complete_set_score)} />
         <Metric label="当たり枠" value={formatScore(item.ace_character_score)} />
         <Metric label="互換性" value={formatScore(item.compatibility_score)} />
         <Metric label="限定性" value={formatScore(item.limitedness_score)} />
-        <Metric label="予想" value={formatScore(item.forecast_score)} tone="highlight" />
+        <Metric label="X反応" value={formatScore(item.x_signal_score)} />
       </div>
       <div className="tag-row">
-        {(item.forecast_tags ?? []).slice(0, 3).map((tag) => (
+        {tags.slice(0, 4).map((tag) => (
           <span key={tag} className="tag">
             {tag}
           </span>

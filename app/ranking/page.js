@@ -3,11 +3,11 @@ import { getSeriesList } from "@/lib/series";
 
 export const metadata = {
   title: "ランキング | Gacha Lens",
-  description: "発売中は単品利益、発売予定は予想スコアで並べる個別種ランキングです。",
+  description: "発売中は相場・利益・流通、発売予定は予想スコアと根拠で並べる単品ランキングです。",
 };
 
 const tabs = [
-  { value: "released", label: "発売中", caption: "実績" },
+  { value: "released", label: "発売中", caption: "相場・流通" },
   { value: "upcoming", label: "発売予定", caption: "期待値" },
 ];
 
@@ -19,13 +19,14 @@ export default async function RankingPage({ searchParams }) {
   const ranked = series
     .filter((item) => (tab === "released" ? item.is_released : !item.is_released))
     .sort((a, b) => {
-      const primaryA = tab === "released" ? a.profit_estimate ?? -Infinity : a.forecast_score ?? -Infinity;
-      const primaryB = tab === "released" ? b.profit_estimate ?? -Infinity : b.forecast_score ?? -Infinity;
+      const primaryA = tab === "released" ? releasedPriority(a) : upcomingPriority(a);
+      const primaryB = tab === "released" ? releasedPriority(b) : upcomingPriority(b);
       if (primaryB !== primaryA) return primaryB - primaryA;
       return a.name.localeCompare(b.name, "ja");
     })
     .map((item, index) => ({ ...item, rank: index + 1 }));
 
+  const signalItems = (tab === "released" ? ranked.filter(hasCirculationSignal) : ranked.filter(hasUpcomingSignal)).slice(0, 4);
   const podium = arrangePodium(ranked.slice(0, 3));
   const rest = ranked.slice(3);
 
@@ -34,9 +35,9 @@ export default async function RankingPage({ searchParams }) {
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">RANKING</p>
-          <h1 className="page-title">強い単品が一目で分かるランキング</h1>
+          <h1 className="page-title">今見るべき単品が一目で分かるランキング</h1>
           <p className="page-lead">
-            中身の個別種ごとに評価。発売中と発売予定で見るべき指標を分けます。
+            発売中は実売相場・利益・流通、発売予定は予想スコアと根拠で判断できます。
           </p>
         </section>
 
@@ -53,9 +54,20 @@ export default async function RankingPage({ searchParams }) {
           ))}
         </div>
 
+        {signalItems.length > 0 ? (
+          <section className="signal-strip" aria-label="今見るべき商品">
+            {signalItems.map((item) => (
+              <Link key={item.slug} href={`/series/${item.slug}`} className="signal-chip">
+                <strong>{tab === "released" ? item.circulation_label : "期待値高め"}</strong>
+                <span>{item.variant_name || item.name}</span>
+              </Link>
+            ))}
+          </section>
+        ) : null}
+
         <section className="grid grid--3 podium">
           {podium.map((item) => (
-            <RankingCard key={item.slug} item={item} mode={tab} large />
+            <RankingCard key={item.slug} item={item} mode={tab} />
           ))}
         </section>
 
@@ -70,8 +82,6 @@ export default async function RankingPage({ searchParams }) {
 }
 
 function RankingCard({ item, mode }) {
-  const metrics = getMetrics(item, mode);
-
   return (
     <Link href={`/series/${item.slug}`} className={`card product-card rank-${item.rank}`}>
       <span className={`rank-medal rank-medal--${item.rank}`}>{item.rank}位</span>
@@ -84,9 +94,10 @@ function RankingCard({ item, mode }) {
           {item.series_name} / {item.rarity}
         </div>
       </div>
-      {mode === "upcoming" ? <ForecastTags item={item} /> : null}
+      {mode === "upcoming" ? <ForecastTags item={item} /> : <TrendTags item={item} />}
       {mode === "released" ? <StockSignal summary={item.stock_summary || item.availability_summary} /> : null}
-      <MetricGrid metrics={metrics} />
+      {mode === "released" ? <MarketSnapshot item={item} /> : null}
+      <MetricGrid metrics={getMetrics(item, mode)} />
     </Link>
   );
 }
@@ -103,9 +114,10 @@ function RankingRow({ item, mode }) {
         <div className="product-meta">
           {item.series_name} / {item.rarity}
         </div>
-        {mode === "upcoming" ? <ForecastTags item={item} compact /> : null}
+        {mode === "upcoming" ? <ForecastTags item={item} compact /> : <TrendTags item={item} compact />}
         {mode === "released" ? <StockSignal summary={item.stock_summary || item.availability_summary} /> : null}
       </div>
+      {mode === "released" ? <MarketSnapshot item={item} compact /> : null}
       <MetricGrid metrics={getMetrics(item, mode)} />
     </Link>
   );
@@ -116,13 +128,37 @@ function ProductImage({ src, alt }) {
 }
 
 function ForecastTags({ item, compact = false }) {
+  const tags = [...(item.trend_tags ?? []), ...(item.forecast_tags ?? [])];
   return (
     <div className="tag-row" style={{ marginTop: compact ? 10 : 0 }}>
-      {(item.forecast_tags ?? []).slice(0, compact ? 3 : 4).map((tag) => (
+      {tags.slice(0, compact ? 3 : 4).map((tag) => (
         <span key={tag} className="tag">
           {tag}
         </span>
       ))}
+    </div>
+  );
+}
+
+function TrendTags({ item, compact = false }) {
+  const tags = item.trend_tags?.length ? item.trend_tags : [item.circulation_label].filter(Boolean);
+  return (
+    <div className="tag-row" style={{ marginTop: compact ? 10 : 0 }}>
+      {tags.slice(0, compact ? 3 : 4).map((tag) => (
+        <span key={tag} className="tag tag--signal">{tag}</span>
+      ))}
+    </div>
+  );
+}
+
+function MarketSnapshot({ item, compact = false }) {
+  const summary = item.market_summary || {};
+  return (
+    <div className={`market-snapshot ${compact ? "market-snapshot--compact" : ""}`}>
+      <span>出品 {summary.listing_count ?? 0}</span>
+      <span>SOLD {summary.sold_count ?? 0}</span>
+      <span>信頼度 {summary.price_confidence?.label ?? "未取得"}</span>
+      <span>{formatDate(summary.last_observed_at)}</span>
     </div>
   );
 }
@@ -155,7 +191,7 @@ function getMetrics(item, mode) {
     return [
       { label: "利益目安", value: formatDiff(item.profit_estimate), tone: getDiffTone(item.profit_estimate) },
       { label: "単品相場", value: formatYen(item.market_price_median) },
-      { label: "価格", value: formatYen(item.price) },
+      { label: "売れ行き", value: item.market_summary?.sell_through_signal?.label || "データ不足" },
       { label: "コンプ相場", value: formatYen(item.market_summary?.complete_set) },
     ];
   }
@@ -166,7 +202,7 @@ function getMetrics(item, mode) {
     { label: "当たり枠", value: formatScore(item.ace_character_score) },
     { label: "互換性", value: formatScore(item.compatibility_score) },
     { label: "限定性", value: formatScore(item.limitedness_score) },
-    { label: "予約気配", value: formatScore(item.preorder_signal_score) },
+    { label: "X反応", value: formatScore(item.x_signal_score) },
   ];
 }
 
@@ -176,17 +212,24 @@ function arrangePodium(items) {
 }
 
 function formatYen(value) {
-  return Number.isFinite(value) ? `${Math.round(value).toLocaleString("ja-JP")}円` : "未登録";
+  return Number.isFinite(value) ? `${Math.round(value).toLocaleString("ja-JP")}円` : "未取得";
 }
 
 function formatDiff(value) {
-  if (!Number.isFinite(value)) return "未登録";
+  if (!Number.isFinite(value)) return "データ不足";
   const rounded = Math.round(value);
   return `${rounded > 0 ? "+" : ""}${rounded.toLocaleString("ja-JP")}円`;
 }
 
 function formatScore(value) {
-  return Number.isFinite(value) ? `${Math.round(value)}点` : "未登録";
+  return Number.isFinite(value) ? `${Math.round(value)}点` : "データ不足";
+}
+
+function formatDate(value) {
+  if (!value) return "未更新";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "未更新";
+  return `${date.getMonth() + 1}/${date.getDate()}更新`;
 }
 
 function getDiffTone(value) {
@@ -202,4 +245,20 @@ function stockSignalLabel(status) {
   if (status === "in_stock") return "在庫あり";
   if (status === "restocked") return "補充あり";
   return "在庫シグナル";
+}
+
+function releasedPriority(item) {
+  return Math.max(0, item.profit_estimate ?? 0) * 0.8 + (item.circulation_score ?? 0) * 18 + (item.trend_score ?? 0) * 12 + (item.sold_count ?? 0) * 45;
+}
+
+function upcomingPriority(item) {
+  return (item.forecast_score ?? 0) * 10 + (item.trend_score ?? 0) * 4 + (item.x_signal_score ?? 0) * 3;
+}
+
+function hasCirculationSignal(item) {
+  return (item.circulation_score ?? 0) > 0 || (item.sold_count ?? 0) > 0 || (item.active_listing_count ?? 0) > 0;
+}
+
+function hasUpcomingSignal(item) {
+  return (item.forecast_score ?? 0) >= 50 || (item.x_signal_score ?? 0) > 0 || (item.trend_tags ?? []).length > 0;
 }
