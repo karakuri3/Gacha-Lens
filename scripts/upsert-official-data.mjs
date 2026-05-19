@@ -1,63 +1,56 @@
-import { createClient } from "@supabase/supabase-js";
 import fs from "node:fs";
 import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
+import { deleteOfficialVariantsBySeriesIds, upsertRows } from "./supabase-rest.mjs";
 
 loadEnvFile(".env.local");
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
-}
-
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: { persistSession: false },
-});
-
-const officialRows = [...officialSchedule, ...officialProducts];
+const generatedOfficial = loadGeneratedOfficialRaw();
+const officialRows = dedupeById([...generatedOfficial.records, ...officialSchedule, ...officialProducts]);
 const seriesRows = officialRows.map(toSeriesRow);
 const variantRows = officialRows.flatMap((series) => {
   return asArray(series.variants || series.items || series.lineup || series.line_up).map((variant) => toVariantRow(variant, series));
 });
 
-await upsert("series", seriesRows);
-await upsert("variants", variantRows);
+const issueRows = generatedOfficial.issues.map((issue) => ({
+  ...issue,
+  record_id: issue.record_id || issue.id,
+  resolved: Boolean(issue.resolved),
+}));
+
+await upsertRows("series", seriesRows, { label: "upsert-official" });
+await replaceOfficialVariants(seriesRows);
+await upsertRows("variants", variantRows, { label: "upsert-official" });
+await upsertRows("import_issues", issueRows, { label: "upsert-official" });
 
 console.log(JSON.stringify({
   ok: true,
+  generatedRows: generatedOfficial.records.length,
+  generatedIssues: generatedOfficial.issues.length,
   sourceRows: officialRows.length,
   series: seriesRows.length,
   variants: variantRows.length,
+  importIssues: issueRows.length,
 }, null, 2));
 
-async function upsert(table, rows) {
-  if (!rows.length) return;
-  let safeRows = rows;
-
-  for (let attempt = 0; attempt < 24; attempt += 1) {
-    const { error } = await supabase.from(table).upsert(safeRows, { onConflict: "id" });
-    if (!error) return;
-
-    const missingColumn = parseMissingColumn(error.message);
-    if (!missingColumn) throw new Error(`${table} upsert failed: ${error.message}`);
-
-    safeRows = safeRows.map((row) => omitKey(row, missingColumn));
-    console.warn(`[upsert-official] ${table}.${missingColumn} is not in the remote schema cache. Retrying without it.`);
-  }
-
-  throw new Error(`${table} upsert failed: too many schema fallback attempts`);
+function replaceOfficialVariants(seriesRows) {
+  const seriesIds = seriesRows.map((row) => row.id).filter(Boolean);
+  return deleteOfficialVariantsBySeriesIds(seriesIds);
 }
 
-function parseMissingColumn(message = "") {
-  return message.match(/Could not find the '([^']+)' column/)?.[1] ?? "";
+function loadGeneratedOfficialRaw() {
+  const filePath = path.join(process.cwd(), "data", "generated", "official-raw.json");
+  if (!fs.existsSync(filePath)) return { records: [], issues: [] };
+
+  const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  return {
+    records: Array.isArray(parsed.records) ? parsed.records : [],
+    issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+  };
 }
 
-function omitKey(row, key) {
-  const next = { ...row };
-  delete next[key];
-  return next;
+function dedupeById(records) {
+  return [...new Map(records.filter(Boolean).map((record) => [text(record.id || record.series_id || record.slug), record])).values()];
 }
 
 function toSeriesRow(raw) {

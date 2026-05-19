@@ -6,6 +6,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "fetch:official": "node scripts/collect-official-data.mjs",
+    "fetch:market": "node scripts/collect-market-data.mjs",
+    "fetch:x": "node scripts/collect-x-reactions.mjs",
+    "ingest:official": "node scripts/run-official-ingestion.mjs",
+    "ingest:market": "node scripts/run-market-ingestion.mjs",
+    "ingest:x": "node scripts/run-x-ingestion.mjs",
     "db:upsert-official": "node scripts/upsert-official-data.mjs",
     "db:upsert-market": "node scripts/upsert-market-data.mjs",
     "db:upsert-x": "node scripts/upsert-x-reactions.mjs",

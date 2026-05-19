@@ -1,7 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
 import fs from "node:fs";
 import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
+import { fetchIdSetSafe, upsertRows } from "./supabase-rest.mjs";
 
 const SOURCE_WEIGHTS = {
   official_site: 1,
@@ -30,28 +30,22 @@ const X_INTENT_LABELS = {
 
 loadEnvFile(".env.local");
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
-}
-
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: { persistSession: false },
-});
-
 const catalog = buildOfficialCatalog([...officialSchedule, ...officialProducts]);
-const xReactionsRaw = loadXReactionsRaw();
+const xReactionsRaw = dedupeById([...loadGeneratedXReactionsRaw().records, ...loadXReactionsRaw()]);
 const xRows = xReactionsRaw.map((raw) => normalizeXReaction(raw, catalog));
 const referenceIds = await loadReferenceIds();
 const dbXRows = xRows.map((row) => applyDbReferenceSafety(row, referenceIds));
 const issueRows = dbXRows
   .filter((row) => row.review_required)
   .map((row) => createImportIssue("x_reactions", row.raw, "unknown_variant", row.id));
+const fetchIssueRows = loadGeneratedXReactionsRaw().issues.map((issue) => ({
+  ...issue,
+  record_id: issue.record_id || issue.id,
+  resolved: Boolean(issue.resolved),
+}));
 
-await upsert("x_reactions", dbXRows);
-await upsert("import_issues", issueRows);
+await upsertRows("x_reactions", dbXRows, { label: "upsert-x" });
+await upsertRows("import_issues", [...issueRows, ...fetchIssueRows], { label: "upsert-x" });
 
 const reviewRequired = dbXRows.filter((row) => row.review_required).length;
 const linkedToVariant = xRows.filter((row) => row.variant_id).length;
@@ -67,30 +61,13 @@ console.log(JSON.stringify({
   ok: true,
   raw: xReactionsRaw.length,
   xReactions: dbXRows.length,
-  importIssues: issueRows.length,
+  importIssues: issueRows.length + fetchIssueRows.length,
+  fetchIssues: fetchIssueRows.length,
   linkedToVariant,
   savedLinkedToVariant,
   reviewRequired,
   intentBreakdown,
 }, null, 2));
-
-async function upsert(table, rows) {
-  if (!rows.length) return;
-  let safeRows = rows;
-
-  for (let attempt = 0; attempt < 32; attempt += 1) {
-    const { error } = await supabase.from(table).upsert(safeRows, { onConflict: "id" });
-    if (!error) return;
-
-    const missingColumn = parseMissingColumn(error.message);
-    if (!missingColumn) throw new Error(`${table} upsert failed: ${error.message}`);
-
-    safeRows = safeRows.map((row) => omitKey(row, missingColumn));
-    console.warn(`[upsert-x] ${table}.${missingColumn} is not in the remote schema cache. Retrying without it.`);
-  }
-
-  throw new Error(`${table} upsert failed: too many schema fallback attempts`);
-}
 
 function normalizeXReaction(raw, catalog) {
   const variant = resolveVariant(raw, catalog);
@@ -147,19 +124,10 @@ function inferXIntentTags(value = "") {
 
 async function loadReferenceIds() {
   const [seriesIds, variantIds] = await Promise.all([
-    fetchIdSet("series"),
-    fetchIdSet("variants"),
+    fetchIdSetSafe("series", "upsert-x"),
+    fetchIdSetSafe("variants", "upsert-x"),
   ]);
   return { seriesIds, variantIds };
-}
-
-async function fetchIdSet(tableName) {
-  const { data, error } = await supabase.from(tableName).select("id");
-  if (error) {
-    console.warn(`[upsert-x] Could not read ${tableName}. References will be sent to review: ${error.message}`);
-    return new Set();
-  }
-  return new Set((data ?? []).map((row) => row.id).filter(Boolean));
 }
 
 function applyDbReferenceSafety(row, referenceIds) {
@@ -238,16 +206,6 @@ function hasAny(value, keywords) {
   return keywords.some((keyword) => value.includes(normalize(keyword)));
 }
 
-function parseMissingColumn(message = "") {
-  return message.match(/Could not find the '([^']+)' column/)?.[1] ?? "";
-}
-
-function omitKey(row, key) {
-  const next = { ...row };
-  delete next[key];
-  return next;
-}
-
 function loadEnvFile(fileName) {
   const envPath = path.join(process.cwd(), fileName);
   if (!fs.existsSync(envPath)) return;
@@ -271,6 +229,21 @@ function loadXReactionsRaw() {
     .replaceAll("export const xReactionsRaw", "const xReactionsRaw");
 
   return Function(`${source}\nreturn xReactionsRaw;`)();
+}
+
+function loadGeneratedXReactionsRaw() {
+  const filePath = path.join(process.cwd(), "data", "generated", "x-reactions-raw.json");
+  if (!fs.existsSync(filePath)) return { records: [], issues: [] };
+
+  const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  return {
+    records: Array.isArray(parsed.records) ? parsed.records : [],
+    issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+  };
+}
+
+function dedupeById(records) {
+  return [...new Map(records.filter(Boolean).map((record) => [text(record.id) || stableId("x", record.url, record.text), record])).values()];
 }
 
 function asArray(value) {

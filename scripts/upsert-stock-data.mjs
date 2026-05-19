@@ -1,7 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
 import fs from "node:fs";
 import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
+import { fetchIdSetSafe, upsertRows } from "./supabase-rest.mjs";
 
 const SOURCE_WEIGHTS = {
   official_site: 1,
@@ -13,17 +13,6 @@ const SOURCE_WEIGHTS = {
 };
 
 loadEnvFile(".env.local");
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
-}
-
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: { persistSession: false },
-});
 
 const catalog = buildOfficialCatalog([...officialSchedule, ...officialProducts]);
 const { restockEventsRaw, stockReportsRaw } = loadStockRaw();
@@ -37,9 +26,9 @@ const issueRows = [
   ...dbStockRows.filter((row) => row.review_required).map((row) => createImportIssue("stock_reports", row.raw, "unknown_variant", row.id)),
 ];
 
-await upsert("restock_events", dbRestockRows);
-await upsert("stock_reports", dbStockRows);
-await upsert("import_issues", issueRows);
+await upsertRows("restock_events", dbRestockRows, { label: "upsert-stock" });
+await upsertRows("stock_reports", dbStockRows, { label: "upsert-stock" });
+await upsertRows("import_issues", issueRows, { label: "upsert-stock" });
 
 const restockLinked = restockRows.filter((row) => row.variant_id).length;
 const stockLinked = stockRows.filter((row) => row.variant_id).length;
@@ -72,24 +61,6 @@ console.log(JSON.stringify({
   restockBreakdown: countBy(dbRestockRows, "event_type"),
   stockBreakdown: countBy(dbStockRows, "status"),
 }, null, 2));
-
-async function upsert(table, rows) {
-  if (!rows.length) return;
-  let safeRows = rows;
-
-  for (let attempt = 0; attempt < 32; attempt += 1) {
-    const { error } = await supabase.from(table).upsert(safeRows, { onConflict: "id" });
-    if (!error) return;
-
-    const missingColumn = parseMissingColumn(error.message);
-    if (!missingColumn) throw new Error(`${table} upsert failed: ${error.message}`);
-
-    safeRows = safeRows.map((row) => omitKey(row, missingColumn));
-    console.warn(`[upsert-stock] ${table}.${missingColumn} is not in the remote schema cache. Retrying without it.`);
-  }
-
-  throw new Error(`${table} upsert failed: too many schema fallback attempts`);
-}
 
 function normalizeRestockEvent(raw, catalog) {
   const variant = resolveVariant(raw, catalog);
@@ -193,19 +164,10 @@ function resolveVariant(raw, catalog) {
 
 async function loadReferenceIds() {
   const [seriesIds, variantIds] = await Promise.all([
-    fetchIdSet("series"),
-    fetchIdSet("variants"),
+    fetchIdSetSafe("series", "upsert-stock"),
+    fetchIdSetSafe("variants", "upsert-stock"),
   ]);
   return { seriesIds, variantIds };
-}
-
-async function fetchIdSet(tableName) {
-  const { data, error } = await supabase.from(tableName).select("id");
-  if (error) {
-    console.warn(`[upsert-stock] Could not read ${tableName}. References will be sent to review: ${error.message}`);
-    return new Set();
-  }
-  return new Set((data ?? []).map((row) => row.id).filter(Boolean));
 }
 
 function applyDbReferenceSafety(row, referenceIds) {
@@ -293,16 +255,6 @@ function loadStockRaw() {
     .replaceAll("export const stockReportsRaw", "const stockReportsRaw");
 
   return Function(`${source}\nreturn { restockEventsRaw, stockReportsRaw };`)();
-}
-
-function parseMissingColumn(message = "") {
-  return message.match(/Could not find the '([^']+)' column/)?.[1] ?? "";
-}
-
-function omitKey(row, key) {
-  const next = { ...row };
-  delete next[key];
-  return next;
 }
 
 function countBy(rows, key) {

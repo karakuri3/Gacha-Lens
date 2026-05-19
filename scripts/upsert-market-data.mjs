@@ -1,8 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
 import fs from "node:fs";
 import path from "node:path";
 import { marketListingsRaw } from "../lib/data/market-input.js";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
+import { fetchIdSetSafe, upsertRows } from "./supabase-rest.mjs";
 
 const TITLE_ALIASES = [
   { aliases: ["リンレン", "リン・レン", "リン&レン", "リン レン"], names: ["鏡音リン", "鏡音レン"] },
@@ -12,27 +12,23 @@ const TITLE_ALIASES = [
 
 loadEnvFile(".env.local");
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
-}
-
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: { persistSession: false },
-});
-
 const catalog = buildOfficialCatalog([...officialSchedule, ...officialProducts]);
-const marketRows = marketListingsRaw.map((raw) => normalizeMarketListing(raw, catalog));
+const generatedMarket = loadGeneratedMarketRaw();
+const safeMarketRaw = dedupeRawById([...generatedMarket.records, ...marketListingsRaw]);
+const marketRows = safeMarketRaw.map((raw) => normalizeMarketListing(raw, catalog));
 const referenceIds = await loadReferenceIds();
 const dbMarketRows = marketRows.map((row) => applyDbReferenceSafety(row, referenceIds));
 const issueRows = dbMarketRows
   .filter((row) => row.review_required)
   .map((row) => createImportIssue("market_listings", row.raw, "unknown_variant", row.id));
+const fetchIssueRows = generatedMarket.issues.map((issue) => ({
+  ...issue,
+  record_id: issue.record_id || issue.id,
+  resolved: Boolean(issue.resolved),
+}));
 
-await upsert("market_listings", dbMarketRows);
-await upsert("import_issues", issueRows);
+await upsertRows("market_listings", dbMarketRows, { label: "upsert-market" });
+await upsertRows("import_issues", [...issueRows, ...fetchIssueRows], { label: "upsert-market" });
 
 const reviewRequired = dbMarketRows.filter((row) => row.review_required).length;
 const linkedToVariant = marketRows.filter((row) => row.variant_id).length;
@@ -43,9 +39,10 @@ const breakdown = countBy(marketRows, "market_review_type");
 
 console.log(JSON.stringify({
   ok: true,
-  raw: marketListingsRaw.length,
+  raw: safeMarketRaw.length,
   marketListings: dbMarketRows.length,
-  importIssues: issueRows.length,
+  importIssues: issueRows.length + fetchIssueRows.length,
+  fetchIssues: fetchIssueRows.length,
   reviewRequired,
   linkedToVariant,
   linkedToSeries,
@@ -54,22 +51,19 @@ console.log(JSON.stringify({
   breakdown,
 }, null, 2));
 
-async function upsert(table, rows) {
-  if (!rows.length) return;
-  let safeRows = rows;
+function loadGeneratedMarketRaw() {
+  const filePath = path.join(process.cwd(), "data", "generated", "market-raw.json");
+  if (!fs.existsSync(filePath)) return { records: [], issues: [] };
 
-  for (let attempt = 0; attempt < 32; attempt += 1) {
-    const { error } = await supabase.from(table).upsert(safeRows, { onConflict: "id" });
-    if (!error) return;
+  const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  return {
+    records: Array.isArray(parsed.records) ? parsed.records : [],
+    issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+  };
+}
 
-    const missingColumn = parseMissingColumn(error.message);
-    if (!missingColumn) throw new Error(`${table} upsert failed: ${error.message}`);
-
-    safeRows = safeRows.map((row) => omitKey(row, missingColumn));
-    console.warn(`[upsert-market] ${table}.${missingColumn} is not in the remote schema cache. Retrying without it.`);
-  }
-
-  throw new Error(`${table} upsert failed: too many schema fallback attempts`);
+function dedupeRawById(records) {
+  return [...new Map(records.filter(Boolean).map((record) => [text(record.id || record.source_url || record.url || record.title), record])).values()];
 }
 
 function normalizeMarketListing(raw, catalog) {
@@ -103,19 +97,10 @@ function normalizeMarketListing(raw, catalog) {
 
 async function loadReferenceIds() {
   const [seriesIds, variantIds] = await Promise.all([
-    fetchIdSet("series"),
-    fetchIdSet("variants"),
+    fetchIdSetSafe("series", "upsert-market"),
+    fetchIdSetSafe("variants", "upsert-market"),
   ]);
   return { seriesIds, variantIds };
-}
-
-async function fetchIdSet(tableName) {
-  const { data, error } = await supabase.from(tableName).select("id");
-  if (error) {
-    console.warn(`[upsert-market] Could not read ${tableName}. References will be sent to review: ${error.message}`);
-    return new Set();
-  }
-  return new Set((data ?? []).map((row) => row.id).filter(Boolean));
 }
 
 function applyDbReferenceSafety(row, referenceIds) {
@@ -304,16 +289,6 @@ function normalizeMarketStatus(value) {
   if (["sold", "sold_out", "soldout", "売り切れ", "売却済み"].includes(status)) return "sold";
   if (["pre_release", "予約", "発売前"].includes(status)) return "pre_release";
   return status || "active";
-}
-
-function parseMissingColumn(message = "") {
-  return message.match(/Could not find the '([^']+)' column/)?.[1] ?? "";
-}
-
-function omitKey(row, key) {
-  const next = { ...row };
-  delete next[key];
-  return next;
 }
 
 function countBy(rows, key) {
