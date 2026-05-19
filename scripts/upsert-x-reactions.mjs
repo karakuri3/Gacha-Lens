@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
+import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { fetchIdSetSafe, upsertRows } from "./supabase-rest.mjs";
 
 const SOURCE_WEIGHTS = {
@@ -232,7 +233,7 @@ function loadXReactionsRaw() {
 }
 
 function loadGeneratedXReactionsRaw() {
-  const filePath = path.join(process.cwd(), "data", "generated", "x-reactions-raw.json");
+  const filePath = getGeneratedDataPath("x-reactions-raw.json");
   if (!fs.existsSync(filePath)) return { records: [], issues: [] };
 
   const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));

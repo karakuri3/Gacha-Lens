@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { marketListingsRaw } from "../lib/data/market-input.js";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
+import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { fetchIdSetSafe, upsertRows } from "./supabase-rest.mjs";
 
 const TITLE_ALIASES = [
@@ -52,7 +53,7 @@ console.log(JSON.stringify({
 }, null, 2));
 
 function loadGeneratedMarketRaw() {
-  const filePath = path.join(process.cwd(), "data", "generated", "market-raw.json");
+  const filePath = getGeneratedDataPath("market-raw.json");
   if (!fs.existsSync(filePath)) return { records: [], issues: [] };
 
   const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));

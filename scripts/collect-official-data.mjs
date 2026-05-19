@@ -1,17 +1,29 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fetchOfficialRaw } from "../lib/fetchers/official-fetcher.js";
+import { getGeneratedDataPath } from "./generated-paths.mjs";
 
 loadEnvFile(".env.local");
 
-const outputPath = path.join(process.cwd(), "data", "generated", "official-raw.json");
+const outputPath = getGeneratedDataPath("official-raw.json");
 const result = await fetchOfficialRaw();
 writeJson(outputPath, result);
-console.log(JSON.stringify(result, null, 2));
+console.log(JSON.stringify(summarize("official", result, outputPath), null, 2));
 
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function summarize(source, result, filePath) {
+  return {
+    ok: Boolean(result.ok),
+    source,
+    fetchedAt: result.fetchedAt,
+    records: Array.isArray(result.records) ? result.records.length : 0,
+    issues: Array.isArray(result.issues) ? result.issues.length : 0,
+    outputPath: path.relative(process.cwd(), filePath),
+  };
 }
 
 function loadEnvFile(fileName) {

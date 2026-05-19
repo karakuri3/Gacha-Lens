@@ -1,16 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
+import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { deleteOfficialVariantsBySeriesIds, upsertRows } from "./supabase-rest.mjs";
 
 loadEnvFile(".env.local");
 
 const generatedOfficial = loadGeneratedOfficialRaw();
 const officialRows = dedupeById([...generatedOfficial.records, ...officialSchedule, ...officialProducts]);
-const seriesRows = officialRows.map(toSeriesRow);
-const variantRows = officialRows.flatMap((series) => {
+const seriesRows = dedupeRowsById(officialRows.map(toSeriesRow));
+const variantSourceRows = officialRows.filter(hasVariantRows);
+const variantRows = dedupeRowsById(officialRows.flatMap((series) => {
   return asArray(series.variants || series.items || series.lineup || series.line_up).map((variant) => toVariantRow(variant, series));
-});
+}));
 
 const issueRows = generatedOfficial.issues.map((issue) => ({
   ...issue,
@@ -19,7 +21,7 @@ const issueRows = generatedOfficial.issues.map((issue) => ({
 }));
 
 await upsertRows("series", seriesRows, { label: "upsert-official" });
-await replaceOfficialVariants(seriesRows);
+await replaceOfficialVariants(variantSourceRows.map(toSeriesRow));
 await upsertRows("variants", variantRows, { label: "upsert-official" });
 await upsertRows("import_issues", issueRows, { label: "upsert-official" });
 
@@ -39,7 +41,7 @@ function replaceOfficialVariants(seriesRows) {
 }
 
 function loadGeneratedOfficialRaw() {
-  const filePath = path.join(process.cwd(), "data", "generated", "official-raw.json");
+  const filePath = getGeneratedDataPath("official-raw.json");
   if (!fs.existsSync(filePath)) return { records: [], issues: [] };
 
   const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -51,6 +53,14 @@ function loadGeneratedOfficialRaw() {
 
 function dedupeById(records) {
   return [...new Map(records.filter(Boolean).map((record) => [text(record.id || record.series_id || record.slug), record])).values()];
+}
+
+function dedupeRowsById(rows) {
+  return [...new Map(rows.filter((row) => row?.id).map((row) => [row.id, row])).values()];
+}
+
+function hasVariantRows(raw) {
+  return asArray(raw?.variants || raw?.items || raw?.lineup || raw?.line_up).length > 0;
 }
 
 function toSeriesRow(raw) {
