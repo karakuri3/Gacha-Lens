@@ -487,6 +487,10 @@ select {
 }
 
 .detail-image {
+  aspect-ratio: 1 / 1;
+  min-height: 320px;
+  display: grid;
+  place-items: center;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -496,7 +500,13 @@ select {
 
 .detail-image img {
   width: 100%;
+  height: 100%;
+  object-fit: contain;
   display: block;
+}
+
+.detail-image .image-placeholder {
+  min-height: inherit;
 }
 
 .detail-panel {
