@@ -2,6 +2,7 @@ import Link from "next/link";
 
 const navItems = [
   { label: "ランキング", href: "/ranking" },
+  { label: "トレンド", href: "/trends" },
   { label: "スケジュール", href: "/schedule" },
   { label: "単品一覧", href: "/series" },
 ];

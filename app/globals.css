@@ -346,6 +346,80 @@ select {
   font-weight: 850;
 }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 26px;
+}
+
+.pagination__pages {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.pill-link.is-disabled {
+  pointer-events: none;
+  opacity: 0.42;
+}
+
+.trend-board {
+  display: grid;
+  gap: 34px;
+}
+
+.trend-card {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px;
+  text-decoration: none;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.trend-card:hover {
+  transform: translateY(-3px);
+  border-color: #cbd5e1;
+  box-shadow: 0 28px 62px rgba(16, 24, 40, 0.12);
+}
+
+.trend-card .product-image {
+  align-self: start;
+}
+
+.trend-card__body {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.trend-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trend-score {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 950;
+  padding: 7px 11px;
+}
+
+.trend-card--compact {
+  grid-template-columns: 124px minmax(0, 1fr);
+  align-items: start;
+}
+
 .market-snapshot {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -876,6 +950,26 @@ button.button-link {
 
   .signal-strip {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pagination__pages {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .trend-card,
+  .trend-card--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .trend-card__top {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .market-snapshot {

@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { getSeriesList } from "@/lib/series";
 import SeriesCard from "@/components/SeriesCard";
-import { customerTags, opportunityScore, watchScore } from "@/lib/domain/public-display";
+import { customerTags, isCirculatingItem, opportunityScore, releasedPriorityScore } from "@/lib/domain/public-display";
 
 export default async function Home() {
   const series = await getSeriesList();
   const watchNow = series
-    .filter((item) => item.is_released)
+    .filter(isCirculatingItem)
     .sort((a, b) => releasedPriority(b) - releasedPriority(a))
     .slice(0, 4);
   const releasedTop = watchNow.slice(0, 3);
@@ -26,6 +26,7 @@ export default async function Home() {
           </p>
           <div className="tag-row">
             <Link href="/ranking" className="button-link button-link--dark">ランキングを見る</Link>
+            <Link href="/trends" className="button-link">トレンドを見る</Link>
             <Link href="/schedule" className="button-link">発売予定を見る</Link>
             <Link href="/series" className="button-link">単品一覧で探す</Link>
           </div>
@@ -77,7 +78,7 @@ export default async function Home() {
 }
 
 function releasedPriority(item) {
-  return watchScore(item) * 12 + Math.max(0, item.profit_estimate ?? 0) * 0.7;
+  return releasedPriorityScore(item);
 }
 
 function upcomingPriority(item) {

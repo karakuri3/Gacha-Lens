@@ -5,8 +5,9 @@ import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
   customerTags,
+  isCirculatingItem,
   opportunityScore,
-  watchScore,
+  releasedPriorityScore,
 } from "@/lib/domain/public-display";
 
 export const metadata = {
@@ -25,7 +26,7 @@ export default async function RankingPage({ searchParams }) {
   const series = await getSeriesList();
 
   const ranked = series
-    .filter((item) => (tab === "released" ? item.is_released : !item.is_released))
+    .filter((item) => (tab === "released" ? isCirculatingItem(item) : !item.is_released))
     .sort((a, b) => {
       const primaryA = tab === "released" ? releasedPriority(a) : upcomingPriority(a);
       const primaryB = tab === "released" ? releasedPriority(b) : upcomingPriority(b);
@@ -168,7 +169,7 @@ function arrangePodium(items) {
 }
 
 function releasedPriority(item) {
-  return watchScore(item) * 12 + Math.max(0, item.profit_estimate ?? 0) * 0.7;
+  return releasedPriorityScore(item);
 }
 
 function upcomingPriority(item) {

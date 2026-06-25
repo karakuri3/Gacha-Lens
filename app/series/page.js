@@ -1,7 +1,7 @@
 import Link from "next/link";
 import SeriesCard from "@/components/SeriesCard";
 import { getSeriesList } from "@/lib/series";
-import { opportunityScore, watchScore } from "@/lib/domain/public-display";
+import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display";
 
 export const metadata = {
   title: "単品一覧 | Gacha Lens",
@@ -25,7 +25,7 @@ const sorts = [
   { value: "release", label: "発売月順" },
 ];
 
-const MAX_VISIBLE_RESULTS = 120;
+const PAGE_SIZE = 120;
 
 export default async function SeriesPage({ searchParams }) {
   const params = await searchParams;
@@ -40,8 +40,13 @@ export default async function SeriesPage({ searchParams }) {
     .sort((a, b) => compareSeries(a, b, sort));
 
   const counts = Object.fromEntries(filters.map((item) => [item.value, series.filter((entry) => matchesFilter(entry, item.value)).length]));
-  const visibleItems = filtered.slice(0, MAX_VISIBLE_RESULTS);
-  const isLimited = filtered.length > visibleItems.length;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const page = clampPage(params?.page, totalPages);
+  const startIndex = (page - 1) * PAGE_SIZE;
+  const visibleItems = filtered.slice(startIndex, startIndex + PAGE_SIZE);
+  const hasPagination = filtered.length > PAGE_SIZE;
+  const displayStart = filtered.length ? startIndex + 1 : 0;
+  const displayEnd = startIndex + visibleItems.length;
 
   return (
     <main className="site-main">
@@ -97,18 +102,25 @@ export default async function SeriesPage({ searchParams }) {
         <div className="section-head">
           <div>
             <h2 className="section-title">
-              {filtered.length}件{isLimited ? `（上位${visibleItems.length}件表示）` : ""}
+              {filtered.length
+                ? `全${filtered.length.toLocaleString("ja-JP")}件中 ${displayStart.toLocaleString("ja-JP")}-${displayEnd.toLocaleString("ja-JP")}件`
+                : "0件"}
             </h2>
-            <p className="section-sub">カード全体をクリックすると詳細へ移動します。</p>
+            <p className="section-sub">過去商品もページを切り替えて全件確認できます。カード全体をクリックすると詳細へ移動します。</p>
           </div>
         </div>
 
         {filtered.length > 0 ? (
-          <section className="grid grid--cards">
-            {visibleItems.map((item) => (
-              <SeriesCard key={item.slug} series={item} />
-            ))}
-          </section>
+          <>
+            <section className="grid grid--cards">
+              {visibleItems.map((item) => (
+                <SeriesCard key={item.slug} series={item} />
+              ))}
+            </section>
+            {hasPagination ? (
+              <Pagination page={page} totalPages={totalPages} q={q} filter={filter} sort={sort} />
+            ) : null}
+          </>
         ) : (
           <div className="card empty">条件に合う単品がありません。</div>
         )}
@@ -121,7 +133,7 @@ function matchesFilter(item, filter) {
   if (filter === "released") return item.is_released;
   if (filter === "upcoming") return !item.is_released;
   if (filter === "profitable") return item.is_released && Number.isFinite(item.profit_estimate) && item.profit_estimate > 0;
-  if (filter === "circulating") return item.is_released && watchScore(item) > 0;
+  if (filter === "circulating") return isCirculatingItem(item);
   if (filter === "opportunity") return !item.is_released && opportunityScore(item) >= 60;
   return true;
 }
@@ -149,4 +161,61 @@ function getReleaseSortValue(item) {
   if (item.release_date) return new Date(item.release_date).getTime();
   const matched = String(item.schedule_month || "").match(/\d+/);
   return matched ? Number(matched[0]) : 999;
+}
+
+function Pagination({ page, totalPages, q, filter, sort }) {
+  const pages = buildPageWindow(page, totalPages);
+  return (
+    <nav className="pagination" aria-label="ページ">
+      <Link
+        className={`pill-link ${page <= 1 ? "is-disabled" : ""}`}
+        href={pageHref({ q, filter, sort, page: Math.max(1, page - 1) })}
+        aria-disabled={page <= 1}
+      >
+        前へ
+      </Link>
+      <div className="pagination__pages">
+        {pages.map((item) => (
+          <Link
+            key={item}
+            className={`pill-link ${item === page ? "is-active" : ""}`}
+            href={pageHref({ q, filter, sort, page: item })}
+          >
+            {item.toLocaleString("ja-JP")}
+          </Link>
+        ))}
+      </div>
+      <Link
+        className={`pill-link ${page >= totalPages ? "is-disabled" : ""}`}
+        href={pageHref({ q, filter, sort, page: Math.min(totalPages, page + 1) })}
+        aria-disabled={page >= totalPages}
+      >
+        次へ
+      </Link>
+    </nav>
+  );
+}
+
+function pageHref({ q, filter, sort, page }) {
+  return {
+    pathname: "/series",
+    query: {
+      q: q || undefined,
+      filter,
+      sort,
+      page: page > 1 ? page : undefined,
+    },
+  };
+}
+
+function buildPageWindow(page, totalPages) {
+  const start = Math.max(1, page - 2);
+  const end = Math.min(totalPages, start + 4);
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+}
+
+function clampPage(value, totalPages) {
+  const page = Number.parseInt(String(value ?? "1"), 10);
+  if (!Number.isFinite(page) || page < 1) return 1;
+  return Math.min(page, totalPages);
 }
