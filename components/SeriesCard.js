@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ProductImage from "@/components/ProductImage";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
@@ -44,8 +45,4 @@ export default function SeriesCard({ series }) {
       ) : null}
     </Link>
   );
-}
-
-function ProductImage({ src, alt }) {
-  return src ? <img src={src} alt={alt} /> : <span className="image-placeholder">NO IMAGE</span>;
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ProductImage from "@/components/ProductImage";
 import { getSeriesList } from "@/lib/series";
 import { buildUpcomingCustomerMetrics, customerTags, opportunityScore } from "@/lib/domain/public-display";
 
@@ -119,10 +120,6 @@ function ScheduleCard({ item }) {
       ) : null}
     </Link>
   );
-}
-
-function ProductImage({ src, alt }) {
-  return src ? <img src={src} alt={alt} /> : <span className="image-placeholder">NO IMAGE</span>;
 }
 
 function Metric({ label, value, tone = "" }) {

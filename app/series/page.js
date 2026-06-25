@@ -25,6 +25,8 @@ const sorts = [
   { value: "release", label: "発売月順" },
 ];
 
+const MAX_VISIBLE_RESULTS = 120;
+
 export default async function SeriesPage({ searchParams }) {
   const params = await searchParams;
   const q = String(params?.q ?? "").trim();
@@ -38,6 +40,8 @@ export default async function SeriesPage({ searchParams }) {
     .sort((a, b) => compareSeries(a, b, sort));
 
   const counts = Object.fromEntries(filters.map((item) => [item.value, series.filter((entry) => matchesFilter(entry, item.value)).length]));
+  const visibleItems = filtered.slice(0, MAX_VISIBLE_RESULTS);
+  const isLimited = filtered.length > visibleItems.length;
 
   return (
     <main className="site-main">
@@ -92,14 +96,16 @@ export default async function SeriesPage({ searchParams }) {
 
         <div className="section-head">
           <div>
-            <h2 className="section-title">{filtered.length}件</h2>
+            <h2 className="section-title">
+              {filtered.length}件{isLimited ? `（上位${visibleItems.length}件表示）` : ""}
+            </h2>
             <p className="section-sub">カード全体をクリックすると詳細へ移動します。</p>
           </div>
         </div>
 
         {filtered.length > 0 ? (
           <section className="grid grid--cards">
-            {filtered.map((item) => (
+            {visibleItems.map((item) => (
               <SeriesCard key={item.slug} series={item} />
             ))}
           </section>

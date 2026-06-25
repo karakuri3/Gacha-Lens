@@ -20,6 +20,9 @@ const nextConfig = {
   turbopack: {
     root: import.meta.dirname,
   },
+  images: {
+    unoptimized: true,
+  },
   outputFileTracingIncludes: {
     "/*": ingestionTraceIncludes,
     "/api/ingest/*": ingestionTraceIncludes,

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import ProductImage from "@/components/ProductImage";
 import { getRelatedSeries, getSeriesBySlug } from "@/lib/series";
 import SeriesCard from "@/components/SeriesCard";
 import {
@@ -198,10 +199,6 @@ function StockPanel({ item }) {
       </p>
     </div>
   );
-}
-
-function ProductImage({ src, alt }) {
-  return src ? <img src={src} alt={alt} /> : <span className="image-placeholder">NO IMAGE</span>;
 }
 
 function Metric({ label, value, tone = "" }) {

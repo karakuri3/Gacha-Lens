@@ -1,6 +1,10 @@
-import { supabase } from "../../lib/supabase";
+import { notFound } from "next/navigation";
+
+const supabase = null;
 
 export default async function SupabaseSeriesPage() {
+  notFound();
+
   if (!supabase) {
     return (
       <main style={{ padding: "24px", fontFamily: "sans-serif" }}>

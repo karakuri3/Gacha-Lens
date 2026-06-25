@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ProductImage from "@/components/ProductImage";
 import { getSeriesList } from "@/lib/series";
 import {
   buildReleasedCustomerMetrics,
@@ -10,11 +11,11 @@ import {
 
 export const metadata = {
   title: "ランキング | Gacha Lens",
-  description: "発売中は相場・利益・在庫・売れ行き、発売予定は期待値と狙い目度で見る単品ランキングです。",
+  description: "発売中と発売予定を分けて、仕入れ判断に使う単品ランキングです。",
 };
 
 const tabs = [
-  { value: "released", label: "発売中", caption: "相場・利益" },
+  { value: "released", label: "発売中", caption: "流通判断" },
   { value: "upcoming", label: "発売予定", caption: "期待値" },
 ];
 
@@ -44,7 +45,7 @@ export default async function RankingPage({ searchParams }) {
           <p className="eyebrow">RANKING</p>
           <h1 className="page-title">仕入れ判断に使う単品ランキング</h1>
           <p className="page-lead">
-            発売中は価格・相場・利益・在庫、発売予定は期待値と狙い目度だけに絞って見られます。
+            発売中と発売予定を分けて、今見るべき単品だけに絞って判断できます。
           </p>
         </section>
 
@@ -139,10 +140,6 @@ function PublicTags({ item, isReleased, compact = false }) {
       ))}
     </div>
   );
-}
-
-function ProductImage({ src, alt }) {
-  return src ? <img src={src} alt={alt} /> : <span className="image-placeholder">NO IMAGE</span>;
 }
 
 function MetricGrid({ metrics }) {

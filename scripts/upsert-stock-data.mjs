@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
+import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { fetchIdSetSafe, upsertRows } from "./supabase-rest.mjs";
 
 const SOURCE_WEIGHTS = {
@@ -243,6 +244,7 @@ function normalizeSourceType(value) {
 }
 
 function loadStockRaw() {
+  const generated = loadGeneratedStockRaw();
   const inputPath = path.join(process.cwd(), "lib", "data", "stock-input.js");
   let source = fs.readFileSync(inputPath, "utf8");
   source = source
@@ -254,7 +256,21 @@ function loadStockRaw() {
     .replaceAll("export const restockEventsRaw", "const restockEventsRaw")
     .replaceAll("export const stockReportsRaw", "const stockReportsRaw");
 
-  return Function(`${source}\nreturn { restockEventsRaw, stockReportsRaw };`)();
+  const staticRaw = Function(`${source}\nreturn { restockEventsRaw, stockReportsRaw };`)();
+  return {
+    restockEventsRaw: dedupeById([...(generated.restockEventsRaw ?? []), ...(staticRaw.restockEventsRaw ?? [])]),
+    stockReportsRaw: dedupeById([...(generated.stockReportsRaw ?? []), ...(staticRaw.stockReportsRaw ?? [])]),
+  };
+}
+
+function loadGeneratedStockRaw() {
+  const generatedPath = getGeneratedDataPath("stock-raw.json");
+  if (!fs.existsSync(generatedPath)) return { restockEventsRaw: [], stockReportsRaw: [] };
+  const parsed = JSON.parse(fs.readFileSync(generatedPath, "utf8"));
+  return {
+    restockEventsRaw: asArray(parsed.restockEventsRaw),
+    stockReportsRaw: asArray(parsed.stockReportsRaw),
+  };
 }
 
 function countBy(rows, key) {
@@ -279,6 +295,10 @@ function loadEnvFile(fileName) {
 
 function asArray(value) {
   return Array.isArray(value) ? value.filter(Boolean) : [];
+}
+
+function dedupeById(records) {
+  return [...new Map(records.map((record) => [record.id || stableId(record.text, record.source_url, record.reported_at), record])).values()];
 }
 
 function text(value) {

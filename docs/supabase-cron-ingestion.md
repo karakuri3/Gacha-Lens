@@ -21,11 +21,11 @@ The public UI still reads variant-first data through the repository layer. Unkno
 | official | `/api/ingest/official` | `npm run ingest:official` | hourly |
 | market | `/api/ingest/market` | `npm run ingest:market` | every 15 minutes |
 | x | `/api/ingest/x` | `npm run ingest:x` | every 10 minutes |
-| stock | `/api/ingest/stock` | `npm run db:upsert-stock` | every 15 minutes |
+| stock | `/api/ingest/stock` | `npm run ingest:stock` | every 15 minutes |
 
 `/api/ingest/all` is available for manual recovery, but Cron should prefer the individual task endpoints.
 
-`official`, `x`, and safe `market` feeds now run `fetch -> generated raw snapshot -> normalize -> upsert`. `market` intentionally accepts only approved JSON/API/export feeds through `MARKET_RAW_FEED_URLS`; uncontrolled scraping is not part of the primary path.
+`official`, `x`, safe `market`, and safe `stock/restock` feeds now run `fetch -> generated raw snapshot -> normalize -> upsert`. `market` and `stock` intentionally accept only approved JSON/API/export feeds through `MARKET_RAW_FEED_URLS` and `STOCK_RAW_FEED_URLS`; uncontrolled scraping is not part of the primary path.
 
 ## App environment
 
@@ -46,6 +46,7 @@ X_SEARCH_QUERIES="ガシャポン OR gashapon OR ガチャガチャ"
 X_MONITOR_ACCOUNTS=
 X_SEARCH_MAX_RESULTS=25
 MARKET_RAW_FEED_URLS=
+STOCK_RAW_FEED_URLS=
 ```
 
 `INGEST_CRON_TOKEN` protects `/api/ingest/:task`. Keep it server-side only.

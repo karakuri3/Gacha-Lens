@@ -89,3 +89,27 @@ Output:
 - `data/generated/market-raw.json`
 
 Market automatic scraping is not enabled as a primary path. The safe path is to connect an approved source that returns explicit listing data, then feed it into the existing classifier. Mixed listings must continue to support `unknown` and human review.
+
+## Stock / restock fetcher
+
+File: `lib/fetchers/stock-fetcher.js`
+
+Input:
+
+- `STOCK_RAW_FEED_URLS`: comma or newline separated approved JSON feeds.
+
+Output:
+
+- `data/generated/stock-raw.json`
+
+Flow:
+
+```text
+fetch approved stock/restock feed
+  -> generated restockEventsRaw / stockReportsRaw
+  -> scripts/upsert-stock-data.mjs
+  -> restock_events / stock_reports / import_issues
+  -> availability_summary
+```
+
+The stock fetcher accepts reviewed JSON/export feeds only. It does not scrape shop pages or social sites directly. Ambiguous reports stay `review_required` and are visible in `/review`.
