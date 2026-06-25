@@ -28,7 +28,10 @@ Required for UI reads:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-or-publishable-key
 GACHA_DATA_SOURCE=supabase
+GACHA_REPOSITORY_CACHE_TTL_MS=60000
 ```
+
+`GACHA_REPOSITORY_CACHE_TTL_MS` controls how long the server keeps the Supabase-backed catalog in memory. The default is `60000` milliseconds, so Cron/upsert changes should appear on public UI routes within about one minute without requiring a redeploy.
 
 Required only for local/server upsert scripts:
 

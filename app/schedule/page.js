@@ -8,6 +8,9 @@ export const metadata = {
   description: "発売予定の単品を月別、週別、期待値別に確認できます。",
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const weeks = ["第1週", "第2週", "第3週", "第4週", "第5週", "未定"];
 
 export default async function SchedulePage({ searchParams }) {

@@ -15,6 +15,9 @@ export const metadata = {
   description: "発売中と発売予定を分けて、仕入れ判断に使う単品ランキングです。",
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const tabs = [
   { value: "released", label: "発売中", caption: "流通判断" },
   { value: "upcoming", label: "発売予定", caption: "期待値" },

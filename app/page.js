@@ -3,6 +3,9 @@ import { getSeriesList } from "@/lib/series";
 import SeriesCard from "@/components/SeriesCard";
 import { customerTags, isCirculatingItem, opportunityScore, releasedPriorityScore } from "@/lib/domain/public-display";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function Home() {
   const series = await getSeriesList();
   const watchNow = series

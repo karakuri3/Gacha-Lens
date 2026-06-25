@@ -8,6 +8,9 @@ export const metadata = {
   description: "発売中と発売予定のガチャ単品を、価格・相場・利益・期待値で探せます。",
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const filters = [
   { value: "all", label: "すべて" },
   { value: "released", label: "発売中" },

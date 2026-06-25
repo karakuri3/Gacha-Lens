@@ -15,20 +15,29 @@ export const metadata = {
   description: "今出回っている単品と、これから動きそうな発売予定を確認できます。",
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function TrendsPage() {
   const series = await getSeriesList();
-  const circulating = series
+  const circulatingAll = series
     .filter(isCirculatingItem)
-    .sort((a, b) => trendPriorityScore(b) - trendPriorityScore(a))
-    .slice(0, 12);
-  const stockMoves = circulating
+    .sort((a, b) => trendPriorityScore(b) - trendPriorityScore(a));
+  const stockMovesAll = circulatingAll
     .filter((item) => hasStockMovement(item))
-    .sort((a, b) => trendPriorityScore(b) - trendPriorityScore(a))
-    .slice(0, 6);
+    .sort((a, b) => trendPriorityScore(b) - trendPriorityScore(a));
+  const circulating = circulatingAll.slice(0, 12);
+  const stockMoves = stockMovesAll.slice(0, 6);
   const upcoming = series
     .filter((item) => !item.is_released)
     .sort((a, b) => upcomingPriority(b) - upcomingPriority(a))
     .slice(0, 8);
+  const trendStats = [
+    { label: "確認できる単品", value: series.length },
+    { label: "今出回っている", value: circulatingAll.length },
+    { label: "発売予定", value: series.filter((item) => !item.is_released).length },
+    { label: "在庫動きあり", value: stockMovesAll.length },
+  ];
 
   return (
     <main className="site-main">
@@ -43,6 +52,15 @@ export default async function TrendsPage() {
             <Link href="/ranking?tab=released" className="button-link button-link--dark">発売中ランキング</Link>
             <Link href="/series?filter=circulating&sort=watch" className="button-link">今出回っている単品</Link>
           </div>
+        </section>
+
+        <section className="stats-strip" aria-label="トレンド概要">
+          {trendStats.map((stat) => (
+            <div key={stat.label} className="stat-pill">
+              <span>{stat.label}</span>
+              <strong>{stat.value.toLocaleString("ja-JP")}</strong>
+            </div>
+          ))}
         </section>
 
         <section className="trend-board">
