@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildFeedSources, parseList } from "../lib/fetchers/feed-source-utils.js";
+import { fetchOfficialRaw } from "../lib/fetchers/official-fetcher.js";
 import { fetchMarketListingsRaw } from "../lib/fetchers/market-fetcher.js";
 import { fetchStockRaw } from "../lib/fetchers/stock-fetcher.js";
 import { fetchXReactionsRaw } from "../lib/fetchers/x-fetcher.js";
@@ -9,7 +10,11 @@ import { getGeneratedDataPath } from "./generated-paths.mjs";
 loadEnvFile(".env.local");
 
 const shouldFetch = process.argv.includes("--fetch");
+const stockXSearchEnabled = parseBoolean(process.env.STOCK_X_SEARCH_ENABLED ?? "true");
+const stockXSearchQueries = parseList(process.env.STOCK_X_SEARCH_QUERIES);
+const stockXMonitorAccounts = parseList(process.env.STOCK_X_MONITOR_ACCOUNTS);
 const configured = {
+  official: parseList(process.env.OFFICIAL_SOURCE_URLS),
   market: buildFeedSources({
     legacyUrls: process.env.MARKET_RAW_FEED_URLS,
     sourcesJson: process.env.MARKET_RAW_FEED_SOURCES_JSON,
@@ -30,6 +35,7 @@ const configured = {
   }),
 };
 const generated = {
+  official: readGenerated("official-raw.json", (value) => value.records?.length ?? 0),
   market: readGenerated("market-raw.json", (value) => value.records?.length ?? 0),
   x: readGenerated("x-reactions-raw.json", (value) => value.records?.length ?? 0),
   stock: readGenerated("stock-raw.json", (value) => (value.restockEventsRaw?.length ?? 0) + (value.stockReportsRaw?.length ?? 0)),
@@ -38,15 +44,22 @@ const summary = {
   ok: true,
   mode: shouldFetch ? "fetch" : "config",
   configuredSources: {
+    official: configured.official.length || 2,
     market: configured.market.length,
     xRawFeeds: configured.xRaw.length,
     stock: configured.stock.length,
     xSearchQueries: parseList(process.env.X_SEARCH_QUERIES).length,
     xMonitorAccounts: parseList(process.env.X_MONITOR_ACCOUNTS).length,
     hasXBearerToken: Boolean(process.env.X_BEARER_TOKEN),
+    stockXSearchEnabled,
+    stockXSearchQueries: stockXSearchQueries.length,
+    stockXMonitorAccounts: stockXMonitorAccounts.length,
+    stockXCanUseBearerToken: stockXSearchEnabled && Boolean(process.env.X_BEARER_TOKEN),
+    stockXDefaultQueriesActive: stockXSearchEnabled && Boolean(process.env.X_BEARER_TOKEN) && !stockXSearchQueries.length,
   },
   generatedRaw: generated,
   sources: {
+    official: configured.official.length ? configured.official : ["https://gashapon.jp/schedule/", "https://gashapon.jp/products/"],
     market: sanitizeSources(configured.market),
     xRaw: sanitizeSources(configured.xRaw),
     stock: sanitizeSources(configured.stock),
@@ -55,12 +68,14 @@ const summary = {
 };
 
 if (shouldFetch) {
-  const [market, x, stock] = await Promise.all([
+  const [official, market, x, stock] = await Promise.all([
+    fetchOfficialRaw(),
     fetchMarketListingsRaw(),
     fetchXReactionsRaw(),
     fetchStockRaw(),
   ]);
   summary.fetch = {
+    official: summarizeFetch(official),
     market: summarizeFetch(market),
     x: summarizeFetch(x),
     stock: summarizeFetch(stock),
@@ -91,13 +106,22 @@ function sanitizeSources(sources) {
 
 function buildNextActions(sources, generatedRaw) {
   const actions = [];
+  const hasXBearerToken = Boolean(process.env.X_BEARER_TOKEN);
+  const hasStockXApi = stockXSearchEnabled && hasXBearerToken;
+  if (!generatedRaw.official.records) actions.push("Run npm run fetch:official to refresh the official master snapshot.");
   if (!sources.market.length) actions.push("Add at least one approved market feed through MARKET_RAW_FEED_SOURCES_JSON.");
   if (!sources.xRaw.length && !process.env.X_BEARER_TOKEN) actions.push("Add X_BEARER_TOKEN or reviewed X_RAW_FEED_SOURCES_JSON.");
-  if (!sources.stock.length) actions.push("Add at least one approved stock/restock feed through STOCK_RAW_FEED_SOURCES_JSON.");
+  if (!sources.stock.length && !hasStockXApi) actions.push("Add STOCK_X_SEARCH_QUERIES/STOCK_X_MONITOR_ACCOUNTS with X_BEARER_TOKEN, or add STOCK_RAW_FEED_SOURCES_JSON.");
   if (!generatedRaw.market.records) actions.push("Run npm run fetch:market after adding market feeds.");
   if (!generatedRaw.x.records) actions.push("Run npm run fetch:x after adding X sources.");
   if (!generatedRaw.stock.records) actions.push("Run npm run fetch:stock after adding stock feeds.");
   return actions.length ? actions : ["Data supply configuration is present. Use --fetch to test live source responses."];
+}
+
+function parseBoolean(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return true;
 }
 
 function readGenerated(fileName, countFn) {

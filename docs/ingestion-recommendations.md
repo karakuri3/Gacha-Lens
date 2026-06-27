@@ -67,8 +67,33 @@ Decision:
 
 - Keep official hourly. Official pages do not need minute-level pressure.
 - Keep X every 10 minutes because reaction windows move faster.
-- Keep market and stock at 15 minutes, but market remains upsert-only until an approved source is selected.
+- Keep market and stock at 15 minutes. Market remains approved-feed/API only; stock can also use X API stock/restock search.
 - Stagger stock at minute 5/20/35/50 to avoid every job starting at exactly the same minute.
+
+## Stock / restock recommendation
+
+Use the X API stock search first, then add trusted shop feeds when available:
+
+```bash
+STOCK_X_SEARCH_ENABLED=true
+STOCK_X_SEARCH_QUERIES=
+STOCK_X_MONITOR_ACCOUNTS=
+STOCK_X_SEARCH_MAX_RESULTS=10
+STOCK_RAW_FEED_URLS=
+STOCK_RAW_FEED_SOURCES_JSON=
+```
+
+Decision:
+
+- Primary now: X API search through `STOCK_X_SEARCH_ENABLED=true` and the shared `X_BEARER_TOKEN`.
+- Secondary later: `STOCK_X_MONITOR_ACCOUNTS` for reliable shop/official accounts.
+- Best future source: approved shop or official JSON/API/export feeds through `STOCK_RAW_FEED_SOURCES_JSON`.
+
+Why:
+
+- Stock and restock signals often appear first on X.
+- The stock fetcher still sends ambiguous sightings to `import_issues`, so high frequency does not force bad variant matches into public UI.
+- Shop page scraping stays out of the primary path until an approved feed/API exists.
 
 ## Final environment names
 
@@ -91,6 +116,13 @@ X_MONITOR_ACCOUNTS=
 X_RAW_FEED_URLS=
 X_SEARCH_MAX_RESULTS=25
 MARKET_RAW_FEED_URLS=
+MARKET_RAW_FEED_SOURCES_JSON=
+STOCK_RAW_FEED_URLS=
+STOCK_RAW_FEED_SOURCES_JSON=
+STOCK_X_SEARCH_ENABLED=true
+STOCK_X_SEARCH_QUERIES=
+STOCK_X_MONITOR_ACCOUNTS=
+STOCK_X_SEARCH_MAX_RESULTS=10
 ```
 
 Set these on the Supabase Edge Function:
@@ -115,3 +147,4 @@ SUPABASE_SERVICE_ROLE_KEY=
 - Whether X API access is available. If not, use `X_RAW_FEED_URLS` with an approved internal JSON feed instead of `X_BEARER_TOKEN`.
 - Whether to add monitored X accounts after the first week.
 - Which safe market source to use later: approved API, manual export, or reviewed JSON feed.
+- Which shop/official X accounts to add to `STOCK_X_MONITOR_ACCOUNTS` after the first week.

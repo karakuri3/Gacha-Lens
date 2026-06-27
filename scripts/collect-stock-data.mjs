@@ -21,11 +21,14 @@ function summarize(source, result, filePath) {
     source,
     fetchedAt: result.fetchedAt,
     configuredSources: result.configuredSources ?? 0,
+    configuredXSearchQueries: result.configuredXSearchQueries ?? 0,
+    configuredXMonitorAccounts: result.configuredXMonitorAccounts ?? 0,
     restockEventsRaw: Array.isArray(result.restockEventsRaw) ? result.restockEventsRaw.length : 0,
     stockReportsRaw: Array.isArray(result.stockReportsRaw) ? result.stockReportsRaw.length : 0,
     records: Array.isArray(result.records) ? result.records.length : 0,
     issues: Array.isArray(result.issues) ? result.issues.length : 0,
     feedResults: result.feedResults ?? [],
+    xSearchResults: result.xSearchResults ?? [],
     outputPath: path.relative(process.cwd(), filePath),
   };
 }

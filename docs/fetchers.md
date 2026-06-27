@@ -132,6 +132,10 @@ Input:
 
 - `STOCK_RAW_FEED_URLS`: comma or newline separated approved JSON feeds.
 - `STOCK_RAW_FEED_SOURCES_JSON`: JSON source config for multiple official/shop/reviewed feeds.
+- `STOCK_X_SEARCH_ENABLED`: default `true`. Set `false` to disable X API stock monitoring.
+- `STOCK_X_SEARCH_QUERIES`: optional stock/restock search queries. If empty and `X_BEARER_TOKEN` exists, the fetcher uses a small default query set.
+- `STOCK_X_MONITOR_ACCOUNTS`: optional official/shop accounts to monitor for stock/restock words.
+- `STOCK_X_SEARCH_MAX_RESULTS`: defaults to `10`, capped at `100`.
 
 Output:
 
@@ -140,14 +144,25 @@ Output:
 Flow:
 
 ```text
-fetch approved stock/restock feed
+fetch approved stock/restock feed and/or X stock search
   -> generated restockEventsRaw / stockReportsRaw
   -> scripts/upsert-stock-data.mjs
   -> restock_events / stock_reports / import_issues
   -> availability_summary
 ```
 
-The stock fetcher accepts reviewed JSON/export feeds only. It does not scrape shop pages or social sites directly. Ambiguous reports stay `review_required` and are visible in `/review`.
+The stock fetcher does not scrape shop pages. It accepts reviewed JSON/export feeds and X API search/account results. Ambiguous reports stay `review_required` and are visible in `/review`.
+
+Recommended first value:
+
+```bash
+STOCK_X_SEARCH_ENABLED=true
+STOCK_X_SEARCH_QUERIES=
+STOCK_X_MONITOR_ACCOUNTS=
+STOCK_X_SEARCH_MAX_RESULTS=10
+```
+
+Leave `STOCK_X_SEARCH_QUERIES` empty at first if the broad default queries are enough. Add shop account names to `STOCK_X_MONITOR_ACCOUNTS` once you know which official/store accounts post reliable restock or sold-out updates.
 
 Recommended source config shape:
 

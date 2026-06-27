@@ -25,7 +25,7 @@ The public UI still reads variant-first data through the repository layer. Unkno
 
 `/api/ingest/all` is available for manual recovery, but Cron should prefer the individual task endpoints.
 
-`official`, `x`, safe `market`, and safe `stock/restock` feeds now run `fetch -> generated raw snapshot -> normalize -> upsert`. `market` and `stock` intentionally accept only approved JSON/API/export feeds through `MARKET_RAW_FEED_URLS` and `STOCK_RAW_FEED_URLS`; uncontrolled scraping is not part of the primary path.
+`official`, `x`, safe `market`, and safe `stock/restock` now run `fetch -> generated raw snapshot -> normalize -> upsert`. `official` uses the official schedule/detail pages, `x` uses X API search/account monitoring or approved raw feeds, and `stock` can use approved JSON/API/export feeds plus X API stock/restock search. `market` intentionally accepts only approved JSON/API/export feeds; uncontrolled marketplace scraping is not part of the primary path.
 
 ## App environment
 
@@ -47,11 +47,15 @@ X_MONITOR_ACCOUNTS=
 X_SEARCH_MAX_RESULTS=25
 MARKET_RAW_FEED_URLS=
 STOCK_RAW_FEED_URLS=
+STOCK_X_SEARCH_ENABLED=true
+STOCK_X_SEARCH_QUERIES=
+STOCK_X_MONITOR_ACCOUNTS=
+STOCK_X_SEARCH_MAX_RESULTS=10
 ```
 
 `INGEST_CRON_TOKEN` protects `/api/ingest/:task`. Keep it server-side only.
 
-`OFFICIAL_SOURCE_URLS` can point to JSON feeds or official product/schedule HTML pages. Start with the schedule page; linked product detail pages are followed automatically up to `OFFICIAL_DETAIL_FETCH_LIMIT` with `OFFICIAL_DETAIL_FETCH_DELAY_MS` between requests. `X_BEARER_TOKEN` is required only when using X API queries or account monitoring. `X_RAW_FEED_URLS` can be used instead for an approved internal JSON feed.
+`OFFICIAL_SOURCE_URLS` can point to JSON feeds or official product/schedule HTML pages. Start with the schedule page; linked product detail pages are followed automatically up to `OFFICIAL_DETAIL_FETCH_LIMIT` with `OFFICIAL_DETAIL_FETCH_DELAY_MS` between requests. `X_BEARER_TOKEN` is required only when using X API queries or account monitoring. `X_RAW_FEED_URLS` can be used instead for an approved internal JSON feed. `STOCK_X_*` reuses the same `X_BEARER_TOKEN` and keeps ambiguous stock sightings in review.
 
 ## Supabase Edge Function environment
 

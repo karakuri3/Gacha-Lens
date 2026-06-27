@@ -1,4 +1,6 @@
 import { runIngestionSequence, runIngestionTask } from "@/lib/ingestion-runner";
+import { buildOpsHealthReport } from "@/lib/data/ops-health";
+import { getDataModel, invalidateRepositoryCache } from "@/lib/series";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,11 +18,19 @@ export async function POST(request, context) {
     const result = taskName === "all"
       ? await runIngestionSequence(undefined, { captureOutput: true })
       : await runIngestionTask(taskName, { captureOutput: true });
+    invalidateRepositoryCache();
+    const health = buildOpsHealthReport(await getDataModel());
 
     return Response.json({
       ok: true,
       task: taskName,
       result,
+      health: {
+        status: health.status,
+        readinessScore: health.readinessScore,
+        records: health.records,
+        risks: health.risks,
+      },
     });
   } catch (error) {
     const status = error.code === "UNKNOWN_INGESTION_TASK" ? 404 : 500;

@@ -1,6 +1,6 @@
 # Daily operations checklist
 
-This project is intentionally semi-automated. Official master data stays first, and loose market, X, restock, and stock signals must pass through review before they can be trusted.
+This project is designed for always-on ingestion with a review safety layer. Official master data stays first, and loose market, X, restock, and stock signals must pass through review before they can be trusted.
 
 ## Every morning
 
@@ -11,14 +11,16 @@ This project is intentionally semi-automated. Official master data stays first, 
 5. If it failed, download `ingestion-log` and check the `failedStep` field.
 6. Open `/review` with the admin token and check the `Operational health` score.
 7. If needed, call `/api/ops-health` with the review token to inspect machine-readable health JSON.
-8. Clear or annotate `high` issues first, especially official master or missing variant records.
-9. Check `medium` unknown variant issues for market, X, restock, and stock rows.
-10. Leave truly ambiguous records unresolved until the source can be verified.
+8. Run `npm run data:audit` when source coverage or generated raw counts look wrong.
+9. Clear or annotate `high` issues first, especially official master or missing variant records.
+10. Check `medium` unknown variant issues for market, X, restock, and stock rows.
+11. Leave truly ambiguous records unresolved until the source can be verified.
 
 ## What good looks like
 
 - Official upsert runs before market, X, and stock.
 - `db:check-schema` returns `ok: true`.
+- `npm run data:audit` shows configured official/X/stock automation sources, or an intentional approved market feed gap.
 - New `import_issues` are explainable by source quality, not schema errors.
 - `unknown_variant` counts do not grow for the same product name every day.
 - `/review` health is `ok` or has only explainable `warning` states.
