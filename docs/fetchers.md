@@ -1,6 +1,6 @@
 # Fetchers
 
-The first collection phase adds automatic raw generation for official and X sources while keeping market collection conservative.
+The free-operation collection phase uses official pages first, then approved market and stock/restock CSV or JSON exports. X support remains in place, but it is optional and disabled from the primary cron path unless paid API access is available.
 
 ## Official fetcher
 
@@ -42,9 +42,13 @@ The Gashapon schedule page is parsed as the discovery source. Detail pages linke
 
 File: `lib/fetchers/x-fetcher.js`
 
+Status: optional / paid-API dependent. Keep this structure for later, but do not treat `X_BEARER_TOKEN` as required for free operation.
+
 Inputs:
 
 - `X_BEARER_TOKEN`
+- `X_FETCH_ENABLED`: default `false`; set `true` only when you intentionally want to call X API.
+- `X_USE_DEFAULT_QUERIES`: default `false`; set `true` only when default broad queries are acceptable.
 - `X_SEARCH_QUERIES`
 - `X_MONITOR_ACCOUNTS`
 - `X_RAW_FEED_URLS`
@@ -54,12 +58,15 @@ Inputs:
 Recommended first value:
 
 ```bash
-X_SEARCH_QUERIES="ガシャポン OR gashapon OR ガチャガチャ"
+X_BEARER_TOKEN=
+X_FETCH_ENABLED=false
+X_USE_DEFAULT_QUERIES=false
+X_SEARCH_QUERIES=
 X_MONITOR_ACCOUNTS=
 X_SEARCH_MAX_RESULTS=25
 ```
 
-Use search first because the forecast needs public intent signals, not only official announcements. If `X_BEARER_TOKEN` is set and no query is configured, the fetcher uses a small default query set for gacha demand, intent, and miniature compatibility.
+Leave these empty for the free-operation path. If `X_BEARER_TOKEN` is available later, set `X_FETCH_ENABLED=true`, add narrow `X_SEARCH_QUERIES` or monitored accounts, and run the X task manually or at low frequency.
 
 Output:
 
@@ -99,13 +106,13 @@ File: `lib/fetchers/market-fetcher.js`
 Input:
 
 - `MARKET_RAW_FEED_URLS`: comma or newline separated approved JSON feeds.
-- `MARKET_RAW_FEED_SOURCES_JSON`: JSON source config for multiple approved feeds/APIs.
+- `MARKET_RAW_FEED_SOURCES_JSON`: source config for approved CSV/JSON exports, feeds, or APIs.
 
 Output:
 
 - `data/generated/market-raw.json`
 
-Market automatic scraping is not enabled as a primary path. The safe path is to connect an approved source that returns explicit listing data, then feed it into the existing classifier. Mixed listings must continue to support `unknown` and human review.
+Market automatic scraping is not enabled as a primary path. The safe free path is to connect a CSV/JSON export or approved source that returns explicit listing data, then feed it into the existing classifier. Mixed listings must continue to support `unknown` and human review.
 
 Recommended source config shape:
 
@@ -114,10 +121,35 @@ Recommended source config shape:
   {
     "name": "market-export-main",
     "url": "https://example.com/gacha/market.json",
+    "format": "json",
     "recordPath": "records",
     "headerEnv": {
       "authorization": "MARKET_FEED_AUTH_HEADER"
     }
+  }
+]
+```
+
+CSV exports are also supported:
+
+```json
+[
+  {
+    "name": "market-csv-export",
+    "url": "https://example.com/gacha/market.csv",
+    "format": "csv"
+  }
+]
+```
+
+Local files inside the project workspace are supported for manual exports:
+
+```json
+[
+  {
+    "name": "local-market-csv",
+    "filePath": "data/imports/market.csv",
+    "format": "csv"
   }
 ]
 ```
@@ -131,9 +163,9 @@ File: `lib/fetchers/stock-fetcher.js`
 Input:
 
 - `STOCK_RAW_FEED_URLS`: comma or newline separated approved JSON feeds.
-- `STOCK_RAW_FEED_SOURCES_JSON`: JSON source config for multiple official/shop/reviewed feeds.
-- `STOCK_X_SEARCH_ENABLED`: default `true`. Set `false` to disable X API stock monitoring.
-- `STOCK_X_SEARCH_QUERIES`: optional stock/restock search queries. If empty and `X_BEARER_TOKEN` exists, the fetcher uses a small default query set.
+- `STOCK_RAW_FEED_SOURCES_JSON`: source config for approved CSV/JSON exports, official/shop feeds, or reviewed APIs.
+- `STOCK_X_SEARCH_ENABLED`: default `false`. Set `true` only when X API access is available and you intentionally want optional stock monitoring.
+- `STOCK_X_SEARCH_QUERIES`: optional stock/restock search queries.
 - `STOCK_X_MONITOR_ACCOUNTS`: optional official/shop accounts to monitor for stock/restock words.
 - `STOCK_X_SEARCH_MAX_RESULTS`: defaults to `10`, capped at `100`.
 
@@ -144,25 +176,23 @@ Output:
 Flow:
 
 ```text
-fetch approved stock/restock feed and/or X stock search
+fetch approved stock/restock CSV/JSON feed/export
   -> generated restockEventsRaw / stockReportsRaw
   -> scripts/upsert-stock-data.mjs
   -> restock_events / stock_reports / import_issues
   -> availability_summary
 ```
 
-The stock fetcher does not scrape shop pages. It accepts reviewed JSON/export feeds and X API search/account results. Ambiguous reports stay `review_required` and are visible in `/review`.
+The stock fetcher does not scrape shop pages. It accepts reviewed CSV/JSON exports and approved feeds as the primary path. X API search/account results are optional and disabled by default. Ambiguous reports stay `review_required` and are visible in `/review`.
 
 Recommended first value:
 
 ```bash
-STOCK_X_SEARCH_ENABLED=true
+STOCK_X_SEARCH_ENABLED=false
 STOCK_X_SEARCH_QUERIES=
 STOCK_X_MONITOR_ACCOUNTS=
 STOCK_X_SEARCH_MAX_RESULTS=10
 ```
-
-Leave `STOCK_X_SEARCH_QUERIES` empty at first if the broad default queries are enough. Add shop account names to `STOCK_X_MONITOR_ACCOUNTS` once you know which official/store accounts post reliable restock or sold-out updates.
 
 Recommended source config shape:
 
@@ -171,13 +201,26 @@ Recommended source config shape:
   {
     "name": "shop-stock-export",
     "url": "https://example.com/gacha/stock.json",
+    "format": "json",
     "recordPath": "data",
     "bearerTokenEnv": "STOCK_FEED_BEARER_TOKEN"
   }
 ]
 ```
 
-The feed can return `restockEventsRaw`, `stockReportsRaw`, `records`, or `data`. Mixed `records` are bucketed into restock or stock reports by type/text.
+CSV exports are also supported:
+
+```json
+[
+  {
+    "name": "stock-csv-export",
+    "filePath": "data/imports/stock.csv",
+    "format": "csv"
+  }
+]
+```
+
+The feed can return `restockEventsRaw`, `stockReportsRaw`, `records`, or `data`. Mixed `records` are bucketed into restock or stock reports by type/text. CSV rows should contain `text`, `status`, `source_type`, `source_url`, `reported_at`, and optionally `variant_id`, `series_id`, `shop_name`, and `region`.
 
 ## Data supply audit
 

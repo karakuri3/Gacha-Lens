@@ -102,9 +102,9 @@ Next.js 16 系のルール確認として、実装確認前に `node_modules/nex
   - `APP_INGEST_BASE_URL` の `/api/ingest/:task` に転送
 - Supabase Cron template: `supabase/cron-ingestion.sql`
   - official: hourly
-  - market: every 15 minutes
-  - x: every 10 minutes
-  - stock: every 15 minutes
+  - market: every 30-60 minutes
+  - x: disabled by default / optional
+  - stock: every 30-60 minutes
 
 ## 5. 実行して確認した結果
 
@@ -163,7 +163,7 @@ stock/restock は `scripts/collect-stock-data.mjs` と `lib/fetchers/stock-fetch
 
 ### market の安全性
 
-`lib/fetchers/market-fetcher.js` は `MARKET_RAW_FEED_URLS` から承認済み JSON/API/export feed を読む方針です。無制御な marketplace scraping は主系統にしていません。これは安全面では良い状態ですが、相場精度を上げるには信頼できる feed/API/export が必要です。
+`lib/fetchers/market-fetcher.js` は `MARKET_RAW_FEED_SOURCES_JSON` / `MARKET_RAW_FEED_URLS` から承認済み JSON/API/export feed を読む方針です。無制御な marketplace scraping は主系統にしていません。これは安全面では良い状態ですが、相場精度を上げるには信頼できる feed/API/export が必要です。
 
 ### `/supabase-series`
 

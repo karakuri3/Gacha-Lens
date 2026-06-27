@@ -120,9 +120,9 @@
 推奨 job:
 
 - official: hourly
-- market: every 15 minutes
-- x: every 10 minutes
-- stock: every 15 minutes
+- market: every 30-60 minutes
+- x: disabled by default / optional
+- stock: every 30-60 minutes
 
 完了条件:
 
@@ -167,7 +167,7 @@
 
 推奨:
 
-- 最初は `X_SEARCH_QUERIES` 優先。
+- 無料運用では X は主系統にしない。`X_SEARCH_QUERIES` は `X_BEARER_TOKEN` を使う判断をした後で追加する。
 - `X_MONITOR_ACCOUNTS` は公式/店舗アカウントが固まってから追加。
 
 理由:
@@ -195,7 +195,7 @@
 
 方針:
 
-- `MARKET_RAW_FEED_URLS` に承認済み JSON/API/export を入れる。
+- `MARKET_RAW_FEED_SOURCES_JSON` / `MARKET_RAW_FEED_URLS` に承認済み JSON/API/export を入れる。
 - marketplace の HTML scraping を主系統にしない。
 - `single`, `rare_or_secret`, `full_set`, `partial_set`, `unknown` の分類を守る。
 - セットと単品を混ぜない。
@@ -309,11 +309,9 @@ Secrets の実値は repo に入れない。
 - Supabase SQL:
   - `supabase/cron-ingestion.sql` の `<PASTE_CRON_SHARED_SECRET_HERE>`
 - X:
-  - `X_BEARER_TOKEN`
-  - `X_SEARCH_QUERIES`
-  - 必要なら `X_MONITOR_ACCOUNTS`
+  - `X_BEARER_TOKEN` only if X API is enabled later
 - Market:
-  - `MARKET_RAW_FEED_URLS`
+  - `MARKET_RAW_FEED_SOURCES_JSON` / `MARKET_RAW_FEED_URLS`
 
 ## 7. 完了判定
 

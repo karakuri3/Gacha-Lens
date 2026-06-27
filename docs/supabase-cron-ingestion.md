@@ -1,6 +1,6 @@
 # Supabase Cron ingestion
 
-Supabase Cron becomes the primary high-frequency runner. GitHub Actions remains the fallback runner for daily recovery and log comparison.
+Supabase Cron becomes the primary free-operation runner. GitHub Actions remains the fallback runner for daily recovery and log comparison.
 
 ## Runtime shape
 
@@ -19,13 +19,13 @@ The public UI still reads variant-first data through the repository layer. Unkno
 | Task | Endpoint | Script | Recommended frequency |
 | --- | --- | --- | --- |
 | official | `/api/ingest/official` | `npm run ingest:official` | hourly |
-| market | `/api/ingest/market` | `npm run ingest:market` | every 15 minutes |
-| x | `/api/ingest/x` | `npm run ingest:x` | every 10 minutes |
-| stock | `/api/ingest/stock` | `npm run ingest:stock` | every 15 minutes |
+| market | `/api/ingest/market` | `npm run ingest:market` | every 30-60 minutes |
+| stock | `/api/ingest/stock` | `npm run ingest:stock` | every 30-60 minutes |
+| x | `/api/ingest/x` | `npm run ingest:x` | disabled by default; manual/low-frequency only with `X_BEARER_TOKEN` |
 
 `/api/ingest/all` is available for manual recovery, but Cron should prefer the individual task endpoints.
 
-`official`, `x`, safe `market`, and safe `stock/restock` now run `fetch -> generated raw snapshot -> normalize -> upsert`. `official` uses the official schedule/detail pages, `x` uses X API search/account monitoring or approved raw feeds, and `stock` can use approved JSON/API/export feeds plus X API stock/restock search. `market` intentionally accepts only approved JSON/API/export feeds; uncontrolled marketplace scraping is not part of the primary path.
+`official`, safe `market`, and safe `stock/restock` now run `fetch -> generated raw snapshot -> normalize -> upsert`. `official` uses the official schedule/detail pages. `market` and `stock` intentionally accept approved CSV/JSON/API/export feeds; uncontrolled marketplace or shop scraping is not part of the primary path. X remains available as an optional task, but it is not part of the default free Cron setup.
 
 ## App environment
 
@@ -41,21 +41,27 @@ OFFICIAL_SOURCE_URLS=https://gashapon.jp/schedule/
 OFFICIAL_DETAIL_FETCH_LIMIT=20
 OFFICIAL_DETAIL_FETCH_DELAY_MS=150
 OFFICIAL_STRICT_DETAIL_REVIEW=false
-X_BEARER_TOKEN=your-x-api-bearer-token
-X_SEARCH_QUERIES="ガシャポン OR gashapon OR ガチャガチャ"
-X_MONITOR_ACCOUNTS=
-X_SEARCH_MAX_RESULTS=25
 MARKET_RAW_FEED_URLS=
+MARKET_RAW_FEED_SOURCES_JSON=
 STOCK_RAW_FEED_URLS=
-STOCK_X_SEARCH_ENABLED=true
+STOCK_RAW_FEED_SOURCES_JSON=
+STOCK_X_SEARCH_ENABLED=false
 STOCK_X_SEARCH_QUERIES=
 STOCK_X_MONITOR_ACCOUNTS=
 STOCK_X_SEARCH_MAX_RESULTS=10
+X_BEARER_TOKEN=
+X_FETCH_ENABLED=false
+X_USE_DEFAULT_QUERIES=false
+X_SEARCH_QUERIES=
+X_MONITOR_ACCOUNTS=
+X_RAW_FEED_URLS=
+X_RAW_FEED_SOURCES_JSON=
+X_SEARCH_MAX_RESULTS=25
 ```
 
 `INGEST_CRON_TOKEN` protects `/api/ingest/:task`. Keep it server-side only.
 
-`OFFICIAL_SOURCE_URLS` can point to JSON feeds or official product/schedule HTML pages. Start with the schedule page; linked product detail pages are followed automatically up to `OFFICIAL_DETAIL_FETCH_LIMIT` with `OFFICIAL_DETAIL_FETCH_DELAY_MS` between requests. `X_BEARER_TOKEN` is required only when using X API queries or account monitoring. `X_RAW_FEED_URLS` can be used instead for an approved internal JSON feed. `STOCK_X_*` reuses the same `X_BEARER_TOKEN` and keeps ambiguous stock sightings in review.
+`OFFICIAL_SOURCE_URLS` can point to JSON feeds or official product/schedule HTML pages. Start with the schedule page; linked product detail pages are followed automatically up to `OFFICIAL_DETAIL_FETCH_LIMIT` with `OFFICIAL_DETAIL_FETCH_DELAY_MS` between requests. `MARKET_RAW_FEED_SOURCES_JSON` and `STOCK_RAW_FEED_SOURCES_JSON` are the free-operation primary inputs. `X_BEARER_TOKEN` is optional, and X API calls stay disabled while `X_FETCH_ENABLED=false`.
 
 ## Supabase Edge Function environment
 
@@ -99,11 +105,10 @@ with the same `CRON_SHARED_SECRET` value set on the Edge Function.
 Recommended jobs:
 
 - `gacha-ingest-official-hourly`: `7 * * * *`
-- `gacha-ingest-market-15min`: `*/15 * * * *`
-- `gacha-ingest-x-10min`: `*/10 * * * *`
-- `gacha-ingest-stock-15min`: `5,20,35,50 * * * *`
+- `gacha-ingest-market-hourly`: `17 * * * *`
+- `gacha-ingest-stock-hourly`: `37 * * * *`
 
-The staggered stock schedule avoids all jobs starting at exactly the same minute.
+The template also unschedules the old `gacha-ingest-x-10min`, `gacha-ingest-market-15min`, and `gacha-ingest-stock-15min` jobs if they exist.
 
 ## Fallback
 
@@ -114,6 +119,7 @@ Keep `.github/workflows/gacha-ingestion.yml` enabled. If Cron or the app endpoin
 Do not make uncontrolled marketplace scraping the primary path. Market data should enter through one of these safer inputs first:
 
 - approved marketplace API
+- owner-created CSV export
 - owner-created export converted to `marketListingsRaw`
 - explicit JSON feed reviewed before ingestion
 
