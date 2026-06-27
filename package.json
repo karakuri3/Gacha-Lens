@@ -10,6 +10,7 @@
     "fetch:market": "node scripts/collect-market-data.mjs",
     "fetch:x": "node scripts/collect-x-reactions.mjs",
     "fetch:stock": "node scripts/collect-stock-data.mjs",
+    "data:audit": "node scripts/audit-data-supply.mjs",
     "ingest:official": "node scripts/run-official-ingestion.mjs",
     "ingest:market": "node scripts/run-market-ingestion.mjs",
     "ingest:x": "node scripts/run-x-ingestion.mjs",

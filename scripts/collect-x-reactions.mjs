@@ -20,8 +20,10 @@ function summarize(source, result, filePath) {
     ok: Boolean(result.ok),
     source,
     fetchedAt: result.fetchedAt,
+    configuredSources: result.configuredSources ?? 0,
     records: Array.isArray(result.records) ? result.records.length : 0,
     issues: Array.isArray(result.issues) ? result.issues.length : 0,
+    feedResults: result.feedResults ?? [],
     outputPath: path.relative(process.cwd(), filePath),
   };
 }
