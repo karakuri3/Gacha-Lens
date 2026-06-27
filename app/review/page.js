@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { isReviewAuthConfigured, REVIEW_COOKIE_NAME, verifyReviewSession } from "@/lib/admin-auth";
 import { buildImportReviewReport } from "@/lib/data/import-review";
+import { buildOpsHealthReport } from "@/lib/data/ops-health";
 import { getDataModel } from "@/lib/series";
 
 export const metadata = {
@@ -25,6 +26,7 @@ export default async function ImportReviewPage() {
 
   const dataModel = await getDataModel();
   const issues = buildImportReviewReport(dataModel.importIssues ?? []);
+  const health = buildOpsHealthReport(dataModel);
   const unresolved = issues.filter((issue) => !issue.resolved);
   const groupedIssues = groupIssues(unresolved.length ? unresolved : issues);
 
@@ -40,12 +42,45 @@ export default async function ImportReviewPage() {
         </section>
 
         <div className="tag-row" style={{ marginBottom: 18 }}>
+          <Link href="/api/ops-health" className="pill-link">Health JSON</Link>
           <Link href="/api/import-issues" className="pill-link">JSON</Link>
           <Link href="/api/import-issues?format=csv" className="pill-link">CSV</Link>
           <form action="/review/logout" method="post">
             <button className="pill-link" type="submit">Logout</button>
           </form>
         </div>
+
+        <section className="review-health card">
+          <div className="review-health__head">
+            <div>
+              <p className="eyebrow">OPERATIONS</p>
+              <h2>Operational health</h2>
+              <p className="section-sub">
+                Public pages read Supabase-backed data dynamically. Use this panel to catch stale or weak data before it affects ranking trust.
+              </p>
+            </div>
+            <span className={`health-score health-score--${health.status}`}>
+              {health.readinessScore} / 100
+            </span>
+          </div>
+
+          <div className="health-grid">
+            {health.pipelines.map((pipeline) => (
+              <HealthCard key={pipeline.key} pipeline={pipeline} />
+            ))}
+          </div>
+
+          {health.risks.length > 0 ? (
+            <div className="risk-list">
+              {health.risks.map((risk) => (
+                <div key={risk.key} className={`risk-item risk-item--${risk.level}`}>
+                  <strong>{risk.label}</strong>
+                  <span>{risk.message}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
 
         <section className="grid grid--3" style={{ marginBottom: 18 }}>
           <ReviewMetric label="Open issues" value={unresolved.length} />
@@ -98,6 +133,27 @@ export default async function ImportReviewPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+function HealthCard({ pipeline }) {
+  return (
+    <div className={`health-card health-card--${pipeline.status}`}>
+      <div className="health-card__top">
+        <strong>{pipeline.label}</strong>
+        <span>{pipeline.status}</span>
+      </div>
+      <p>{pipeline.summary}</p>
+      {pipeline.latestObservedAt ? <small>Latest: {formatDateTime(pipeline.latestObservedAt)}</small> : null}
+      <dl className="health-metrics">
+        {pipeline.metrics.map((metric) => (
+          <div key={metric.label}>
+            <dt>{metric.label}</dt>
+            <dd>{metric.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 
@@ -161,4 +217,13 @@ function groupIssues(issues) {
 
 function priorityScore(priority) {
   return { high: 0, medium: 1, low: 2 }[priority] ?? 3;
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("ja-JP", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "Asia/Tokyo",
+  }).format(new Date(value));
 }
