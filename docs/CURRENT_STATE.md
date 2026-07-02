@@ -1,5 +1,7 @@
 # Current State
 
+Product direction: see `docs/PRODUCT_VISION.md`. The site is a gachapon market intelligence service for quickly finding hot, profitable, scarce, or high-buyback-value items.
+
 更新日: 2026-06-25
 
 このドキュメントは、リポジトリを読み、実装済みの範囲と動作確認済みの範囲を分けて整理したものです。2026-06-25 の仕上げ作業で `db:upsert-all` まで実行し、Supabase への upsert 経路も確認済みです。

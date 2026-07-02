@@ -1,5 +1,7 @@
 # Automation Plan
 
+Product direction: see `docs/PRODUCT_VISION.md`. The site is a gachapon market intelligence service for quickly finding hot, profitable, scarce, or high-buyback-value items.
+
 更新日: 2026-06-25
 
 この計画は、現在の UI と Supabase 接続を壊さず、実運用に耐える自動収集へ段階的に近づけるための優先順位です。Phase 0 ではコード変更を入れず、次に着手すべき作業を安全順に整理します。
