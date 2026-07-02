@@ -1,17 +1,29 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import { getSeriesList } from "@/lib/series";
-import { buildUpcomingCustomerMetrics, customerTags, opportunityScore } from "@/lib/domain/public-display";
+import {
+  UPCOMING_METRIC_LABELS,
+  buildUpcomingCustomerMetrics,
+  customerTags,
+  opportunityScore,
+} from "@/lib/domain/public-display-clean";
 
 export const metadata = {
   title: "発売スケジュール | Gacha Lens",
-  description: "発売予定の単品を月別、週別、期待値別に確認できます。",
+  description: "発売予定のガチャ単品を、実データがある月と週だけで確認できます。",
 };
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const weeks = ["第1週", "第2週", "第3週", "第4週", "第5週", "未定"];
+const scheduleMetricLabels = [
+  UPCOMING_METRIC_LABELS.price,
+  UPCOMING_METRIC_LABELS.forecast,
+  UPCOMING_METRIC_LABELS.upside,
+  UPCOMING_METRIC_LABELS.scarcity,
+  UPCOMING_METRIC_LABELS.opportunity,
+];
 
 export default async function SchedulePage({ searchParams }) {
   const params = await searchParams;
@@ -41,6 +53,7 @@ export default async function SchedulePage({ searchParams }) {
         <section className="page-hero">
           <p className="eyebrow">SCHEDULE</p>
           <h1 className="page-title">発売予定を狙い目順に見る</h1>
+          <p className="page-lead">実データがある月だけを表示し、週単位で期待値の高い単品を確認できます。発売前なので相場や利益は出しません。</p>
         </section>
 
         {months.length > 0 ? (
@@ -87,9 +100,7 @@ export default async function SchedulePage({ searchParams }) {
 
 function ScheduleCard({ item }) {
   const week = normalizeWeek(item.schedule_week);
-  const metrics = buildUpcomingCustomerMetrics(item).filter((metric) =>
-    ["価格", "期待値", "価格上昇期待", "品薄予想", "狙い目度"].includes(metric.label)
-  );
+  const metrics = buildUpcomingCustomerMetrics(item).filter((metric) => scheduleMetricLabels.includes(metric.label));
   const tags = customerTags(item, false);
 
   return (

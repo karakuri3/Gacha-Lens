@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import { getSeriesList } from "@/lib/series";
 import {
@@ -8,7 +8,7 @@ import {
   opportunityScore,
   publicTrendTags,
   trendPriorityScore,
-} from "@/lib/domain/public-display";
+} from "@/lib/domain/public-display-clean";
 
 export const metadata = {
   title: "トレンド | Gacha Lens",
@@ -44,9 +44,9 @@ export default async function TrendsPage() {
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">TREND</p>
-          <h1 className="page-title">今動いている単品を見る</h1>
+          <h1 className="page-title">今動いているガチャを確認</h1>
           <p className="page-lead">
-            出品、売れ行き、在庫の動き、X反応、発売直後のシグナルをまとめて、今見る価値が高い単品に絞ります。
+            出品、売れ行き、在庫報告、SNS反応、発売直後のシグナルをまとめて、今探す価値が高い単品を上に出します。
           </p>
           <div className="tag-row">
             <Link href="/ranking?tab=released" className="button-link button-link--dark">発売中ランキング</Link>
@@ -66,7 +66,7 @@ export default async function TrendsPage() {
         <section className="trend-board">
           <TrendSection
             title="急上昇・流通中"
-            subtitle="今出品や売れ行き、在庫報告がある単品を優先しています。"
+            subtitle="出品や売れ行き、在庫報告がある単品を優先しています。"
             items={circulating}
             mode="released"
           />
@@ -79,7 +79,7 @@ export default async function TrendsPage() {
           />
           <TrendSection
             title="これから狙い目"
-            subtitle="発売予定は相場を出さず、期待値・品薄予想・狙い目度だけで見せています。"
+            subtitle="発売前は相場を出さず、期待値と流通少なめだけで見せます。"
             items={upcoming}
             mode="upcoming"
           />
@@ -152,8 +152,8 @@ function TrendCard({ item, mode, compact }) {
 function publicFlowLabel(item) {
   const active = item.active_listing_count ?? item.market_summary?.active_listing_count ?? 0;
   const sold = item.sold_count ?? item.market_summary?.sold_count ?? 0;
-  if (!active && !sold) return "流通シグナルあり";
-  return `出品${active.toLocaleString("ja-JP")} / 売れ${sold.toLocaleString("ja-JP")}`;
+  if (!active && !sold) return "流通信号あり";
+  return `出品 ${active.toLocaleString("ja-JP")} / 売れ ${sold.toLocaleString("ja-JP")}`;
 }
 
 function publicScheduleLabel(item) {

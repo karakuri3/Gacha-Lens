@@ -1,26 +1,47 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import { getSeriesList } from "@/lib/series";
 import {
+  RELEASED_METRIC_LABELS,
+  UPCOMING_METRIC_LABELS,
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
   customerTags,
   isCirculatingItem,
   opportunityScore,
   releasedPriorityScore,
-} from "@/lib/domain/public-display";
+} from "@/lib/domain/public-display-clean";
 
 export const metadata = {
   title: "ランキング | Gacha Lens",
-  description: "発売中と発売予定を分けて、仕入れ判断に使う単品ランキングです。",
+  description: "発売中と発売予定を分けて、今見るべきガチャ単品をランキングします。",
 };
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const tabs = [
-  { value: "released", label: "発売中", caption: "流通判断" },
+  { value: "released", label: "発売中", caption: "相場・利益" },
   { value: "upcoming", label: "発売予定", caption: "期待値" },
+];
+
+const releasedMetricLabels = [
+  RELEASED_METRIC_LABELS.price,
+  RELEASED_METRIC_LABELS.singleMarket,
+  RELEASED_METRIC_LABELS.profit,
+  RELEASED_METRIC_LABELS.completeSet,
+  RELEASED_METRIC_LABELS.stock,
+  RELEASED_METRIC_LABELS.sellThrough,
+  RELEASED_METRIC_LABELS.watch,
+];
+
+const upcomingMetricLabels = [
+  UPCOMING_METRIC_LABELS.price,
+  UPCOMING_METRIC_LABELS.forecast,
+  UPCOMING_METRIC_LABELS.upside,
+  UPCOMING_METRIC_LABELS.scarcity,
+  UPCOMING_METRIC_LABELS.opportunity,
+  UPCOMING_METRIC_LABELS.release,
 ];
 
 export default async function RankingPage({ searchParams }) {
@@ -47,9 +68,9 @@ export default async function RankingPage({ searchParams }) {
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">RANKING</p>
-          <h1 className="page-title">仕入れ判断に使う単品ランキング</h1>
+          <h1 className="page-title">今見るべきガチャ単品ランキング</h1>
           <p className="page-lead">
-            発売中と発売予定を分けて、今見るべき単品だけに絞って判断できます。
+            発売中は相場・利益・在庫・売れ行きで、発売予定は期待値・価格上昇期待・流通少なめで並べます。
           </p>
         </section>
 
@@ -98,7 +119,7 @@ function RankingCard({ item, mode }) {
     <Link href={`/series/${item.slug}`} className={`card product-card rank-${item.rank}`}>
       <span className={`rank-medal rank-medal--${item.rank}`}>{item.rank}位</span>
       <div className="product-image">
-        <ProductImage src={item.image_url} alt={item.name} />
+        <ProductImage src={item.image_url} alt={item.name} priority={item.rank <= 3} />
       </div>
       <ProductTitle item={item} />
       <PublicTags item={item} isReleased={mode === "released"} />
@@ -161,9 +182,8 @@ function MetricGrid({ metrics }) {
 
 function getMetrics(item, mode) {
   const metrics = mode === "released" ? buildReleasedCustomerMetrics(item) : buildUpcomingCustomerMetrics(item);
-  return mode === "released"
-    ? metrics.filter((metric) => ["価格", "単品相場", "利益目安", "コンプ相場", "在庫状況", "売れ行き", "今見るべき度"].includes(metric.label))
-    : metrics.filter((metric) => ["価格", "期待値", "価格上昇期待", "品薄予想", "狙い目度", "発売"].includes(metric.label));
+  const allowed = mode === "released" ? releasedMetricLabels : upcomingMetricLabels;
+  return metrics.filter((metric) => allowed.includes(metric.label));
 }
 
 function arrangePodium(items) {

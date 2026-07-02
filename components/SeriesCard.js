@@ -1,12 +1,12 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
   customerTags,
-} from "@/lib/domain/public-display";
+} from "@/lib/domain/public-display-clean";
 
-export default function SeriesCard({ series }) {
+export default function SeriesCard({ series, priority = false }) {
   const isReleased = Boolean(series.is_released ?? series.isReleased);
   const metrics = isReleased ? buildReleasedCustomerMetrics(series).slice(0, 4) : buildUpcomingCustomerMetrics(series).slice(0, 4);
   const tags = customerTags(series, isReleased);
@@ -14,7 +14,7 @@ export default function SeriesCard({ series }) {
   return (
     <Link href={`/series/${series.slug}`} className="card product-card">
       <div className="product-image">
-        <ProductImage src={series.image_url || series.imageUrl} alt={series.name} />
+        <ProductImage src={series.image_url || series.imageUrl} alt={series.name} priority={priority} />
       </div>
       <div>
         <div className="tag-row" style={{ marginBottom: 10 }}>

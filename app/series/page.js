@@ -1,11 +1,11 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import SeriesCard from "@/components/SeriesCard";
 import { getSeriesList } from "@/lib/series";
-import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display";
+import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display-clean";
 
 export const metadata = {
   title: "単品一覧 | Gacha Lens",
-  description: "発売中と発売予定のガチャ単品を、価格・相場・利益・期待値で探せます。",
+  description: "発売中と発売予定のガチャ単品を、価格・相場・利益・在庫・期待値で探せます。",
 };
 
 export const dynamic = "force-dynamic";
@@ -56,8 +56,8 @@ export default async function SeriesPage({ searchParams }) {
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">SEARCH</p>
-          <h1 className="page-title">単品を探す</h1>
-          <p className="page-lead">お客さん向けの表示は、価格・相場・利益・在庫・期待値に絞っています。</p>
+          <h1 className="page-title">ガチャ単品を探す</h1>
+          <p className="page-lead">過去商品も含めて、価格・相場・利益・在庫・期待値で絞り込めます。</p>
         </section>
 
         <form className="card form-panel" action="/series" method="get">
@@ -109,7 +109,7 @@ export default async function SeriesPage({ searchParams }) {
                 ? `全${filtered.length.toLocaleString("ja-JP")}件中 ${displayStart.toLocaleString("ja-JP")}-${displayEnd.toLocaleString("ja-JP")}件`
                 : "0件"}
             </h2>
-            <p className="section-sub">過去商品もページを切り替えて全件確認できます。カード全体をクリックすると詳細へ移動します。</p>
+            <p className="section-sub">過去商品もページを切り替えて確認できます。カード全体をクリックすると詳細へ移動します。</p>
           </div>
         </div>
 

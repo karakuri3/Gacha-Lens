@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { notFound } from "next/navigation";
 import ProductImage from "@/components/ProductImage";
 import { getRelatedSeries, getSeriesBySlug } from "@/lib/series";
@@ -17,7 +17,7 @@ import {
   scarcityScore,
   stockStatusLabel,
   watchScore,
-} from "@/lib/domain/public-display";
+} from "@/lib/domain/public-display-clean";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -54,7 +54,7 @@ export default async function VariantDetailPage({ params }) {
 
         <section className="detail-hero">
           <div className="detail-image">
-            <ProductImage src={item.image_url} alt={item.name} />
+            <ProductImage src={item.image_url} alt={item.name} priority />
           </div>
           <div className="card detail-panel">
             <div className="tag-row">
@@ -103,7 +103,7 @@ export default async function VariantDetailPage({ params }) {
           <StockPanel item={item} />
           <div className="card panel">
             <h2>{isReleased ? "相場の内訳" : "発売前の注意"}</h2>
-            {isReleased ? <MarketBreakdown item={item} /> : <UpcomingNotice />}
+            {isReleased ? <MarketBreakdown item={item} /> : <UpcomingNotice item={item} />}
           </div>
         </section>
 
@@ -111,7 +111,7 @@ export default async function VariantDetailPage({ params }) {
           <div className="section-head">
             <div>
               <h2 className="section-title">関連単品</h2>
-              <p className="section-sub">同じ状態の商品だけを比較できます。</p>
+              <p className="section-sub">同じ発売状態の単品だけを比較できます。</p>
             </div>
           </div>
           <div className="grid grid--cards">
@@ -158,9 +158,10 @@ function UpcomingSummary({ item }) {
     <div className="metric-grid">
       <Metric label="期待値" value={formatScore(item.forecast_score)} tone="highlight" />
       <Metric label="価格上昇期待" value={formatScore(priceUpsideScore(item))} />
-      <Metric label="品薄予想" value={formatScore(scarcityScore(item))} />
+      <Metric label="流通少なめ" value={formatScore(scarcityScore(item))} />
       <Metric label="狙い目度" value={formatScore(opportunityScore(item))} tone="highlight" />
       <Metric label="発売" value={formatSchedule(item)} />
+      <Metric label="価格" value={formatYen(item.price)} />
     </div>
   );
 }
@@ -175,15 +176,25 @@ function MarketBreakdown({ item }) {
       <Metric label="コンプ相場" value={formatYen(summary.complete_set)} />
       <Metric label="一部セット" value={formatYen(summary.partial_set)} />
       <Metric label="人気セット" value={formatYen(summary.popular_set)} />
+      <Metric label="出品数" value={(summary.active_listing_count ?? 0).toLocaleString("ja-JP")} />
+      <Metric label="売れた数" value={(summary.sold_count ?? 0).toLocaleString("ja-JP")} />
+      <Metric label="信頼度" value={summary.price_confidence?.label ?? "データ不足"} />
     </div>
   );
 }
 
-function UpcomingNotice() {
+function UpcomingNotice({ item }) {
   return (
-    <p className="section-sub">
-      発売前の商品は、価格・期待値・品薄予想・狙い目度だけで判断できるようにしています。
-    </p>
+    <div>
+      <p className="section-sub">
+        発売前の商品は、相場や利益を確定情報として表示しません。期待値、価格上昇期待、流通少なめ、狙い目度で判断してください。
+      </p>
+      {item.official_url ? (
+        <div className="tag-row" style={{ marginTop: 14 }}>
+          <Link href={item.official_url} className="button-link" target="_blank" rel="noreferrer">公式ページ</Link>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -198,7 +209,7 @@ function StockPanel({ item }) {
         <span>{label === "未取得" ? "データ不足" : "動きあり"}</span>
       </div>
       <p className="section-sub">
-        仕入れ判断に必要な在庫の動きだけを表示しています。
+        今見るべき判断に必要な在庫の動きだけを表示します。
       </p>
     </div>
   );
