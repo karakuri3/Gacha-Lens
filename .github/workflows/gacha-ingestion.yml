@@ -15,6 +15,8 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      MARKET_RAW_FEED_SOURCES_JSON: ${{ secrets.MARKET_RAW_FEED_SOURCES_JSON }}
+      STOCK_RAW_FEED_SOURCES_JSON: ${{ secrets.STOCK_RAW_FEED_SOURCES_JSON }}
       GACHA_DATA_SOURCE: supabase
     steps:
       - uses: actions/checkout@v6
