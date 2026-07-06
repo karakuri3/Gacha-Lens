@@ -375,6 +375,11 @@ select {
   gap: 34px;
 }
 
+.trend-list {
+  display: grid;
+  gap: 12px;
+}
+
 .stats-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -410,9 +415,10 @@ select {
 
 .trend-card {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 16px;
-  padding: 14px;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
   text-decoration: none;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
@@ -425,12 +431,13 @@ select {
 
 .trend-card .product-image {
   align-self: start;
+  width: 132px;
 }
 
 .trend-card__body {
   min-width: 0;
   display: grid;
-  gap: 12px;
+  gap: 9px;
 }
 
 .trend-card__top {
@@ -445,7 +452,7 @@ select {
   align-items: center;
   min-height: 34px;
   border-radius: 999px;
-  background: var(--brand);
+  background: #22304a;
   color: #ffffff;
   font-size: 13px;
   font-weight: 950;
@@ -453,8 +460,12 @@ select {
 }
 
 .trend-card--compact {
-  grid-template-columns: 124px minmax(0, 1fr);
+  grid-template-columns: 112px minmax(0, 1fr);
   align-items: start;
+}
+
+.trend-card--compact .product-image {
+  width: 112px;
 }
 
 .market-snapshot {
@@ -1179,12 +1190,43 @@ button.button-link {
 
   .trend-card,
   .trend-card--compact {
-    grid-template-columns: 1fr;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px;
   }
 
   .trend-card__top {
     align-items: flex-start;
     flex-direction: column;
+    gap: 5px;
+  }
+
+  .trend-card .product-image,
+  .trend-card--compact .product-image {
+    width: 92px;
+  }
+
+  .trend-card .product-name {
+    font-size: 16px;
+  }
+
+  .trend-card .tag-row {
+    gap: 5px;
+  }
+
+  .trend-card .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .trend-card .metric {
+    padding: 8px;
+  }
+
+  .trend-score {
+    min-height: 28px;
+    padding: 5px 9px;
+    font-size: 12px;
   }
 
   .market-snapshot {

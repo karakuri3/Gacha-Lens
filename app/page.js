@@ -33,7 +33,7 @@ export default async function Home() {
             相場、利益目安、在庫の動き、売れ行き、発売予定の期待値を単品ごとに整理。転売判断、買取チェック、欲しい商品の探索に必要な情報だけを前に出します。
           </p>
           <div className="tag-row">
-            <Link href="/ranking" className="button-link button-link--dark">ランキングを見る</Link>
+            <Link href="/ranking" className="button-link">ランキングを見る</Link>
             <Link href="/trends" className="button-link">トレンドを見る</Link>
             <Link href="/schedule" className="button-link">発売予定を見る</Link>
             <Link href="/series" className="button-link">単品一覧で探す</Link>

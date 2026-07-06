@@ -51,7 +51,7 @@ export default async function TrendsPage() {
             出品、売れ行き、在庫報告、SNS反応、発売直後のシグナルをまとめて、今探す価値が高い単品を上に出します。
           </p>
           <div className="tag-row">
-            <Link href="/ranking?tab=released" className="button-link button-link--dark">発売中ランキング</Link>
+            <Link href="/ranking?tab=released" className="button-link">発売中ランキング</Link>
             <Link href="/series?filter=circulating&sort=watch" className="button-link">今出回っている単品</Link>
           </div>
         </section>
@@ -103,7 +103,7 @@ function TrendSection({ title, subtitle, items, mode, compact = false }) {
         </div>
       </div>
       {items.length ? (
-        <div className={`grid ${compact ? "" : "grid--cards"}`}>
+        <div className={`trend-list ${compact ? "trend-list--compact" : ""}`}>
           {items.map((item) => (
             <TrendCard key={item.slug} item={item} mode={mode} compact={compact} />
           ))}
@@ -139,7 +139,7 @@ function TrendCard({ item, mode, compact }) {
         <div className="product-meta">{item.series_name} / {item.rarity}</div>
         {tags.length ? (
           <div className="tag-row">
-            {tags.map((tag) => (
+            {tags.slice(0, 3).map((tag) => (
               <span key={tag} className="tag tag--signal">{tag}</span>
             ))}
           </div>
@@ -172,7 +172,7 @@ function visibleTrendMetrics(metrics = [], mode, compact) {
   const unavailable = new Set(["未取得", "データ不足"]);
   return metrics
     .filter((metric) => mode !== "released" || !unavailable.has(metric.value))
-    .slice(0, compact ? 4 : 5);
+    .slice(0, compact ? 3 : 4);
 }
 
 function hasStockMovement(item) {
