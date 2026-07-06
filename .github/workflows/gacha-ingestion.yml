@@ -17,6 +17,9 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       MARKET_RAW_FEED_SOURCES_JSON: ${{ secrets.MARKET_RAW_FEED_SOURCES_JSON }}
       STOCK_RAW_FEED_SOURCES_JSON: ${{ secrets.STOCK_RAW_FEED_SOURCES_JSON }}
+      RAKUTEN_APPLICATION_ID: ${{ secrets.RAKUTEN_APPLICATION_ID }}
+      RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+      RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
       GACHA_DATA_SOURCE: supabase
     steps:
       - uses: actions/checkout@v6
