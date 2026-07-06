@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import { getSeriesList } from "@/lib/series";
+import { variantHref } from "@/lib/variant-url";
 import {
   UPCOMING_METRIC_LABELS,
   buildUpcomingCustomerMetrics,
@@ -104,7 +105,7 @@ function ScheduleCard({ item }) {
   const tags = customerTags(item, false);
 
   return (
-    <Link href={`/series/${item.slug}`} className="card product-card">
+    <Link href={variantHref(item)} className="card product-card">
       <div className="product-image">
         <ProductImage src={item.image_url} alt={item.name} />
       </div>

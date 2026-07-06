@@ -26,16 +26,36 @@ export async function upsertRows(table, rows, options = {}) {
 }
 
 export async function fetchIdSet(table) {
-  const response = await fetch(restUrl(table, { select: "id" }), {
-    headers: restHeaders(),
-  });
+  const data = await fetchRows(table, { select: "id" });
+  return new Set((data ?? []).map((row) => row.id).filter(Boolean));
+}
 
-  if (!response.ok) {
-    throw new Error(`${table} id fetch failed: ${await errorMessage(response)}`);
+export async function fetchRows(table, options = {}) {
+  const pageSize = options.pageSize ?? 1000;
+  const select = options.select ?? "*";
+  const extraParams = options.params ?? {};
+  const rows = [];
+
+  for (let offset = 0; offset < 100_000; offset += pageSize) {
+    const response = await fetch(restUrl(table, {
+      ...extraParams,
+      select,
+      limit: String(pageSize),
+      offset: String(offset),
+    }), {
+      headers: restHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`${table} fetch failed: ${await errorMessage(response)}`);
+    }
+
+    const page = await response.json();
+    rows.push(...(page ?? []));
+    if (!Array.isArray(page) || page.length < pageSize) break;
   }
 
-  const data = await response.json();
-  return new Set((data ?? []).map((row) => row.id).filter(Boolean));
+  return rows;
 }
 
 export async function fetchIdSetSafe(table, label = "upsert") {

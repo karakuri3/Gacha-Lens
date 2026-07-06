@@ -20,9 +20,6 @@ export default function Header() {
               {item.label}
             </Link>
           ))}
-          <Link href="/series" className="button-link button-link--dark">
-            探す
-          </Link>
         </nav>
       </div>
     </header>

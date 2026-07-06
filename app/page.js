@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 import { getSeriesList } from "@/lib/series";
 import SeriesCard from "@/components/SeriesCard";
+import { variantHref } from "@/lib/variant-url";
 import { customerTags, isCirculatingItem, opportunityScore, releasedPriorityScore, trendPriorityScore } from "@/lib/domain/public-display-clean";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +43,7 @@ export default async function Home() {
         {watchNow.length > 0 ? (
           <section className="signal-strip" aria-label="今見るべき商品">
             {watchNow.map((item) => (
-              <Link key={item.slug} href={`/series/${item.slug}`} className="signal-chip">
+              <Link key={item.slug} href={variantHref(item)} className="signal-chip">
                 <strong>{customerTags(item, true)[0] || "今見るべき"}</strong>
                 <span>{item.variant_name || item.name}</span>
               </Link>
@@ -56,7 +57,7 @@ export default async function Home() {
             <p className="section-sub">出品、売れ行き、在庫報告、利益目安がある単品を優先します。</p>
             <div className="plain-list">
               {trendTop.map((item) => (
-                <Link key={item.slug} href={`/series/${item.slug}`} className="signal-chip" style={{ marginBottom: 10 }}>
+                <Link key={item.slug} href={variantHref(item)} className="signal-chip" style={{ marginBottom: 10 }}>
                   <strong>{customerTags(item, true)[0] || "流通あり"}</strong>
                   <span>{item.name}</span>
                 </Link>
@@ -68,7 +69,7 @@ export default async function Home() {
             <p className="section-sub">発売前は相場を出さず、期待値、価格上昇期待、流通少なめで見ます。</p>
             <div className="plain-list">
               {upcomingTop.map((item) => (
-                <Link key={item.slug} href={`/series/${item.slug}`} className="signal-chip" style={{ marginBottom: 10 }}>
+                <Link key={item.slug} href={variantHref(item)} className="signal-chip" style={{ marginBottom: 10 }}>
                   <strong>{customerTags(item, false)[0] || "期待値"}</strong>
                   <span>{item.name}</span>
                 </Link>

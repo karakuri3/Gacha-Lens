@@ -1,5 +1,6 @@
 ﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
+import { variantHref } from "@/lib/variant-url";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
@@ -8,11 +9,14 @@ import {
 
 export default function SeriesCard({ series, priority = false }) {
   const isReleased = Boolean(series.is_released ?? series.isReleased);
-  const metrics = isReleased ? buildReleasedCustomerMetrics(series).slice(0, 4) : buildUpcomingCustomerMetrics(series).slice(0, 4);
+  const metrics = visibleCardMetrics(
+    isReleased ? buildReleasedCustomerMetrics(series) : buildUpcomingCustomerMetrics(series),
+    isReleased
+  );
   const tags = customerTags(series, isReleased);
 
   return (
-    <Link href={`/series/${series.slug}`} className="card product-card">
+    <Link href={variantHref(series)} className="card product-card">
       <div className="product-image">
         <ProductImage src={series.image_url || series.imageUrl} alt={series.name} priority={priority} />
       </div>
@@ -45,4 +49,10 @@ export default function SeriesCard({ series, priority = false }) {
       ) : null}
     </Link>
   );
+}
+
+function visibleCardMetrics(metrics = [], isReleased) {
+  const unavailable = new Set(["未取得", "データ不足"]);
+  const filtered = metrics.filter((metric) => !unavailable.has(metric.value));
+  return (filtered.length ? filtered : metrics).slice(0, isReleased ? 4 : 3);
 }

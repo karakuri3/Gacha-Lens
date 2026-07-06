@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import { getSeriesList } from "@/lib/series";
+import { variantHref } from "@/lib/variant-url";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
@@ -26,8 +27,9 @@ export default async function TrendsPage() {
   const stockMovesAll = circulatingAll
     .filter((item) => hasStockMovement(item))
     .sort((a, b) => trendPriorityScore(b) - trendPriorityScore(a));
-  const circulating = circulatingAll.slice(0, 12);
-  const stockMoves = stockMovesAll.slice(0, 6);
+  const circulating = circulatingAll.slice(0, 6);
+  const circulatingSlugs = new Set(circulating.map((item) => item.slug));
+  const stockMoves = stockMovesAll.filter((item) => !circulatingSlugs.has(item.slug)).slice(0, 6);
   const upcoming = series
     .filter((item) => !item.is_released)
     .sort((a, b) => upcomingPriority(b) - upcomingPriority(a))
@@ -70,13 +72,15 @@ export default async function TrendsPage() {
             items={circulating}
             mode="released"
           />
-          <TrendSection
-            title="在庫動きあり"
-            subtitle="再入荷や在庫報告が入り、探しに行く理由がある単品です。"
-            items={stockMoves}
-            mode="released"
-            compact
-          />
+          {stockMoves.length > 0 ? (
+            <TrendSection
+              title="在庫動きあり"
+              subtitle="再入荷や在庫報告が入り、探しに行く理由がある単品です。"
+              items={stockMoves}
+              mode="released"
+              compact
+            />
+          ) : null}
           <TrendSection
             title="これから狙い目"
             subtitle="発売前は相場を出さず、期待値と流通少なめだけで見せます。"
@@ -113,12 +117,16 @@ function TrendSection({ title, subtitle, items, mode, compact = false }) {
 
 function TrendCard({ item, mode, compact }) {
   const tags = publicTrendTags(item);
-  const metrics = mode === "released" ? buildReleasedCustomerMetrics(item).slice(0, compact ? 4 : 6) : buildUpcomingCustomerMetrics(item).slice(0, 6);
+  const metrics = visibleTrendMetrics(
+    mode === "released" ? buildReleasedCustomerMetrics(item) : buildUpcomingCustomerMetrics(item),
+    mode,
+    compact
+  );
   const rawScore = mode === "released" ? trendPriorityScore(item) / 10 : opportunityScore(item);
   const score = Math.max(0, Math.min(100, Math.round(rawScore)));
 
   return (
-    <Link href={`/series/${item.slug}`} className={`card trend-card ${compact ? "trend-card--compact" : ""}`}>
+    <Link href={variantHref(item)} className={`card trend-card ${compact ? "trend-card--compact" : ""}`}>
       <div className="product-image">
         <ProductImage src={item.image_url} alt={item.name} />
       </div>
@@ -158,6 +166,13 @@ function publicFlowLabel(item) {
 
 function publicScheduleLabel(item) {
   return [item.schedule_month, item.schedule_week ? `${item.schedule_week}より順次` : ""].filter(Boolean).join(" ") || "発売予定";
+}
+
+function visibleTrendMetrics(metrics = [], mode, compact) {
+  const unavailable = new Set(["未取得", "データ不足"]);
+  return metrics
+    .filter((metric) => mode !== "released" || !unavailable.has(metric.value))
+    .slice(0, compact ? 4 : 5);
 }
 
 function hasStockMovement(item) {

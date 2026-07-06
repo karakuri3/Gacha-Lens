@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import { getSeriesList } from "@/lib/series";
+import { variantHref } from "@/lib/variant-url";
 import {
   RELEASED_METRIC_LABELS,
   UPCOMING_METRIC_LABELS,
@@ -59,7 +60,6 @@ export default async function RankingPage({ searchParams }) {
     })
     .map((item, index) => ({ ...item, rank: index + 1 }));
 
-  const signalItems = ranked.filter((item) => customerTags(item, tab === "released").length > 0).slice(0, 4);
   const podium = arrangePodium(ranked.slice(0, 3));
   const rest = ranked.slice(3);
 
@@ -87,17 +87,6 @@ export default async function RankingPage({ searchParams }) {
           ))}
         </div>
 
-        {signalItems.length > 0 ? (
-          <section className="signal-strip" aria-label="今見るべき商品">
-            {signalItems.map((item) => (
-              <Link key={item.slug} href={`/series/${item.slug}`} className="signal-chip">
-                <strong>{customerTags(item, tab === "released")[0]}</strong>
-                <span>{item.variant_name || item.name}</span>
-              </Link>
-            ))}
-          </section>
-        ) : null}
-
         <section className="grid grid--3 podium">
           {podium.map((item) => (
             <RankingCard key={item.slug} item={item} mode={tab} />
@@ -116,7 +105,7 @@ export default async function RankingPage({ searchParams }) {
 
 function RankingCard({ item, mode }) {
   return (
-    <Link href={`/series/${item.slug}`} className={`card product-card rank-${item.rank}`}>
+    <Link href={variantHref(item)} className={`card product-card rank-${item.rank}`}>
       <span className={`rank-medal rank-medal--${item.rank}`}>{item.rank}位</span>
       <div className="product-image">
         <ProductImage src={item.image_url} alt={item.name} priority={item.rank <= 3} />
@@ -130,7 +119,7 @@ function RankingCard({ item, mode }) {
 
 function RankingRow({ item, mode }) {
   return (
-    <Link href={`/series/${item.slug}`} className="card rank-row">
+    <Link href={variantHref(item)} className="card rank-row">
       <div className="rank-number">#{item.rank}</div>
       <div className="product-image">
         <ProductImage src={item.image_url} alt={item.name} />
@@ -183,7 +172,10 @@ function MetricGrid({ metrics }) {
 function getMetrics(item, mode) {
   const metrics = mode === "released" ? buildReleasedCustomerMetrics(item) : buildUpcomingCustomerMetrics(item);
   const allowed = mode === "released" ? releasedMetricLabels : upcomingMetricLabels;
-  return metrics.filter((metric) => allowed.includes(metric.label));
+  return metrics
+    .filter((metric) => allowed.includes(metric.label))
+    .filter((metric) => mode !== "released" || !["未取得", "データ不足"].includes(metric.value))
+    .slice(0, mode === "released" ? 5 : 6);
 }
 
 function arrangePodium(items) {
