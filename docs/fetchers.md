@@ -113,6 +113,7 @@ Input:
 - `RAKUTEN_MARKET_KEYWORDS`: comma or newline separated search keywords. Defaults to `ガチャ,ガチャガチャ,カプセルトイ,ガシャポン`.
 - `RAKUTEN_MARKET_HITS`: results per keyword, capped at 30. Defaults to `20`.
 - `RAKUTEN_REQUEST_DELAY_MS`: polite delay between Rakuten keyword requests. Defaults to `1200`.
+- `RAKUTEN_REQUEST_ORIGIN`: origin/referer sent for Rakuten allowed website checks. Defaults to `https://gachalens.vercel.app`.
 
 Output:
 
