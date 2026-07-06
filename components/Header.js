@@ -12,7 +12,7 @@ export default function Header() {
     <header className="site-header">
       <div className="site-shell site-header__inner">
         <Link href="/" className="site-logo">
-          Gacha Lens
+          ガチャ相場ナビ
         </Link>
         <nav className="site-nav" aria-label="サイトメニュー">
           {navItems.map((item) => (

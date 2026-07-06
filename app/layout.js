@@ -2,7 +2,7 @@ import "./globals.css";
 import Header from "@/components/Header";
 
 export const metadata = {
-  title: "Gacha Lens",
+  title: "ガチャ相場ナビ",
   description: "ガチャの発売予定、ランキング、相場感を判断するためのサイトです。",
 };
 
