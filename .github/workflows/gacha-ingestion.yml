@@ -29,7 +29,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Run ingestion
-        run: npm run db:upsert-all 2>&1 | tee ingestion.log
+        run: |
+          set -o pipefail
+          npm run db:upsert-all 2>&1 | tee ingestion.log
       - name: Write summary
         if: always()
         run: |

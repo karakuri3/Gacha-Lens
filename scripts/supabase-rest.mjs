@@ -1,6 +1,6 @@
 export async function upsertRows(table, rows, options = {}) {
   if (!rows.length) return;
-  let safeRows = rows;
+  let safeRows = dedupeRowsById(rows);
   const label = options.label || "upsert";
 
   for (let attempt = 0; attempt < 32; attempt += 1) {
@@ -18,7 +18,7 @@ export async function upsertRows(table, rows, options = {}) {
     const missingColumn = parseMissingColumn(message);
     if (!missingColumn) throw new Error(`${table} upsert failed: ${message}`);
 
-    safeRows = safeRows.map((row) => omitKey(row, missingColumn));
+    safeRows = dedupeRowsById(safeRows.map((row) => omitKey(row, missingColumn)));
     console.warn(`[${label}] ${table}.${missingColumn} is not in the remote schema cache. Retrying without it.`);
   }
 
@@ -113,6 +113,10 @@ function omitKey(row, key) {
   const next = { ...row };
   delete next[key];
   return next;
+}
+
+function dedupeRowsById(rows) {
+  return [...new Map(rows.filter(Boolean).map((row) => [row.id ?? JSON.stringify(row), row])).values()];
 }
 
 function chunk(values, size) {
