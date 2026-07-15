@@ -37,6 +37,8 @@ Rakuten Ichiba:
 
 These are credentials, not recurring product data entry. The primary Cron path stores them as Supabase Edge Function secrets. The Edge Function forwards available provider credentials only to the authenticated Vercel ingestion request over TLS; they are injected into the child fetch process and are never returned in logs or API responses. GitHub Actions keeps the same names as fallback secrets.
 
+The Edge Function accepts the shared Cron secret for scheduled jobs. Explicit administrator runs use a separate `ADMIN_INGEST_TOKEN` through `x-admin-ingest-token`; this allows rotation without interrupting Cron. Public and anonymous calls remain rejected.
+
 ## Stored data
 
 Every run normalizes provider results into `market_listings`. A listing is classified as single, rare/secret, full set, partial set, or unknown against the official master.

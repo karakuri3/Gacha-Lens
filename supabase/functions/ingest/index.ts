@@ -9,11 +9,17 @@ Deno.serve(async (request) => {
   }
 
   const cronSecret = Deno.env.get("CRON_SHARED_SECRET") || "";
-  if (cronSecret) {
-    const suppliedSecret = request.headers.get("x-cron-secret") || "";
-    if (suppliedSecret !== cronSecret) {
-      return json({ ok: false, error: "Unauthorized cron caller" }, 401);
-    }
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const adminIngestToken = Deno.env.get("ADMIN_INGEST_TOKEN") || "";
+  const suppliedSecret = request.headers.get("x-cron-secret") || "";
+  const authorization = request.headers.get("authorization") || "";
+  const bearerToken = authorization.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : "";
+  const suppliedAdminToken = request.headers.get("x-admin-ingest-token") || "";
+  const cronAuthorized = Boolean(cronSecret && suppliedSecret === cronSecret);
+  const serviceRoleAuthorized = Boolean(serviceRoleKey && bearerToken === serviceRoleKey);
+  const adminAuthorized = Boolean(adminIngestToken && suppliedAdminToken === adminIngestToken);
+  if (!cronAuthorized && !serviceRoleAuthorized && !adminAuthorized) {
+    return json({ ok: false, error: "Unauthorized ingestion caller" }, 401);
   }
 
   const baseUrl = Deno.env.get("APP_INGEST_BASE_URL") || "";
