@@ -19,6 +19,8 @@ Mercari page scraping and Amazon page scraping are intentionally excluded. Neith
 - old products are rotated through the remaining slots
 - provisional variants are never used as exact single-item targets
 
+When a provider returns a likely single listing for a series that still has only a provisional variant, that series official product URL is promoted to the front of the next official-detail queue. After the official lineup arrives, the next market upsert reclassifies the stored listing against the confirmed variants.
+
 The default hourly run uses 24 planned queries. Yahoo consumes up to 24 and Rakuten up to 8. Adjust these only after checking provider limits and function duration.
 
 ## One-time credentials

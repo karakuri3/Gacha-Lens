@@ -205,16 +205,25 @@ function classifyMarketListing(raw, catalog) {
 }
 
 function classifyListingType(title) {
+  const completeMatch = title.match(/全\d+種|全部揃(?:って)?(?:ます|います)?|フルコンプ/);
+  if (completeMatch) {
+    return { listingType: "complete_set", reason: "full_set_pattern", confidence: 0.94, keywords: [completeMatch[0]] };
+  }
+  const numberedSetMatch = title.match(/(?:ノーマル)?\d+種セット|\d+点セット/);
+  if (numberedSetMatch) {
+    return { listingType: "partial_set", reason: "numbered_set_pattern", confidence: 0.86, keywords: [numberedSetMatch[0]] };
+  }
   const rules = [
-    { listingType: "secret_single", reason: "secret_keyword", confidence: 0.88, keywords: ["シークレット", "シクレ", "secret", "sec", "隠し", "レア枠"] },
-    { listingType: "rare_single", reason: "rare_keyword", confidence: 0.82, keywords: ["レア", "rare", "限定カラー", "レアカラー", "リカラー", "クリアカラー", "当たり"] },
     { listingType: "complete_set", reason: "full_set_keyword", confidence: 0.92, keywords: ["コンプ", "コンプリート", "全種", "フルセット", "complete", "fullset"] },
     { listingType: "partial_set", reason: "partial_set_keyword", confidence: 0.74, keywords: ["セミコンプ", "準コンプ", "2種", "3種", "4種", "2点", "3点", "4点", "一部", "セット", "よりどり"] },
+    { listingType: "secret_single", reason: "secret_keyword", confidence: 0.88, keywords: ["シークレット", "シクレ", "secret", "sec", "隠し", "レア枠"] },
+    { listingType: "rare_single", reason: "rare_keyword", confidence: 0.82, keywords: ["レア", "rare", "限定カラー", "レアカラー", "リカラー", "クリアカラー", "当たり"] },
     { listingType: "unknown", reason: "loose_bulk_keyword", confidence: 0.38, keywords: ["まとめ", "まとめ売り", "バラ"] },
   ];
 
   for (const rule of rules) {
     const keyword = rule.keywords.find((entry) => title.includes(normalize(entry)));
+    if (rule.listingType === "rare_single" && /レア(?:は)?(?:含まれ|含み)ません/.test(title)) continue;
     if (keyword) return { ...rule, keywords: [keyword] };
   }
 

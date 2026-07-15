@@ -231,6 +231,25 @@ create index if not exists market_listings_last_observed_at_idx on market_listin
 create index if not exists market_listing_observations_listing_id_idx on market_listing_observations(listing_id, observed_at desc);
 create index if not exists market_listing_observations_variant_id_idx on market_listing_observations(variant_id, observed_at desc);
 create index if not exists market_listing_observations_series_id_idx on market_listing_observations(series_id, observed_at desc);
+
+create or replace function sync_market_observation_links()
+returns trigger
+language plpgsql
+as $$
+begin
+  update market_listing_observations
+  set variant_id = new.variant_id,
+      series_id = new.series_id
+  where listing_id = new.id
+    and (variant_id is distinct from new.variant_id or series_id is distinct from new.series_id);
+  return new;
+end;
+$$;
+
+drop trigger if exists market_listing_observation_links_trigger on market_listings;
+create trigger market_listing_observation_links_trigger
+after insert or update of variant_id, series_id on market_listings
+for each row execute function sync_market_observation_links();
 create index if not exists x_reactions_variant_id_idx on x_reactions(variant_id);
 create index if not exists x_reactions_matched_variant_id_idx on x_reactions(matched_variant_id);
 create index if not exists restock_events_variant_id_idx on restock_events(variant_id);

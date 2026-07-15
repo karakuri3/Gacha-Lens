@@ -9,10 +9,12 @@ loadEnvFile(".env.local");
 const outputPath = getGeneratedDataPath("official-raw.json");
 const previous = readExistingResult(outputPath);
 const knownDetailedOfficialUrls = await loadKnownDetailedOfficialUrls();
+const marketPriorityOfficialUrls = await loadMarketPriorityOfficialUrls();
 const result = await fetchOfficialRaw({
   previousRecords: previous.records,
   detailCursor: previous.detailCursor,
   knownDetailedOfficialUrls,
+  priorityDetailUrls: marketPriorityOfficialUrls,
 });
 writeJson(outputPath, result);
 console.log(JSON.stringify(summarize("official", result, outputPath), null, 2));
@@ -27,6 +29,20 @@ function readExistingResult(filePath) {
     };
   } catch {
     return { records: [], detailCursor: 0 };
+  }
+}
+
+async function loadMarketPriorityOfficialUrls() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return [];
+  try {
+    const rows = await fetchRows("market_listings", {
+      select: "series:series!inner(official_url)",
+      params: { variant_id: "is.null", series_id: "not.is.null", listing_type: "eq.unknown" },
+    });
+    return [...new Set(rows.map((row) => row.series?.official_url).filter(Boolean))];
+  } catch (error) {
+    console.warn(`[official-fetch] Could not read market detail priorities: ${error.message}`);
+    return [];
   }
 }
 
@@ -60,6 +76,7 @@ function summarize(source, result, filePath) {
     detailFetched: result.detailFetched ?? 0,
     remainingDetails: result.remainingDetails ?? 0,
     knownDetailedInDatabase: knownDetailedOfficialUrls.length,
+    marketPriorityDetails: marketPriorityOfficialUrls.length,
     issues: Array.isArray(result.issues) ? result.issues.length : 0,
     outputPath: path.relative(process.cwd(), filePath),
   };
