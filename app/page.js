@@ -1,123 +1,144 @@
-﻿import Link from "next/link";
-import { getRankingSeries } from "@/lib/series";
+import Link from "next/link";
+import ProductImage from "@/components/ProductImage";
 import SeriesCard from "@/components/SeriesCard";
+import { getRankingSeries, getSeriesCatalogCounts } from "@/lib/series";
 import { variantHref } from "@/lib/variant-url";
-import { customerTags, isCirculatingItem, opportunityScore, releasedPriorityScore, trendPriorityScore } from "@/lib/domain/public-display-clean";
+import {
+  customerTags,
+  formatPriceRange,
+  formatSchedule,
+  formatScore,
+  formatYen,
+  isCirculatingItem,
+  opportunityScore,
+  releasedPriorityScore,
+  watchScore,
+} from "@/lib/domain/public-display-clean";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function Home() {
-  const [releasedSeries, upcomingSeries] = await Promise.all([
+  const [releasedSeries, upcomingSeries, catalogCounts] = await Promise.all([
     getRankingSeries("released"),
     getRankingSeries("upcoming"),
+    getSeriesCatalogCounts(),
   ]);
-  const watchNow = releasedSeries
+  const hot = releasedSeries
     .filter(isCirculatingItem)
-    .sort((a, b) => releasedPriorityScore(b) - releasedPriorityScore(a))
-    .slice(0, 4);
-  const releasedTop = watchNow.slice(0, 3);
-  const upcomingTop = upcomingSeries
+    .sort((a, b) => releasedPriorityScore(b) - releasedPriorityScore(a));
+  const spotlight = hot[0];
+  const movingNow = hot.slice(1, 5);
+  const upcoming = upcomingSeries
     .filter((item) => !item.is_released && item.variant_type !== "provisional" && (item.forecast_score ?? 0) > 0)
     .sort((a, b) => upcomingPriority(b) - upcomingPriority(a))
-    .slice(0, 3);
-  const trendTop = releasedSeries
-    .filter(isCirculatingItem)
-    .sort((a, b) => trendPriorityScore(b) - trendPriorityScore(a))
-    .slice(0, 3);
+    .slice(0, 4);
 
   return (
-    <main className="site-main">
+    <main className="site-main home-main">
       <div className="site-shell">
-        <section className="page-hero">
-          <p className="eyebrow">GACHA MARKET INTELLIGENCE</p>
-          <h1 className="page-title">今いちばん熱いガチャ単品が一目で分かる</h1>
-          <p className="page-lead">
-            相場、利益目安、在庫の動き、売れ行き、発売予定の期待値を単品ごとに整理。転売判断、買取チェック、欲しい商品の探索に必要な情報だけを前に出します。
-          </p>
-          <div className="tag-row">
-            <Link href="/ranking" className="button-link">ランキングを見る</Link>
-            <Link href="/trends" className="button-link">トレンドを見る</Link>
-            <Link href="/schedule" className="button-link">発売予定を見る</Link>
-            <Link href="/series" className="button-link">単品一覧で探す</Link>
+        <section className="home-intro">
+          <div>
+            <p className="eyebrow">CAPSULE TREND GUIDE</p>
+            <h1>次に見つけたいガチャが、ここで分かる。</h1>
+            <p>新作、話題の単品、価格の動き、在庫情報をひとつに。ガチャをもっと早く、深く楽しむためのトレンドガイドです。</p>
+          </div>
+          <div className="home-intro__catalog" aria-label="収録単品数">
+            <span>収録単品</span>
+            <strong>{(catalogCounts?.all ?? 0).toLocaleString("ja-JP")}</strong>
+            <small>公式データから随時更新</small>
           </div>
         </section>
 
-        {watchNow.length > 0 ? (
-          <section className="signal-strip" aria-label="今見るべき商品">
-            {watchNow.map((item) => (
-              <Link key={item.slug} href={variantHref(item)} className="signal-chip">
-                <strong>{customerTags(item, true)[0] || "今見るべき"}</strong>
-                <span>{item.variant_name || item.name}</span>
-              </Link>
-            ))}
-          </section>
-        ) : null}
+        {spotlight ? <Spotlight item={spotlight} /> : null}
 
-        <section className="trend-board" style={{ marginBottom: 34 }}>
-          <div className="card panel">
-            <h2>今出回っている</h2>
-            <p className="section-sub">出品、売れ行き、在庫報告、利益目安がある単品を優先します。</p>
-            <div className="plain-list">
-              {trendTop.map((item) => (
-                <Link key={item.slug} href={variantHref(item)} className="signal-chip" style={{ marginBottom: 10 }}>
-                  <strong>{customerTags(item, true)[0] || "流通あり"}</strong>
-                  <span>{item.name}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-          <div className="card panel">
-            <h2>発売予定の狙い目</h2>
-            <p className="section-sub">発売前は相場を出さず、期待値、価格上昇期待、流通少なめで見ます。</p>
-            <div className="plain-list">
-              {upcomingTop.map((item) => (
-                <Link key={item.slug} href={variantHref(item)} className="signal-chip" style={{ marginBottom: 10 }}>
-                  <strong>{customerTags(item, false)[0] || "期待値"}</strong>
-                  <span>{item.name}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section>
+        <section className="home-section">
           <div className="section-head">
             <div>
-              <h2 className="section-title">発売中で見るべき単品</h2>
-              <p className="section-sub">単品相場、利益目安、コンプ相場、在庫、売れ行きで判断できます。</p>
+              <p className="eyebrow">MOVING NOW</p>
+              <h2 className="section-title">いま動きがある単品</h2>
+              <p className="section-sub">出品、売れ行き、在庫の変化をまとめて確認。</p>
             </div>
-            <Link href="/ranking?tab=released" className="button-link">もっと見る</Link>
+            <Link href="/trends" className="text-link">トレンドをすべて見る <span aria-hidden="true">→</span></Link>
           </div>
-          <div className="grid grid--cards">
-            {releasedTop.map((item, index) => (
-              <SeriesCard key={item.slug} series={item} priority={index === 0} />
-            ))}
+          <div className="discovery-list">
+            {movingNow.map((item, index) => <DiscoveryRow key={item.slug} item={item} index={index + 2} />)}
           </div>
-          {releasedTop.length === 0 ? (
-            <div className="card empty">単品に紐付く市場・在庫データを収集中です。取得前の価格や利益は表示しません。</div>
-          ) : null}
         </section>
 
-        <section style={{ marginTop: 34 }}>
+        <section className="home-section home-section--upcoming">
           <div className="section-head">
             <div>
-              <h2 className="section-title">これから狙い目の発売予定</h2>
-              <p className="section-sub">発売前は利益を出さず、期待値、価格上昇期待、在庫/流通の少なさだけを見せます。</p>
+              <p className="eyebrow">COMING SOON</p>
+              <h2 className="section-title">これから登場する注目作</h2>
+              <p className="section-sub">発売前は価格相場ではなく、先行反応と入手難度を表示します。</p>
             </div>
-            <Link href="/ranking?tab=upcoming" className="button-link">もっと見る</Link>
+            <Link href="/schedule" className="text-link">発売カレンダー <span aria-hidden="true">→</span></Link>
           </div>
           <div className="grid grid--cards">
-            {upcomingTop.map((item, index) => (
-              <SeriesCard key={item.slug} series={item} priority={index === 0} />
-            ))}
+            {upcoming.map((item, index) => <SeriesCard key={item.slug} series={item} priority={index === 0} />)}
           </div>
-          {upcomingTop.length === 0 ? (
-            <div className="card empty">現在、公式マスタで確認できる発売予定はありません。</div>
-          ) : null}
         </section>
+
+        <nav className="home-explore" aria-label="ガチャを探す">
+          <Link href="/ranking"><span>01</span><strong>注目ランキング</strong><small>いま熱い単品を比較</small></Link>
+          <Link href="/schedule"><span>02</span><strong>発売カレンダー</strong><small>月と週から新作を探す</small></Link>
+          <Link href="/series"><span>03</span><strong>ガチャ図鑑</strong><small>過去商品も含めて検索</small></Link>
+        </nav>
       </div>
     </main>
+  );
+}
+
+function Spotlight({ item }) {
+  const tags = customerTags(item, true);
+  return (
+    <Link href={variantHref(item)} className="hot-spotlight">
+      <div className="hot-spotlight__image">
+        <ProductImage src={item.image_url} alt={item.name} priority />
+        <span className="hot-spotlight__rank">TODAY&apos;S PICK</span>
+      </div>
+      <div className="hot-spotlight__body">
+        <div className="hot-spotlight__topline">
+          <span>注目度 {formatScore(watchScore(item))}</span>
+          <span>{formatSchedule(item)}</span>
+        </div>
+        <div>
+          <p className="eyebrow">いま注目の単品</p>
+          <h2>{item.name}</h2>
+          <p className="hot-spotlight__series">{item.series_name}</p>
+        </div>
+        <div className="hot-spotlight__metrics">
+          <div><span>定価</span><strong>{formatYen(item.price)}</strong></div>
+          <div><span>参考相場</span><strong>{formatYen(item.market_summary?.single)}</strong></div>
+          <div><span>価格レンジ</span><strong>{formatPriceRange(item.market_summary?.estimated_resale_range)}</strong></div>
+        </div>
+        <div className="heat-meter" aria-label={`注目度 ${formatScore(watchScore(item))}`}>
+          <span style={{ width: `${watchScore(item) ?? 0}%` }} />
+        </div>
+        {tags.length ? <div className="tag-row">{tags.map((tag) => <span className="tag tag--signal" key={tag}>{tag}</span>)}</div> : null}
+        <span className="text-link">詳しく見る <span aria-hidden="true">→</span></span>
+      </div>
+    </Link>
+  );
+}
+
+function DiscoveryRow({ item, index }) {
+  const tags = customerTags(item, true);
+  return (
+    <Link href={variantHref(item)} className="discovery-row">
+      <span className="discovery-row__index">{String(index).padStart(2, "0")}</span>
+      <div className="discovery-row__image"><ProductImage src={item.image_url} alt={item.name} /></div>
+      <div className="discovery-row__copy">
+        <strong>{item.name}</strong>
+        <span>{item.series_name}</span>
+      </div>
+      <div className="discovery-row__signal">
+        <span>{tags[0] || "流通を観測"}</span>
+        <strong>{formatScore(watchScore(item))}</strong>
+      </div>
+      <span className="discovery-row__arrow" aria-hidden="true">→</span>
+    </Link>
   );
 }
 

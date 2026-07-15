@@ -55,8 +55,8 @@ export default async function SchedulePage({ searchParams }) {
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">SCHEDULE</p>
-          <h1 className="page-title">発売予定を狙い目順に見る</h1>
-          <p className="page-lead">実データがある月だけを表示し、週単位で期待値の高い単品を確認できます。発売前なので相場や利益は出しません。</p>
+          <h1 className="page-title">新作を月と週から探す</h1>
+          <p className="page-lead">公式発表がある月だけを表示し、第何週から登場するかと先行注目度を確認できます。</p>
         </section>
 
         {months.length > 0 ? (

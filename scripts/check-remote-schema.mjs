@@ -28,6 +28,8 @@ const checks = [
   { table: "ingestion_runs", column: "summary" },
   { table: "community_reports", column: "status" },
   { table: "community_reports", column: "review_required" },
+  { table: "outbound_clicks", column: "provider" },
+  { table: "outbound_clicks", column: "clicked_at" },
 ];
 
 const results = [];

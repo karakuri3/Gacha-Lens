@@ -50,9 +50,9 @@ export default async function TrendsPage() {
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">TREND</p>
-          <h1 className="page-title">今動いているガチャを確認</h1>
+          <h1 className="page-title">ガチャの熱量を追いかける</h1>
           <p className="page-lead">
-            出品、売れ行き、在庫報告、SNS反応、発売直後のシグナルをまとめて、今探す価値が高い単品を上に出します。
+            価格の動き、売れ行き、在庫、発売直後の反応をまとめて、いま話題の単品を見つけます。
           </p>
           <div className="tag-row">
             <Link href="/ranking?tab=released" className="button-link">発売中ランキング</Link>
@@ -86,8 +86,8 @@ export default async function TrendsPage() {
             />
           ) : null}
           <TrendSection
-            title="これから狙い目"
-            subtitle="発売前は相場を出さず、期待値と流通少なめだけで見せます。"
+            title="これから注目"
+            subtitle="発売前は価格相場を出さず、先行注目度と入手難度を表示します。"
             items={upcoming}
             mode="upcoming"
           />

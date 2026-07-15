@@ -1,10 +1,10 @@
 ﻿import Link from "next/link";
 
 const navItems = [
-  { label: "ランキング", href: "/ranking" },
+  { label: "いま熱い", href: "/ranking" },
   { label: "トレンド", href: "/trends" },
-  { label: "スケジュール", href: "/schedule" },
-  { label: "単品一覧", href: "/series" },
+  { label: "発売カレンダー", href: "/schedule" },
+  { label: "ガチャ図鑑", href: "/series" },
 ];
 
 export default function Header() {
@@ -12,7 +12,8 @@ export default function Header() {
     <header className="site-header">
       <div className="site-shell site-header__inner">
         <Link href="/" className="site-logo">
-          Gacha Lens
+          <strong>Gacha Lens</strong>
+          <span>CAPSULE TREND GUIDE</span>
         </Link>
         <nav className="site-nav" aria-label="サイトメニュー">
           {navItems.map((item) => (

@@ -44,7 +44,6 @@ export default function CommunityReportForm({ item }) {
           <select name="reportType" value={reportType} onChange={(event) => setReportType(event.target.value)}>
             {item.is_released ? <option value="sold_price">売れた価格</option> : null}
             {item.is_released ? <option value="asking_price">販売価格</option> : null}
-            {item.is_released ? <option value="buyback_price">買取価格</option> : null}
             <option value="in_stock">在庫あり</option>
             <option value="low_stock">残り少ない</option>
             <option value="sold_out">売り切れ</option>

@@ -14,23 +14,22 @@ import {
 } from "@/lib/domain/public-display-clean";
 
 export const metadata = {
-  title: "ランキング | Gacha Lens",
-  description: "発売中と発売予定を分けて、今見るべきガチャ単品をランキングします。",
+  title: "注目ランキング | Gacha Lens",
+  description: "発売中と発売予定を分けて、いま話題のガチャ単品をランキングします。",
 };
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const tabs = [
-  { value: "released", label: "発売中", caption: "相場・利益" },
-  { value: "upcoming", label: "発売予定", caption: "期待値" },
+  { value: "released", label: "発売中", caption: "話題・流通" },
+  { value: "upcoming", label: "発売予定", caption: "先行注目" },
 ];
 
 const releasedMetricLabels = [
   RELEASED_METRIC_LABELS.price,
   RELEASED_METRIC_LABELS.singleMarket,
   RELEASED_METRIC_LABELS.estimatedResale,
-  RELEASED_METRIC_LABELS.profit,
   RELEASED_METRIC_LABELS.completeSet,
   RELEASED_METRIC_LABELS.stock,
   RELEASED_METRIC_LABELS.sellThrough,
@@ -51,7 +50,7 @@ export default async function RankingPage({ searchParams }) {
   const tab = params?.tab === "upcoming" ? "upcoming" : "released";
   const series = await getRankingSeries(tab);
 
-  const ranked = series
+  const sorted = series
     .filter((item) => (tab === "released"
       ? isReleasedRankingCandidate(item)
       : !item.is_released && item.variant_type !== "provisional" && (item.forecast_score ?? 0) > 0))
@@ -60,7 +59,9 @@ export default async function RankingPage({ searchParams }) {
       const primaryB = tab === "released" ? releasedPriority(b) : upcomingPriority(b);
       if (primaryB !== primaryA) return primaryB - primaryA;
       return a.name.localeCompare(b.name, "ja");
-    })
+    });
+
+  const ranked = (tab === "upcoming" ? diversifyUpcomingPodium(sorted) : sorted)
     .map((item, index) => ({ ...item, rank: index + 1 }));
 
   const podium = arrangePodium(ranked.slice(0, 3));
@@ -71,9 +72,9 @@ export default async function RankingPage({ searchParams }) {
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">RANKING</p>
-          <h1 className="page-title">今見るべきガチャ単品ランキング</h1>
+          <h1 className="page-title">いま熱いガチャ単品ランキング</h1>
           <p className="page-lead">
-            発売中は相場・利益・在庫・売れ行きで、発売予定は期待値・価格上昇期待・流通少なめで並べます。
+            発売中は価格の動き・売れ行き・在庫、発売予定は先行反応・話題化期待・入手難度で並べます。
           </p>
         </section>
 
@@ -104,7 +105,7 @@ export default async function RankingPage({ searchParams }) {
         {ranked.length === 0 ? (
           <div className="card empty">
             {tab === "released"
-              ? "単品に紐付く市場・在庫データがまだありません。未取得の価格で順位は作りません。"
+              ? "価格や在庫の動きを確認できる単品がまだありません。観測データが入り次第更新します。"
               : "現在、発売予定として確認できる単品がありません。"}
           </div>
         ) : null}
@@ -191,6 +192,32 @@ function getMetrics(item, mode) {
 function arrangePodium(items) {
   if (items.length < 3) return items;
   return [items[1], items[0], items[2]];
+}
+
+function diversifyUpcomingPodium(items) {
+  const featured = [];
+  const featuredIds = new Set();
+  const seriesIds = new Set();
+
+  for (const item of items) {
+    if (featured.length >= 3) break;
+    const seriesId = item.series_id || item.series_slug || item.series_name;
+    if (seriesIds.has(seriesId)) continue;
+    featured.push(item);
+    featuredIds.add(item.variant_id);
+    seriesIds.add(seriesId);
+  }
+
+  if (featured.length < 3) {
+    for (const item of items) {
+      if (featured.length >= 3) break;
+      if (featuredIds.has(item.variant_id)) continue;
+      featured.push(item);
+      featuredIds.add(item.variant_id);
+    }
+  }
+
+  return [...featured, ...items.filter((item) => !featuredIds.has(item.variant_id))];
 }
 
 function releasedPriority(item) {

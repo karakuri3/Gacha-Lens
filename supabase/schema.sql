@@ -224,6 +224,14 @@ create table if not exists community_reports (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists outbound_clicks (
+  id uuid primary key default gen_random_uuid(),
+  variant_id text references variants(id) on delete set null,
+  provider text not null check (provider in ('mercari', 'yahoo', 'rakuten', 'amazon', 'official')),
+  page_path text,
+  clicked_at timestamptz not null default now()
+);
+
 create table if not exists forecast_snapshots (
   id uuid primary key default gen_random_uuid(),
   variant_id text not null references variants(id) on delete cascade,
@@ -283,5 +291,8 @@ create index if not exists ingestion_runs_status_started_at_idx on ingestion_run
 create index if not exists community_reports_status_created_at_idx on community_reports(status, created_at desc);
 create index if not exists community_reports_variant_id_idx on community_reports(variant_id, created_at desc);
 create index if not exists community_reports_submitter_hash_idx on community_reports(submitter_hash, created_at desc);
+create index if not exists outbound_clicks_provider_clicked_at_idx on outbound_clicks(provider, clicked_at desc);
+create index if not exists outbound_clicks_variant_id_clicked_at_idx on outbound_clicks(variant_id, clicked_at desc);
 
 alter table community_reports enable row level security;
+alter table outbound_clicks enable row level security;

@@ -5,16 +5,15 @@ import { getRelatedSeries, getSeriesBySlug } from "@/lib/series";
 import SeriesCard from "@/components/SeriesCard";
 import MarketplaceLinks from "@/components/MarketplaceLinks";
 import CommunityReportForm from "@/components/CommunityReportForm";
+import PriceTrendChart from "@/components/PriceTrendChart";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
   customerTags,
-  formatDiff,
   formatPriceRange,
   formatSchedule,
   formatScore,
   formatYen,
-  getDiffTone,
   opportunityScore,
   priceUpsideScore,
   scarcityScore,
@@ -30,7 +29,7 @@ export async function generateMetadata({ params }) {
   const item = await getSeriesBySlug(resolvedParams.slug);
   return {
     title: item ? `${item.name} | Gacha Lens` : "単品詳細 | Gacha Lens",
-    description: item?.summary ?? "ガチャ単品の価格、相場、利益、在庫、期待値を確認できます。",
+    description: item?.summary ?? "ガチャ単品の価格、話題度、在庫、発売情報を確認できます。",
   };
 }
 
@@ -84,6 +83,19 @@ export default async function VariantDetailPage({ params }) {
             </div>
           </div>
         </section>
+
+        {isReleased ? (
+          <section className="card panel price-history-panel">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">PRICE PULSE</p>
+                <h2 className="section-title">価格の動き</h2>
+              </div>
+              <span className="data-note">参考価格</span>
+            </div>
+            <PriceTrendChart item={item} />
+          </section>
+        ) : null}
 
         <section className="detail-sections">
           <div className="card panel">
@@ -144,12 +156,11 @@ function ReleasedHeroMetrics({ item }) {
     <>
       <Metric label="価格" value={formatYen(item.price)} />
       <Metric label="単品相場" value={formatYen(item.market_summary?.single)} tone="highlight" />
-      <Metric label="推定売却レンジ" value={formatPriceRange(item.market_summary?.estimated_resale_range)} tone="highlight" />
-      <Metric label="利益目安" value={formatDiff(item.profit_estimate)} tone={getDiffTone(item.profit_estimate)} />
+      <Metric label="参考価格レンジ" value={formatPriceRange(item.market_summary?.estimated_resale_range)} tone="highlight" />
       <Metric label="コンプ相場" value={formatYen(item.market_summary?.complete_set)} />
       <Metric label="在庫状況" value={stockStatusLabel(item.stock_summary || item.availability_summary)} />
       <Metric label="売れ行き" value={item.market_summary?.sell_through_signal?.label ?? "データ不足"} />
-      <Metric label="今見るべき度" value={formatScore(watchScore(item))} tone="highlight" />
+      <Metric label="注目度" value={formatScore(watchScore(item))} tone="highlight" />
     </>
   );
 }
@@ -171,10 +182,10 @@ function ReleasedSummary({ item }) {
 function UpcomingSummary({ item }) {
   return (
     <div className="metric-grid">
-      <Metric label="期待値" value={formatScore(item.forecast_score)} tone="highlight" />
-      <Metric label="価格上昇期待" value={formatScore(priceUpsideScore(item))} />
-      <Metric label="流通少なめ" value={formatScore(scarcityScore(item))} />
-      <Metric label="狙い目度" value={formatScore(opportunityScore(item))} tone="highlight" />
+      <Metric label="先行注目度" value={formatScore(item.forecast_score)} tone="highlight" />
+      <Metric label="話題化期待" value={formatScore(priceUpsideScore(item))} />
+      <Metric label="入手難度" value={formatScore(scarcityScore(item))} />
+      <Metric label="注目度" value={formatScore(opportunityScore(item))} tone="highlight" />
       <Metric label="発売" value={formatSchedule(item)} />
       <Metric label="価格" value={formatYen(item.price)} />
     </div>
@@ -186,13 +197,12 @@ function MarketBreakdown({ item }) {
   return (
     <div className="metric-grid">
       <Metric label="単品相場" value={formatYen(summary.single)} tone="highlight" />
-      <Metric label="推定売却レンジ" value={formatPriceRange(summary.estimated_resale_range)} tone="highlight" />
+      <Metric label="参考価格レンジ" value={formatPriceRange(summary.estimated_resale_range)} tone="highlight" />
       <Metric label="レア単品" value={formatYen(summary.rare_single)} />
       <Metric label="シークレット" value={formatYen(summary.secret_single)} />
       <Metric label="コンプ相場" value={formatYen(summary.complete_set)} />
       <Metric label="一部セット" value={formatYen(summary.partial_set)} />
       <Metric label="人気セット" value={formatYen(summary.popular_set)} />
-      <Metric label="買取価格" value={formatYen(summary.buyback_price)} />
       <Metric label="出品数" value={(summary.active_listing_count ?? 0).toLocaleString("ja-JP")} />
       <Metric label="売れた数" value={(summary.sold_count ?? 0).toLocaleString("ja-JP")} />
       <Metric label="信頼度" value={summary.price_confidence?.label ?? "データ不足"} />
@@ -206,7 +216,7 @@ function UpcomingNotice({ item }) {
   return (
     <div>
       <p className="section-sub">
-        発売前の商品は、相場や利益を確定情報として表示しません。期待値、価格上昇期待、流通少なめ、狙い目度で判断してください。
+        発売前の商品は価格相場を表示せず、先行注目度、話題化期待、入手難度から新作の動きを確認できます。
       </p>
       {item.official_url ? (
         <div className="tag-row" style={{ marginTop: 14 }}>
@@ -228,7 +238,7 @@ function StockPanel({ item }) {
         <span>{label === "未取得" ? "データ不足" : "動きあり"}</span>
       </div>
       <p className="section-sub">
-        今見るべき判断に必要な在庫の動きだけを表示します。
+        店頭やオンラインで確認できた在庫の動きを表示します。
       </p>
     </div>
   );
@@ -245,7 +255,7 @@ function Metric({ label, value, tone = "" }) {
 
 function estimateBasisLabel(range) {
   if (!range) return "データ不足";
-  const prefix = range.basis === "confirmed_sold" ? "売却実績" : "販売価格から推定";
+  const prefix = range.basis === "confirmed_sold" ? "取引観測" : "販売価格から推定";
   return `${prefix}・${range.evidence_count ?? 0}件`;
 }
 

@@ -1,9 +1,10 @@
 import "./globals.css";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 export const metadata = {
   title: "Gacha Lens",
-  description: "ガチャの発売予定、ランキング、相場感を判断するためのサイトです。",
+  description: "新作、話題の単品、価格の動き、在庫情報が分かるガチャトレンドガイドです。",
 };
 
 export default function RootLayout({ children }) {
@@ -12,6 +13,7 @@ export default function RootLayout({ children }) {
       <body>
         <Header />
         {children}
+        <Footer />
       </body>
     </html>
   );

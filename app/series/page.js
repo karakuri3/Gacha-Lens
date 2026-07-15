@@ -4,8 +4,8 @@ import { getRankingSeries, getSeriesCatalogCounts, getSeriesCatalogPage } from "
 import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display-clean";
 
 export const metadata = {
-  title: "単品一覧 | Gacha Lens",
-  description: "発売中と発売予定のガチャ単品を、価格・相場・利益・在庫・期待値で探せます。",
+  title: "ガチャ図鑑 | Gacha Lens",
+  description: "発売中と発売予定のガチャ単品を、価格・話題度・在庫・発売情報で探せます。",
 };
 
 export const dynamic = "force-dynamic";
@@ -15,16 +15,16 @@ const filters = [
   { value: "all", label: "すべて" },
   { value: "released", label: "発売中" },
   { value: "circulating", label: "今出回っている" },
-  { value: "profitable", label: "利益目安あり" },
+  { value: "market", label: "相場データあり" },
   { value: "upcoming", label: "発売予定" },
-  { value: "opportunity", label: "狙い目" },
+  { value: "opportunity", label: "先行注目" },
 ];
 
 const sorts = [
   { value: "recommended", label: "おすすめ順" },
-  { value: "watch", label: "今見るべき順" },
-  { value: "profit", label: "利益順" },
-  { value: "opportunity", label: "狙い目順" },
+  { value: "watch", label: "注目度順" },
+  { value: "market", label: "参考相場順" },
+  { value: "opportunity", label: "先行注目順" },
   { value: "release", label: "発売月順" },
 ];
 
@@ -37,7 +37,7 @@ export default async function SeriesPage({ searchParams }) {
   const sort = sorts.some((item) => item.value === params?.sort) ? params.sort : "recommended";
   const requestedPage = Math.max(1, Number.parseInt(String(params?.page ?? "1"), 10) || 1);
   const useDatabaseCatalog = ["all", "released", "upcoming"].includes(filter) && ["recommended", "release"].includes(sort);
-  const signalMode = ["circulating", "profitable", "released"].includes(filter) || ["watch", "profit"].includes(sort)
+  const signalMode = ["circulating", "market", "released"].includes(filter) || ["watch", "market"].includes(sort)
     ? "released"
     : "upcoming";
   const [series, catalogPage, catalogCounts] = await Promise.all([
@@ -58,7 +58,7 @@ export default async function SeriesPage({ searchParams }) {
   const counts = Object.fromEntries(filters.map((item) => [item.value, series.filter((entry) => matchesFilter(entry, item.value)).length]));
   if (useDatabaseCatalog) {
     counts.circulating = null;
-    counts.profitable = null;
+    counts.market = null;
     counts.opportunity = null;
   }
   if (catalogCounts) Object.assign(counts, catalogCounts);
@@ -76,8 +76,8 @@ export default async function SeriesPage({ searchParams }) {
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">SEARCH</p>
-          <h1 className="page-title">ガチャ単品を探す</h1>
-          <p className="page-lead">過去商品も含めて、価格・相場・利益・在庫・期待値で絞り込めます。</p>
+          <h1 className="page-title">ガチャ図鑑</h1>
+          <p className="page-lead">過去商品からこれからの新作まで、キャラクター名やシリーズ名で探せます。</p>
         </section>
 
         <form className="card form-panel" action="/series" method="get">
@@ -104,7 +104,7 @@ export default async function SeriesPage({ searchParams }) {
             </div>
           </div>
           <div className="tag-row">
-            <button className="button-link button-link--dark" type="submit">この条件で見る</button>
+            <button className="button-link button-link--accent" type="submit">この条件で見る</button>
             <Link href="/series" className="button-link">リセット</Link>
           </div>
         </form>
@@ -157,7 +157,7 @@ export default async function SeriesPage({ searchParams }) {
 function matchesFilter(item, filter) {
   if (filter === "released") return item.is_released;
   if (filter === "upcoming") return !item.is_released;
-  if (filter === "profitable") return item.is_released && Number.isFinite(item.profit_estimate) && item.profit_estimate > 0;
+  if (filter === "market") return item.is_released && Number.isFinite(item.market_summary?.single);
   if (filter === "circulating") return isCirculatingItem(item);
   if (filter === "opportunity") return !item.is_released && opportunityScore(item) >= 60;
   return true;
@@ -170,7 +170,7 @@ function matchesKeyword(item, q) {
 }
 
 function compareSeries(a, b, sort) {
-  if (sort === "profit") return (b.profit_estimate ?? -Infinity) - (a.profit_estimate ?? -Infinity);
+  if (sort === "market") return (b.market_summary?.single ?? -Infinity) - (a.market_summary?.single ?? -Infinity);
   if (sort === "watch") return watchScore(b) - watchScore(a);
   if (sort === "opportunity") return opportunityScore(b) - opportunityScore(a);
   if (sort === "release") return getReleaseSortValue(a) - getReleaseSortValue(b);
@@ -179,7 +179,7 @@ function compareSeries(a, b, sort) {
 
 function displayPriority(item) {
   if (!item.is_released) return opportunityScore(item) * 12 + (item.forecast_score ?? 0) * 3;
-  return watchScore(item) * 12 + Math.max(0, item.profit_estimate ?? 0) * 0.7;
+  return watchScore(item) * 12 + (item.circulation_score ?? 0) * 4;
 }
 
 function getReleaseSortValue(item) {
