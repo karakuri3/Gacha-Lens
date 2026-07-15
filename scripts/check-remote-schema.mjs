@@ -26,6 +26,8 @@ const checks = [
   { table: "stock_reports", column: "matched_variant_id" },
   { table: "ingestion_runs", column: "trigger_source" },
   { table: "ingestion_runs", column: "summary" },
+  { table: "community_reports", column: "status" },
+  { table: "community_reports", column: "review_required" },
 ];
 
 const results = [];

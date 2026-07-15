@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
-import { getSeriesList } from "@/lib/series";
+import { getRankingSeries } from "@/lib/series";
 import { variantHref } from "@/lib/variant-url";
 import {
   UPCOMING_METRIC_LABELS,
@@ -28,8 +28,10 @@ const scheduleMetricLabels = [
 
 export default async function SchedulePage({ searchParams }) {
   const params = await searchParams;
-  const allSeries = await getSeriesList();
-  const upcomingItems = allSeries.filter((item) => !item.is_released && item.schedule_month);
+  const allSeries = await getRankingSeries("upcoming");
+  const upcomingItems = allSeries.filter(
+    (item) => !item.is_released && item.variant_type !== "provisional" && item.schedule_month
+  );
   const months = buildMonthsFromItems(upcomingItems);
   const selectedMonth = months.includes(params?.month) ? params.month : months[0];
   const items = upcomingItems

@@ -1,5 +1,13 @@
 # Daily operations checklist
 
+## Community reports
+
+- Open `/review` and check `Community submissions` first.
+- Approve only reports whose product, price/status, and evidence URL are consistent.
+- Approved price reports become reviewed market signals; approved availability reports become stock/restock signals.
+- Reject duplicates, unverifiable claims, personal information, and unrelated URLs.
+- Keep the pending queue below 30 items so operational health stays green.
+
 This project is designed for always-on ingestion with a review safety layer. Official master data stays first, and loose market, X, restock, and stock signals must pass through review before they can be trusted.
 
 ## Every morning

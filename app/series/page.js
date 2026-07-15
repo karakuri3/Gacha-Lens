@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 import SeriesCard from "@/components/SeriesCard";
-import { getSeriesCatalogCounts, getSeriesCatalogPage, getSeriesList } from "@/lib/series";
+import { getRankingSeries, getSeriesCatalogCounts, getSeriesCatalogPage } from "@/lib/series";
 import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display-clean";
 
 export const metadata = {
@@ -37,8 +37,11 @@ export default async function SeriesPage({ searchParams }) {
   const sort = sorts.some((item) => item.value === params?.sort) ? params.sort : "recommended";
   const requestedPage = Math.max(1, Number.parseInt(String(params?.page ?? "1"), 10) || 1);
   const useDatabaseCatalog = ["all", "released", "upcoming"].includes(filter) && ["recommended", "release"].includes(sort);
+  const signalMode = ["circulating", "profitable", "released"].includes(filter) || ["watch", "profit"].includes(sort)
+    ? "released"
+    : "upcoming";
   const [series, catalogPage, catalogCounts] = await Promise.all([
-    useDatabaseCatalog ? Promise.resolve([]) : getSeriesList(),
+    useDatabaseCatalog ? Promise.resolve([]) : getRankingSeries(signalMode),
     useDatabaseCatalog
       ? getSeriesCatalogPage({ q, filter, sort, page: requestedPage, pageSize: PAGE_SIZE })
       : Promise.resolve(null),

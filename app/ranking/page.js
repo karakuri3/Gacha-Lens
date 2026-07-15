@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
-import { getSeriesList } from "@/lib/series";
+import { getRankingSeries } from "@/lib/series";
 import { variantHref } from "@/lib/variant-url";
 import {
   RELEASED_METRIC_LABELS,
@@ -29,6 +29,7 @@ const tabs = [
 const releasedMetricLabels = [
   RELEASED_METRIC_LABELS.price,
   RELEASED_METRIC_LABELS.singleMarket,
+  RELEASED_METRIC_LABELS.estimatedResale,
   RELEASED_METRIC_LABELS.profit,
   RELEASED_METRIC_LABELS.completeSet,
   RELEASED_METRIC_LABELS.stock,
@@ -48,11 +49,11 @@ const upcomingMetricLabels = [
 export default async function RankingPage({ searchParams }) {
   const params = await searchParams;
   const tab = params?.tab === "upcoming" ? "upcoming" : "released";
-  const series = await getSeriesList();
+  const series = await getRankingSeries(tab);
 
   const ranked = series
     .filter((item) => (tab === "released"
-      ? isCirculatingItem(item)
+      ? isReleasedRankingCandidate(item)
       : !item.is_released && item.variant_type !== "provisional" && (item.forecast_score ?? 0) > 0))
     .sort((a, b) => {
       const primaryA = tab === "released" ? releasedPriority(a) : upcomingPriority(a);
@@ -184,7 +185,7 @@ function getMetrics(item, mode) {
   return metrics
     .filter((metric) => allowed.includes(metric.label))
     .filter((metric) => mode !== "released" || !["未取得", "データ不足"].includes(metric.value))
-    .slice(0, mode === "released" ? 5 : 6);
+    .slice(0, 6);
 }
 
 function arrangePodium(items) {
@@ -194,6 +195,12 @@ function arrangePodium(items) {
 
 function releasedPriority(item) {
   return releasedPriorityScore(item);
+}
+
+function isReleasedRankingCandidate(item) {
+  if (!item?.is_released) return false;
+  const market = item.market_summary ?? {};
+  return isCirculatingItem(item) || [market.single, market.rare_single, market.secret_single].some(Number.isFinite);
 }
 
 function upcomingPriority(item) {

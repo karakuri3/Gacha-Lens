@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
-import { getSeriesCatalogCounts, getSeriesList } from "@/lib/series";
+import { getRankingSeries, getSeriesCatalogCounts } from "@/lib/series";
 import { variantHref } from "@/lib/variant-url";
 import {
   buildReleasedCustomerMetrics,
@@ -20,9 +20,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function TrendsPage() {
-  const series = await getSeriesList();
-  const catalogCounts = await getSeriesCatalogCounts();
-  const circulatingAll = series
+  const [releasedSeries, upcomingSeries, catalogCounts] = await Promise.all([
+    getRankingSeries("released"),
+    getRankingSeries("upcoming"),
+    getSeriesCatalogCounts(),
+  ]);
+  const circulatingAll = releasedSeries
     .filter(isCirculatingItem)
     .sort((a, b) => trendPriorityScore(b) - trendPriorityScore(a));
   const stockMovesAll = circulatingAll
@@ -31,14 +34,14 @@ export default async function TrendsPage() {
   const circulating = circulatingAll.slice(0, 6);
   const circulatingSlugs = new Set(circulating.map((item) => item.slug));
   const stockMoves = stockMovesAll.filter((item) => !circulatingSlugs.has(item.slug)).slice(0, 6);
-  const upcoming = series
+  const upcoming = upcomingSeries
     .filter((item) => !item.is_released && item.variant_type !== "provisional" && (item.forecast_score ?? 0) > 0)
     .sort((a, b) => upcomingPriority(b) - upcomingPriority(a))
     .slice(0, 8);
   const trendStats = [
-    { label: "確認できる単品", value: catalogCounts?.all ?? series.length },
+    { label: "確認できる単品", value: catalogCounts?.all ?? releasedSeries.length + upcomingSeries.length },
     { label: "今出回っている", value: circulatingAll.length },
-    { label: "発売予定", value: catalogCounts?.upcoming ?? series.filter((item) => !item.is_released).length },
+    { label: "発売予定", value: catalogCounts?.upcoming ?? upcomingSeries.filter((item) => !item.is_released).length },
     { label: "在庫動きあり", value: stockMovesAll.length },
   ];
 

@@ -14,7 +14,8 @@ insert into source_weights (source_type, weight, label) values
   ('official_x', 0.92, 'Official X'),
   ('shop_x', 0.76, 'Shop X'),
   ('user_x', 0.48, 'User X'),
-  ('marketplace', 0.62, 'Marketplace')
+  ('marketplace', 0.62, 'Marketplace'),
+  ('user_report', 0.48, 'Reviewed user report')
 on conflict (source_type) do update set
   weight = excluded.weight,
   label = excluded.label,
@@ -203,6 +204,26 @@ create table if not exists ingestion_runs (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists community_reports (
+  id uuid primary key default gen_random_uuid(),
+  variant_id text not null references variants(id) on delete cascade,
+  series_id text not null references series(id) on delete cascade,
+  report_type text not null check (report_type in ('sold_price', 'asking_price', 'buyback_price', 'in_stock', 'low_stock', 'sold_out', 'restocked')),
+  price integer check (price is null or price between 1 and 1000000),
+  shop_name text,
+  region text,
+  source_url text,
+  note text,
+  occurred_at timestamptz not null default now(),
+  submitter_hash text not null,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  confidence numeric not null default 0.25 check (confidence >= 0 and confidence <= 1),
+  review_required boolean not null default true,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists forecast_snapshots (
   id uuid primary key default gen_random_uuid(),
   variant_id text not null references variants(id) on delete cascade,
@@ -259,3 +280,8 @@ create index if not exists stock_reports_matched_variant_id_idx on stock_reports
 create index if not exists import_issues_resolved_idx on import_issues(resolved);
 create index if not exists ingestion_runs_task_started_at_idx on ingestion_runs(task, started_at desc);
 create index if not exists ingestion_runs_status_started_at_idx on ingestion_runs(status, started_at desc);
+create index if not exists community_reports_status_created_at_idx on community_reports(status, created_at desc);
+create index if not exists community_reports_variant_id_idx on community_reports(variant_id, created_at desc);
+create index if not exists community_reports_submitter_hash_idx on community_reports(submitter_hash, created_at desc);
+
+alter table community_reports enable row level security;

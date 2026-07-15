@@ -1,5 +1,5 @@
 ﻿import Link from "next/link";
-import { getSeriesList } from "@/lib/series";
+import { getRankingSeries } from "@/lib/series";
 import SeriesCard from "@/components/SeriesCard";
 import { variantHref } from "@/lib/variant-url";
 import { customerTags, isCirculatingItem, opportunityScore, releasedPriorityScore, trendPriorityScore } from "@/lib/domain/public-display-clean";
@@ -8,17 +8,20 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function Home() {
-  const series = await getSeriesList();
-  const watchNow = series
+  const [releasedSeries, upcomingSeries] = await Promise.all([
+    getRankingSeries("released"),
+    getRankingSeries("upcoming"),
+  ]);
+  const watchNow = releasedSeries
     .filter(isCirculatingItem)
     .sort((a, b) => releasedPriorityScore(b) - releasedPriorityScore(a))
     .slice(0, 4);
   const releasedTop = watchNow.slice(0, 3);
-  const upcomingTop = series
+  const upcomingTop = upcomingSeries
     .filter((item) => !item.is_released && item.variant_type !== "provisional" && (item.forecast_score ?? 0) > 0)
     .sort((a, b) => upcomingPriority(b) - upcomingPriority(a))
     .slice(0, 3);
-  const trendTop = series
+  const trendTop = releasedSeries
     .filter(isCirculatingItem)
     .sort((a, b) => trendPriorityScore(b) - trendPriorityScore(a))
     .slice(0, 3);

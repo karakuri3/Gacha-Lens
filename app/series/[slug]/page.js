@@ -3,11 +3,14 @@ import { notFound } from "next/navigation";
 import ProductImage from "@/components/ProductImage";
 import { getRelatedSeries, getSeriesBySlug } from "@/lib/series";
 import SeriesCard from "@/components/SeriesCard";
+import MarketplaceLinks from "@/components/MarketplaceLinks";
+import CommunityReportForm from "@/components/CommunityReportForm";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
   customerTags,
   formatDiff,
+  formatPriceRange,
   formatSchedule,
   formatScore,
   formatYen,
@@ -76,6 +79,9 @@ export default async function VariantDetailPage({ params }) {
                 ))}
               </div>
             ) : null}
+            <div style={{ marginTop: 20 }}>
+              <MarketplaceLinks item={item} />
+            </div>
           </div>
         </section>
 
@@ -98,6 +104,14 @@ export default async function VariantDetailPage({ params }) {
             </ul>
           </div>
         </section>
+
+        <details className="card panel community-panel community-disclosure">
+          <summary>
+            <span>価格・在庫を報告</span>
+            <small>確認後に反映</small>
+          </summary>
+          <CommunityReportForm item={{ variant_id: item.variant_id, is_released: isReleased }} />
+        </details>
 
         <section className="detail-sections">
           <StockPanel item={item} />
@@ -130,6 +144,7 @@ function ReleasedHeroMetrics({ item }) {
     <>
       <Metric label="価格" value={formatYen(item.price)} />
       <Metric label="単品相場" value={formatYen(item.market_summary?.single)} tone="highlight" />
+      <Metric label="推定売却レンジ" value={formatPriceRange(item.market_summary?.estimated_resale_range)} tone="highlight" />
       <Metric label="利益目安" value={formatDiff(item.profit_estimate)} tone={getDiffTone(item.profit_estimate)} />
       <Metric label="コンプ相場" value={formatYen(item.market_summary?.complete_set)} />
       <Metric label="在庫状況" value={stockStatusLabel(item.stock_summary || item.availability_summary)} />
@@ -171,14 +186,18 @@ function MarketBreakdown({ item }) {
   return (
     <div className="metric-grid">
       <Metric label="単品相場" value={formatYen(summary.single)} tone="highlight" />
+      <Metric label="推定売却レンジ" value={formatPriceRange(summary.estimated_resale_range)} tone="highlight" />
       <Metric label="レア単品" value={formatYen(summary.rare_single)} />
       <Metric label="シークレット" value={formatYen(summary.secret_single)} />
       <Metric label="コンプ相場" value={formatYen(summary.complete_set)} />
       <Metric label="一部セット" value={formatYen(summary.partial_set)} />
       <Metric label="人気セット" value={formatYen(summary.popular_set)} />
+      <Metric label="買取価格" value={formatYen(summary.buyback_price)} />
       <Metric label="出品数" value={(summary.active_listing_count ?? 0).toLocaleString("ja-JP")} />
       <Metric label="売れた数" value={(summary.sold_count ?? 0).toLocaleString("ja-JP")} />
       <Metric label="信頼度" value={summary.price_confidence?.label ?? "データ不足"} />
+      <Metric label="推定根拠" value={estimateBasisLabel(summary.estimated_resale_range)} />
+      <Metric label="直近更新" value={formatObservedAt(summary.last_observed_at)} />
     </div>
   );
 }
@@ -222,4 +241,15 @@ function Metric({ label, value, tone = "" }) {
       <div className={`metric__value ${tone ? `is-${tone}` : ""}`}>{value}</div>
     </div>
   );
+}
+
+function estimateBasisLabel(range) {
+  if (!range) return "データ不足";
+  const prefix = range.basis === "confirmed_sold" ? "売却実績" : "販売価格から推定";
+  return `${prefix}・${range.evidence_count ?? 0}件`;
+}
+
+function formatObservedAt(value) {
+  if (!value) return "未取得";
+  return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" }).format(new Date(value));
 }

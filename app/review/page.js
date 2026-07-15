@@ -112,6 +112,7 @@ export default async function ImportReviewPage() {
           <ReviewMetric label="Open issues" value={unresolved.length} />
           <ReviewMetric label="Market review" value={issues.filter((issue) => issue.table === "market_listings").length} />
           <ReviewMetric label="Stock / restock" value={issues.filter((issue) => issue.table === "stock_reports" || issue.table === "restock_events").length} />
+          <ReviewMetric label="Community" value={issues.filter((issue) => issue.table === "community_reports").length} />
         </section>
 
         <section className="review-board">
@@ -150,6 +151,18 @@ export default async function ImportReviewPage() {
                     </dl>
                     <p className="review-action">{issue.suggestedAction}</p>
                     {issue.sourceUrl ? <a className="review-source" href={issue.sourceUrl}>Source</a> : null}
+                    {issue.table === "community_reports" && !issue.resolved ? (
+                      <div className="review-decisions">
+                        <form action={`/api/review/community-reports/${issue.recordId}`} method="post">
+                          <input type="hidden" name="decision" value="approved" />
+                          <button className="button-link" type="submit">承認して反映</button>
+                        </form>
+                        <form action={`/api/review/community-reports/${issue.recordId}`} method="post">
+                          <input type="hidden" name="decision" value="rejected" />
+                          <button className="pill-link" type="submit">却下</button>
+                        </form>
+                      </div>
+                    ) : null}
                   </article>
                 ))}
               </div>
@@ -225,7 +238,7 @@ function ReviewMetric({ label, value }) {
 }
 
 function groupIssues(issues) {
-  const order = ["Official master", "Market", "X reactions", "Stock", "Other"];
+  const order = ["Community submissions", "Official master", "Market", "X reactions", "Stock", "Other"];
   const groups = issues.reduce((result, issue) => {
     const group = issue.group || "Other";
     if (!result.has(group)) result.set(group, []);
