@@ -81,7 +81,7 @@ Next.js 16 系のルール確認として、実装確認前に `node_modules/nex
 - market: `scripts/run-market-ingestion.mjs` が `collect-market-data.mjs` -> `upsert-market-data.mjs` を実行します。
 - x: `scripts/run-x-ingestion.mjs` が `collect-x-reactions.mjs` -> `upsert-x-reactions.mjs` を実行します。
 - stock: `lib/ingestion-runner.js` では `run-stock-ingestion.mjs` を実行し、`collect-stock-data.mjs` -> `upsert-stock-data.mjs` の順で処理します。現状の fetcher は承認済み JSON feed (`STOCK_RAW_FEED_URLS`) 専用です。
-- all: `scripts/run-ingestion.mjs` が official -> market -> x -> stock の順に実行します。
+- all: `scripts/run-ingestion.mjs` は無料運用時に official -> market -> stock の順で実行します。`X_FETCH_ENABLED=true` の場合だけ X を含めます。
 
 ### 管理 review
 

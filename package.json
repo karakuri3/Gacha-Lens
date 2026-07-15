@@ -21,6 +21,9 @@
     "db:upsert-stock": "node scripts/upsert-stock-data.mjs",
     "db:upsert-all": "node scripts/run-ingestion.mjs",
     "db:check-schema": "node scripts/check-remote-schema.mjs",
+    "db:cleanup-provisional": "node scripts/cleanup-provisional-variants.mjs",
+    "db:cleanup-nonproduction": "node scripts/cleanup-nonproduction-data.mjs",
+    "db:cleanup-irrelevant-market": "node scripts/cleanup-irrelevant-market-data.mjs",
     "start": "next start",
     "lint": "eslint"
   },

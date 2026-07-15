@@ -15,9 +15,13 @@ export async function POST(request, context) {
   const taskName = String(task || "").trim();
 
   try {
+    const runnerOptions = {
+      captureOutput: true,
+      triggerSource: request.headers.get("x-ingest-source") || "api",
+    };
     const result = taskName === "all"
-      ? await runIngestionSequence(undefined, { captureOutput: true })
-      : await runIngestionTask(taskName, { captureOutput: true });
+      ? await runIngestionSequence(undefined, runnerOptions)
+      : await runIngestionTask(taskName, runnerOptions);
     invalidateRepositoryCache();
     const health = buildOpsHealthReport(await getDataModel());
 

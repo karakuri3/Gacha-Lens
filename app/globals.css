@@ -1094,9 +1094,9 @@ button.button-link {
 
   .site-header__inner {
     min-height: 58px;
-    align-items: center;
-    flex-direction: row;
-    gap: 12px;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
     padding: 10px 0;
   }
 
@@ -1106,7 +1106,7 @@ button.button-link {
   }
 
   .site-nav {
-    width: auto;
+    width: 100%;
     min-width: 0;
     flex: 1;
     display: flex;
@@ -1121,7 +1121,7 @@ button.button-link {
   }
 
   .site-nav a {
-    flex: 0 0 auto;
+    flex: 1 0 auto;
     min-height: 34px;
     width: auto;
     padding: 7px 11px;

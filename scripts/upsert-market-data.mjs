@@ -3,7 +3,9 @@ import path from "node:path";
 import { marketListingsRaw } from "../lib/data/market-input.js";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
-import { fetchIdSetSafe, upsertRows } from "./supabase-rest.mjs";
+import { loadOfficialCatalog } from "./load-official-catalog.mjs";
+import { includeStaticSampleData, productionRecords } from "./nonproduction-data.mjs";
+import { fetchIdSetSafe, fetchRows, upsertRows } from "./supabase-rest.mjs";
 
 const TITLE_ALIASES = [
   { aliases: ["リンレン", "リン・レン", "リン&レン", "リン レン"], names: ["鏡音リン", "鏡音レン"] },
@@ -13,9 +15,11 @@ const TITLE_ALIASES = [
 
 loadEnvFile(".env.local");
 
-const catalog = buildOfficialCatalog([...officialSchedule, ...officialProducts]);
+const catalog = await loadOfficialCatalog([...officialSchedule, ...officialProducts]);
 const generatedMarket = loadGeneratedMarketRaw();
-const safeMarketRaw = dedupeRawById([...generatedMarket.records, ...marketListingsRaw]);
+const existingUnlinked = await loadExistingUnlinkedMarketRows();
+const sampleRows = includeStaticSampleData() ? marketListingsRaw : [];
+const safeMarketRaw = productionRecords(dedupeRawById([...existingUnlinked, ...generatedMarket.records, ...sampleRows]));
 const marketRows = safeMarketRaw.map((raw) => normalizeMarketListing(raw, catalog));
 const referenceIds = await loadReferenceIds();
 const dbMarketRows = marketRows.map((row) => applyDbReferenceSafety(row, referenceIds));
@@ -61,6 +65,13 @@ function loadGeneratedMarketRaw() {
     records: Array.isArray(parsed.records) ? parsed.records : [],
     issues: Array.isArray(parsed.issues) ? parsed.issues : [],
   };
+}
+
+async function loadExistingUnlinkedMarketRows() {
+  const rows = await fetchRows("market_listings", {
+    select: "id,title,price,status,source,source_type,source_url,listed_at,sold_at,raw",
+  });
+  return rows.map((row) => ({ ...(row.raw ?? {}), ...row }));
 }
 
 function dedupeRawById(records) {
@@ -185,25 +196,28 @@ function classifyListingType(title) {
 function resolveVariants(title, catalog, explicitVariant) {
   if (explicitVariant && catalog.variantById.has(explicitVariant)) {
     const variant = catalog.variantById.get(explicitVariant);
-    const additional = catalog.variants.filter((entry) => entry.id !== explicitVariant && variantMatches(entry, title));
+    const additional = catalog.variants.filter((entry) => entry.id !== explicitVariant && variantMatches(entry, title, catalog));
     return dedupeById([{ ...variant, matchedTerms: getMatchedTerms(variant, title) }, ...additional.map((entry) => ({ ...entry, matchedTerms: getMatchedTerms(entry, title) }))]);
   }
 
   return catalog.variants
-    .filter((variant) => variantMatches(variant, title))
+    .filter((variant) => variantMatches(variant, title, catalog))
     .map((variant) => ({ ...variant, matchedTerms: getMatchedTerms(variant, title) }));
 }
 
 function resolveSeries(title, catalog) {
   for (const series of catalog.series) {
-    const terms = [series.name, series.slug, series.franchise].filter(Boolean).map(normalize);
+    const terms = getSeriesTerms(series);
     const matchedTerms = terms.filter((term) => term && title.includes(term));
     if (matchedTerms.length) return { ...series, matchedTerms };
   }
   return null;
 }
 
-function variantMatches(variant, title) {
+function variantMatches(variant, title, catalog) {
+  if (variant.variant_type === "provisional") return false;
+  const parent = catalog.seriesById.get(variant.series_id);
+  if (!parent || !getSeriesTerms(parent).some((term) => title.includes(term))) return false;
   return getVariantTerms(variant).some((term) => term && title.includes(term));
 }
 
@@ -216,7 +230,14 @@ function getVariantTerms(variant) {
     variant.name,
     variant.slug,
     ...(TITLE_ALIASES.find((entry) => entry.names.some((name) => normalize(name) === normalize(variant.name)))?.aliases ?? []),
-  ].filter(Boolean).map(normalize);
+  ].filter(Boolean).map(normalize).filter((term) => term.length >= 3);
+}
+
+function getSeriesTerms(series) {
+  return [series.name, series.slug]
+    .filter(Boolean)
+    .map(normalize)
+    .filter((term) => term.length >= 4);
 }
 
 function result(listingType, marketReviewType, variantId, seriesId, reason, confidence, matchedKeywords, matchedVariantIds) {

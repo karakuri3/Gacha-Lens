@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 import SeriesCard from "@/components/SeriesCard";
-import { getSeriesList } from "@/lib/series";
+import { getSeriesCatalogCounts, getSeriesCatalogPage, getSeriesList } from "@/lib/series";
 import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display-clean";
 
 export const metadata = {
@@ -35,20 +35,37 @@ export default async function SeriesPage({ searchParams }) {
   const q = String(params?.q ?? "").trim();
   const filter = filters.some((item) => item.value === params?.filter) ? params.filter : "all";
   const sort = sorts.some((item) => item.value === params?.sort) ? params.sort : "recommended";
-  const series = await getSeriesList();
+  const requestedPage = Math.max(1, Number.parseInt(String(params?.page ?? "1"), 10) || 1);
+  const useDatabaseCatalog = ["all", "released", "upcoming"].includes(filter) && ["recommended", "release"].includes(sort);
+  const [series, catalogPage, catalogCounts] = await Promise.all([
+    useDatabaseCatalog ? Promise.resolve([]) : getSeriesList(),
+    useDatabaseCatalog
+      ? getSeriesCatalogPage({ q, filter, sort, page: requestedPage, pageSize: PAGE_SIZE })
+      : Promise.resolve(null),
+    getSeriesCatalogCounts(),
+  ]);
 
-  const filtered = series
-    .filter((item) => matchesFilter(item, filter))
-    .filter((item) => matchesKeyword(item, q))
-    .sort((a, b) => compareSeries(a, b, sort));
+  const filtered = catalogPage
+    ? catalogPage.items
+    : series
+        .filter((item) => matchesFilter(item, filter))
+        .filter((item) => matchesKeyword(item, q))
+        .sort((a, b) => compareSeries(a, b, sort));
 
   const counts = Object.fromEntries(filters.map((item) => [item.value, series.filter((entry) => matchesFilter(entry, item.value)).length]));
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const page = clampPage(params?.page, totalPages);
+  if (useDatabaseCatalog) {
+    counts.circulating = null;
+    counts.profitable = null;
+    counts.opportunity = null;
+  }
+  if (catalogCounts) Object.assign(counts, catalogCounts);
+  const totalCount = catalogPage?.total ?? filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const page = catalogPage?.page ?? clampPage(params?.page, totalPages);
   const startIndex = (page - 1) * PAGE_SIZE;
-  const visibleItems = filtered.slice(startIndex, startIndex + PAGE_SIZE);
-  const hasPagination = filtered.length > PAGE_SIZE;
-  const displayStart = filtered.length ? startIndex + 1 : 0;
+  const visibleItems = catalogPage ? filtered : filtered.slice(startIndex, startIndex + PAGE_SIZE);
+  const hasPagination = totalCount > PAGE_SIZE;
+  const displayStart = totalCount ? startIndex + 1 : 0;
   const displayEnd = startIndex + visibleItems.length;
 
   return (
@@ -97,7 +114,9 @@ export default async function SeriesPage({ searchParams }) {
               href={{ pathname: "/series", query: { q: q || undefined, sort, filter: item.value } }}
             >
               {item.label}
-              <span style={{ marginLeft: 8, opacity: 0.72 }}>{counts[item.value]}</span>
+              {Number.isFinite(counts[item.value]) ? (
+                <span style={{ marginLeft: 8, opacity: 0.72 }}>{counts[item.value]}</span>
+              ) : null}
             </Link>
           ))}
         </div>
@@ -105,15 +124,15 @@ export default async function SeriesPage({ searchParams }) {
         <div className="section-head">
           <div>
             <h2 className="section-title">
-              {filtered.length
-                ? `全${filtered.length.toLocaleString("ja-JP")}件中 ${displayStart.toLocaleString("ja-JP")}-${displayEnd.toLocaleString("ja-JP")}件`
+              {totalCount
+                ? `全${totalCount.toLocaleString("ja-JP")}件中 ${displayStart.toLocaleString("ja-JP")}-${displayEnd.toLocaleString("ja-JP")}件`
                 : "0件"}
             </h2>
             <p className="section-sub">過去商品もページを切り替えて確認できます。カード全体をクリックすると詳細へ移動します。</p>
           </div>
         </div>
 
-        {filtered.length > 0 ? (
+        {totalCount > 0 ? (
           <>
             <section className="grid grid--cards">
               {visibleItems.map((item) => (

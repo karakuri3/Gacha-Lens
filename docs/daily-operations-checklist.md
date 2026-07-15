@@ -11,6 +11,7 @@ This project is designed for always-on ingestion with a review safety layer. Off
 5. If it failed, download `ingestion-log` and check the `failedStep` field.
 6. Open `/review` with the admin token and check the `Operational health` score.
 7. If needed, call `/api/ops-health` with the review token to inspect machine-readable health JSON.
+8. In `Ingestion history`, confirm official, market, and stock have a recent `succeeded` run. A failed run is more urgent than an unchanged record count.
 8. Run `npm run data:audit` when source coverage or generated raw counts look wrong.
 9. Clear or annotate `high` issues first, especially official master or missing variant records.
 10. Check `medium` unknown variant issues for market, X, restock, and stock rows.
@@ -41,4 +42,5 @@ This project is designed for always-on ingestion with a review safety layer. Off
 - Confirm X reactions affect forecast axes without showing market price on unreleased variants.
 - Confirm restock and stock reports feed `availability_summary`.
 - Confirm `/api/ops-health` readiness score is improving as real market, X, and stock feeds grow.
+- Treat X as optional while `X_FETCH_ENABLED=false`. The default `all` task runs official, market, and stock only; `--task=x` remains available for a future API connection.
 - Export `/api/import-issues?format=csv` for a quick review archive.

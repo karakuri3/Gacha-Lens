@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
+import { loadOfficialCatalog } from "./load-official-catalog.mjs";
+import { includeStaticSampleData, productionRecords } from "./nonproduction-data.mjs";
 import { fetchIdSetSafe, upsertRows } from "./supabase-rest.mjs";
 
 const SOURCE_WEIGHTS = {
@@ -15,8 +17,10 @@ const SOURCE_WEIGHTS = {
 
 loadEnvFile(".env.local");
 
-const catalog = buildOfficialCatalog([...officialSchedule, ...officialProducts]);
-const { restockEventsRaw, stockReportsRaw } = loadStockRaw();
+const catalog = await loadOfficialCatalog([...officialSchedule, ...officialProducts]);
+const loadedStockRaw = loadStockRaw();
+const restockEventsRaw = productionRecords(loadedStockRaw.restockEventsRaw);
+const stockReportsRaw = productionRecords(loadedStockRaw.stockReportsRaw);
 const restockRows = restockEventsRaw.map((raw) => normalizeRestockEvent(raw, catalog));
 const stockRows = stockReportsRaw.map((raw) => normalizeStockReport(raw, catalog));
 const referenceIds = await loadReferenceIds();
@@ -257,9 +261,11 @@ function loadStockRaw() {
     .replaceAll("export const stockReportsRaw", "const stockReportsRaw");
 
   const staticRaw = Function(`${source}\nreturn { restockEventsRaw, stockReportsRaw };`)();
+  const staticRestock = includeStaticSampleData() ? staticRaw.restockEventsRaw ?? [] : [];
+  const staticStock = includeStaticSampleData() ? staticRaw.stockReportsRaw ?? [] : [];
   return {
-    restockEventsRaw: dedupeById([...(generated.restockEventsRaw ?? []), ...(staticRaw.restockEventsRaw ?? [])]),
-    stockReportsRaw: dedupeById([...(generated.stockReportsRaw ?? []), ...(staticRaw.stockReportsRaw ?? [])]),
+    restockEventsRaw: dedupeById([...(generated.restockEventsRaw ?? []), ...staticRestock]),
+    stockReportsRaw: dedupeById([...(generated.stockReportsRaw ?? []), ...staticStock]),
   };
 }
 

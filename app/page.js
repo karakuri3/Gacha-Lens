@@ -15,7 +15,7 @@ export default async function Home() {
     .slice(0, 4);
   const releasedTop = watchNow.slice(0, 3);
   const upcomingTop = series
-    .filter((item) => !item.is_released)
+    .filter((item) => !item.is_released && item.variant_type !== "provisional" && (item.forecast_score ?? 0) > 0)
     .sort((a, b) => upcomingPriority(b) - upcomingPriority(a))
     .slice(0, 3);
   const trendTop = series
@@ -91,6 +91,9 @@ export default async function Home() {
               <SeriesCard key={item.slug} series={item} priority={index === 0} />
             ))}
           </div>
+          {releasedTop.length === 0 ? (
+            <div className="card empty">単品に紐付く市場・在庫データを収集中です。取得前の価格や利益は表示しません。</div>
+          ) : null}
         </section>
 
         <section style={{ marginTop: 34 }}>
@@ -106,6 +109,9 @@ export default async function Home() {
               <SeriesCard key={item.slug} series={item} priority={index === 0} />
             ))}
           </div>
+          {upcomingTop.length === 0 ? (
+            <div className="card empty">現在、公式マスタで確認できる発売予定はありません。</div>
+          ) : null}
         </section>
       </div>
     </main>

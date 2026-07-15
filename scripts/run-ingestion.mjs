@@ -1,4 +1,8 @@
-import { getIngestionTaskNames, runIngestionSequence } from "../lib/ingestion-runner.js";
+try {
+  process.loadEnvFile(".env.local");
+} catch {}
+
+const { getIngestionTaskNames, runIngestionSequence } = await import("../lib/ingestion-runner.js");
 
 const taskNames = getRequestedTasks();
 

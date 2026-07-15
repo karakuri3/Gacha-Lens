@@ -82,6 +82,32 @@ export default async function ImportReviewPage() {
           ) : null}
         </section>
 
+        <section className="card review-group" style={{ marginBottom: 18 }}>
+          <div className="review-group__head">
+            <div>
+              <p className="eyebrow">RECENT RUNS</p>
+              <h2>Ingestion history</h2>
+            </div>
+            <span className="review-count">latest {health.ingestionRuns.length}</span>
+          </div>
+          <div className="review-list">
+            {health.ingestionRuns.map((run) => (
+              <article key={run.id} className={`review-item review-item--${run.status === "failed" ? "high" : "low"}`}>
+                <div className="review-item__top">
+                  <span className={`review-priority review-priority--${run.status === "failed" ? "high" : "low"}`}>{run.status}</span>
+                  <span>{run.task}</span>
+                  <span>{run.trigger_source}</span>
+                </div>
+                <h3>{formatDateTime(run.started_at)}</h3>
+                <p className="review-action">
+                  {run.status === "failed" ? run.error_message || "No error message" : `${run.duration_ms ?? 0} ms`}
+                </p>
+              </article>
+            ))}
+            {health.ingestionRuns.length === 0 ? <div className="empty">Run history will appear after the schema migration and next ingestion.</div> : null}
+          </div>
+        </section>
+
         <section className="grid grid--3" style={{ marginBottom: 18 }}>
           <ReviewMetric label="Open issues" value={unresolved.length} />
           <ReviewMetric label="Market review" value={issues.filter((issue) => issue.table === "market_listings").length} />

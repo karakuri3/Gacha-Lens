@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
+import { loadOfficialCatalog } from "./load-official-catalog.mjs";
+import { includeStaticSampleData, productionRecords } from "./nonproduction-data.mjs";
 import { fetchIdSetSafe, upsertRows } from "./supabase-rest.mjs";
 
 const SOURCE_WEIGHTS = {
@@ -31,15 +33,17 @@ const X_INTENT_LABELS = {
 
 loadEnvFile(".env.local");
 
-const catalog = buildOfficialCatalog([...officialSchedule, ...officialProducts]);
-const xReactionsRaw = dedupeById([...loadGeneratedXReactionsRaw().records, ...loadXReactionsRaw()]);
+const catalog = await loadOfficialCatalog([...officialSchedule, ...officialProducts]);
+const generatedX = loadGeneratedXReactionsRaw();
+const staticX = includeStaticSampleData() ? loadXReactionsRaw() : [];
+const xReactionsRaw = productionRecords(dedupeById([...generatedX.records, ...staticX]));
 const xRows = xReactionsRaw.map((raw) => normalizeXReaction(raw, catalog));
 const referenceIds = await loadReferenceIds();
 const dbXRows = xRows.map((row) => applyDbReferenceSafety(row, referenceIds));
 const issueRows = dbXRows
   .filter((row) => row.review_required)
   .map((row) => createImportIssue("x_reactions", row.raw, "unknown_variant", row.id));
-const fetchIssueRows = loadGeneratedXReactionsRaw().issues.map((issue) => ({
+const fetchIssueRows = generatedX.issues.map((issue) => ({
   ...issue,
   record_id: issue.record_id || issue.id,
   resolved: Boolean(issue.resolved),

@@ -22,6 +22,8 @@ const checks = [
   { table: "x_reactions", column: "matched_variant_id" },
   { table: "restock_events", column: "matched_variant_id" },
   { table: "stock_reports", column: "matched_variant_id" },
+  { table: "ingestion_runs", column: "trigger_source" },
+  { table: "ingestion_runs", column: "summary" },
 ];
 
 const results = [];

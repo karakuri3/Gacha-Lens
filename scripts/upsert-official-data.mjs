@@ -2,16 +2,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
-import { deleteOfficialVariantsBySeriesIds, upsertRows } from "./supabase-rest.mjs";
+import { fetchRows, upsertRows } from "./supabase-rest.mjs";
 
 loadEnvFile(".env.local");
 
 const generatedOfficial = loadGeneratedOfficialRaw();
 const officialRows = dedupeById([...generatedOfficial.records, ...officialSchedule, ...officialProducts]);
 const seriesRows = dedupeRowsById(officialRows.map(toSeriesRow));
-const variantSourceRows = officialRows.filter(hasVariantRows);
+const existingRealVariantSeriesIds = await loadExistingRealVariantSeriesIds();
 const variantRows = dedupeRowsById(officialRows.flatMap((series) => {
-  return asArray(series.variants || series.items || series.lineup || series.line_up).map((variant) => toVariantRow(variant, series));
+  const variants = asArray(series.variants || series.items || series.lineup || series.line_up);
+  if (variants.length) return variants.map((variant) => toVariantRow(variant, series));
+  const seriesId = toSeriesRow(series).id;
+  return existingRealVariantSeriesIds.has(seriesId) ? [] : [toProvisionalVariantRow(series)];
 }));
 
 const issueRows = generatedOfficial.issues.map((issue) => ({
@@ -21,7 +24,6 @@ const issueRows = generatedOfficial.issues.map((issue) => ({
 }));
 
 await upsertRows("series", seriesRows, { label: "upsert-official" });
-await replaceOfficialVariants(variantSourceRows.map(toSeriesRow));
 await upsertRows("variants", variantRows, { label: "upsert-official" });
 await upsertRows("import_issues", issueRows, { label: "upsert-official" });
 
@@ -35,11 +37,6 @@ console.log(JSON.stringify({
   importIssues: issueRows.length,
 }, null, 2));
 
-function replaceOfficialVariants(seriesRows) {
-  const seriesIds = seriesRows.map((row) => row.id).filter(Boolean);
-  return deleteOfficialVariantsBySeriesIds(seriesIds);
-}
-
 function loadGeneratedOfficialRaw() {
   const filePath = getGeneratedDataPath("official-raw.json");
   if (!fs.existsSync(filePath)) return { records: [], issues: [] };
@@ -51,16 +48,25 @@ function loadGeneratedOfficialRaw() {
   };
 }
 
+async function loadExistingRealVariantSeriesIds() {
+  try {
+    const rows = await fetchRows("variants", {
+      select: "series_id",
+      params: { variant_type: "neq.provisional" },
+    });
+    return new Set(rows.map((row) => row.series_id).filter(Boolean));
+  } catch (error) {
+    console.warn(`[upsert-official] Existing real variants could not be read: ${error.message}`);
+    return new Set();
+  }
+}
+
 function dedupeById(records) {
   return [...new Map(records.filter(Boolean).map((record) => [text(record.id || record.series_id || record.slug), record])).values()];
 }
 
 function dedupeRowsById(rows) {
   return [...new Map(rows.filter((row) => row?.id).map((row) => [row.id, row])).values()];
-}
-
-function hasVariantRows(raw) {
-  return asArray(raw?.variants || raw?.items || raw?.lineup || raw?.line_up).length > 0;
 }
 
 function toSeriesRow(raw) {
@@ -77,7 +83,7 @@ function toSeriesRow(raw) {
     price: number(raw.price || raw.price_yen || raw.priceYen),
     image_url: text(raw.image || raw.image_url || raw.imageUrl || raw.product_image || raw.thumbnail),
     official_url: text(raw.official_url || raw.url || raw.product_url),
-    is_released: Boolean(raw.is_released ?? raw.released),
+    is_released: resolveReleased(raw.release_date, raw.is_released ?? raw.released),
     source_type: "official_site",
     raw,
   };
@@ -95,7 +101,7 @@ function toVariantRow(raw, series) {
     rarity: text(raw.rarity) || "通常",
     role: text(raw.role) || "単品",
     image: text(raw.image || raw.image_url || raw.imageUrl || raw.product_image || raw.thumbnail || seriesRow.image_url),
-    released: Boolean(raw.released ?? seriesRow.is_released),
+    released: resolveReleased(raw.release_date || seriesRow.release_date, raw.released ?? seriesRow.is_released),
     price: number(raw.price || raw.price_yen || raw.priceYen) ?? seriesRow.price,
     brand: text(raw.brand || seriesRow.brand),
     release_month: normalizeMonth(raw.release_month || raw.month || raw.releaseMonth || seriesRow.release_month),
@@ -108,6 +114,43 @@ function toVariantRow(raw, series) {
     source_type: "official_site",
     review_required: !name,
     raw,
+  };
+}
+
+function resolveReleased(releaseDate, fallback) {
+  const parsed = Date.parse(String(releaseDate || ""));
+  if (Number.isFinite(parsed)) return parsed <= Date.now();
+  return Boolean(fallback);
+}
+
+function toProvisionalVariantRow(series) {
+  const seriesRow = toSeriesRow(series);
+  return {
+    id: `${seriesRow.id}-provisional`,
+    slug: `${seriesRow.slug}-provisional`,
+    series_id: seriesRow.id,
+    name: seriesRow.name,
+    variant_type: "provisional",
+    rarity: "未確認",
+    role: "ラインナップ確認中",
+    image: seriesRow.image_url,
+    released: seriesRow.is_released,
+    price: seriesRow.price,
+    brand: seriesRow.brand,
+    release_month: seriesRow.release_month,
+    release_week: seriesRow.release_week,
+    release_date: seriesRow.release_date,
+    official_url: seriesRow.official_url,
+    axes: {},
+    signals: {},
+    tags: ["ラインナップ確認中"],
+    source_type: "official_site",
+    review_required: true,
+    raw: {
+      provisional: true,
+      reason: "official_lineup_not_fetched_yet",
+      series_id: seriesRow.id,
+    },
   };
 }
 

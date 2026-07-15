@@ -51,7 +51,9 @@ export default async function RankingPage({ searchParams }) {
   const series = await getSeriesList();
 
   const ranked = series
-    .filter((item) => (tab === "released" ? isCirculatingItem(item) : !item.is_released))
+    .filter((item) => (tab === "released"
+      ? isCirculatingItem(item)
+      : !item.is_released && item.variant_type !== "provisional" && (item.forecast_score ?? 0) > 0))
     .sort((a, b) => {
       const primaryA = tab === "released" ? releasedPriority(a) : upcomingPriority(a);
       const primaryB = tab === "released" ? releasedPriority(b) : upcomingPriority(b);
@@ -98,6 +100,13 @@ export default async function RankingPage({ searchParams }) {
             <RankingRow key={item.slug} item={item} mode={tab} />
           ))}
         </section>
+        {ranked.length === 0 ? (
+          <div className="card empty">
+            {tab === "released"
+              ? "単品に紐付く市場・在庫データがまだありません。未取得の価格で順位は作りません。"
+              : "現在、発売予定として確認できる単品がありません。"}
+          </div>
+        ) : null}
       </div>
     </main>
   );

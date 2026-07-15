@@ -6,6 +6,7 @@ import { fetchMarketListingsRaw } from "../lib/fetchers/market-fetcher.js";
 import { fetchStockRaw } from "../lib/fetchers/stock-fetcher.js";
 import { fetchXReactionsRaw } from "../lib/fetchers/x-fetcher.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
+import { productionRecords } from "./nonproduction-data.mjs";
 
 loadEnvFile(".env.local");
 
@@ -40,9 +41,9 @@ const configured = {
 };
 const generated = {
   official: readGenerated("official-raw.json", (value) => value.records?.length ?? 0),
-  market: readGenerated("market-raw.json", (value) => value.records?.length ?? 0),
+  market: readGenerated("market-raw.json", (value) => productionRecords(value.records ?? []).length),
   x: readGenerated("x-reactions-raw.json", (value) => value.records?.length ?? 0),
-  stock: readGenerated("stock-raw.json", (value) => (value.restockEventsRaw?.length ?? 0) + (value.stockReportsRaw?.length ?? 0)),
+  stock: readGenerated("stock-raw.json", (value) => productionRecords([...(value.restockEventsRaw ?? []), ...(value.stockReportsRaw ?? [])]).length),
 };
 const summary = {
   ok: true,

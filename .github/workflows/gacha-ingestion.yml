@@ -32,6 +32,12 @@ jobs:
         run: |
           set -o pipefail
           npm run db:upsert-all 2>&1 | tee ingestion.log
+      - name: Clean replaced provisional variants
+        run: npm run db:cleanup-provisional
+      - name: Remove validation-only signal rows
+        run: npm run db:cleanup-nonproduction
+      - name: Remove irrelevant unlinked market rows
+        run: npm run db:cleanup-irrelevant-market
       - name: Write summary
         if: always()
         run: |

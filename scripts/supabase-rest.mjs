@@ -1,8 +1,16 @@
 export async function upsertRows(table, rows, options = {}) {
   if (!rows.length) return;
-  let safeRows = dedupeRowsById(rows);
   const label = options.label || "upsert";
+  const batchSize = options.batchSize ?? 500;
+  const batches = chunk(dedupeRowsById(rows), batchSize);
 
+  for (let index = 0; index < batches.length; index += 1) {
+    await upsertBatch(table, batches[index], { label, batch: `${index + 1}/${batches.length}` });
+  }
+}
+
+async function upsertBatch(table, rows, options = {}) {
+  let safeRows = rows;
   for (let attempt = 0; attempt < 32; attempt += 1) {
     const response = await fetch(restUrl(table, { on_conflict: "id" }), {
       method: "POST",
@@ -19,7 +27,7 @@ export async function upsertRows(table, rows, options = {}) {
     if (!missingColumn) throw new Error(`${table} upsert failed: ${message}`);
 
     safeRows = dedupeRowsById(safeRows.map((row) => omitKey(row, missingColumn)));
-    console.warn(`[${label}] ${table}.${missingColumn} is not in the remote schema cache. Retrying without it.`);
+    console.warn(`[${options.label}] ${table}.${missingColumn} is not in the remote schema cache (${options.batch}). Retrying without it.`);
   }
 
   throw new Error(`${table} upsert failed: too many schema fallback attempts`);
@@ -34,28 +42,51 @@ export async function fetchRows(table, options = {}) {
   const pageSize = options.pageSize ?? 1000;
   const select = options.select ?? "*";
   const extraParams = options.params ?? {};
-  const rows = [];
+  const firstResponse = await fetch(restUrl(table, {
+    ...extraParams,
+    select,
+    limit: String(pageSize),
+    offset: "0",
+  }), {
+    headers: restHeaders({ Prefer: "count=exact" }),
+  });
+  if (!firstResponse.ok) throw new Error(`${table} fetch failed: ${await errorMessage(firstResponse)}`);
 
-  for (let offset = 0; offset < 100_000; offset += pageSize) {
-    const response = await fetch(restUrl(table, {
+  const rows = await firstResponse.json();
+  const total = parseContentRangeTotal(firstResponse.headers.get("content-range")) ?? rows.length;
+  if (total <= pageSize) return rows;
+
+  const requests = [];
+  for (let offset = pageSize; offset < total; offset += pageSize) {
+    requests.push(fetch(restUrl(table, {
       ...extraParams,
       select,
       limit: String(pageSize),
       offset: String(offset),
     }), {
       headers: restHeaders(),
-    });
-
-    if (!response.ok) {
-      throw new Error(`${table} fetch failed: ${await errorMessage(response)}`);
-    }
-
-    const page = await response.json();
-    rows.push(...(page ?? []));
-    if (!Array.isArray(page) || page.length < pageSize) break;
+    }));
   }
-
+  const responses = await Promise.all(requests);
+  for (const response of responses) {
+    if (!response.ok) throw new Error(`${table} fetch failed: ${await errorMessage(response)}`);
+    rows.push(...((await response.json()) ?? []));
+  }
   return rows;
+}
+
+export async function deleteRowsByIds(table, ids, options = {}) {
+  const safeIds = [...new Set(ids.filter(Boolean))];
+  for (const batch of chunk(safeIds, options.batchSize ?? 80)) {
+    const response = await fetch(restUrl(table, {
+      id: `in.(${batch.map(escapeInValue).join(",")})`,
+    }), {
+      method: "DELETE",
+      headers: restHeaders(),
+    });
+    if (!response.ok) throw new Error(`${table} delete failed: ${await errorMessage(response)}`);
+  }
+  return safeIds.length;
 }
 
 export async function fetchIdSetSafe(table, label = "upsert") {
@@ -127,6 +158,11 @@ async function errorMessage(response) {
 
 function parseMissingColumn(message = "") {
   return message.match(/Could not find the '([^']+)' column/)?.[1] ?? "";
+}
+
+function parseContentRangeTotal(value = "") {
+  const total = Number(String(value).split("/").pop());
+  return Number.isFinite(total) ? total : null;
 }
 
 function omitKey(row, key) {
