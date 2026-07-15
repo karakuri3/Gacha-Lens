@@ -63,6 +63,7 @@ export default async function RankingPage({ searchParams }) {
 
   const ranked = (tab === "upcoming" ? diversifyUpcomingPodium(sorted) : sorted)
     .map((item, index) => ({ ...item, rank: index + 1 }));
+  const summary = buildRankingSummary(ranked, tab);
 
   const podium = arrangePodium(ranked.slice(0, 3));
   const rest = ranked.slice(3);
@@ -72,23 +73,30 @@ export default async function RankingPage({ searchParams }) {
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">RANKING</p>
-          <h1 className="page-title">いま熱いガチャ単品ランキング</h1>
+          <h1 className="page-title">いま注目のガチャランキング</h1>
           <p className="page-lead">
             発売中は価格の動き・売れ行き・在庫、発売予定は先行反応・話題化期待・入手難度で並べます。
           </p>
         </section>
 
-        <div className="tabs">
-          {tabs.map((item) => (
-            <Link
-              key={item.value}
-              href={{ pathname: "/ranking", query: { tab: item.value } }}
-              className={`pill-link ${tab === item.value ? "is-active" : ""}`}
-            >
-              {item.label}
-              <span style={{ marginLeft: 8, opacity: 0.72, fontSize: 12 }}>{item.caption}</span>
-            </Link>
-          ))}
+        <div className="ranking-toolbar">
+          <div className="tabs">
+            {tabs.map((item) => (
+              <Link
+                key={item.value}
+                href={{ pathname: "/ranking", query: { tab: item.value } }}
+                className={`pill-link ${tab === item.value ? "is-active" : ""}`}
+              >
+                {item.label}
+                <span style={{ marginLeft: 8, opacity: 0.72, fontSize: 12 }}>{item.caption}</span>
+              </Link>
+            ))}
+          </div>
+          <div className="ranking-summary" aria-label="ランキング概要">
+            {summary.map((entry) => (
+              <div key={entry.label}><span>{entry.label}</span><strong>{entry.value}</strong></div>
+            ))}
+          </div>
         </div>
 
         <section className="grid grid--3 podium">
@@ -121,9 +129,11 @@ function RankingCard({ item, mode }) {
       <div className="product-image">
         <ProductImage src={item.image_url} alt={item.name} priority={item.rank <= 3} />
       </div>
-      <ProductTitle item={item} />
-      <PublicTags item={item} isReleased={mode === "released"} />
-      <MetricGrid metrics={getMetrics(item, mode)} />
+      <div className="ranking-card__info">
+        <ProductTitle item={item} />
+        <PublicTags item={item} isReleased={mode === "released"} />
+        <MetricGrid metrics={getMetrics(item, mode)} />
+      </div>
     </Link>
   );
 }
@@ -232,4 +242,19 @@ function isReleasedRankingCandidate(item) {
 
 function upcomingPriority(item) {
   return opportunityScore(item) * 12 + (item.forecast_score ?? 0) * 3;
+}
+
+function buildRankingSummary(items, mode) {
+  if (mode === "upcoming") {
+    return [
+      { label: "掲載", value: `${items.length.toLocaleString("ja-JP")}件` },
+      { label: "注目度70以上", value: `${items.filter((item) => opportunityScore(item) >= 70).length.toLocaleString("ja-JP")}件` },
+      { label: "発売月", value: `${new Set(items.map((item) => item.schedule_month).filter(Boolean)).size}か月` },
+    ];
+  }
+  return [
+    { label: "掲載", value: `${items.length.toLocaleString("ja-JP")}件` },
+    { label: "売れ行きあり", value: `${items.filter((item) => (item.sold_count ?? item.market_summary?.sold_count ?? 0) > 0).length.toLocaleString("ja-JP")}件` },
+    { label: "在庫情報あり", value: `${items.filter((item) => Boolean((item.stock_summary ?? item.availability_summary)?.has_stock_signal)).length.toLocaleString("ja-JP")}件` },
+  ];
 }

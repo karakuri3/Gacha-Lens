@@ -1,8 +1,7 @@
 ﻿import Link from "next/link";
 
 const navItems = [
-  { label: "いま熱い", href: "/ranking" },
-  { label: "トレンド", href: "/trends" },
+  { label: "ランキング", href: "/ranking" },
   { label: "発売カレンダー", href: "/schedule" },
   { label: "ガチャ図鑑", href: "/series" },
 ];

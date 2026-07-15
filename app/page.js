@@ -1,6 +1,5 @@
 import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
-import SeriesCard from "@/components/SeriesCard";
 import { getRankingSeries, getSeriesCatalogCounts } from "@/lib/series";
 import { variantHref } from "@/lib/variant-url";
 import {
@@ -59,7 +58,7 @@ export default async function Home() {
               <h2 className="section-title">いま動きがある単品</h2>
               <p className="section-sub">出品、売れ行き、在庫の変化をまとめて確認。</p>
             </div>
-            <Link href="/trends" className="text-link">トレンドをすべて見る <span aria-hidden="true">→</span></Link>
+            <Link href="/ranking" className="text-link">ランキングをすべて見る <span aria-hidden="true">→</span></Link>
           </div>
           <div className="discovery-list">
             {movingNow.map((item, index) => <DiscoveryRow key={item.slug} item={item} index={index + 2} />)}
@@ -75,8 +74,8 @@ export default async function Home() {
             </div>
             <Link href="/schedule" className="text-link">発売カレンダー <span aria-hidden="true">→</span></Link>
           </div>
-          <div className="grid grid--cards">
-            {upcoming.map((item, index) => <SeriesCard key={item.slug} series={item} priority={index === 0} />)}
+          <div className="discovery-list">
+            {upcoming.map((item) => <UpcomingRow key={item.slug} item={item} />)}
           </div>
         </section>
 
@@ -111,7 +110,7 @@ function Spotlight({ item }) {
         <div className="hot-spotlight__metrics">
           <div><span>定価</span><strong>{formatYen(item.price)}</strong></div>
           <div><span>参考相場</span><strong>{formatYen(item.market_summary?.single)}</strong></div>
-          <div><span>価格レンジ</span><strong>{formatPriceRange(item.market_summary?.estimated_resale_range)}</strong></div>
+          <div><span>相場の目安</span><strong>{formatPriceRange(item.market_summary?.estimated_resale_range)}</strong></div>
         </div>
         <div className="heat-meter" aria-label={`注目度 ${formatScore(watchScore(item))}`}>
           <span style={{ width: `${watchScore(item) ?? 0}%` }} />
@@ -136,6 +135,24 @@ function DiscoveryRow({ item, index }) {
       <div className="discovery-row__signal">
         <span>{tags[0] || "流通を観測"}</span>
         <strong>{formatScore(watchScore(item))}</strong>
+      </div>
+      <span className="discovery-row__arrow" aria-hidden="true">→</span>
+    </Link>
+  );
+}
+
+function UpcomingRow({ item }) {
+  return (
+    <Link href={variantHref(item)} className="discovery-row discovery-row--upcoming">
+      <span className="discovery-row__index">{item.schedule_month || "予定"}</span>
+      <div className="discovery-row__image"><ProductImage src={item.image_url} alt={item.name} /></div>
+      <div className="discovery-row__copy">
+        <strong>{item.name}</strong>
+        <span>{item.series_name} ・ {formatYen(item.price)}</span>
+      </div>
+      <div className="discovery-row__signal">
+        <span>{formatSchedule(item)}</span>
+        <strong>{formatScore(opportunityScore(item))}</strong>
       </div>
       <span className="discovery-row__arrow" aria-hidden="true">→</span>
     </Link>

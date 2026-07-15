@@ -156,7 +156,7 @@ function ReleasedHeroMetrics({ item }) {
     <>
       <Metric label="価格" value={formatYen(item.price)} />
       <Metric label="単品相場" value={formatYen(item.market_summary?.single)} tone="highlight" />
-      <Metric label="参考価格レンジ" value={formatPriceRange(item.market_summary?.estimated_resale_range)} tone="highlight" />
+      <Metric label="相場の目安" value={formatPriceRange(item.market_summary?.estimated_resale_range)} tone="highlight" />
       <Metric label="コンプ相場" value={formatYen(item.market_summary?.complete_set)} />
       <Metric label="在庫状況" value={stockStatusLabel(item.stock_summary || item.availability_summary)} />
       <Metric label="売れ行き" value={item.market_summary?.sell_through_signal?.label ?? "データ不足"} />
@@ -197,7 +197,7 @@ function MarketBreakdown({ item }) {
   return (
     <div className="metric-grid">
       <Metric label="単品相場" value={formatYen(summary.single)} tone="highlight" />
-      <Metric label="参考価格レンジ" value={formatPriceRange(summary.estimated_resale_range)} tone="highlight" />
+      <Metric label="相場の目安" value={formatPriceRange(summary.estimated_resale_range)} tone="highlight" />
       <Metric label="レア単品" value={formatYen(summary.rare_single)} />
       <Metric label="シークレット" value={formatYen(summary.secret_single)} />
       <Metric label="コンプ相場" value={formatYen(summary.complete_set)} />

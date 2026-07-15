@@ -10,7 +10,7 @@ export default function Footer() {
           <p>ガチャの新作と話題を追いかける、非公式のトレンドガイド。</p>
         </div>
         <nav aria-label="フッターメニュー">
-          <Link href="/ranking">いま熱い</Link>
+          <Link href="/ranking">注目ランキング</Link>
           <Link href="/schedule">発売カレンダー</Link>
           <Link href="/series">ガチャ図鑑</Link>
         </nav>

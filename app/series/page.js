@@ -80,7 +80,7 @@ export default async function SeriesPage({ searchParams }) {
           <p className="page-lead">過去商品からこれからの新作まで、キャラクター名やシリーズ名で探せます。</p>
         </section>
 
-        <form className="card form-panel" action="/series" method="get">
+        <form className="card form-panel catalog-filter-form" action="/series" method="get">
           <div className="form-grid">
             <div className="field">
               <label htmlFor="q">キーワード</label>
@@ -109,7 +109,7 @@ export default async function SeriesPage({ searchParams }) {
           </div>
         </form>
 
-        <div className="tabs">
+        <div className="tabs catalog-filter-tabs">
           {filters.map((item) => (
             <Link
               key={item.value}
@@ -124,7 +124,7 @@ export default async function SeriesPage({ searchParams }) {
           ))}
         </div>
 
-        <div className="section-head">
+        <div className="section-head catalog-results-head">
           <div>
             <h2 className="section-title">
               {totalCount
