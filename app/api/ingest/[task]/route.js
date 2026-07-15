@@ -18,6 +18,7 @@ export async function POST(request, context) {
     const runnerOptions = {
       captureOutput: true,
       triggerSource: request.headers.get("x-ingest-source") || "api",
+      env: providerEnvironment(request),
     };
     const result = taskName === "all"
       ? await runIngestionSequence(undefined, runnerOptions)
@@ -45,6 +46,27 @@ export async function POST(request, context) {
       summary: error.summary ?? null,
     }, { status });
   }
+}
+
+function providerEnvironment(request) {
+  const mappings = [
+    ["x-provider-rakuten-application-id", "RAKUTEN_APPLICATION_ID"],
+    ["x-provider-rakuten-access-key", "RAKUTEN_ACCESS_KEY"],
+    ["x-provider-rakuten-affiliate-id", "RAKUTEN_AFFILIATE_ID"],
+    ["x-provider-yahoo-shopping-app-id", "YAHOO_SHOPPING_APP_ID"],
+  ];
+  const environment = {};
+  for (const [headerName, envName] of mappings) {
+    const value = request.headers.get(headerName) || "";
+    if (value) environment[envName] = value;
+  }
+  if (environment.RAKUTEN_APPLICATION_ID && environment.RAKUTEN_ACCESS_KEY) {
+    environment.RAKUTEN_MARKET_FETCH_ENABLED = "true";
+  }
+  if (environment.YAHOO_SHOPPING_APP_ID) {
+    environment.YAHOO_SHOPPING_FETCH_ENABLED = "true";
+  }
+  return environment;
 }
 
 export async function GET() {

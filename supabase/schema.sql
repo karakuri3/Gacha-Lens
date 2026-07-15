@@ -84,11 +84,25 @@ create table if not exists market_listings (
   source_url text,
   listed_at timestamptz,
   sold_at timestamptz,
+  last_observed_at timestamptz,
   confidence numeric not null default 0.25,
   review_required boolean not null default false,
   raw jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+create table if not exists market_listing_observations (
+  id text primary key,
+  listing_id text not null references market_listings(id) on delete cascade,
+  variant_id text references variants(id) on delete set null,
+  series_id text references series(id) on delete set null,
+  price integer,
+  status text not null default 'active',
+  source text not null,
+  observed_at timestamptz not null,
+  raw jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists x_reactions (
@@ -204,6 +218,7 @@ create table if not exists forecast_snapshots (
 );
 
 alter table market_listings add column if not exists matched_variant_id text references variants(id) on delete set null;
+alter table market_listings add column if not exists last_observed_at timestamptz;
 alter table x_reactions add column if not exists matched_variant_id text references variants(id) on delete set null;
 alter table restock_events add column if not exists matched_variant_id text references variants(id) on delete set null;
 alter table stock_reports add column if not exists matched_variant_id text references variants(id) on delete set null;
@@ -212,6 +227,10 @@ create index if not exists variants_series_id_idx on variants(series_id);
 create index if not exists market_listings_variant_id_idx on market_listings(variant_id);
 create index if not exists market_listings_matched_variant_id_idx on market_listings(matched_variant_id);
 create index if not exists market_listings_review_required_idx on market_listings(review_required);
+create index if not exists market_listings_last_observed_at_idx on market_listings(last_observed_at desc);
+create index if not exists market_listing_observations_listing_id_idx on market_listing_observations(listing_id, observed_at desc);
+create index if not exists market_listing_observations_variant_id_idx on market_listing_observations(variant_id, observed_at desc);
+create index if not exists market_listing_observations_series_id_idx on market_listing_observations(series_id, observed_at desc);
 create index if not exists x_reactions_variant_id_idx on x_reactions(variant_id);
 create index if not exists x_reactions_matched_variant_id_idx on x_reactions(matched_variant_id);
 create index if not exists restock_events_variant_id_idx on restock_events(variant_id);

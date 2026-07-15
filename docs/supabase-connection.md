@@ -123,6 +123,11 @@ For GitHub Actions, use `.github/workflows/gacha-ingestion.yml` and set reposito
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `YAHOO_SHOPPING_APP_ID`
+- `YAHOO_SHOPPING_FETCH_ENABLED` (`true` after the app ID is added)
+- `RAKUTEN_APPLICATION_ID`
+- `RAKUTEN_ACCESS_KEY`
+- optional `RAKUTEN_AFFILIATE_ID`
 
 The workflow is manually runnable and also runs daily. Keep `import_issues` review as a daily human step before trusting new unknown data in ranking decisions.
 
@@ -134,4 +139,4 @@ After applying `supabase/schema.sql` in the Supabase SQL editor, verify that the
 npm run db:check-schema
 ```
 
-The check confirms `matched_variant_id` is readable on `market_listings`, `x_reactions`, `restock_events`, and `stock_reports`. Once this passes, the upsert scripts should no longer print schema-cache fallback warnings for `matched_variant_id`.
+The check confirms `matched_variant_id`, `market_listings.last_observed_at`, `market_listing_observations.observed_at`, and ingestion-run fields are readable. Once this passes, the upsert scripts should no longer print schema-cache fallback warnings for those columns.

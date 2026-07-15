@@ -28,12 +28,14 @@ Deno.serve(async (request) => {
 
   const target = `${baseUrl.replace(/\/$/, "")}/api/ingest/${task}`;
   const startedAt = new Date().toISOString();
+  const providerHeaders = providerCredentialHeaders();
   const response = await fetch(target, {
     method: "POST",
     headers: {
       authorization: `Bearer ${ingestToken}`,
       "content-type": "application/json",
       "x-ingest-source": "supabase-cron",
+      ...providerHeaders,
     },
     body: JSON.stringify({
       task,
@@ -59,6 +61,19 @@ Deno.serve(async (request) => {
     body,
   }, response.ok ? 200 : response.status);
 });
+
+function providerCredentialHeaders() {
+  const mappings = [
+    ["RAKUTEN_APPLICATION_ID", "x-provider-rakuten-application-id"],
+    ["RAKUTEN_ACCESS_KEY", "x-provider-rakuten-access-key"],
+    ["RAKUTEN_AFFILIATE_ID", "x-provider-rakuten-affiliate-id"],
+    ["YAHOO_SHOPPING_APP_ID", "x-provider-yahoo-shopping-app-id"],
+  ];
+  return Object.fromEntries(mappings.flatMap(([envName, headerName]) => {
+    const value = Deno.env.get(envName) || "";
+    return value ? [[headerName, value]] : [];
+  }));
+}
 
 function normalizeTask(url: URL) {
   const queryTask = url.searchParams.get("task");

@@ -25,7 +25,7 @@ The public UI still reads variant-first data through the repository layer. Unkno
 
 `/api/ingest/all` is available for manual recovery, but Cron should prefer the individual task endpoints.
 
-`official`, safe `market`, and safe `stock/restock` now run `fetch -> generated raw snapshot -> normalize -> upsert`. `official` uses the official schedule/detail pages. `market` and `stock` intentionally accept approved CSV/JSON/API/export feeds; uncontrolled marketplace or shop scraping is not part of the primary path. X remains available as an optional task, but it is not part of the default free Cron setup.
+`official`, safe `market`, and safe `stock/restock` now run `fetch -> generated raw snapshot -> normalize -> upsert`. `official` uses the official schedule/detail pages. `market` uses the Yahoo Shopping and Rakuten official APIs plus approved CSV/JSON feeds. Product queries are generated from the official Supabase master, so recurring manual keyword input is not required. Uncontrolled marketplace or shop scraping is not part of the primary path. X remains optional.
 
 ## App environment
 
@@ -123,9 +123,13 @@ Keep `.github/workflows/gacha-ingestion.yml` enabled. If Cron or the app endpoin
 
 Do not make uncontrolled marketplace scraping the primary path. Market data should enter through one of these safer inputs first:
 
-- approved marketplace API
+- Yahoo Shopping Item Search API (`YAHOO_SHOPPING_APP_ID`)
+- Rakuten Ichiba Item Search API (`RAKUTEN_APPLICATION_ID`, `RAKUTEN_ACCESS_KEY`)
+- other approved marketplace API
 - owner-created CSV export
 - owner-created export converted to `marketListingsRaw`
+
+See `docs/market-data-automation.md` for query rotation, rate limits, and the distinction between active asking prices and sold-price evidence.
 - explicit JSON feed reviewed before ingestion
 
 Unknown or mixed listings must continue to fall into `import_issues` rather than being forced into a variant.

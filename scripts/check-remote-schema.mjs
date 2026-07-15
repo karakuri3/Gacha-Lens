@@ -19,6 +19,8 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 
 const checks = [
   { table: "market_listings", column: "matched_variant_id" },
+  { table: "market_listings", column: "last_observed_at" },
+  { table: "market_listing_observations", column: "observed_at" },
   { table: "x_reactions", column: "matched_variant_id" },
   { table: "restock_events", column: "matched_variant_id" },
   { table: "stock_reports", column: "matched_variant_id" },

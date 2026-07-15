@@ -17,6 +17,8 @@ loadEnvFile(".env.local");
 
 const catalog = await loadOfficialCatalog([...officialSchedule, ...officialProducts]);
 const generatedMarket = loadGeneratedMarketRaw();
+const generatedProductionRows = productionRecords(generatedMarket.records);
+const generatedIds = new Set(generatedProductionRows.map((row) => text(row.id) || stableId("market", row.source_url || row.url, row.title || row.name, row.listed_at || row.created_at || row.createdAt)).filter(Boolean));
 const existingUnlinked = await loadExistingUnlinkedMarketRows();
 const sampleRows = includeStaticSampleData() ? marketListingsRaw : [];
 const safeMarketRaw = productionRecords(dedupeRawById([...existingUnlinked, ...generatedMarket.records, ...sampleRows]));
@@ -33,6 +35,8 @@ const fetchIssueRows = generatedMarket.issues.map((issue) => ({
 }));
 
 await upsertRows("market_listings", dbMarketRows, { label: "upsert-market" });
+const observationRows = buildObservationRows(dbMarketRows.filter((row) => generatedIds.has(row.id)));
+await upsertRows("market_listing_observations", observationRows, { label: "upsert-market-observations" });
 await upsertRows("import_issues", [...issueRows, ...fetchIssueRows], { label: "upsert-market" });
 
 const reviewRequired = dbMarketRows.filter((row) => row.review_required).length;
@@ -46,6 +50,7 @@ console.log(JSON.stringify({
   ok: true,
   raw: safeMarketRaw.length,
   marketListings: dbMarketRows.length,
+  observations: observationRows.length,
   importIssues: issueRows.length + fetchIssueRows.length,
   fetchIssues: fetchIssueRows.length,
   reviewRequired,
@@ -102,10 +107,33 @@ function normalizeMarketListing(raw, catalog) {
     source_url: text(raw.source_url || raw.url),
     listed_at: nullableText(raw.listed_at || raw.created_at || raw.createdAt),
     sold_at: nullableText(raw.sold_at || raw.soldAt),
+    last_observed_at: nullableText(raw.last_observed_at || raw.observed_at || raw.fetched_at || raw.raw?.fetchedAt || raw.listed_at || new Date().toISOString()),
     confidence: reviewRequired ? 0.25 : classification.confidence,
     review_required: reviewRequired,
     raw,
   };
+}
+
+function buildObservationRows(rows) {
+  const observedAt = new Date();
+  observedAt.setUTCHours(0, 0, 0, 0);
+  const bucket = observedAt.toISOString().slice(0, 10).replace(/[^0-9]/g, "");
+  return rows
+    .filter((row) => Number.isFinite(row.price))
+    .map((row) => ({
+      id: stableId("market-observation", bucket, row.id),
+      listing_id: row.id,
+      variant_id: row.variant_id,
+      series_id: row.series_id,
+      price: row.price,
+      status: row.status,
+      source: row.source,
+      observed_at: row.last_observed_at || observedAt.toISOString(),
+      raw: {
+        classification_confidence: row.classification_confidence,
+        review_required: row.review_required,
+      },
+    }));
 }
 
 async function loadReferenceIds() {

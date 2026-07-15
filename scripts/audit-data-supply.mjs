@@ -7,6 +7,7 @@ import { fetchStockRaw } from "../lib/fetchers/stock-fetcher.js";
 import { fetchXReactionsRaw } from "../lib/fetchers/x-fetcher.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { productionRecords } from "./nonproduction-data.mjs";
+import { loadOfficialCatalog } from "./load-official-catalog.mjs";
 
 loadEnvFile(".env.local");
 
@@ -18,6 +19,7 @@ const xFetchEnabled = parseBoolean(process.env.X_FETCH_ENABLED ?? "false");
 const xSearchQueries = parseList(process.env.X_SEARCH_QUERIES);
 const xMonitorAccounts = parseList(process.env.X_MONITOR_ACCOUNTS);
 const rakutenMarketEnabled = parseBoolean(process.env.RAKUTEN_MARKET_FETCH_ENABLED ?? Boolean(process.env.RAKUTEN_APPLICATION_ID));
+const yahooShoppingEnabled = parseBoolean(process.env.YAHOO_SHOPPING_FETCH_ENABLED ?? Boolean(process.env.YAHOO_SHOPPING_APP_ID));
 const configured = {
   official: parseList(process.env.OFFICIAL_SOURCE_URLS),
   market: buildFeedSources({
@@ -64,6 +66,8 @@ const summary = {
     stockXCanUseBearerToken: stockXSearchEnabled && Boolean(process.env.X_BEARER_TOKEN),
     stockXDefaultQueriesActive: false,
     rakutenMarketEnabled,
+    yahooShoppingEnabled,
+    hasYahooShoppingAppId: Boolean(process.env.YAHOO_SHOPPING_APP_ID),
     hasRakutenApplicationId: Boolean(process.env.RAKUTEN_APPLICATION_ID),
     hasRakutenAccessKey: Boolean(process.env.RAKUTEN_ACCESS_KEY),
     rakutenKeywords: parseList(process.env.RAKUTEN_MARKET_KEYWORDS).length || 4,
@@ -79,9 +83,10 @@ const summary = {
 };
 
 if (shouldFetch) {
+  const catalog = await loadOfficialCatalog();
   const [official, market, x, stock] = await Promise.all([
     fetchOfficialRaw(),
-    fetchMarketListingsRaw(),
+    fetchMarketListingsRaw({ catalog }),
     fetchXReactionsRaw(),
     fetchStockRaw(),
   ]);
@@ -121,10 +126,12 @@ function buildNextActions(sources, generatedRaw) {
   const actions = [];
   const hasXBearerToken = Boolean(process.env.X_BEARER_TOKEN);
   const hasRakutenMarket = rakutenMarketEnabled && Boolean(process.env.RAKUTEN_APPLICATION_ID) && Boolean(process.env.RAKUTEN_ACCESS_KEY);
+  const hasYahooMarket = yahooShoppingEnabled && Boolean(process.env.YAHOO_SHOPPING_APP_ID);
   const hasStockXApi = stockXSearchEnabled && hasXBearerToken && (stockXSearchQueries.length || stockXMonitorAccounts.length);
   const hasXConfigured = sources.xRaw.length || (xFetchEnabled && hasXBearerToken && (xSearchQueries.length || xMonitorAccounts.length));
   if (!generatedRaw.official.records) actions.push("Run npm run fetch:official to refresh the official master snapshot.");
-  if (!sources.market.length && !hasRakutenMarket) actions.push("Add at least one approved market CSV/JSON export through MARKET_RAW_FEED_SOURCES_JSON or configure RAKUTEN_APPLICATION_ID plus RAKUTEN_ACCESS_KEY.");
+  if (!sources.market.length && !hasRakutenMarket && !hasYahooMarket) actions.push("Configure one safe market source: YAHOO_SHOPPING_APP_ID, Rakuten API credentials, or an approved MARKET_RAW_FEED_SOURCES_JSON feed.");
+  if (yahooShoppingEnabled && !process.env.YAHOO_SHOPPING_APP_ID) actions.push("Add YAHOO_SHOPPING_APP_ID or disable YAHOO_SHOPPING_FETCH_ENABLED.");
   if (rakutenMarketEnabled && process.env.RAKUTEN_APPLICATION_ID && !process.env.RAKUTEN_ACCESS_KEY) actions.push("Add RAKUTEN_ACCESS_KEY for the current Rakuten Ichiba Item Search API.");
   if (!sources.stock.length && !hasStockXApi) actions.push("Add at least one approved stock/restock CSV/JSON export through STOCK_RAW_FEED_SOURCES_JSON.");
   if (!generatedRaw.market.records) actions.push("Run npm run fetch:market after adding market exports.");

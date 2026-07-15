@@ -2,11 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { fetchMarketListingsRaw } from "../lib/fetchers/market-fetcher.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
+import { loadOfficialCatalog } from "./load-official-catalog.mjs";
 
 loadEnvFile(".env.local");
 
 const outputPath = getGeneratedDataPath("market-raw.json");
-const result = await fetchMarketListingsRaw();
+const catalog = await loadOfficialCatalog();
+const result = await fetchMarketListingsRaw({ catalog });
 writeJson(outputPath, result);
 console.log(JSON.stringify(summarize("market", result, outputPath), null, 2));
 
@@ -24,6 +26,7 @@ function summarize(source, result, filePath) {
     records: Array.isArray(result.records) ? result.records.length : 0,
     issues: Array.isArray(result.issues) ? result.issues.length : 0,
     feedResults: result.feedResults ?? [],
+    queries: Array.isArray(result.queryPlan) ? result.queryPlan.length : 0,
     outputPath: path.relative(process.cwd(), filePath),
   };
 }

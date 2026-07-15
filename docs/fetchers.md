@@ -107,10 +107,15 @@ Input:
 
 - `MARKET_RAW_FEED_URLS`: comma or newline separated approved JSON feeds.
 - `MARKET_RAW_FEED_SOURCES_JSON`: source config for approved CSV/JSON exports, feeds, or APIs.
+- `YAHOO_SHOPPING_APP_ID`: Yahoo Developer Network Client ID.
+- `YAHOO_SHOPPING_FETCH_ENABLED`: enables the Yahoo Shopping official API source.
 - `RAKUTEN_APPLICATION_ID`: Rakuten Web Service application ID.
 - `RAKUTEN_ACCESS_KEY`: Rakuten Web Service access key required by the current Ichiba Item Search API.
 - `RAKUTEN_AFFILIATE_ID`: optional Rakuten affiliate ID.
-- `RAKUTEN_MARKET_KEYWORDS`: comma or newline separated search keywords. Defaults to `ガチャ,ガチャガチャ,カプセルトイ,ガシャポン`.
+- `MARKET_QUERY_LIMIT_PER_RUN`: total automatic queries generated from the official master. Defaults to `24`.
+- `MARKET_QUERY_HOT_DAYS`: prioritization window before today. Defaults to `120`.
+- `MARKET_QUERY_LOOKBACK_DAYS`: secondary history window. Defaults to `540`.
+- `RAKUTEN_MARKET_QUERY_LIMIT`: Rakuten queries per run. Defaults to `8`.
 - `RAKUTEN_MARKET_HITS`: results per keyword, capped at 30. Defaults to `20`.
 - `RAKUTEN_REQUEST_DELAY_MS`: polite delay between Rakuten keyword requests. Defaults to `1200`.
 - `RAKUTEN_REQUEST_ORIGIN`: origin/referer sent for Rakuten allowed website checks. Defaults to `https://gachalens.vercel.app`.
@@ -119,9 +124,11 @@ Output:
 
 - `data/generated/market-raw.json`
 
-Market automatic scraping is not enabled as a primary path. The safe free path is to connect a CSV/JSON export, approved source, or approved API that returns explicit listing data, then feed it into the existing classifier. Mixed listings must continue to support `unknown` and human review.
+Market automatic scraping is not enabled as a primary path. Search terms are generated automatically from the official Supabase master and sent to the Yahoo Shopping and Rakuten official APIs. Approved CSV/JSON feeds remain supported. Mixed listings continue to support `unknown` and human review.
 
 Rakuten Ichiba can be used as an approved API source. `fetch:market` converts Rakuten Item Search results into `marketListingsRaw` records with `source: "rakuten"`, then the normal classifier links them to official variants when possible. If `RAKUTEN_APPLICATION_ID` is present but `RAKUTEN_ACCESS_KEY` is missing, the fetcher writes a review issue instead of failing the whole ingestion run.
+
+Yahoo Shopping can be used through the official Item Search API. Results are stored with `source: "yahoo_shopping"`. Both providers expose active asking prices, not proof of completed resale transactions, so confidence remains limited until an approved sold-listing feed is connected.
 
 Recommended source config shape:
 

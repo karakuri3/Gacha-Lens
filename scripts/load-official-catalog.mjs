@@ -3,8 +3,8 @@ import { fetchRows } from "./supabase-rest.mjs";
 export async function loadOfficialCatalog(fallbackRows = []) {
   try {
     const [series, variants] = await Promise.all([
-      fetchRows("series", { select: "id,slug,name,franchise,brand,official_url" }),
-      fetchRows("variants", { select: "id,slug,series_id,name,variant_type" }),
+      fetchRows("series", { select: "id,slug,name,franchise,brand,official_url,release_date,release_month,is_released" }),
+      fetchRows("variants", { select: "id,slug,series_id,name,variant_type,release_date,released" }),
     ]);
     if (series.length && variants.length) return catalogShape(series, variants);
   } catch (error) {
@@ -20,6 +20,9 @@ function catalogFromRaw(rows) {
     name: text(raw.name || raw.title || raw.product_name),
     franchise: text(raw.franchise || raw.character || raw.work_name || raw.ip),
     brand: text(raw.brand || raw.maker || raw.manufacturer),
+    release_date: text(raw.release_date || raw.releaseDate),
+    release_month: text(raw.release_month || raw.releaseMonth),
+    is_released: Boolean(raw.is_released ?? raw.released),
   }));
   const variants = rows.flatMap((row) => asArray(row.variants || row.items || row.lineup || row.line_up).map((variant) => ({
     id: text(variant.id || variant.variant_id),
@@ -27,6 +30,8 @@ function catalogFromRaw(rows) {
     series_id: text(row.series_id || row.id || row.slug),
     name: text(variant.name || variant.title || variant.variant_name),
     variant_type: text(variant.variant_type) || "normal",
+    release_date: text(variant.release_date || variant.releaseDate || row.release_date || row.releaseDate),
+    released: Boolean(variant.released ?? row.is_released ?? row.released),
   })));
   return catalogShape(series, variants);
 }

@@ -29,7 +29,7 @@ Next.js 16 系のルール確認として、実装確認前に `node_modules/nex
 - 管理 UI/API: `app/review/page.js`, `app/review/login/route.js`, `app/review/logout/route.js`, `app/api/import-issues/route.js`, `lib/admin-auth.js`
 - データ集約: `lib/series.js`, `lib/data/supabase-gacha-repository.js`, `lib/data/gacha-repository.js`, `lib/data/ingestion-adapters.js`
 - ドメインロジック: `lib/domain/market-summary.js`, `lib/domain/trend-summary.js`, `lib/domain/stock-summary.js`, `lib/domain/forecast-score.js`, `lib/domain/public-display.js`, `lib/domain/listing-classifier.js`
-- fetcher: `lib/fetchers/official-fetcher.js`, `lib/fetchers/x-fetcher.js`, `lib/fetchers/market-fetcher.js`, `lib/fetchers/stock-fetcher.js`
+- fetcher: `lib/fetchers/official-fetcher.js`, `lib/fetchers/x-fetcher.js`, `lib/fetchers/market-fetcher.js`, `lib/fetchers/yahoo-shopping-fetcher.js`, `lib/fetchers/rakuten-market-fetcher.js`, `lib/fetchers/stock-fetcher.js`
 - upsert/ingestion: `scripts/run-ingestion.mjs`, `scripts/run-official-ingestion.mjs`, `scripts/run-market-ingestion.mjs`, `scripts/run-x-ingestion.mjs`, `scripts/run-stock-ingestion.mjs`, `scripts/upsert-official-data.mjs`, `scripts/upsert-market-data.mjs`, `scripts/upsert-x-reactions.mjs`, `scripts/upsert-stock-data.mjs`
 - Supabase: `supabase/schema.sql`, `supabase/functions/ingest/index.ts`, `supabase/cron-ingestion.sql`
 - 運用: `.github/workflows/gacha-ingestion.yml`, `docs/supabase-cron-ingestion.md`, `docs/fetchers.md`, `docs/daily-operations-checklist.md`
@@ -52,6 +52,7 @@ Next.js 16 系のルール確認として、実装確認前に `node_modules/nex
 - `series`
 - `variants`
 - `market_listings`
+- `market_listing_observations`
 - `x_reactions`
 - `restock_events`
 - `stock_reports`
@@ -165,7 +166,7 @@ stock/restock は `scripts/collect-stock-data.mjs` と `lib/fetchers/stock-fetch
 
 ### market の安全性
 
-`lib/fetchers/market-fetcher.js` は `MARKET_RAW_FEED_SOURCES_JSON` / `MARKET_RAW_FEED_URLS` から承認済み JSON/API/export feed を読む方針です。無制御な marketplace scraping は主系統にしていません。これは安全面では良い状態ですが、相場精度を上げるには信頼できる feed/API/export が必要です。
+`lib/fetchers/market-fetcher.js` は公式マスタから検索語を自動生成し、Yahoo!ショッピング公式API、楽天市場公式API、`MARKET_RAW_FEED_SOURCES_JSON` の承認済み feed を統合します。無制御な marketplace scraping は主系統にしていません。各取得時点は `market_listing_observations` に蓄積します。
 
 ### `/supabase-series`
 
