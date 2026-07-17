@@ -1,5 +1,6 @@
 import "./globals.css";
 import Header from "@/components/Header";
+import AppSidebar from "@/components/AppSidebar";
 import Footer from "@/components/Footer";
 
 export const metadata = {
@@ -12,8 +13,13 @@ export default function RootLayout({ children }) {
     <html lang="ja">
       <body>
         <Header />
-        {children}
-        <Footer />
+        <div className="app-frame">
+          <AppSidebar />
+          <div className="app-content">
+            {children}
+            <Footer />
+          </div>
+        </div>
       </body>
     </html>
   );

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import PriceTrendChart from "@/components/PriceTrendChart";
-import { getRankingSeries, getSeriesCatalogCounts } from "@/lib/series";
+import { getRankingSeries } from "@/lib/series";
 import { variantHref } from "@/lib/variant-url";
 import {
   customerTags,
@@ -20,10 +20,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function Home() {
-  const [releasedSeries, upcomingSeries, catalogCounts] = await Promise.all([
+  const [releasedSeries, upcomingSeries] = await Promise.all([
     getRankingSeries("released"),
     getRankingSeries("upcoming"),
-    getSeriesCatalogCounts(),
   ]);
   const hot = releasedSeries
     .filter(isCirculatingItem)
@@ -32,23 +31,17 @@ export default async function Home() {
     .filter((item) => !item.is_released && item.variant_type !== "provisional" && (item.forecast_score ?? 0) > 0)
     .sort((a, b) => upcomingPriority(b) - upcomingPriority(a));
   const spotlight = hot[0];
+  const highPriceItems = [...hot]
+    .filter((item) => Number.isFinite(item.market_summary?.single))
+    .sort((a, b) => b.market_summary.single - a.market_summary.single)
+    .slice(0, 5);
   const stockMoves = hot.filter(hasAvailabilitySignal).slice(0, 5);
   const movementItems = (stockMoves.length ? stockMoves : hot.slice(0, 5));
 
   return (
     <main className="site-main dashboard-main">
       <div className="site-shell">
-        <section className="dashboard-titlebar">
-          <div>
-            <p className="eyebrow">GACHA PULSE</p>
-            <h1>いま注目のガチャが、すぐ分かる。</h1>
-          </div>
-          <div className="dashboard-counts" aria-label="掲載状況">
-            <Count label="収録単品" value={catalogCounts?.all ?? 0} />
-            <Count label="動きあり" value={hot.length} />
-            <Count label="発売予定" value={catalogCounts?.upcoming ?? upcoming.length} />
-          </div>
-        </section>
+        <h1 className="sr-only">いま注目のガチャがすぐ分かる Gacha Lens</h1>
 
         <div className="dashboard-layout">
           <div className="dashboard-primary">
@@ -63,14 +56,25 @@ export default async function Home() {
               </div>
             </section>
 
-            <section className="dashboard-panel">
-              <PanelHead title="いま動きがある単品" meta="出品・売れ行きの観測順" href="/ranking" />
-              <div className="dashboard-table" role="list">
-                {hot.slice(0, 7).map((item, index) => (
-                  <MovementRow key={item.slug} item={item} rank={index + 1} />
-                ))}
-              </div>
-            </section>
+            <div className="dashboard-lower-grid">
+              <section className="dashboard-panel">
+                <PanelHead title="単品相場 上位" meta="観測価格順" href="/series?filter=market&sort=market" />
+                <div className="dashboard-mini-table" role="list">
+                  {highPriceItems.map((item, index) => (
+                    <CompactMarketRow key={item.slug} item={item} rank={index + 1} mode="price" />
+                  ))}
+                </div>
+              </section>
+
+              <section className="dashboard-panel">
+                <PanelHead title="売れ行き・流通の動き" meta="直近の観測" href="/ranking" />
+                <div className="dashboard-mini-table" role="list">
+                  {hot.slice(0, 5).map((item, index) => (
+                    <CompactMarketRow key={item.slug} item={item} rank={index + 1} mode="movement" />
+                  ))}
+                </div>
+              </section>
+            </div>
           </div>
 
           <aside className="dashboard-rail">
@@ -98,10 +102,6 @@ export default async function Home() {
   );
 }
 
-function Count({ label, value }) {
-  return <div><span>{label}</span><strong>{Number(value).toLocaleString("ja-JP")}</strong></div>;
-}
-
 function PanelHead({ title, meta, href }) {
   return (
     <div className="dashboard-panel__head">
@@ -114,28 +114,31 @@ function PanelHead({ title, meta, href }) {
 function DashboardSpotlight({ item }) {
   const tags = customerTags(item, true);
   return (
-    <Link href={variantHref(item)} className="dashboard-panel dashboard-spotlight">
-      <div className="dashboard-spotlight__image">
-        <ProductImage src={item.image_url} alt={item.name} priority />
-        <span>注目 1位</span>
-      </div>
-      <div className="dashboard-spotlight__copy">
-        <p className="eyebrow">TODAY&apos;S PICK</p>
-        <h2>{item.name}</h2>
-        <p>{item.series_name} / {item.rarity}</p>
-        <div className="dashboard-spotlight__metrics">
-          <Metric label="価格" value={formatYen(item.price)} />
-          <Metric label="単品相場" value={formatYen(item.market_summary?.single)} accent />
-          <Metric label="売れ行き" value={sellThroughLabel(item.market_summary)} />
-          <Metric label="注目度" value={formatScore(watchScore(item))} accent />
+    <section className="dashboard-panel dashboard-spotlight-panel">
+      <PanelHead title="いま一番注目の商品" meta="価格・売れ行き・在庫を総合" href={variantHref(item)} />
+      <Link href={variantHref(item)} className="dashboard-spotlight">
+        <div className="dashboard-spotlight__image">
+          <ProductImage src={item.image_url} alt={item.name} priority />
+          <span>注目 1位</span>
         </div>
-        {tags.length ? <div className="tag-row">{tags.slice(0, 3).map((tag) => <span key={tag} className="tag tag--signal">{tag}</span>)}</div> : null}
-      </div>
-      <div className="dashboard-spotlight__chart">
-        <div className="dashboard-chart-title"><strong>価格の動き</strong><span>実データのみ</span></div>
-        <PriceTrendChart item={item} />
-      </div>
-    </Link>
+        <div className="dashboard-spotlight__copy">
+          <p className="eyebrow">TODAY&apos;S PICK</p>
+          <h2>{item.name}</h2>
+          <p>{item.series_name} / {item.rarity}</p>
+          <div className="dashboard-spotlight__metrics">
+            <Metric label="価格" value={formatYen(item.price)} />
+            <Metric label="単品相場" value={formatYen(item.market_summary?.single)} accent />
+            <Metric label="売れ行き" value={sellThroughLabel(item.market_summary)} />
+            <Metric label="注目度" value={formatScore(watchScore(item))} accent />
+          </div>
+          {tags.length ? <div className="tag-row">{tags.slice(0, 3).map((tag) => <span key={tag} className="tag tag--signal">{tag}</span>)}</div> : null}
+        </div>
+        <div className="dashboard-spotlight__chart">
+          <div className="dashboard-chart-title"><strong>価格の動き</strong><span>実データのみ</span></div>
+          <PriceTrendChart item={item} />
+        </div>
+      </Link>
+    </section>
   );
 }
 
@@ -155,17 +158,18 @@ function RankingTile({ item, rank }) {
   );
 }
 
-function MovementRow({ item, rank }) {
+function CompactMarketRow({ item, rank, mode }) {
   const active = item.active_listing_count ?? item.market_summary?.active_listing_count ?? 0;
   const sold = item.sold_count ?? item.market_summary?.sold_count ?? 0;
   return (
-    <Link href={variantHref(item)} className="dashboard-table__row" role="listitem">
+    <Link href={variantHref(item)} className="dashboard-mini-row" role="listitem">
       <span>{rank}</span>
       <div className="dashboard-table__image"><ProductImage src={item.image_url} alt={item.name} /></div>
       <div><strong>{item.name}</strong><small>{item.series_name}</small></div>
-      <b>{formatYen(item.market_summary?.single)}</b>
-      <small>出品 {active} / 売れ {sold}</small>
-      <em>{formatScore(watchScore(item))}</em>
+      <div className="dashboard-mini-row__value">
+        <b>{mode === "price" ? formatYen(item.market_summary?.single) : formatScore(watchScore(item))}</b>
+        <small>{mode === "price" ? `出品 ${active}件` : `出品 ${active} / 売れ ${sold}`}</small>
+      </div>
     </Link>
   );
 }
