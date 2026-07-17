@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, ChartNoAxesCombined, CircleDotDashed, Library, Search } from "lucide-react";
+import { CalendarDays, ChartNoAxesCombined, CircleDotDashed, Library, Search, Star } from "lucide-react";
 
 export default function Header() {
   return (
@@ -20,6 +20,7 @@ export default function Header() {
         </form>
 
         <nav className="header-actions" aria-label="クイックメニュー">
+          <Link href="/favorites" title="お気に入り"><Star size={19} /><span>お気に入り</span></Link>
           <Link href="/ranking" title="ランキング"><ChartNoAxesCombined size={19} /><span>ランキング</span></Link>
           <Link href="/schedule" title="発売予定"><CalendarDays size={19} /><span>発売予定</span></Link>
           <Link href="/series" title="ガチャ図鑑"><Library size={19} /><span>図鑑</span></Link>

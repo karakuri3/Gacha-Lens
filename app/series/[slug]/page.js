@@ -6,6 +6,7 @@ import SeriesCard from "@/components/SeriesCard";
 import MarketplaceLinks from "@/components/MarketplaceLinks";
 import CommunityReportForm from "@/components/CommunityReportForm";
 import PriceTrendChart from "@/components/PriceTrendChart";
+import FavoriteButton from "@/components/FavoriteButton";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
@@ -47,24 +48,21 @@ export default async function VariantDetailPage({ params }) {
   return (
     <main className="site-main">
       <div className="site-shell">
-        <div className="tag-row" style={{ marginBottom: 18 }}>
-          <Link href="/series" className="pill-link">単品一覧</Link>
-          <Link href={isReleased ? "/ranking?tab=released" : "/ranking?tab=upcoming"} className="pill-link">
-            {isReleased ? "発売中ランキング" : "発売予定ランキング"}
-          </Link>
-        </div>
+        <nav className="detail-breadcrumbs" aria-label="パンくずリスト">
+          <Link href="/">ホーム</Link><span>/</span><Link href="/series">ガチャ図鑑</Link><span>/</span><strong>{item.name}</strong>
+        </nav>
 
         <section className="detail-hero">
           <div className="detail-image">
             <ProductImage src={item.image_url} alt={item.name} priority />
           </div>
-          <div className="card detail-panel">
+          <div className="detail-panel">
             <div className="tag-row">
               <span className="tag">{isReleased ? "発売中" : "発売予定"}</span>
               <span className="tag">{item.rarity}</span>
               <span className="tag">{formatSchedule(item)}</span>
             </div>
-            <h1 className="page-title" style={{ marginTop: 18, fontSize: "clamp(30px, 4vw, 48px)" }}>{item.name}</h1>
+            <h1 className="page-title detail-title">{item.name}</h1>
             <p className="page-lead" style={{ marginTop: 12 }}>{item.series_name}</p>
 
             <div className="metric-grid" style={{ marginTop: 22 }}>
@@ -78,14 +76,30 @@ export default async function VariantDetailPage({ params }) {
                 ))}
               </div>
             ) : null}
-            <div style={{ marginTop: 20 }}>
+            <div className="detail-actions">
+              <FavoriteButton item={{
+                slug: item.slug,
+                name: item.name,
+                series_name: item.series_name,
+                image_url: item.image_url,
+                is_released: isReleased,
+                primary_value: isReleased ? formatYen(item.market_summary?.single) : `${formatSchedule(item)}・${formatYen(item.price)}`,
+              }} />
               <MarketplaceLinks item={item} />
             </div>
           </div>
         </section>
 
+        <nav className="detail-section-nav" aria-label="商品詳細メニュー">
+          <a href="#overview">基本情報</a>
+          {isReleased ? <a href="#price">価格の動き</a> : null}
+          <a href="#lineup">ラインナップ</a>
+          <a href="#stock">在庫情報</a>
+          <a href="#report">情報を報告</a>
+        </nav>
+
         {isReleased ? (
-          <section className="card panel price-history-panel">
+          <section id="price" className="card panel price-history-panel">
             <div className="section-head">
               <div>
                 <p className="eyebrow">PRICE PULSE</p>
@@ -97,13 +111,13 @@ export default async function VariantDetailPage({ params }) {
           </section>
         ) : null}
 
-        <section className="detail-sections">
+        <section id="overview" className="detail-sections">
           <div className="card panel">
             <h2>{isReleased ? "判断ポイント" : "発売前の見方"}</h2>
             {isReleased ? <ReleasedSummary item={item} /> : <UpcomingSummary item={item} />}
           </div>
 
-          <div className="card panel">
+          <div id="lineup" className="card panel">
             <h2>同じシリーズの単品</h2>
             <ul className="plain-list">
               {(item.sibling_variants ?? []).map((entry) => (
@@ -117,7 +131,7 @@ export default async function VariantDetailPage({ params }) {
           </div>
         </section>
 
-        <details className="card panel community-panel community-disclosure">
+        <details id="report" className="card panel community-panel community-disclosure">
           <summary>
             <span>価格・在庫を報告</span>
             <small>確認後に反映</small>
@@ -231,7 +245,7 @@ function StockPanel({ item }) {
   const summary = item.stock_summary || item.availability_summary;
   const label = stockStatusLabel(summary);
   return (
-    <div className="card panel">
+    <div id="stock" className="card panel">
       <h2>在庫状況</h2>
       <div className={`stock-signal stock-signal--${summary?.latest_stock_status || "unknown"}`} style={{ marginBottom: 12 }}>
         <strong>{label}</strong>

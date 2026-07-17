@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Activity, CalendarDays, ChartNoAxesCombined, Home, Library, PackageSearch, SearchCheck } from "lucide-react";
+import { Activity, CalendarDays, ChartNoAxesCombined, Home, Library, PackageSearch, SearchCheck, Star } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 const primaryItems = [
@@ -9,6 +9,7 @@ const primaryItems = [
   { label: "注目ランキング", href: "/ranking", icon: ChartNoAxesCombined },
   { label: "新作・発売予定", href: "/schedule", icon: CalendarDays },
   { label: "ガチャ図鑑", href: "/series", icon: Library },
+  { label: "お気に入り", href: "/favorites", icon: Star },
 ];
 
 const discoveryItems = [
