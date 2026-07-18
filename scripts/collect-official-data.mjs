@@ -13,6 +13,7 @@ const marketPriorityOfficialUrls = await loadMarketPriorityOfficialUrls();
 const result = await fetchOfficialRaw({
   previousRecords: previous.records,
   detailCursor: previous.detailCursor,
+  sourceCursors: previous.sourceCursors,
   knownDetailedOfficialUrls,
   priorityDetailUrls: marketPriorityOfficialUrls,
 });
@@ -20,15 +21,16 @@ writeJson(outputPath, result);
 console.log(JSON.stringify(summarize("official", result, outputPath), null, 2));
 
 function readExistingResult(filePath) {
-  if (!fs.existsSync(filePath)) return { records: [], detailCursor: 0 };
+  if (!fs.existsSync(filePath)) return { records: [], detailCursor: 0, sourceCursors: {} };
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
     return {
       records: Array.isArray(parsed.records) ? parsed.records : [],
       detailCursor: Number.isFinite(parsed.detailCursor) ? parsed.detailCursor : 0,
+      sourceCursors: parsed.sourceCursors && typeof parsed.sourceCursors === "object" ? parsed.sourceCursors : {},
     };
   } catch {
-    return { records: [], detailCursor: 0 };
+    return { records: [], detailCursor: 0, sourceCursors: {} };
   }
 }
 
@@ -75,6 +77,7 @@ function summarize(source, result, filePath) {
     detailQueue: result.detailQueue ?? 0,
     detailFetched: result.detailFetched ?? 0,
     remainingDetails: result.remainingDetails ?? 0,
+    sourceCoverage: result.sourceCoverage ?? {},
     knownDetailedInDatabase: knownDetailedOfficialUrls.length,
     marketPriorityDetails: marketPriorityOfficialUrls.length,
     issues: Array.isArray(result.issues) ? result.issues.length : 0,

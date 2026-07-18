@@ -51,7 +51,7 @@ const summary = {
   ok: true,
   mode: shouldFetch ? "fetch" : "config",
   configuredSources: {
-    official: configured.official.length || 2,
+    official: configured.official.length || 3,
     market: configured.market.length,
     xRawFeeds: configured.xRaw.length,
     stock: configured.stock.length,
@@ -74,7 +74,11 @@ const summary = {
   },
   generatedRaw: generated,
   sources: {
-    official: configured.official.length ? configured.official : ["https://gashapon.jp/schedule/", "https://gashapon.jp/products/"],
+    official: configured.official.length ? configured.official : [
+      "https://gashapon.jp/schedule/",
+      "https://gashapon.jp/products/",
+      "https://www.takaratomy-arts.co.jp/items/gacha/search.html?order=release&p=1&sort=0",
+    ],
     market: sanitizeSources(configured.market),
     xRaw: sanitizeSources(configured.xRaw),
     stock: sanitizeSources(configured.stock),

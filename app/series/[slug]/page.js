@@ -6,7 +6,9 @@ import SeriesCard from "@/components/SeriesCard";
 import MarketplaceLinks from "@/components/MarketplaceLinks";
 import CommunityReportForm from "@/components/CommunityReportForm";
 import PriceTrendChart from "@/components/PriceTrendChart";
+import PriceHistoryTable from "@/components/PriceHistoryTable";
 import FavoriteButton from "@/components/FavoriteButton";
+import { variantHref } from "@/lib/variant-url";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
@@ -44,17 +46,29 @@ export default async function VariantDetailPage({ params }) {
     .filter((entry) => Boolean(entry.is_released) === isReleased)
     .slice(0, 3);
   const tags = customerTags(item, isReleased);
+  const siblingImages = (item.sibling_variants ?? []).filter((entry) => entry.image).slice(0, 5);
 
   return (
     <main className="site-main">
       <div className="site-shell">
         <nav className="detail-breadcrumbs" aria-label="パンくずリスト">
-          <Link href="/">ホーム</Link><span>/</span><Link href="/series">ガチャ図鑑</Link><span>/</span><strong>{item.name}</strong>
+          <Link href="/">ホーム</Link><span>/</span><Link href="/series">ガチャ一覧</Link><span>/</span><strong>{item.name}</strong>
         </nav>
 
         <section className="detail-hero">
-          <div className="detail-image">
-            <ProductImage src={item.image_url} alt={item.name} priority />
+          <div className="detail-media">
+            <div className="detail-image">
+              <ProductImage src={item.image_url} alt={item.name} priority />
+            </div>
+            {siblingImages.length > 1 ? (
+              <div className="detail-thumbnails" aria-label="同じシリーズの画像">
+                {siblingImages.map((entry) => (
+                  <Link key={entry.id} href={variantHref(entry)} title={entry.name}>
+                    <ProductImage src={entry.image} alt={entry.name} />
+                  </Link>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="detail-panel">
             <div className="tag-row">
@@ -64,6 +78,13 @@ export default async function VariantDetailPage({ params }) {
             </div>
             <h1 className="page-title detail-title">{item.name}</h1>
             <p className="page-lead" style={{ marginTop: 12 }}>{item.series_name}</p>
+
+            <dl className="detail-facts">
+              <div><dt>メーカー</dt><dd>{item.brand || "未登録"}</dd></div>
+              <div><dt>カテゴリ</dt><dd>{item.category || "未登録"}</dd></div>
+              <div><dt>発売</dt><dd>{formatSchedule(item)}</dd></div>
+              <div><dt>定価</dt><dd>{formatYen(item.price)}</dd></div>
+            </dl>
 
             <div className="metric-grid" style={{ marginTop: 22 }}>
               {isReleased ? <ReleasedHeroMetrics item={item} /> : <UpcomingHeroMetrics item={item} />}
@@ -94,6 +115,7 @@ export default async function VariantDetailPage({ params }) {
           <a href="#overview">基本情報</a>
           {isReleased ? <a href="#price">価格の動き</a> : null}
           <a href="#lineup">ラインナップ</a>
+          {(item.restock_events ?? []).length ? <a href="#restock">再販・再入荷</a> : null}
           <a href="#stock">在庫情報</a>
           <a href="#report">情報を報告</a>
         </nav>
@@ -108,6 +130,7 @@ export default async function VariantDetailPage({ params }) {
               <span className="data-note">参考価格</span>
             </div>
             <PriceTrendChart item={item} />
+            <PriceHistoryTable observations={item.market_observations ?? []} />
           </section>
         ) : null}
 
@@ -119,15 +142,14 @@ export default async function VariantDetailPage({ params }) {
 
           <div id="lineup" className="card panel">
             <h2>同じシリーズの単品</h2>
-            <ul className="plain-list">
+            <div className="lineup-grid">
               {(item.sibling_variants ?? []).map((entry) => (
-                <li key={entry.id}>
-                  <strong>{entry.name}</strong>
-                  <br />
-                  <span style={{ color: "var(--muted)" }}>{entry.rarity} / {entry.role}</span>
-                </li>
+                <Link key={entry.id} href={variantHref(entry)}>
+                  <span className="lineup-grid__image"><ProductImage src={entry.image || item.image_url} alt={entry.name} /></span>
+                  <span><strong>{entry.name}</strong><small>{entry.rarity} / {entry.role}</small></span>
+                </Link>
               ))}
-            </ul>
+            </div>
           </div>
         </section>
 
@@ -141,6 +163,7 @@ export default async function VariantDetailPage({ params }) {
 
         <section className="detail-sections">
           <StockPanel item={item} />
+          {(item.restock_events ?? []).length ? <RestockPanel item={item} /> : null}
           <div className="card panel">
             <h2>{isReleased ? "相場の内訳" : "発売前の注意"}</h2>
             {isReleased ? <MarketBreakdown item={item} /> : <UpcomingNotice item={item} />}
@@ -254,6 +277,34 @@ function StockPanel({ item }) {
       <p className="section-sub">
         店頭やオンラインで確認できた在庫の動きを表示します。
       </p>
+      {(item.stock_reports ?? []).length ? (
+        <div className="detail-signal-list">
+          {(item.stock_reports ?? []).slice(0, 5).map((report) => (
+            <div key={report.id || report.reported_at}>
+              <strong>{report.status_label || stockStatusLabel({ latest_stock_status: report.status })}</strong>
+              <span>{[report.region, report.shop_name].filter(Boolean).join(" / ") || "場所未登録"}</span>
+              <time>{formatObservedAt(report.reported_at)}</time>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RestockPanel({ item }) {
+  return (
+    <div id="restock" className="card panel">
+      <h2>再販・再入荷</h2>
+      <div className="detail-signal-list">
+        {(item.restock_events ?? []).slice(0, 5).map((event) => (
+          <div key={event.id || event.reported_at}>
+            <strong>{event.event_label || (event.event_type === "refill" ? "補充" : "再入荷")}</strong>
+            <span>{[event.region, event.shop_name].filter(Boolean).join(" / ") || "場所未登録"}</span>
+            <time>{formatObservedAt(event.reported_at)}</time>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

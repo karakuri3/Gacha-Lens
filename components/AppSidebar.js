@@ -1,14 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Activity, CalendarDays, ChartNoAxesCombined, Home, Library, PackageSearch, SearchCheck, Star } from "lucide-react";
+import { Activity, CalendarDays, ChartNoAxesCombined, Home, Library, MapPin, PackageSearch, RefreshCcw, SearchCheck, Shapes, Star } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 const primaryItems = [
   { label: "ホーム", href: "/", icon: Home, exact: true },
-  { label: "注目ランキング", href: "/ranking", icon: ChartNoAxesCombined },
+  { label: "相場ランキング", href: "/ranking", icon: ChartNoAxesCombined },
   { label: "新作・発売予定", href: "/schedule", icon: CalendarDays },
-  { label: "ガチャ図鑑", href: "/series", icon: Library },
+  { label: "ガチャ一覧", href: "/series", icon: Library },
+  { label: "カテゴリ一覧", href: "/categories", icon: Shapes },
+  { label: "再販・再入荷", href: "/restocks", icon: RefreshCcw },
+  { label: "在庫目撃情報", href: "/stock", icon: MapPin },
   { label: "お気に入り", href: "/favorites", icon: Star },
 ];
 
@@ -25,10 +28,6 @@ export default function AppSidebar() {
     <aside className="app-sidebar">
       <SidebarGroup label="メニュー" items={primaryItems} pathname={pathname} />
       <SidebarGroup label="ガチャを探す" items={discoveryItems} pathname={pathname} />
-      <div className="sidebar-status">
-        <span className="sidebar-status__dot" aria-hidden="true" />
-        <div><strong>データ更新中</strong><small>公式・市場・在庫情報を反映</small></div>
-      </div>
     </aside>
   );
 }

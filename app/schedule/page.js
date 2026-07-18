@@ -86,8 +86,8 @@ export default async function SchedulePage({ searchParams }) {
                   </div>
                 </div>
                 <div className="grid grid--cards">
-                  {group.items.map((item) => (
-                    <ScheduleCard key={item.slug} item={item} />
+                  {group.items.map((item, index) => (
+                    <ScheduleCard key={item.slug} item={item} priority={index < 4} />
                   ))}
                 </div>
               </section>
@@ -101,7 +101,7 @@ export default async function SchedulePage({ searchParams }) {
   );
 }
 
-function ScheduleCard({ item }) {
+function ScheduleCard({ item, priority = false }) {
   const week = normalizeWeek(item.schedule_week);
   const metrics = buildUpcomingCustomerMetrics(item).filter((metric) => scheduleMetricLabels.includes(metric.label));
   const tags = customerTags(item, false);
@@ -109,7 +109,7 @@ function ScheduleCard({ item }) {
   return (
     <Link href={variantHref(item)} className="card product-card">
       <div className="product-image">
-        <ProductImage src={item.image_url} alt={item.name} />
+        <ProductImage src={item.image_url} alt={item.name} priority={priority} />
       </div>
       <div>
         <div className="tag-row" style={{ marginBottom: 10 }}>

@@ -1,15 +1,36 @@
+"use client";
+
+import { useState } from "react";
+
 function yen(value) {
   return Number.isFinite(value) ? `${Math.round(value).toLocaleString("ja-JP")}円` : "--";
 }
 
-export default function PriceTrendChart({ item }) {
+export default function PriceTrendChart({ item, compact = false }) {
+  const [period, setPeriod] = useState(30);
   const timeline = buildTimeline(item.market_observations ?? []);
+  const visibleTimeline = filterTimeline(timeline, compact ? 30 : period);
   const currentPrices = (item.market_listings ?? [])
     .map((listing) => Number(listing.price))
     .filter(Number.isFinite)
     .sort((a, b) => a - b);
 
-  if (timeline.length >= 2) return <TimelineChart points={timeline} />;
+  if (timeline.length >= 2) {
+    return (
+      <div className={compact ? "price-chart-shell is-compact" : "price-chart-shell"}>
+        {!compact ? (
+          <div className="price-period-tabs" aria-label="表示期間">
+            {[7, 30, 90].map((days) => (
+              <button key={days} type="button" className={period === days ? "is-active" : ""} onClick={() => setPeriod(days)}>
+                {days}日
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <TimelineChart points={visibleTimeline.length >= 2 ? visibleTimeline : timeline.slice(-2)} />
+      </div>
+    );
+  }
   if (currentPrices.length) return <RangeChart prices={currentPrices} observedAt={item.market_summary?.last_observed_at} />;
 
   return (
@@ -52,7 +73,11 @@ function TimelineChart({ points }) {
         <line x1={inset.left} y1={height - inset.bottom} x2={width - inset.right} y2={height - inset.bottom} className="price-chart__axis" />
         <polygon points={area} className="price-chart__area" />
         <polyline points={line} className="price-chart__line" pathLength="1" />
-        {coords.map((point) => <circle key={point.date} cx={point.x} cy={point.y} r="4" className="price-chart__dot" />)}
+        {coords.map((point) => (
+          <circle key={point.date} cx={point.x} cy={point.y} r="5" className="price-chart__dot" tabIndex="0" aria-label={`${formatDate(point.date)} ${yen(point.price)}`}>
+            <title>{`${formatDate(point.date)} ${yen(point.price)}`}</title>
+          </circle>
+        ))}
         <text x={inset.left} y={height - 12} className="price-chart__label">{formatDate(points[0].date)}</text>
         <text x={width - inset.right} y={height - 12} textAnchor="end" className="price-chart__label">{formatDate(points.at(-1).date)}</text>
       </svg>
@@ -98,8 +123,14 @@ function buildTimeline(observations) {
   }
   return [...groups.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .slice(-30)
     .map(([date, values]) => ({ date, price: median(values) }));
+}
+
+function filterTimeline(points, days) {
+  if (!points.length) return [];
+  const latest = new Date(`${points.at(-1).date}T23:59:59Z`).getTime();
+  const cutoff = latest - (days - 1) * 86400000;
+  return points.filter((point) => new Date(`${point.date}T00:00:00Z`).getTime() >= cutoff);
 }
 
 function median(values) {

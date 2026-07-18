@@ -11,14 +11,18 @@ Input:
 - `OFFICIAL_SOURCE_URLS`: comma or newline separated official URLs.
 - `OFFICIAL_DETAIL_FETCH_LIMIT`: maximum detail pages followed from schedule cards per run.
 - `OFFICIAL_DETAIL_FETCH_DELAY_MS`: small delay between detail page requests.
+- `OFFICIAL_TARTS_PAGES_PER_RUN`: Takara Tomy Arts history pages visited per run. Defaults to `4`.
+- `OFFICIAL_TARTS_MAX_PAGE`: temporary safety cap used until the live product count is parsed.
 - `OFFICIAL_STRICT_DETAIL_REVIEW`: set `true` only when schedule-only cards should create a review issue.
 
 Recommended first value:
 
 ```bash
-OFFICIAL_SOURCE_URLS=https://gashapon.jp/schedule/
-OFFICIAL_DETAIL_FETCH_LIMIT=20
-OFFICIAL_DETAIL_FETCH_DELAY_MS=150
+OFFICIAL_SOURCE_URLS=https://gashapon.jp/schedule/,https://gashapon.jp/products/,https://www.takaratomy-arts.co.jp/items/gacha/search.html?order=release&p=1&sort=0
+OFFICIAL_DETAIL_FETCH_LIMIT=60
+OFFICIAL_DETAIL_FETCH_DELAY_MS=250
+OFFICIAL_TARTS_PAGES_PER_RUN=4
+OFFICIAL_TARTS_MAX_PAGE=80
 OFFICIAL_STRICT_DETAIL_REVIEW=false
 ```
 
@@ -36,7 +40,9 @@ fetch official URL
   -> series / variants / import_issues
 ```
 
-The Gashapon schedule page is parsed as the discovery source. Detail pages linked from schedule cards are followed up to `OFFICIAL_DETAIL_FETCH_LIMIT` so variants can be generated from the official lineup images. A small `OFFICIAL_DETAIL_FETCH_DELAY_MS` keeps high-frequency runs polite. Schedule-only cards stay `review_required` in raw data, but they do not flood `import_issues` unless strict review mode is enabled.
+The Gashapon schedule/products pages and the Takara Tomy Arts gacha catalog are parsed as official discovery sources. Takara Tomy Arts page 1 is refreshed every run, while a persisted cursor walks four history pages at a time. The current catalog is about 64 pages, so an hourly job completes a discovery pass in roughly 16 runs without sending a burst of thousands of requests.
+
+Detail pages linked from both manufacturers are followed up to `OFFICIAL_DETAIL_FETCH_LIMIT`. Previously discovered official URLs are kept in the detail queue, so older provisional variants continue to be replaced even after their catalog page is no longer in the current page batch. Gashapon variant images and Takara Tomy Arts lineup text become the canonical variant master. A small `OFFICIAL_DETAIL_FETCH_DELAY_MS` keeps high-frequency runs polite. Discovery-only products stay `review_required` in raw data, but they do not flood `import_issues` unless strict review mode is enabled.
 
 ## X fetcher
 
@@ -250,4 +256,10 @@ This checks configured sources and generated raw files without making network re
 
 ```bash
 npm run data:audit -- --fetch
+```
+
+To measure what is actually stored in Supabase, including classification and variant-link coverage, run:
+
+```bash
+npm run data:audit-remote
 ```

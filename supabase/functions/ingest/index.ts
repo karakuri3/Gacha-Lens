@@ -70,6 +70,13 @@ Deno.serve(async (request) => {
 
 function providerCredentialHeaders() {
   const mappings = [
+    ["OFFICIAL_SOURCE_URLS", "x-provider-official-source-urls"],
+    ["OFFICIAL_DETAIL_FETCH_LIMIT", "x-provider-official-detail-fetch-limit"],
+    ["OFFICIAL_DETAIL_FETCH_DELAY_MS", "x-provider-official-detail-fetch-delay-ms"],
+    ["OFFICIAL_TARTS_PAGES_PER_RUN", "x-provider-official-tarts-pages-per-run"],
+    ["OFFICIAL_TARTS_MAX_PAGE", "x-provider-official-tarts-max-page"],
+    ["MARKET_RAW_FEED_SOURCES_JSON", "x-provider-market-feed-sources"],
+    ["STOCK_RAW_FEED_SOURCES_JSON", "x-provider-stock-feed-sources"],
     ["RAKUTEN_APPLICATION_ID", "x-provider-rakuten-application-id"],
     ["RAKUTEN_ACCESS_KEY", "x-provider-rakuten-access-key"],
     ["RAKUTEN_AFFILIATE_ID", "x-provider-rakuten-affiliate-id"],

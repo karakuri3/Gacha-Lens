@@ -80,6 +80,8 @@ CRON_SHARED_SECRET=another-long-random-secret
 
 `CRON_SHARED_SECRET` protects the Edge Function itself. Cron jobs send it as `x-cron-secret`.
 
+The Edge Function also forwards the configured official crawler settings, approved market/stock feed definitions, and Yahoo/Rakuten API credentials to the protected application ingestion endpoint. Keep these values in Supabase secrets; they are not returned in task responses or public UI.
+
 ## Deploy function
 
 ```bash

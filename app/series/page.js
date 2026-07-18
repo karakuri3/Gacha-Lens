@@ -1,10 +1,10 @@
 ﻿import Link from "next/link";
 import SeriesCard from "@/components/SeriesCard";
-import { getRankingSeries, getSeriesCatalogCounts, getSeriesCatalogPage } from "@/lib/series";
+import { getCategoryCatalog, getRankingSeries, getSeriesCatalogCounts, getSeriesCatalogPage } from "@/lib/series";
 import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display-clean";
 
 export const metadata = {
-  title: "ガチャ図鑑 | Gacha Lens",
+  title: "ガチャ一覧 | Gacha Lens",
   description: "発売中と発売予定のガチャ単品を、価格・話題度・在庫・発売情報で探せます。",
 };
 
@@ -28,11 +28,12 @@ const sorts = [
   { value: "release", label: "発売月順" },
 ];
 
-const PAGE_SIZE = 120;
+const PAGE_SIZE = 60;
 
 export default async function SeriesPage({ searchParams }) {
   const params = await searchParams;
   const q = String(params?.q ?? "").trim();
+  const category = String(params?.category ?? "").trim();
   const filter = filters.some((item) => item.value === params?.filter) ? params.filter : "all";
   const sort = sorts.some((item) => item.value === params?.sort) ? params.sort : "recommended";
   const requestedPage = Math.max(1, Number.parseInt(String(params?.page ?? "1"), 10) || 1);
@@ -40,12 +41,13 @@ export default async function SeriesPage({ searchParams }) {
   const signalMode = ["circulating", "market", "released"].includes(filter) || ["watch", "market"].includes(sort)
     ? "released"
     : "upcoming";
-  const [series, catalogPage, catalogCounts] = await Promise.all([
+  const [series, catalogPage, catalogCounts, categories] = await Promise.all([
     useDatabaseCatalog ? Promise.resolve([]) : getRankingSeries(signalMode),
     useDatabaseCatalog
-      ? getSeriesCatalogPage({ q, filter, sort, page: requestedPage, pageSize: PAGE_SIZE })
+      ? getSeriesCatalogPage({ q, category, filter, sort, page: requestedPage, pageSize: PAGE_SIZE })
       : Promise.resolve(null),
     getSeriesCatalogCounts(),
+    getCategoryCatalog(),
   ]);
 
   const filtered = catalogPage
@@ -53,6 +55,7 @@ export default async function SeriesPage({ searchParams }) {
     : series
         .filter((item) => matchesFilter(item, filter))
         .filter((item) => matchesKeyword(item, q))
+        .filter((item) => !category || item.category === category)
         .sort((a, b) => compareSeries(a, b, sort));
 
   const counts = Object.fromEntries(filters.map((item) => [item.value, series.filter((entry) => matchesFilter(entry, item.value)).length]));
@@ -76,7 +79,7 @@ export default async function SeriesPage({ searchParams }) {
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">SEARCH</p>
-          <h1 className="page-title">ガチャ図鑑</h1>
+          <h1 className="page-title">ガチャ一覧</h1>
           <p className="page-lead">過去商品からこれからの新作まで、キャラクター名やシリーズ名で探せます。</p>
         </section>
 
@@ -85,6 +88,13 @@ export default async function SeriesPage({ searchParams }) {
             <div className="field">
               <label htmlFor="q">キーワード</label>
               <input id="q" name="q" defaultValue={q} placeholder="単品名 / シリーズ名 / レア種別" />
+            </div>
+            <div className="field">
+              <label htmlFor="category">カテゴリ</label>
+              <select id="category" name="category" defaultValue={category}>
+                <option value="">すべて</option>
+                {categories.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}
+              </select>
             </div>
             <div className="field">
               <label htmlFor="filter">表示</label>
@@ -114,7 +124,7 @@ export default async function SeriesPage({ searchParams }) {
             <Link
               key={item.value}
               className={`pill-link ${filter === item.value ? "is-active" : ""}`}
-              href={{ pathname: "/series", query: { q: q || undefined, sort, filter: item.value } }}
+                href={{ pathname: "/series", query: { q: q || undefined, category: category || undefined, sort, filter: item.value } }}
             >
               {item.label}
               {Number.isFinite(counts[item.value]) ? (
@@ -138,12 +148,12 @@ export default async function SeriesPage({ searchParams }) {
         {totalCount > 0 ? (
           <>
             <section className="grid grid--cards">
-              {visibleItems.map((item) => (
-                <SeriesCard key={item.slug} series={item} />
+              {visibleItems.map((item, index) => (
+                <SeriesCard key={item.slug} series={item} priority={index < 6} />
               ))}
             </section>
             {hasPagination ? (
-              <Pagination page={page} totalPages={totalPages} q={q} filter={filter} sort={sort} />
+              <Pagination page={page} totalPages={totalPages} q={q} category={category} filter={filter} sort={sort} />
             ) : null}
           </>
         ) : (
@@ -188,13 +198,13 @@ function getReleaseSortValue(item) {
   return matched ? Number(matched[0]) : 999;
 }
 
-function Pagination({ page, totalPages, q, filter, sort }) {
+function Pagination({ page, totalPages, q, category, filter, sort }) {
   const pages = buildPageWindow(page, totalPages);
   return (
     <nav className="pagination" aria-label="ページ">
       <Link
         className={`pill-link ${page <= 1 ? "is-disabled" : ""}`}
-        href={pageHref({ q, filter, sort, page: Math.max(1, page - 1) })}
+        href={pageHref({ q, category, filter, sort, page: Math.max(1, page - 1) })}
         aria-disabled={page <= 1}
       >
         前へ
@@ -204,7 +214,7 @@ function Pagination({ page, totalPages, q, filter, sort }) {
           <Link
             key={item}
             className={`pill-link ${item === page ? "is-active" : ""}`}
-            href={pageHref({ q, filter, sort, page: item })}
+            href={pageHref({ q, category, filter, sort, page: item })}
           >
             {item.toLocaleString("ja-JP")}
           </Link>
@@ -212,7 +222,7 @@ function Pagination({ page, totalPages, q, filter, sort }) {
       </div>
       <Link
         className={`pill-link ${page >= totalPages ? "is-disabled" : ""}`}
-        href={pageHref({ q, filter, sort, page: Math.min(totalPages, page + 1) })}
+        href={pageHref({ q, category, filter, sort, page: Math.min(totalPages, page + 1) })}
         aria-disabled={page >= totalPages}
       >
         次へ
@@ -221,11 +231,12 @@ function Pagination({ page, totalPages, q, filter, sort }) {
   );
 }
 
-function pageHref({ q, filter, sort, page }) {
+function pageHref({ q, category, filter, sort, page }) {
   return {
     pathname: "/series",
     query: {
       q: q || undefined,
+      category: category || undefined,
       filter,
       sort,
       page: page > 1 ? page : undefined,

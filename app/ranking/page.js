@@ -14,7 +14,7 @@ import {
 } from "@/lib/domain/public-display-clean";
 
 export const metadata = {
-  title: "注目ランキング | Gacha Lens",
+  title: "相場ランキング | Gacha Lens",
   description: "発売中と発売予定を分けて、いま話題のガチャ単品をランキングします。",
 };
 
@@ -73,7 +73,7 @@ export default async function RankingPage({ searchParams }) {
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">RANKING</p>
-          <h1 className="page-title">いま注目のガチャランキング</h1>
+          <h1 className="page-title">相場ランキング</h1>
           <p className="page-lead">
             発売中は価格の動き・売れ行き・在庫、発売予定は先行反応・話題化期待・入手難度で並べます。
           </p>

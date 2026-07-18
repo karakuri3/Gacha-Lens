@@ -35,6 +35,12 @@ export default async function Home() {
     .filter((item) => Number.isFinite(item.market_summary?.single))
     .sort((a, b) => b.market_summary.single - a.market_summary.single)
     .slice(0, 5);
+  const risingItems = hot
+    .map((item) => ({ item, change: priceChangePercent(item) }))
+    .filter((entry) => Number.isFinite(entry.change) && entry.change > 0)
+    .sort((a, b) => b.change - a.change)
+    .slice(0, 5)
+    .map((entry) => entry.item);
   const stockMoves = hot.filter(hasAvailabilitySignal).slice(0, 5);
   const movementItems = (stockMoves.length ? stockMoves : hot.slice(0, 5));
 
@@ -67,10 +73,10 @@ export default async function Home() {
               </section>
 
               <section className="dashboard-panel">
-                <PanelHead title="売れ行き・流通の動き" meta="直近の観測" href="/ranking" />
+                <PanelHead title={risingItems.length ? "価格上昇中" : "売れ行き・流通の動き"} meta="実観測データ" href="/ranking" />
                 <div className="dashboard-mini-table" role="list">
-                  {hot.slice(0, 5).map((item, index) => (
-                    <CompactMarketRow key={item.slug} item={item} rank={index + 1} mode="movement" />
+                  {(risingItems.length ? risingItems : hot.slice(0, 5)).map((item, index) => (
+                    <CompactMarketRow key={item.slug} item={item} rank={index + 1} mode={risingItems.length ? "rising" : "movement"} />
                   ))}
                 </div>
               </section>
@@ -126,16 +132,18 @@ function DashboardSpotlight({ item }) {
           <h2>{item.name}</h2>
           <p>{item.series_name} / {item.rarity}</p>
           <div className="dashboard-spotlight__metrics">
-            <Metric label="価格" value={formatYen(item.price)} />
             <Metric label="単品相場" value={formatYen(item.market_summary?.single)} accent />
-            <Metric label="売れ行き" value={sellThroughLabel(item.market_summary)} />
-            <Metric label="注目度" value={formatScore(watchScore(item))} accent />
+            <Metric label="定価" value={formatYen(item.price)} />
+            <Metric label="直近変動" value={formatChange(priceChangePercent(item))} accent />
+            <Metric label="売れた数" value={`${(item.sold_count ?? item.market_summary?.sold_count ?? 0).toLocaleString("ja-JP")}件`} />
+            <Metric label="出品数" value={`${(item.active_listing_count ?? item.market_summary?.active_listing_count ?? 0).toLocaleString("ja-JP")}件`} />
+            <Metric label="発売" value={formatSchedule(item)} />
           </div>
           {tags.length ? <div className="tag-row">{tags.slice(0, 3).map((tag) => <span key={tag} className="tag tag--signal">{tag}</span>)}</div> : null}
         </div>
         <div className="dashboard-spotlight__chart">
           <div className="dashboard-chart-title"><strong>価格の動き</strong><span>実データのみ</span></div>
-          <PriceTrendChart item={item} />
+          <PriceTrendChart item={item} compact />
         </div>
       </Link>
     </section>
@@ -147,13 +155,14 @@ function Metric({ label, value, accent = false }) {
 }
 
 function RankingTile({ item, rank }) {
+  const change = priceChangePercent(item);
   return (
     <Link href={variantHref(item)} className="dashboard-rank-tile">
       <span className={`dashboard-rank-tile__rank rank-${rank}`}>{rank}</span>
       <div className="dashboard-rank-tile__image"><ProductImage src={item.image_url} alt={item.name} priority={rank <= 3} /></div>
       <strong>{item.name}</strong>
       <span>{formatYen(item.market_summary?.single)}</span>
-      <small>{sellThroughLabel(item.market_summary)} ・ 注目 {formatScore(watchScore(item))}</small>
+      <small>{Number.isFinite(change) ? formatChange(change) : sellThroughLabel(item.market_summary)} ・ 売れた数 {(item.sold_count ?? 0).toLocaleString("ja-JP")}件</small>
     </Link>
   );
 }
@@ -167,7 +176,7 @@ function CompactMarketRow({ item, rank, mode }) {
       <div className="dashboard-table__image"><ProductImage src={item.image_url} alt={item.name} /></div>
       <div><strong>{item.name}</strong><small>{item.series_name}</small></div>
       <div className="dashboard-mini-row__value">
-        <b>{mode === "price" ? formatYen(item.market_summary?.single) : formatScore(watchScore(item))}</b>
+        <b>{mode === "price" ? formatYen(item.market_summary?.single) : mode === "rising" ? formatChange(priceChangePercent(item)) : formatScore(watchScore(item))}</b>
         <small>{mode === "price" ? `出品 ${active}件` : `出品 ${active} / 売れ ${sold}`}</small>
       </div>
     </Link>
@@ -186,11 +195,12 @@ function UpcomingRow({ item }) {
 
 function AvailabilityRow({ item }) {
   const summary = item.stock_summary ?? item.availability_summary ?? {};
+  const status = summary.has_stock_signal || summary.has_restock_signal ? stockStatusLabel(summary) : "流通あり";
   return (
     <Link href={variantHref(item)} className="dashboard-compact-row dashboard-compact-row--stock">
       <div className="dashboard-compact-row__image"><ProductImage src={item.image_url} alt={item.name} /></div>
       <div><strong>{item.name}</strong><span>{sellThroughLabel(item.market_summary)}</span></div>
-      <b>{stockStatusLabel(summary)}</b>
+      <b>{status}</b>
     </Link>
   );
 }
@@ -202,4 +212,32 @@ function hasAvailabilitySignal(item) {
 
 function upcomingPriority(item) {
   return opportunityScore(item) * 12 + (item.forecast_score ?? 0) * 3;
+}
+
+function priceChangePercent(item) {
+  const groups = new Map();
+  for (const observation of item.market_observations ?? []) {
+    const price = Number(observation.price);
+    const time = new Date(observation.observed_at || observation.created_at).getTime();
+    if (!Number.isFinite(price) || !Number.isFinite(time)) continue;
+    const date = new Date(time).toISOString().slice(0, 10);
+    const values = groups.get(date) ?? [];
+    values.push(price);
+    groups.set(date, values);
+  }
+  const daily = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, values]) => median(values));
+  if (daily.length < 2 || !daily.at(-2)) return null;
+  return ((daily.at(-1) - daily.at(-2)) / daily.at(-2)) * 100;
+}
+
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function formatChange(value) {
+  if (!Number.isFinite(value)) return "データ不足";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(1)}%`;
 }

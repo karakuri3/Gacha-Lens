@@ -21,9 +21,10 @@ This project is designed for always-on ingestion with a review safety layer. Off
 7. If needed, call `/api/ops-health` with the review token to inspect machine-readable health JSON.
 8. In `Ingestion history`, confirm official, market, and stock have a recent `succeeded` run. A failed run is more urgent than an unchanged record count.
 8. Run `npm run data:audit` when source coverage or generated raw counts look wrong.
-9. Clear or annotate `high` issues first, especially official master or missing variant records.
-10. Check `medium` unknown variant issues for market, X, restock, and stock rows.
-11. Leave truly ambiguous records unresolved until the source can be verified.
+9. Run `npm run data:audit-remote` to compare actual Supabase counts, variant linkage, and unresolved review totals.
+10. Clear or annotate `high` issues first, especially official master or missing variant records.
+11. Check `medium` unknown variant issues for market, X, restock, and stock rows.
+12. Leave truly ambiguous records unresolved until the source can be verified.
 
 ## What good looks like
 
