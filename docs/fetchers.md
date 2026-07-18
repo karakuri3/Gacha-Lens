@@ -42,7 +42,7 @@ fetch official URL
 
 The Gashapon schedule/products pages and the Takara Tomy Arts gacha catalog are parsed as official discovery sources. Takara Tomy Arts page 1 is refreshed every run, while a persisted cursor walks four history pages at a time. The current catalog is about 64 pages, so an hourly job completes a discovery pass in roughly 16 runs without sending a burst of thousands of requests.
 
-Detail pages linked from both manufacturers are followed up to `OFFICIAL_DETAIL_FETCH_LIMIT`. Previously discovered official URLs are kept in the detail queue, so older provisional variants continue to be replaced even after their catalog page is no longer in the current page batch. Gashapon variant images and Takara Tomy Arts lineup text become the canonical variant master. A small `OFFICIAL_DETAIL_FETCH_DELAY_MS` keeps high-frequency runs polite. Discovery-only products stay `review_required` in raw data, but they do not flood `import_issues` unless strict review mode is enabled.
+Detail pages linked from both manufacturers are followed up to `OFFICIAL_DETAIL_FETCH_LIMIT`. Previously discovered official URLs are read from Supabase into a lightweight detail queue on every run, so serverless temporary storage is not required and older provisional variants continue to be replaced after their catalog page leaves the current page batch. When no local page cursor exists, Takara Tomy Arts history pages rotate deterministically by hour. Gashapon variant images and Takara Tomy Arts lineup text become the canonical variant master. A small `OFFICIAL_DETAIL_FETCH_DELAY_MS` keeps high-frequency runs polite. Discovery-only products stay `review_required` in raw data, but they do not flood `import_issues` unless strict review mode is enabled.
 
 ## X fetcher
 

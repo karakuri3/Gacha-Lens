@@ -8,13 +8,17 @@ loadEnvFile(".env.local");
 
 const outputPath = getGeneratedDataPath("official-raw.json");
 const previous = readExistingResult(outputPath);
-const knownDetailedOfficialUrls = await loadKnownDetailedOfficialUrls();
-const marketPriorityOfficialUrls = await loadMarketPriorityOfficialUrls();
+const [knownDetailedOfficialUrls, marketPriorityOfficialUrls, knownOfficialRecords] = await Promise.all([
+  loadKnownDetailedOfficialUrls(),
+  loadMarketPriorityOfficialUrls(),
+  loadKnownOfficialRecords(),
+]);
 const result = await fetchOfficialRaw({
   previousRecords: previous.records,
   detailCursor: previous.detailCursor,
   sourceCursors: previous.sourceCursors,
   knownDetailedOfficialUrls,
+  knownOfficialRecords,
   priorityDetailUrls: marketPriorityOfficialUrls,
 });
 writeJson(outputPath, result);
@@ -62,6 +66,19 @@ async function loadKnownDetailedOfficialUrls() {
   }
 }
 
+async function loadKnownOfficialRecords() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return [];
+  try {
+    return await fetchRows("series", {
+      select: "id,name,official_url,release_date",
+      params: { official_url: "not.is.null" },
+    });
+  } catch (error) {
+    console.warn(`[official-fetch] Could not read DB official detail queue: ${error.message}`);
+    return [];
+  }
+}
+
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
@@ -79,6 +96,7 @@ function summarize(source, result, filePath) {
     remainingDetails: result.remainingDetails ?? 0,
     sourceCoverage: result.sourceCoverage ?? {},
     knownDetailedInDatabase: knownDetailedOfficialUrls.length,
+    knownOfficialInDatabase: knownOfficialRecords.length,
     marketPriorityDetails: marketPriorityOfficialUrls.length,
     issues: Array.isArray(result.issues) ? result.issues.length : 0,
     outputPath: path.relative(process.cwd(), filePath),
