@@ -5,8 +5,21 @@ env:
 
 on:
   workflow_dispatch:
+    inputs:
+      task:
+        description: Ingestion task
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - official
+          - market
+          - stock
   schedule:
-    - cron: "10 18 * * *"
+    - cron: "7 * * * *"
+    - cron: "17,47 * * * *"
+    - cron: "37 * * * *"
 
 jobs:
   upsert:
@@ -22,6 +35,11 @@ jobs:
       RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
       YAHOO_SHOPPING_APP_ID: ${{ secrets.YAHOO_SHOPPING_APP_ID }}
       YAHOO_SHOPPING_FETCH_ENABLED: ${{ secrets.YAHOO_SHOPPING_FETCH_ENABLED }}
+      OFFICIAL_DETAIL_FETCH_LIMIT: 60
+      OFFICIAL_DETAIL_FETCH_DELAY_MS: 250
+      OFFICIAL_TARTS_PAGES_PER_RUN: 4
+      OFFICIAL_TARTS_MAX_PAGE: 80
+      MARKET_QUERY_CURSOR_MINUTES: 30
       GACHA_DATA_SOURCE: supabase
     steps:
       - uses: actions/checkout@v6
@@ -30,21 +48,38 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Select ingestion task
+        id: ingestion
+        shell: bash
+        env:
+          MANUAL_TASK: ${{ inputs.task }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          case "$SCHEDULE" in
+            "7 * * * *") task=official ;;
+            "17,47 * * * *") task=market ;;
+            "37 * * * *") task=stock ;;
+            *) task="${MANUAL_TASK:-all}" ;;
+          esac
+          echo "task=$task" >> "$GITHUB_OUTPUT"
       - name: Run ingestion
         run: |
           set -o pipefail
-          npm run db:upsert-all 2>&1 | tee ingestion.log
+          npm run db:upsert-all -- --task=${{ steps.ingestion.outputs.task }} 2>&1 | tee ingestion.log
       - name: Clean replaced provisional variants
+        if: ${{ steps.ingestion.outputs.task == 'official' || steps.ingestion.outputs.task == 'all' }}
         run: npm run db:cleanup-provisional
       - name: Remove validation-only signal rows
         run: npm run db:cleanup-nonproduction
       - name: Remove irrelevant unlinked market rows
+        if: ${{ steps.ingestion.outputs.task == 'market' || steps.ingestion.outputs.task == 'all' }}
         run: npm run db:cleanup-irrelevant-market
       - name: Write summary
         if: always()
         run: |
           echo "## Gacha ingestion" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Task: ${{ steps.ingestion.outputs.task }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Status: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Review queue: /review" >> "$GITHUB_STEP_SUMMARY"
           echo "- Next check: import_issues high/medium items" >> "$GITHUB_STEP_SUMMARY"

@@ -10,6 +10,8 @@
 
 This project is designed for always-on ingestion with a review safety layer. Official master data stays first, and loose market, X, restock, and stock signals must pass through review before they can be trusted.
 
+Until Supabase Cron is registered again, GitHub Actions runs official hourly, market every 30 minutes, and stock hourly. After Supabase Cron is confirmed healthy for a full day, reduce the GitHub schedule back to a daily fallback to avoid duplicate provider queries.
+
 ## Every morning
 
 1. Check Supabase Cron run history for the four ingestion jobs.
