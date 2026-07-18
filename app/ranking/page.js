@@ -1,7 +1,7 @@
 ﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import { getRankingSeries } from "@/lib/series";
-import { variantHref } from "@/lib/variant-url";
+import { seriesHref, variantHref } from "@/lib/variant-url";
 import {
   RELEASED_METRIC_LABELS,
   UPCOMING_METRIC_LABELS,
@@ -48,20 +48,21 @@ const upcomingMetricLabels = [
 export default async function RankingPage({ searchParams }) {
   const params = await searchParams;
   const tab = params?.tab === "upcoming" ? "upcoming" : "released";
-  const series = await getRankingSeries(tab);
+  const scope = params?.scope === "series" ? "series" : "variant";
+  const series = await getRankingSeries(tab, scope);
 
   const sorted = series
     .filter((item) => (tab === "released"
-      ? isReleasedRankingCandidate(item)
-      : !item.is_released && item.variant_type !== "provisional" && (item.forecast_score ?? 0) > 0))
+      ? isReleasedRankingCandidate(item, scope)
+      : !item.is_released && (scope === "series" || item.variant_type !== "provisional") && (item.forecast_score ?? 0) > 0))
     .sort((a, b) => {
-      const primaryA = tab === "released" ? releasedPriority(a) : upcomingPriority(a);
-      const primaryB = tab === "released" ? releasedPriority(b) : upcomingPriority(b);
+      const primaryA = tab === "released" ? (scope === "series" ? releasedSeriesPriority(a) : releasedPriority(a)) : upcomingPriority(a);
+      const primaryB = tab === "released" ? (scope === "series" ? releasedSeriesPriority(b) : releasedPriority(b)) : upcomingPriority(b);
       if (primaryB !== primaryA) return primaryB - primaryA;
       return a.name.localeCompare(b.name, "ja");
     });
 
-  const ranked = (tab === "upcoming" ? diversifyUpcomingPodium(sorted) : sorted)
+  const ranked = (tab === "upcoming" && scope === "variant" ? diversifyUpcomingPodium(sorted) : sorted)
     .map((item, index) => ({ ...item, rank: index + 1 }));
   const summary = buildRankingSummary(ranked, tab);
 
@@ -74,17 +75,24 @@ export default async function RankingPage({ searchParams }) {
         <section className="page-hero">
           <p className="eyebrow">RANKING</p>
           <h1 className="page-title">相場ランキング</h1>
-          <p className="page-lead">
-            発売中は価格の動き・売れ行き・在庫、発売予定は先行反応・話題化期待・入手難度で並べます。
-          </p>
+          <p className="page-lead">{scope === "variant" ? "キャラクターやレア種ごとの動きを順位で確認できます。" : "親シリーズ全体の流通、コンプ需要、発売前の注目度を順位で確認できます。"}</p>
         </section>
+
+        <nav className="entity-scope-tabs" aria-label="ランキング単位">
+          <Link href={{ pathname: "/ranking", query: { scope: "variant", tab } }} className={scope === "variant" ? "is-active" : ""}>
+            <strong>単品ランキング</strong><span>キャラクター・レア別</span>
+          </Link>
+          <Link href={{ pathname: "/ranking", query: { scope: "series", tab } }} className={scope === "series" ? "is-active" : ""}>
+            <strong>シリーズランキング</strong><span>ラインナップ・コンプ別</span>
+          </Link>
+        </nav>
 
         <div className="ranking-toolbar">
           <div className="tabs">
             {tabs.map((item) => (
               <Link
                 key={item.value}
-                href={{ pathname: "/ranking", query: { tab: item.value } }}
+                href={{ pathname: "/ranking", query: { scope, tab: item.value } }}
                 className={`pill-link ${tab === item.value ? "is-active" : ""}`}
               >
                 {item.label}
@@ -101,20 +109,20 @@ export default async function RankingPage({ searchParams }) {
 
         <section className="grid grid--3 podium">
           {podium.map((item) => (
-            <RankingCard key={item.slug} item={item} mode={tab} />
+            <RankingCard key={item.slug} item={item} mode={tab} scope={scope} />
           ))}
         </section>
 
         <section className="grid">
           {rest.map((item) => (
-            <RankingRow key={item.slug} item={item} mode={tab} />
+            <RankingRow key={item.slug} item={item} mode={tab} scope={scope} />
           ))}
         </section>
         {ranked.length === 0 ? (
           <div className="card empty">
             {tab === "released"
-              ? "価格や在庫の動きを確認できる単品がまだありません。観測データが入り次第更新します。"
-              : "現在、発売予定として確認できる単品がありません。"}
+              ? `価格や在庫の動きを確認できる${scope === "variant" ? "単品" : "シリーズ"}がまだありません。観測データが入り次第更新します。`
+              : `現在、発売予定として確認できる${scope === "variant" ? "単品" : "シリーズ"}がありません。`}
           </div>
         ) : null}
       </div>
@@ -122,15 +130,15 @@ export default async function RankingPage({ searchParams }) {
   );
 }
 
-function RankingCard({ item, mode }) {
+function RankingCard({ item, mode, scope }) {
   return (
-    <Link href={variantHref(item)} className={`card product-card rank-${item.rank}`}>
+    <Link href={scope === "series" ? seriesHref(item) : variantHref(item)} className={`card product-card rank-${item.rank}`}>
       <span className={`rank-medal rank-medal--${item.rank}`}>{item.rank}位</span>
       <div className="product-image">
-        <ProductImage src={item.image_url} alt={item.name} priority={item.rank <= 3} />
+        <ProductImage src={item.image_url} alt={item.name} priority={item.rank <= 3} emptyLabel={scope === "series" ? "シリーズ画像未取得" : "単品画像未取得"} />
       </div>
       <div className="ranking-card__info">
-        <ProductTitle item={item} />
+        <ProductTitle item={item} scope={scope} />
         <PublicTags item={item} isReleased={mode === "released"} />
         <MetricGrid metrics={getMetrics(item, mode)} />
       </div>
@@ -138,15 +146,15 @@ function RankingCard({ item, mode }) {
   );
 }
 
-function RankingRow({ item, mode }) {
+function RankingRow({ item, mode, scope }) {
   return (
-    <Link href={variantHref(item)} className="card rank-row">
+    <Link href={scope === "series" ? seriesHref(item) : variantHref(item)} className="card rank-row">
       <div className="rank-number">#{item.rank}</div>
       <div className="product-image">
-        <ProductImage src={item.image_url} alt={item.name} />
+        <ProductImage src={item.image_url} alt={item.name} emptyLabel={scope === "series" ? "シリーズ画像未取得" : "単品画像未取得"} />
       </div>
       <div>
-        <ProductTitle item={item} />
+        <ProductTitle item={item} scope={scope} />
         <PublicTags item={item} isReleased={mode === "released"} compact />
       </div>
       <MetricGrid metrics={getMetrics(item, mode)} />
@@ -154,12 +162,12 @@ function RankingRow({ item, mode }) {
   );
 }
 
-function ProductTitle({ item }) {
+function ProductTitle({ item, scope }) {
   return (
     <div>
       <h2 className="product-name">{item.name}</h2>
       <div className="product-meta">
-        {item.series_name} / {item.rarity}
+        {scope === "series" ? `${item.brand || item.character || "公式商品"} / ${item.variant_count ? `${item.variant_count}種` : "ラインナップ確認中"}` : `${item.series_name} / ${item.rarity || "通常"}`}
       </div>
     </div>
   );
@@ -234,9 +242,29 @@ function releasedPriority(item) {
   return releasedPriorityScore(item);
 }
 
-function isReleasedRankingCandidate(item) {
+function releasedSeriesPriority(item) {
+  const market = item.market_summary ?? {};
+  const complete = market.type_stats?.complete_set ?? {};
+  const partial = market.type_stats?.partial_set ?? {};
+  const stock = item.stock_summary ?? item.availability_summary ?? {};
+  const stockMoves = (stock.restock_event_count ?? 0) + (stock.stock_report_count ?? 0);
+  return (
+    (complete.sold_count ?? 0) * 90 +
+    (complete.active_listing_count ?? 0) * 28 +
+    (partial.sold_count ?? 0) * 32 +
+    (market.listing_count ?? 0) * 8 +
+    stockMoves * 24 +
+    (item.trend_score ?? 0) * 6
+  );
+}
+
+function isReleasedRankingCandidate(item, scope = "variant") {
   if (!item?.is_released) return false;
   const market = item.market_summary ?? {};
+  if (scope === "series") {
+    const stock = item.stock_summary ?? item.availability_summary ?? {};
+    return market.listing_count > 0 || Number.isFinite(market.complete_set) || stock.has_stock_signal || stock.has_restock_signal;
+  }
   return isCirculatingItem(item) || [market.single, market.rare_single, market.secret_single].some(Number.isFinite);
 }
 

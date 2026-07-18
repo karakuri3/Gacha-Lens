@@ -58,7 +58,7 @@ export default async function VariantDetailPage({ params }) {
         <section className="detail-hero">
           <div className="detail-media">
             <div className="detail-image">
-              <ProductImage src={item.image_url} alt={item.name} priority />
+              <ProductImage src={item.image_url} alt={item.name} priority emptyLabel="単品画像未取得" />
             </div>
             {siblingImages.length > 1 ? (
               <div className="detail-thumbnails" aria-label="同じシリーズの画像">
@@ -145,7 +145,7 @@ export default async function VariantDetailPage({ params }) {
             <div className="lineup-grid">
               {(item.sibling_variants ?? []).map((entry) => (
                 <Link key={entry.id} href={variantHref(entry)}>
-                  <span className="lineup-grid__image"><ProductImage src={entry.image || item.image_url} alt={entry.name} /></span>
+                  <span className="lineup-grid__image"><ProductImage src={entry.image} alt={entry.name} emptyLabel="単品画像未取得" /></span>
                   <span><strong>{entry.name}</strong><small>{entry.rarity} / {entry.role}</small></span>
                 </Link>
               ))}

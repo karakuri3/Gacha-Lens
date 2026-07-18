@@ -1,14 +1,15 @@
 ﻿import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
-import { variantHref } from "@/lib/variant-url";
+import { seriesHref, variantHref } from "@/lib/variant-url";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
   customerTags,
 } from "@/lib/domain/public-display-clean";
 
-export default function SeriesCard({ series, priority = false }) {
+export default function SeriesCard({ series, priority = false, scope = "variant" }) {
   const isReleased = Boolean(series.is_released ?? series.isReleased);
+  const isSeries = scope === "series" || series.entity_type === "series";
   const metrics = visibleCardMetrics(
     isReleased ? buildReleasedCustomerMetrics(series) : buildUpcomingCustomerMetrics(series),
     isReleased
@@ -16,18 +17,25 @@ export default function SeriesCard({ series, priority = false }) {
   const tags = customerTags(series, isReleased);
 
   return (
-    <Link href={variantHref(series)} className="card product-card">
+    <Link href={isSeries ? seriesHref(series) : variantHref(series)} className="card product-card">
       <div className="product-image">
-        <ProductImage src={series.image_url || series.imageUrl} alt={series.name} priority={priority} />
+        <ProductImage
+          src={series.image_url || series.imageUrl}
+          alt={series.name}
+          priority={priority}
+          emptyLabel={isSeries ? "シリーズ画像未取得" : "単品画像未取得"}
+        />
       </div>
       <div>
         <div className="tag-row" style={{ marginBottom: 10 }}>
           <span className="tag">{isReleased ? "発売中" : "発売予定"}</span>
-          <span className="tag">{series.rarity ?? series.category}</span>
+          <span className="tag">{isSeries ? "シリーズ" : (series.rarity || series.category || "単品")}</span>
         </div>
         <h3 className="product-name">{series.name}</h3>
         <div className="product-meta">
-          {series.series_name ?? series.brand} / {series.role ?? series.character}
+          {isSeries
+            ? `${series.brand || series.character || "公式商品"} / ${series.variant_count ? `${series.variant_count}種` : "ラインナップ確認中"}`
+            : `${series.series_name ?? series.brand} / ${series.role ?? series.character}`}
         </div>
       </div>
       <div className="metric-grid">

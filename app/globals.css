@@ -846,6 +846,38 @@ select {
   gap: 12px;
 }
 
+.entity-scope-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 4px 0 14px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f1f3f6;
+}
+
+.entity-scope-tabs a {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.entity-scope-tabs a.is-active {
+  border-color: var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgba(20, 23, 31, 0.06);
+}
+
+.entity-scope-tabs strong { font-size: 14px; }
+.entity-scope-tabs span { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+
 .podium .rank-medal {
   position: absolute;
   top: 18px;
@@ -1846,6 +1878,11 @@ button.button-link {
     gap: 8px;
     margin-bottom: 10px;
   }
+
+  .entity-scope-tabs { gap: 4px; }
+  .entity-scope-tabs a { padding: 9px 10px; }
+  .entity-scope-tabs strong { font-size: 13px; }
+  .entity-scope-tabs span { font-size: 9px; }
 
   .podium .tag-row {
     display: none;

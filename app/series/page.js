@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 import SeriesCard from "@/components/SeriesCard";
-import { getCategoryCatalog, getRankingSeries, getSeriesCatalogCounts, getSeriesCatalogPage } from "@/lib/series";
+import { getCategoryCatalog, getParentSeriesCatalogPage, getRankingSeries, getSeriesCatalogCounts, getSeriesCatalogPage } from "@/lib/series";
 import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display-clean";
 
 export const metadata = {
@@ -32,6 +32,7 @@ const PAGE_SIZE = 60;
 
 export default async function SeriesPage({ searchParams }) {
   const params = await searchParams;
+  const scope = params?.scope === "series" ? "series" : "variant";
   const q = String(params?.q ?? "").trim();
   const category = String(params?.category ?? "").trim();
   const filter = filters.some((item) => item.value === params?.filter) ? params.filter : "all";
@@ -42,9 +43,9 @@ export default async function SeriesPage({ searchParams }) {
     ? "released"
     : "upcoming";
   const [series, catalogPage, catalogCounts, categories] = await Promise.all([
-    useDatabaseCatalog ? Promise.resolve([]) : getRankingSeries(signalMode),
+    useDatabaseCatalog ? Promise.resolve([]) : getRankingSeries(signalMode, scope),
     useDatabaseCatalog
-      ? getSeriesCatalogPage({ q, category, filter, sort, page: requestedPage, pageSize: PAGE_SIZE })
+      ? (scope === "series" ? getParentSeriesCatalogPage : getSeriesCatalogPage)({ q, category, filter, sort, page: requestedPage, pageSize: PAGE_SIZE })
       : Promise.resolve(null),
     getSeriesCatalogCounts(),
     getCategoryCatalog(),
@@ -60,11 +61,9 @@ export default async function SeriesPage({ searchParams }) {
 
   const counts = Object.fromEntries(filters.map((item) => [item.value, series.filter((entry) => matchesFilter(entry, item.value)).length]));
   if (useDatabaseCatalog) {
-    counts.circulating = null;
-    counts.market = null;
-    counts.opportunity = null;
+    for (const key of Object.keys(counts)) counts[key] = null;
   }
-  if (catalogCounts) Object.assign(counts, catalogCounts);
+  if (catalogCounts && scope === "variant") Object.assign(counts, catalogCounts);
   const totalCount = catalogPage?.total ?? filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const page = catalogPage?.page ?? clampPage(params?.page, totalPages);
@@ -80,14 +79,24 @@ export default async function SeriesPage({ searchParams }) {
         <section className="page-hero">
           <p className="eyebrow">SEARCH</p>
           <h1 className="page-title">ガチャ一覧</h1>
-          <p className="page-lead">過去商品からこれからの新作まで、キャラクター名やシリーズ名で探せます。</p>
+          <p className="page-lead">{scope === "variant" ? "キャラクターやレア種を単品で探せます。" : "親シリーズ単位でラインナップとセットの動きを探せます。"}</p>
         </section>
 
+        <nav className="entity-scope-tabs" aria-label="検索単位">
+          <Link href={{ pathname: "/series", query: { scope: "variant", filter, sort, q: q || undefined, category: category || undefined } }} className={scope === "variant" ? "is-active" : ""}>
+            <strong>単品から探す</strong><span>キャラクター・レア・シークレット</span>
+          </Link>
+          <Link href={{ pathname: "/series", query: { scope: "series", filter, sort, q: q || undefined, category: category || undefined } }} className={scope === "series" ? "is-active" : ""}>
+            <strong>シリーズから探す</strong><span>全体ラインナップ・コンプ・発売情報</span>
+          </Link>
+        </nav>
+
         <form className="card form-panel catalog-filter-form" action="/series" method="get">
+          <input type="hidden" name="scope" value={scope} />
           <div className="form-grid">
             <div className="field">
               <label htmlFor="q">キーワード</label>
-              <input id="q" name="q" defaultValue={q} placeholder="単品名 / シリーズ名 / レア種別" />
+              <input id="q" name="q" defaultValue={q} placeholder={scope === "variant" ? "単品名 / キャラクター / レア種別" : "シリーズ名 / 作品名 / ブランド"} />
             </div>
             <div className="field">
               <label htmlFor="category">カテゴリ</label>
@@ -115,7 +124,7 @@ export default async function SeriesPage({ searchParams }) {
           </div>
           <div className="tag-row">
             <button className="button-link button-link--accent" type="submit">この条件で見る</button>
-            <Link href="/series" className="button-link">リセット</Link>
+            <Link href={{ pathname: "/series", query: { scope } }} className="button-link">リセット</Link>
           </div>
         </form>
 
@@ -124,7 +133,7 @@ export default async function SeriesPage({ searchParams }) {
             <Link
               key={item.value}
               className={`pill-link ${filter === item.value ? "is-active" : ""}`}
-                href={{ pathname: "/series", query: { q: q || undefined, category: category || undefined, sort, filter: item.value } }}
+                href={{ pathname: "/series", query: { scope, q: q || undefined, category: category || undefined, sort, filter: item.value } }}
             >
               {item.label}
               {Number.isFinite(counts[item.value]) ? (
@@ -141,7 +150,7 @@ export default async function SeriesPage({ searchParams }) {
                 ? `全${totalCount.toLocaleString("ja-JP")}件中 ${displayStart.toLocaleString("ja-JP")}-${displayEnd.toLocaleString("ja-JP")}件`
                 : "0件"}
             </h2>
-            <p className="section-sub">過去商品もページを切り替えて確認できます。カード全体をクリックすると詳細へ移動します。</p>
+            <p className="section-sub">{scope === "variant" ? "単品画像を確認できる正式ラインナップを表示しています。" : "集合画像とシリーズ全体の情報を表示しています。"}</p>
           </div>
         </div>
 
@@ -149,15 +158,15 @@ export default async function SeriesPage({ searchParams }) {
           <>
             <section className="grid grid--cards">
               {visibleItems.map((item, index) => (
-                <SeriesCard key={item.slug} series={item} priority={index < 6} />
+                <SeriesCard key={item.slug} series={item} priority={index < 6} scope={scope} />
               ))}
             </section>
             {hasPagination ? (
-              <Pagination page={page} totalPages={totalPages} q={q} category={category} filter={filter} sort={sort} />
+              <Pagination page={page} totalPages={totalPages} q={q} category={category} filter={filter} sort={sort} scope={scope} />
             ) : null}
           </>
         ) : (
-          <div className="card empty">条件に合う単品がありません。</div>
+          <div className="card empty">条件に合う{scope === "variant" ? "単品" : "シリーズ"}がありません。</div>
         )}
       </div>
     </main>
@@ -167,7 +176,7 @@ export default async function SeriesPage({ searchParams }) {
 function matchesFilter(item, filter) {
   if (filter === "released") return item.is_released;
   if (filter === "upcoming") return !item.is_released;
-  if (filter === "market") return item.is_released && Number.isFinite(item.market_summary?.single);
+  if (filter === "market") return item.is_released && (Number.isFinite(item.market_summary?.single) || Number.isFinite(item.market_summary?.complete_set));
   if (filter === "circulating") return isCirculatingItem(item);
   if (filter === "opportunity") return !item.is_released && opportunityScore(item) >= 60;
   return true;
@@ -198,13 +207,13 @@ function getReleaseSortValue(item) {
   return matched ? Number(matched[0]) : 999;
 }
 
-function Pagination({ page, totalPages, q, category, filter, sort }) {
+function Pagination({ page, totalPages, q, category, filter, sort, scope }) {
   const pages = buildPageWindow(page, totalPages);
   return (
     <nav className="pagination" aria-label="ページ">
       <Link
         className={`pill-link ${page <= 1 ? "is-disabled" : ""}`}
-        href={pageHref({ q, category, filter, sort, page: Math.max(1, page - 1) })}
+        href={pageHref({ q, category, filter, sort, scope, page: Math.max(1, page - 1) })}
         aria-disabled={page <= 1}
       >
         前へ
@@ -214,7 +223,7 @@ function Pagination({ page, totalPages, q, category, filter, sort }) {
           <Link
             key={item}
             className={`pill-link ${item === page ? "is-active" : ""}`}
-            href={pageHref({ q, category, filter, sort, page: item })}
+            href={pageHref({ q, category, filter, sort, scope, page: item })}
           >
             {item.toLocaleString("ja-JP")}
           </Link>
@@ -222,7 +231,7 @@ function Pagination({ page, totalPages, q, category, filter, sort }) {
       </div>
       <Link
         className={`pill-link ${page >= totalPages ? "is-disabled" : ""}`}
-        href={pageHref({ q, category, filter, sort, page: Math.min(totalPages, page + 1) })}
+        href={pageHref({ q, category, filter, sort, scope, page: Math.min(totalPages, page + 1) })}
         aria-disabled={page >= totalPages}
       >
         次へ
@@ -231,11 +240,12 @@ function Pagination({ page, totalPages, q, category, filter, sort }) {
   );
 }
 
-function pageHref({ q, category, filter, sort, page }) {
+function pageHref({ q, category, filter, sort, scope, page }) {
   return {
     pathname: "/series",
     query: {
       q: q || undefined,
+      scope,
       category: category || undefined,
       filter,
       sort,
