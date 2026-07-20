@@ -296,3 +296,7 @@ create index if not exists outbound_clicks_variant_id_clicked_at_idx on outbound
 
 alter table community_reports enable row level security;
 alter table outbound_clicks enable row level security;
+
+-- Market observations are server-only data accessed through the service role.
+alter table public.market_listing_observations enable row level security;
+revoke all privileges on table public.market_listing_observations from anon, authenticated;
