@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
-import { hasSupabaseConfig, supabase } from "@/lib/supabase";
+import {
+  hasServiceRoleSupabaseConfig as hasSupabaseConfig,
+  serviceRoleSupabase as supabase,
+} from "@/lib/supabase/service-role-client";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +11,7 @@ const STOCK_TYPES = new Set(["in_stock", "low_stock", "sold_out", "restocked"]);
 const ALLOWED_TYPES = new Set([...PRICE_TYPES, ...STOCK_TYPES]);
 
 export async function POST(request) {
-  if (!hasSupabaseConfig || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!hasSupabaseConfig) {
     return Response.json({ error: "投稿受付は準備中です" }, { status: 503 });
   }
 

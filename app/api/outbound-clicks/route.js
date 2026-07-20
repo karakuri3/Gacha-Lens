@@ -1,9 +1,12 @@
-import { hasSupabaseConfig, supabase } from "@/lib/supabase";
+import {
+  hasServiceRoleSupabaseConfig as hasSupabaseConfig,
+  serviceRoleSupabase as supabase,
+} from "@/lib/supabase/service-role-client";
 
 const PROVIDERS = new Set(["mercari", "yahoo", "rakuten", "amazon", "official"]);
 
 export async function POST(request) {
-  if (!hasSupabaseConfig || !process.env.SUPABASE_SERVICE_ROLE_KEY) return new Response(null, { status: 204 });
+  if (!hasSupabaseConfig) return new Response(null, { status: 204 });
   const body = await request.json().catch(() => ({}));
   const provider = String(body.provider || "");
   const variantId = String(body.variantId || "").slice(0, 220);
