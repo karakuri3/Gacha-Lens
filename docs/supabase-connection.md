@@ -16,7 +16,7 @@ The site remains variant-first. `series` is the parent product master, and every
 
 ## Repository swap point
 
-Current UI reads from `lib/series.js`. Set `GACHA_DATA_SOURCE=supabase` to make it try `createSupabaseGachaDataSource` from `lib/data/supabase-gacha-repository.js` first. If Supabase is not configured, cannot be reached, or does not yet contain `series` and `variants`, the site falls back to the file-based official input.
+Current UI reads from `lib/series.js`. Production always uses `createSupabaseGachaDataSource` from `lib/data/supabase-gacha-repository.js`; `GACHA_DATA_SOURCE` may be omitted or set to `supabase`. Missing configuration and query failures surface as data-source errors, while a valid empty database renders an empty state. Production never falls back to file-based official input or mock signals. Development/Test may use fixtures only with explicit `GACHA_DATA_SOURCE=sample`.
 
 Keep ingestion adapters in `lib/data/ingestion-adapters.js` as the boundary for raw official, market, X, restock, and stock inputs.
 

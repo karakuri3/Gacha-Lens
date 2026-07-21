@@ -30,9 +30,10 @@ export const revalidate = 0;
 export async function generateMetadata({ params }) {
   const resolvedParams = await params;
   const item = await getSeriesBySlug(resolvedParams.slug);
+  if (!item) notFound();
   return {
-    title: item ? `${item.name} | Gacha Lens` : "単品詳細 | Gacha Lens",
-    description: item?.summary ?? "ガチャ単品の価格、話題度、在庫、発売情報を確認できます。",
+    title: `${item.name} | Gacha Lens`,
+    description: item.summary ?? "ガチャ単品の価格、話題度、在庫、発売情報を確認できます。",
   };
 }
 

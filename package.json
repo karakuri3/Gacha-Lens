@@ -26,7 +26,8 @@
     "db:cleanup-nonproduction": "node scripts/cleanup-nonproduction-data.mjs",
     "db:cleanup-irrelevant-market": "node scripts/cleanup-irrelevant-market-data.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:data-source": "node --test tests/data-source-policy.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
