@@ -31,7 +31,10 @@
     "test:foundation-baseline": "node --test tests/foundation-baseline.test.mjs",
     "test:publication": "node --test tests/provisional-publication.test.mjs",
     "test:market-evidence": "node --test tests/market-evidence.test.mjs",
-    "test:catalog-discovery": "node --test tests/catalog-discovery.test.mjs"
+    "test:catalog-discovery": "node --test tests/catalog-discovery.test.mjs",
+    "test:market-coverage": "node --test tests/market-coverage.test.mjs",
+    "market:coverage": "node scripts/market-coverage-report.mjs",
+    "market:backfill": "node scripts/market-backfill.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",

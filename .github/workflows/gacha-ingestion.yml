@@ -9,13 +9,40 @@ on:
       task:
         description: Ingestion task
         required: true
-        default: all
+        default: market
         type: choice
         options:
           - all
           - official
           - market
           - stock
+      mode:
+        description: Market collection mode (scheduled runs always write)
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - write
+      limit:
+        description: Maximum market variants (1-200)
+        required: true
+        default: "25"
+        type: string
+      priority:
+        description: Market priority (all or 1-5)
+        required: true
+        default: all
+        type: string
+      release:
+        description: Market release scope
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - released
+          - upcoming
   schedule:
     - cron: "7 * * * *"
     - cron: "17,47 * * * *"
@@ -23,6 +50,9 @@ on:
 
 jobs:
   upsert:
+    concurrency:
+      group: gacha-ingestion
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -53,6 +83,10 @@ jobs:
         shell: bash
         env:
           MANUAL_TASK: ${{ inputs.task }}
+          MANUAL_MODE: ${{ inputs.mode }}
+          MANUAL_LIMIT: ${{ inputs.limit }}
+          MANUAL_PRIORITY: ${{ inputs.priority }}
+          MANUAL_RELEASE: ${{ inputs.release }}
           SCHEDULE: ${{ github.event.schedule }}
         run: |
           case "$SCHEDULE" in
@@ -61,8 +95,35 @@ jobs:
             "37 * * * *") task=stock ;;
             *) task="${MANUAL_TASK:-all}" ;;
           esac
+          if [ -n "$SCHEDULE" ]; then mode=write; else mode="${MANUAL_MODE:-dry-run}"; fi
+          case "${MANUAL_LIMIT:-25}" in ''|*[!0-9]*) limit=25 ;; *) limit="$MANUAL_LIMIT" ;; esac
+          case "${MANUAL_PRIORITY:-all}" in all|1|2|3|4|5) priority="${MANUAL_PRIORITY:-all}" ;; *) priority=all ;; esac
+          if [ "$task" = "all" ] && [ "$mode" = "dry-run" ]; then
+            echo "::error::The all task writes official and stock data. Select write explicitly, or run the default market dry-run."
+            exit 1
+          fi
           echo "task=$task" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "limit=$limit" >> "$GITHUB_OUTPUT"
+          echo "priority=$priority" >> "$GITHUB_OUTPUT"
+          echo "release=${MANUAL_RELEASE:-all}" >> "$GITHUB_OUTPUT"
+      - name: Run controlled market backfill
+        if: ${{ github.event_name == 'workflow_dispatch' && steps.ingestion.outputs.task == 'market' }}
+        env:
+          BACKFILL_MODE: ${{ steps.ingestion.outputs.mode }}
+          BACKFILL_LIMIT: ${{ steps.ingestion.outputs.limit }}
+          BACKFILL_PRIORITY: ${{ steps.ingestion.outputs.priority }}
+          BACKFILL_RELEASE: ${{ steps.ingestion.outputs.release }}
+        run: |
+          set -o pipefail
+          npm run market:backfill -- "--mode=$BACKFILL_MODE" "--limit=$BACKFILL_LIMIT" "--priority=$BACKFILL_PRIORITY" "--release=$BACKFILL_RELEASE" 2>&1 | tee ingestion.log
       - name: Run ingestion
+        if: ${{ github.event_name != 'workflow_dispatch' || steps.ingestion.outputs.task != 'market' }}
+        env:
+          MARKET_COVERAGE_LIMIT: ${{ steps.ingestion.outputs.limit }}
+          MARKET_COVERAGE_PRIORITY: ${{ steps.ingestion.outputs.priority }}
+          MARKET_COVERAGE_RELEASE: ${{ steps.ingestion.outputs.release }}
+          MARKET_COVERAGE_COOLDOWN_HOURS: 24
         run: |
           set -o pipefail
           npm run db:upsert-all -- --task=${{ steps.ingestion.outputs.task }} 2>&1 | tee ingestion.log
@@ -70,9 +131,10 @@ jobs:
         if: ${{ steps.ingestion.outputs.task == 'official' || steps.ingestion.outputs.task == 'all' }}
         run: npm run db:cleanup-provisional
       - name: Remove validation-only signal rows
+        if: ${{ steps.ingestion.outputs.mode == 'write' || github.event_name != 'workflow_dispatch' }}
         run: npm run db:cleanup-nonproduction
       - name: Remove irrelevant unlinked market rows
-        if: ${{ steps.ingestion.outputs.task == 'market' || steps.ingestion.outputs.task == 'all' }}
+        if: ${{ (steps.ingestion.outputs.task == 'market' || steps.ingestion.outputs.task == 'all') && (steps.ingestion.outputs.mode == 'write' || github.event_name != 'workflow_dispatch') }}
         run: npm run db:cleanup-irrelevant-market
       - name: Write summary
         if: always()
@@ -80,6 +142,7 @@ jobs:
           echo "## Gacha ingestion" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Task: ${{ steps.ingestion.outputs.task }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: ${{ steps.ingestion.outputs.mode }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Status: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Review queue: /review" >> "$GITHUB_STEP_SUMMARY"
           echo "- Next check: import_issues high/medium items" >> "$GITHUB_STEP_SUMMARY"
