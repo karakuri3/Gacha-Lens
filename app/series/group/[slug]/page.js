@@ -7,6 +7,7 @@ import { variantHref } from "@/lib/variant-url";
 import {
   formatSchedule,
   formatScore,
+  formatMarketEvidenceValue,
   formatYen,
   opportunityScore,
   stockStatusLabel,
@@ -67,9 +68,8 @@ export default async function ParentSeriesDetailPage({ params }) {
             <div className="metric-grid" style={{ marginTop: 22 }}>
               {released ? (
                 <>
-                  <Metric label="単品中央値" value={formatYen(market.single)} />
-                  <Metric label="コンプ相場" value={formatYen(market.complete_set)} tone="highlight" />
-                  <Metric label="一部セット" value={formatYen(market.partial_set)} />
+                  <Metric label={item.market_evidence?.label || "セット価格データ不足"} value={formatMarketEvidenceValue(item.market_evidence)} meta={item.market_evidence?.explanation} tone="highlight" />
+                  <Metric label={market.type_stats?.partial_set?.label || "セット価格データ不足"} value={formatYen(market.partial_set)} />
                   <Metric label="売れた数" value={`${market.sold_count ?? 0}件`} />
                   <Metric label="在庫状況" value={stockStatusLabel(item.stock_summary)} />
                   <Metric label="注目度" value={formatScore(watchScore(item))} tone="highlight" />
@@ -93,7 +93,8 @@ export default async function ParentSeriesDetailPage({ params }) {
                 series_name: "シリーズ",
                 image_url: item.image_url,
                 is_released: released,
-                primary_value: released ? formatYen(market.complete_set) : formatSchedule(item),
+                primary_label: released ? item.market_evidence?.label : "発売",
+                primary_value: released ? formatMarketEvidenceValue(item.market_evidence) : formatSchedule(item),
               }} />
               {item.official_url ? <Link href={item.official_url} className="button-link" target="_blank" rel="noreferrer">公式ページ</Link> : null}
             </div>
@@ -132,11 +133,12 @@ export default async function ParentSeriesDetailPage({ params }) {
   );
 }
 
-function Metric({ label, value, tone = "" }) {
+function Metric({ label, value, tone = "", meta = "" }) {
   return (
     <div className="metric">
       <div className="metric__label">{label}</div>
       <div className={`metric__value ${tone ? `is-${tone}` : ""}`}>{value}</div>
+      {meta ? <small>{meta}</small> : null}
     </div>
   );
 }

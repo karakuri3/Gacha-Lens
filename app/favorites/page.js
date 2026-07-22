@@ -72,7 +72,8 @@ export default function FavoritesPage() {
                     <span>{item.is_released ? "発売中" : "発売予定"}</span>
                     <h2>{item.name}</h2>
                     <p>{item.series_name}</p>
-                    <strong>{item.primary_value || "データ不足"}</strong>
+                    <span>{item.primary_label || (item.is_released ? "市場価格" : "発売")}</span>
+                    <strong>{item.primary_label ? (item.primary_value || "データ不足") : (item.is_released ? "詳細で最新情報を確認" : item.primary_value || "未定")}</strong>
                   </div>
                 </Link>
                 <button type="button" onClick={() => remove(item.slug)} aria-label={`${item.name}をお気に入りから削除`} title="削除">
