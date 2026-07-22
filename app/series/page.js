@@ -176,7 +176,7 @@ export default async function SeriesPage({ searchParams }) {
 function matchesFilter(item, filter) {
   if (filter === "released") return item.is_released;
   if (filter === "upcoming") return !item.is_released;
-  if (filter === "market") return item.is_released && (Number.isFinite(item.market_summary?.single) || Number.isFinite(item.market_summary?.complete_set));
+  if (filter === "market") return item.is_released && item.market_evidence?.tier !== "insufficient";
   if (filter === "circulating") return isCirculatingItem(item);
   if (filter === "opportunity") return !item.is_released && opportunityScore(item) >= 60;
   return true;
@@ -189,7 +189,7 @@ function matchesKeyword(item, q) {
 }
 
 function compareSeries(a, b, sort) {
-  if (sort === "market") return (b.market_summary?.single ?? -Infinity) - (a.market_summary?.single ?? -Infinity);
+  if (sort === "market") return (b.market_evidence?.primaryPrice ?? -Infinity) - (a.market_evidence?.primaryPrice ?? -Infinity);
   if (sort === "watch") return watchScore(b) - watchScore(a);
   if (sort === "opportunity") return opportunityScore(b) - opportunityScore(a);
   if (sort === "release") return getReleaseSortValue(a) - getReleaseSortValue(b);

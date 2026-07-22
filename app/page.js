@@ -7,7 +7,9 @@ import {
   customerTags,
   formatSchedule,
   formatScore,
+  formatMarketEvidenceValue,
   formatYen,
+  hasPriceRankingEvidence,
   isCirculatingItem,
   opportunityScore,
   releasedPriorityScore,
@@ -32,10 +34,11 @@ export default async function Home() {
     .sort((a, b) => upcomingPriority(b) - upcomingPriority(a));
   const spotlight = hot[0];
   const highPriceItems = [...hot]
-    .filter((item) => Number.isFinite(item.market_summary?.single))
-    .sort((a, b) => b.market_summary.single - a.market_summary.single)
+    .filter(hasPriceRankingEvidence)
+    .sort((a, b) => b.market_evidence.primaryPrice - a.market_evidence.primaryPrice)
     .slice(0, 5);
   const risingItems = hot
+    .filter(hasPriceRankingEvidence)
     .map((item) => ({ item, change: priceChangePercent(item) }))
     .filter((entry) => Number.isFinite(entry.change) && entry.change > 0)
     .sort((a, b) => b.change - a.change)
@@ -64,7 +67,7 @@ export default async function Home() {
 
             <div className="dashboard-lower-grid">
               <section className="dashboard-panel">
-                <PanelHead title="単品相場 上位" meta="観測価格順" href="/series?filter=market&sort=market" />
+                <PanelHead title="成約・参考価格 上位" meta="直近90日・成約3件以上" href="/series?filter=market&sort=market" />
                 <div className="dashboard-mini-table" role="list">
                   {highPriceItems.map((item, index) => (
                     <CompactMarketRow key={item.slug} item={item} rank={index + 1} mode="price" />
@@ -132,7 +135,7 @@ function DashboardSpotlight({ item }) {
           <h2>{item.name}</h2>
           <p>{item.series_name} / {item.rarity}</p>
           <div className="dashboard-spotlight__metrics">
-            <Metric label="単品相場" value={formatYen(item.market_summary?.single)} accent />
+            <Metric label={item.market_evidence?.label || "データ不足"} value={formatMarketEvidenceValue(item.market_evidence)} accent />
             <Metric label="定価" value={formatYen(item.price)} />
             <Metric label="直近変動" value={formatChange(priceChangePercent(item))} accent />
             <Metric label="売れた数" value={`${(item.sold_count ?? item.market_summary?.sold_count ?? 0).toLocaleString("ja-JP")}件`} />
@@ -161,7 +164,7 @@ function RankingTile({ item, rank }) {
       <span className={`dashboard-rank-tile__rank rank-${rank}`}>{rank}</span>
       <div className="dashboard-rank-tile__image"><ProductImage src={item.image_url} alt={item.name} priority={rank <= 3} /></div>
       <strong>{item.name}</strong>
-      <span>{formatYen(item.market_summary?.single)}</span>
+      <span>{formatMarketEvidenceValue(item.market_evidence)}</span>
       <small>{Number.isFinite(change) ? formatChange(change) : sellThroughLabel(item.market_summary)} ・ 売れた数 {(item.sold_count ?? 0).toLocaleString("ja-JP")}件</small>
     </Link>
   );
@@ -176,8 +179,8 @@ function CompactMarketRow({ item, rank, mode }) {
       <div className="dashboard-table__image"><ProductImage src={item.image_url} alt={item.name} /></div>
       <div><strong>{item.name}</strong><small>{item.series_name}</small></div>
       <div className="dashboard-mini-row__value">
-        <b>{mode === "price" ? formatYen(item.market_summary?.single) : mode === "rising" ? formatChange(priceChangePercent(item)) : formatScore(watchScore(item))}</b>
-        <small>{mode === "price" ? `出品 ${active}件` : `出品 ${active} / 売れ ${sold}`}</small>
+        <b>{mode === "price" ? formatMarketEvidenceValue(item.market_evidence) : mode === "rising" ? formatChange(priceChangePercent(item)) : formatScore(watchScore(item))}</b>
+        <small>{mode === "price" ? item.market_evidence?.label : `出品 ${active} / 売れ ${sold}`}</small>
       </div>
     </Link>
   );
@@ -216,9 +219,9 @@ function upcomingPriority(item) {
 
 function priceChangePercent(item) {
   const groups = new Map();
-  for (const observation of item.market_observations ?? []) {
+  for (const observation of item.market_evidence?.completedEvidence ?? []) {
     const price = Number(observation.price);
-    const time = new Date(observation.observed_at || observation.created_at).getTime();
+    const time = new Date(observation.observedAt).getTime();
     if (!Number.isFinite(price) || !Number.isFinite(time)) continue;
     const date = new Date(time).toISOString().slice(0, 10);
     const values = groups.get(date) ?? [];

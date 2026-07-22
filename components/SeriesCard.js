@@ -45,6 +45,7 @@ export default function SeriesCard({ series, priority = false, scope = "variant"
             <div className={`metric__value ${metric.tone ? `is-${metric.tone}` : ""}`}>
               {metric.value}
             </div>
+            {metric.meta ? <small>{metric.meta}</small> : null}
           </div>
         ))}
       </div>
@@ -61,6 +62,6 @@ export default function SeriesCard({ series, priority = false, scope = "variant"
 
 function visibleCardMetrics(metrics = [], isReleased) {
   const unavailable = new Set(["未取得", "データ不足"]);
-  const filtered = metrics.filter((metric) => !unavailable.has(metric.value));
+  const filtered = metrics.filter((metric) => metric.meta || /相場|出品価格|データ不足/.test(metric.label) || !unavailable.has(metric.value));
   return (filtered.length ? filtered : metrics).slice(0, isReleased ? 4 : 3);
 }

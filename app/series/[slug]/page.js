@@ -6,14 +6,13 @@ import SeriesCard from "@/components/SeriesCard";
 import MarketplaceLinks from "@/components/MarketplaceLinks";
 import CommunityReportForm from "@/components/CommunityReportForm";
 import PriceTrendChart from "@/components/PriceTrendChart";
-import PriceHistoryTable from "@/components/PriceHistoryTable";
 import FavoriteButton from "@/components/FavoriteButton";
 import { variantHref } from "@/lib/variant-url";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
   customerTags,
-  formatPriceRange,
+  formatMarketEvidenceValue,
   formatSchedule,
   formatScore,
   formatYen,
@@ -105,7 +104,8 @@ export default async function VariantDetailPage({ params }) {
                 series_name: item.series_name,
                 image_url: item.image_url,
                 is_released: isReleased,
-                primary_value: isReleased ? formatYen(item.market_summary?.single) : `${formatSchedule(item)}・${formatYen(item.price)}`,
+                primary_label: isReleased ? item.market_evidence?.label : "発売",
+                primary_value: isReleased ? formatMarketEvidenceValue(item.market_evidence) : `${formatSchedule(item)}・${formatYen(item.price)}`,
               }} />
               <MarketplaceLinks item={item} />
             </div>
@@ -128,10 +128,9 @@ export default async function VariantDetailPage({ params }) {
                 <p className="eyebrow">PRICE PULSE</p>
                 <h2 className="section-title">価格の動き</h2>
               </div>
-              <span className="data-note">参考価格</span>
+              <span className="data-note">{item.market_evidence?.label || "データ不足"}</span>
             </div>
             <PriceTrendChart item={item} />
-            <PriceHistoryTable observations={item.market_observations ?? []} />
           </section>
         ) : null}
 
@@ -190,17 +189,7 @@ export default async function VariantDetailPage({ params }) {
 }
 
 function ReleasedHeroMetrics({ item }) {
-  return (
-    <>
-      <Metric label="価格" value={formatYen(item.price)} />
-      <Metric label="単品相場" value={formatYen(item.market_summary?.single)} tone="highlight" />
-      <Metric label="相場の目安" value={formatPriceRange(item.market_summary?.estimated_resale_range)} tone="highlight" />
-      <Metric label="コンプ相場" value={formatYen(item.market_summary?.complete_set)} />
-      <Metric label="在庫状況" value={stockStatusLabel(item.stock_summary || item.availability_summary)} />
-      <Metric label="売れ行き" value={item.market_summary?.sell_through_signal?.label ?? "データ不足"} />
-      <Metric label="注目度" value={formatScore(watchScore(item))} tone="highlight" />
-    </>
-  );
+  return buildReleasedCustomerMetrics(item).map((metric) => <Metric key={metric.label} {...metric} />);
 }
 
 function UpcomingHeroMetrics({ item }) {
@@ -232,19 +221,15 @@ function UpcomingSummary({ item }) {
 
 function MarketBreakdown({ item }) {
   const summary = item.market_summary || {};
+  const evidence = item.market_evidence || summary.evidence || {};
   return (
     <div className="metric-grid">
-      <Metric label="単品相場" value={formatYen(summary.single)} tone="highlight" />
-      <Metric label="相場の目安" value={formatPriceRange(summary.estimated_resale_range)} tone="highlight" />
-      <Metric label="レア単品" value={formatYen(summary.rare_single)} />
-      <Metric label="シークレット" value={formatYen(summary.secret_single)} />
-      <Metric label="コンプ相場" value={formatYen(summary.complete_set)} />
-      <Metric label="一部セット" value={formatYen(summary.partial_set)} />
-      <Metric label="人気セット" value={formatYen(summary.popular_set)} />
+      <Metric label={evidence.label || "データ不足"} value={formatMarketEvidenceValue(evidence)} meta={evidence.explanation} tone="highlight" />
+      <EvidenceMetric stats={summary.type_stats?.rare_single} fallbackLabel="レア単品" />
+      <EvidenceMetric stats={summary.type_stats?.secret_single} fallbackLabel="シークレット" />
       <Metric label="出品数" value={(summary.active_listing_count ?? 0).toLocaleString("ja-JP")} />
       <Metric label="売れた数" value={(summary.sold_count ?? 0).toLocaleString("ja-JP")} />
       <Metric label="信頼度" value={summary.price_confidence?.label ?? "データ不足"} />
-      <Metric label="推定根拠" value={estimateBasisLabel(summary.estimated_resale_range)} />
       <Metric label="直近更新" value={formatObservedAt(summary.last_observed_at)} />
     </div>
   );
@@ -254,7 +239,7 @@ function UpcomingNotice({ item }) {
   return (
     <div>
       <p className="section-sub">
-        発売前の商品は価格相場を表示せず、先行注目度、話題化期待、入手難度から新作の動きを確認できます。
+        発売前の商品は成約相場や利益を表示しません。予約・出品価格は3件以上確認できた場合だけ、参考情報として区別して表示します。
       </p>
       {item.official_url ? (
         <div className="tag-row" style={{ marginTop: 14 }}>
@@ -310,19 +295,19 @@ function RestockPanel({ item }) {
   );
 }
 
-function Metric({ label, value, tone = "" }) {
+function Metric({ label, value, tone = "", meta = "" }) {
   return (
     <div className="metric">
       <div className="metric__label">{label}</div>
       <div className={`metric__value ${tone ? `is-${tone}` : ""}`}>{value}</div>
+      {meta ? <small>{meta}</small> : null}
     </div>
   );
 }
 
-function estimateBasisLabel(range) {
-  if (!range) return "データ不足";
-  const prefix = range.basis === "confirmed_sold" ? "取引観測" : "販売価格から推定";
-  return `${prefix}・${range.evidence_count ?? 0}件`;
+function EvidenceMetric({ stats, fallbackLabel }) {
+  if (!stats || (!Number.isFinite(stats.primary_price) && stats.listing_count === 0)) return null;
+  return <Metric label={stats.label || fallbackLabel} value={formatYen(stats.primary_price)} meta={stats.explanation} />;
 }
 
 function formatObservedAt(value) {

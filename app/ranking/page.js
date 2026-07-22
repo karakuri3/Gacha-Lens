@@ -3,12 +3,10 @@ import ProductImage from "@/components/ProductImage";
 import { getRankingSeries } from "@/lib/series";
 import { seriesHref, variantHref } from "@/lib/variant-url";
 import {
-  RELEASED_METRIC_LABELS,
-  UPCOMING_METRIC_LABELS,
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
   customerTags,
-  isCirculatingItem,
+  hasPriceRankingEvidence,
   opportunityScore,
   releasedPriorityScore,
 } from "@/lib/domain/public-display-clean";
@@ -22,27 +20,8 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const tabs = [
-  { value: "released", label: "発売中", caption: "話題・流通" },
+  { value: "released", label: "発売中", caption: "成約データ" },
   { value: "upcoming", label: "発売予定", caption: "先行注目" },
-];
-
-const releasedMetricLabels = [
-  RELEASED_METRIC_LABELS.price,
-  RELEASED_METRIC_LABELS.singleMarket,
-  RELEASED_METRIC_LABELS.estimatedResale,
-  RELEASED_METRIC_LABELS.completeSet,
-  RELEASED_METRIC_LABELS.stock,
-  RELEASED_METRIC_LABELS.sellThrough,
-  RELEASED_METRIC_LABELS.watch,
-];
-
-const upcomingMetricLabels = [
-  UPCOMING_METRIC_LABELS.price,
-  UPCOMING_METRIC_LABELS.forecast,
-  UPCOMING_METRIC_LABELS.upside,
-  UPCOMING_METRIC_LABELS.scarcity,
-  UPCOMING_METRIC_LABELS.opportunity,
-  UPCOMING_METRIC_LABELS.release,
 ];
 
 export default async function RankingPage({ searchParams }) {
@@ -192,6 +171,7 @@ function MetricGrid({ metrics }) {
         <div key={metric.label} className="metric">
           <div className="metric__label">{metric.label}</div>
           <div className={`metric__value ${metric.tone ? `is-${metric.tone}` : ""}`}>{metric.value}</div>
+          {metric.meta ? <small>{metric.meta}</small> : null}
         </div>
       ))}
     </div>
@@ -200,9 +180,7 @@ function MetricGrid({ metrics }) {
 
 function getMetrics(item, mode) {
   const metrics = mode === "released" ? buildReleasedCustomerMetrics(item) : buildUpcomingCustomerMetrics(item);
-  const allowed = mode === "released" ? releasedMetricLabels : upcomingMetricLabels;
   return metrics
-    .filter((metric) => allowed.includes(metric.label))
     .filter((metric) => mode !== "released" || !["未取得", "データ不足"].includes(metric.value))
     .slice(0, 6);
 }
@@ -260,12 +238,8 @@ function releasedSeriesPriority(item) {
 
 function isReleasedRankingCandidate(item, scope = "variant") {
   if (!item?.is_released) return false;
-  const market = item.market_summary ?? {};
-  if (scope === "series") {
-    const stock = item.stock_summary ?? item.availability_summary ?? {};
-    return market.listing_count > 0 || Number.isFinite(market.complete_set) || stock.has_stock_signal || stock.has_restock_signal;
-  }
-  return isCirculatingItem(item) || [market.single, market.rare_single, market.secret_single].some(Number.isFinite);
+  if (scope === "series") return hasPriceRankingEvidence(item);
+  return item.variant_type !== "provisional" && hasPriceRankingEvidence(item);
 }
 
 function upcomingPriority(item) {
