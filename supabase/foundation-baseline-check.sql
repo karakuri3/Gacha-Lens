@@ -203,6 +203,23 @@ expected_indexes(index_name) as (
     ('stock_reports_matched_variant_id_idx'),
     ('import_issues_resolved_idx')
 ),
+target_cron_jobs as (
+  select query_to_xml(
+    $query$
+      select jobname, schedule
+      from cron.job
+      where jobname in (
+        'gacha-ingest-official-hourly',
+        'gacha-ingest-market-hourly',
+        'gacha-ingest-stock-hourly'
+      )
+    $query$,
+    false,
+    true,
+    ''
+  ) as result
+  from (select 1 where to_regclass('cron.job') is not null) available
+),
 later_owned_objects(object_name, object_kind) as (
   values
     ('ingestion_runs', 'table'),
@@ -415,14 +432,10 @@ findings as (
 
   select
     'unexpected_cron_job',
-    jobs.jobname,
-    format('schedule=%s', jobs.schedule)
-  from cron.job jobs
-  where jobs.jobname in (
-    'gacha-ingest-official-hourly',
-    'gacha-ingest-market-hourly',
-    'gacha-ingest-stock-hourly'
-  )
+    'gacha-ingest-*',
+    'a disabled ingestion job remains in cron.job'
+  from target_cron_jobs jobs
+  where xpath_exists('/table/row', jobs.result)
 )
 select issue_type, object_name, detail
 from findings
