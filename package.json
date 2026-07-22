@@ -27,7 +27,8 @@
     "db:cleanup-irrelevant-market": "node scripts/cleanup-irrelevant-market-data.mjs",
     "start": "next start",
     "lint": "eslint",
-    "test:data-source": "node --test tests/data-source-policy.test.mjs"
+    "test:data-source": "node --test tests/data-source-policy.test.mjs",
+    "test:foundation-baseline": "node --test tests/foundation-baseline.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",

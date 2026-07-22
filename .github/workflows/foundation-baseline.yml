@@ -1,0 +1,172 @@
+name: Foundation baseline
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  SUPABASE_CLI_VERSION: 2.109.1
+  PGHOST: 127.0.0.1
+  PGPORT: 54322
+  PGDATABASE: postgres
+  PGUSER: postgres
+  PGPASSWORD: postgres
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/foundation-baseline-check.sql"
+      - "tests/foundation-baseline.test.mjs"
+      - "package.json"
+      - ".github/workflows/foundation-baseline.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fresh-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify fixed Supabase CLI
+        shell: bash
+        run: |
+          version="$(npx --yes supabase@"$SUPABASE_CLI_VERSION" --version)"
+          test "$version" = "$SUPABASE_CLI_VERSION"
+          echo "Supabase CLI $version"
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Start disposable Supabase
+        shell: bash
+        run: |
+          set +e
+          npx --yes supabase@"$SUPABASE_CLI_VERSION" start > "$RUNNER_TEMP/supabase-start.log" 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            sed -E 's/(ANON_KEY|SERVICE_ROLE_KEY|SECRET_KEY|ACCESS_KEY|JWT_SECRET|DB_URL|API_KEY)([=: ]+).*/\1\2[redacted]/Ig' "$RUNNER_TEMP/supabase-start.log"
+            exit "$status"
+          fi
+          echo "Disposable Supabase stack started."
+
+      - name: Reset empty database and apply all migrations
+        shell: bash
+        run: npx --yes supabase@"$SUPABASE_CLI_VERSION" db reset --local --no-seed
+
+      - name: Verify migration order
+        shell: bash
+        run: |
+          mapfile -t actual < <(psql -X --no-psqlrc --tuples-only --no-align --command \
+            "select version from supabase_migrations.schema_migrations order by version")
+          expected=(
+            20260715000000
+            20260716090000
+            20260716130000
+            20260716143000
+            20260716220000
+            20260716233000
+            20260721090000
+            20260721100000
+          )
+          if [ "${actual[*]}" != "${expected[*]}" ]; then
+            echo "Expected migrations: ${expected[*]}"
+            echo "Applied migrations:  ${actual[*]}"
+            exit 1
+          fi
+          echo "Applied 8 migrations in the reviewed order."
+
+      - name: Verify final catalog
+        shell: bash
+        run: |
+          findings="$(psql -X --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
+            --field-separator=' | ' --file supabase/foundation-baseline-check.sql)"
+          if [ -n "$findings" ]; then
+            echo "Foundation catalog assertions failed:"
+            printf '%s\n' "$findings"
+            exit 1
+          fi
+          echo "Foundation catalog assertions returned 0 rows."
+
+      - name: Run transactional foreign-key smoke test
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/foundation-smoke.sql" <<'SQL'
+          \set ON_ERROR_STOP on
+          begin;
+
+          insert into public.series (id, slug, name)
+          values ('ci-foundation-series', 'ci-foundation-series', 'CI Foundation Series');
+
+          insert into public.variants (id, slug, series_id, name)
+          values ('ci-foundation-variant', 'ci-foundation-variant', 'ci-foundation-series', 'CI Foundation Variant');
+
+          insert into public.market_listings (
+            id, variant_id, matched_variant_id, series_id, title
+          ) values (
+            'ci-foundation-listing',
+            'ci-foundation-variant',
+            'ci-foundation-variant',
+            'ci-foundation-series',
+            'CI Foundation Listing'
+          );
+
+          do $block$
+          begin
+            begin
+              insert into public.market_listings (id, variant_id, title)
+              values ('ci-invalid-listing', 'ci-missing-variant', 'Invalid FK');
+              raise exception 'invalid foreign key was accepted';
+            exception
+              when foreign_key_violation then null;
+            end;
+          end
+          $block$;
+
+          rollback;
+
+          do $block$
+          begin
+            if exists (select 1 from public.series where id = 'ci-foundation-series')
+              or exists (select 1 from public.variants where id = 'ci-foundation-variant')
+              or exists (select 1 from public.market_listings where id like 'ci-%') then
+              raise exception 'smoke-test data remained after rollback';
+            end if;
+          end
+          $block$;
+          SQL
+          psql -X --no-psqlrc --file "$RUNNER_TEMP/foundation-smoke.sql"
+          echo "FK acceptance, FK rejection, rollback, and zero residue verified."
+
+      - name: Run Foundation static tests
+        run: npm run test:foundation-baseline
+
+      - name: Run data-source tests
+        run: npm run test:data-source
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Stop disposable Supabase
+        if: always()
+        shell: bash
+        run: npx --yes supabase@"$SUPABASE_CLI_VERSION" stop --no-backup || true
