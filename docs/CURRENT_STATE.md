@@ -10,7 +10,7 @@ Product direction: see `docs/PRODUCT_VISION.md`. The site is a gachapon market i
 
 Gacha Lens は、ガチャ商品を「シリーズ」ではなく「単品 variant」主役で見せる Next.js アプリです。公開 UI は `/ranking`、`/schedule`、`/series`、`/series/[slug]` を中心に、発売中は価格・単品相場・利益目安・在庫・売れ行き、発売予定は期待値・価格上昇期待・流通の少なさ・狙い目度を見せる構成になっています。
 
-データは `lib/series.js` が集約し、`GACHA_DATA_SOURCE=supabase` かつ Supabase env がある場合は Supabase を優先します。DB が空、未接続、または取得失敗の場合は file/mock に fallback します。
+データは `lib/series.js` が集約します。Production は Supabase 固定で、設定不足や取得失敗を file/mock で隠しません。DB が空なら空状態、商品が存在しなければ404、取得失敗なら明示的なデータ取得エラーになります。Development/Test の sample は `GACHA_DATA_SOURCE=sample` を明示した場合だけ利用できます。
 
 ## 2. 技術スタック
 

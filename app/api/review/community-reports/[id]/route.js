@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { REVIEW_COOKIE_NAME, verifyReviewSession } from "@/lib/admin-auth";
-import { hasSupabaseConfig, supabase } from "@/lib/supabase";
+import {
+  hasServiceRoleSupabaseConfig as hasSupabaseConfig,
+  serviceRoleSupabase as supabase,
+} from "@/lib/supabase/service-role-client";
 
 export async function POST(request, { params }) {
   if (!sameOrigin(request) || !verifyReviewSession(request.cookies.get(REVIEW_COOKIE_NAME)?.value)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!hasSupabaseConfig || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!hasSupabaseConfig) {
     return Response.json({ error: "Supabase service role is required" }, { status: 503 });
   }
 
