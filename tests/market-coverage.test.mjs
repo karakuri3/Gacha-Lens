@@ -11,6 +11,7 @@ import {
   applyMarketCandidateSafety,
   applyMarketPersistenceSafety,
   assessMarketCandidate,
+  requiresPlannerMarketSafety,
 } from "../lib/domain/market-match-safety.js";
 import { MARKET_EVIDENCE_TIERS, classifyMarketEvidence, dedupeMarketListings } from "../lib/domain/market-evidence.js";
 import { buildMarketSearchQueriesForVariant, isSafeMarketSearchQuery } from "../lib/fetchers/market-query-planner.js";
@@ -179,7 +180,7 @@ function assessedPersistenceFixture(title, options = {}) {
     title,
     variant_id: options.explicitVariantId,
     raw: {
-      provider: "fixture-market-api",
+      provider: options.provider ?? "fixture-market-api",
       ...(options.includeQuery === false ? {} : { query }),
     },
   };
@@ -251,7 +252,7 @@ test("unsafe query candidates are unlinked before persistence", () => {
 });
 
 test("API candidates without query context become review records", () => {
-  const row = assessedPersistenceFixture("冒険ガチャ 勇者 ガチャ 単品", { includeQuery: false }).row;
+  const row = assessedPersistenceFixture("冒険ガチャ 勇者 ガチャ 単品", { includeQuery: false, provider: "rakuten_ichiba" }).row;
   assert.equal(row.classification_reason, "query_context_missing");
   assert.ok(row.classification_confidence <= 0.49);
 });
@@ -271,6 +272,57 @@ test("safety metadata preserves the provider raw response for audit", () => {
 test("approved feed rows without planner safety metadata retain existing handling", () => {
   const row = { variant_id: "v1", series_id: "s1", review_required: false };
   assert.deepEqual(applyMarketPersistenceSafety(row, { provider: "approved-feed" }), row);
+});
+
+test("mixed collection path only assesses planner API records", () => {
+  const query = buildMarketSearchQueriesForVariant(variant, series)[0];
+  const records = [
+    { id: "rakuten-safe", title: "冒険ガチャ 勇者 ガチャ 単品", raw: { provider: "rakuten_ichiba", query } },
+    { id: "yahoo-ambiguous", title: "冒険ガチャ 勇者 魔法使い 2点", raw: { provider: "yahoo_shopping", query } },
+    { id: "rakuten-missing-query", title: "冒険ガチャ 勇者 ガチャ 単品", raw: { provider: "rakuten_ichiba" } },
+    { id: "approved-feed", title: "冒険ガチャ 勇者 ガチャ 単品", raw: { fetch_context: { source: "approved-json" } } },
+  ];
+  const safety = applyMarketCandidateSafety({ records, queryPlan: [query], catalog: catalog() });
+  const classifierRows = records.map(() => ({
+    variant_id: "v3",
+    matched_variant_id: "v3",
+    series_id: "s1",
+    listing_type: "single",
+    market_review_type: "single",
+    classification_reason: "existing_classifier",
+    classification_confidence: 0.86,
+    confidence: 0.86,
+    review_required: false,
+  }));
+  const finalRows = safety.records.map((record, index) => applyMarketPersistenceSafety(classifierRows[index], record));
+
+  assert.deepEqual(safety.summary, {
+    accepted_listings: 1,
+    ambiguous_listings: 2,
+    safety_assessed_records: 3,
+    safety_skipped_approved_feed_records: 1,
+    variants_with_results: 1,
+  });
+  assert.deepEqual([finalRows[0].variant_id, finalRows[0].review_required], ["v1", false]);
+  assert.deepEqual([finalRows[1].variant_id, finalRows[1].series_id, finalRows[1].review_required], [null, null, true]);
+  assert.deepEqual([finalRows[2].classification_reason, finalRows[2].review_required], ["query_context_missing", true]);
+  assert.deepEqual(finalRows[3], classifierRows[3]);
+  assert.equal(safety.records[3].market_safety_assessed, undefined);
+});
+
+test("approved feed records are not planner-assessed or counted as ambiguous", () => {
+  const record = { raw: { fetch_context: { format: "csv" } } };
+  const result = applyMarketCandidateSafety({ records: [record], queryPlan: [], catalog: catalog() });
+  assert.equal(requiresPlannerMarketSafety(record), false);
+  assert.equal(result.records[0], record);
+  assert.equal(result.records[0].market_safety_assessed, undefined);
+  assert.equal(result.summary.ambiguous_listings, 0);
+  assert.equal(result.summary.safety_skipped_approved_feed_records, 1);
+});
+
+test("planner API providers require safety even when query context is missing", () => {
+  assert.equal(requiresPlannerMarketSafety({ raw: { provider: "rakuten_ichiba" } }), true);
+  assert.equal(requiresPlannerMarketSafety({ raw: { provider: "yahoo_shopping" } }), true);
 });
 
 test("upsert path enforces safety and creates review issues", async () => {
