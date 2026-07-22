@@ -14,6 +14,13 @@ import {
   requiresPlannerMarketSafety,
 } from "../lib/domain/market-match-safety.js";
 import { MARKET_EVIDENCE_TIERS, classifyMarketEvidence, dedupeMarketListings } from "../lib/domain/market-evidence.js";
+import {
+  MARKET_SOURCE_SCOPES,
+  describeMarketWriteReadiness,
+  normalizeMarketSourceScope,
+  selectMarketSourceFamilies,
+} from "../lib/domain/market-source-scope.js";
+import { describeMarketSourceConfiguration, fetchMarketListingsRaw } from "../lib/fetchers/market-fetcher.js";
 import { buildMarketSearchQueriesForVariant, isSafeMarketSearchQuery } from "../lib/fetchers/market-query-planner.js";
 
 const NOW = new Date("2026-07-22T12:00:00Z");
@@ -336,5 +343,159 @@ test("scheduled and manual ingestion share one non-cancelling concurrency group"
   assert.match(workflow, /group: gacha-ingestion\s+cancel-in-progress: false/);
   assert.equal((workflow.match(/cron:/g) ?? []).length, 3);
   assert.match(workflow, /default: dry-run/);
-  assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then mode=write/);
+  assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then\s+mode=write/);
 });
+
+test("market source scope normalizes invalid input to the requested safe default", () => {
+  assert.equal(normalizeMarketSourceScope("invalid", MARKET_SOURCE_SCOPES.PLANNER_APIS), MARKET_SOURCE_SCOPES.PLANNER_APIS);
+  assert.equal(normalizeMarketSourceScope("invalid", "also-invalid"), MARKET_SOURCE_SCOPES.ALL);
+});
+
+test("planner scope selects APIs and excludes approved feeds", () => {
+  assert.deepEqual(selectMarketSourceFamilies(MARKET_SOURCE_SCOPES.PLANNER_APIS), {
+    sourceScope: MARKET_SOURCE_SCOPES.PLANNER_APIS,
+    approvedFeedSourcesEnabled: false,
+    plannerApiSourcesEnabled: true,
+  });
+});
+
+test("approved feed scope excludes planner APIs", () => {
+  assert.deepEqual(selectMarketSourceFamilies(MARKET_SOURCE_SCOPES.APPROVED_FEEDS), {
+    sourceScope: MARKET_SOURCE_SCOPES.APPROVED_FEEDS,
+    approvedFeedSourcesEnabled: true,
+    plannerApiSourcesEnabled: false,
+  });
+});
+
+test("all scope selects approved feeds and planner APIs", () => {
+  assert.deepEqual(selectMarketSourceFamilies(MARKET_SOURCE_SCOPES.ALL), {
+    sourceScope: MARKET_SOURCE_SCOPES.ALL,
+    approvedFeedSourcesEnabled: true,
+    plannerApiSourcesEnabled: true,
+  });
+});
+
+test("planner-only write is blocked without a configured planner API", () => {
+  assert.deepEqual(describeMarketWriteReadiness(MARKET_SOURCE_SCOPES.PLANNER_APIS, 0), {
+    writeReady: false,
+    blockingReason: "no_planner_api_source_configured",
+  });
+});
+
+test("planner-only write becomes ready with one configured planner API", () => {
+  assert.equal(describeMarketWriteReadiness(MARKET_SOURCE_SCOPES.PLANNER_APIS, 1).writeReady, true);
+});
+
+test("planner configuration never counts an approved feed", () => {
+  const configuration = describeMarketSourceConfiguration({
+    sourceScope: "planner-apis",
+    sourcesJson: JSON.stringify([{ url: "https://feed.example/market.json" }]),
+    queryCount: 5,
+    rakuten: { enabled: false },
+    yahoo: { enabled: false },
+  });
+  assert.equal(configuration.approvedFeedSourcesConfigured, 0);
+  assert.equal(configuration.plannedSourceRequests.approved_feed_exports, 0);
+  assert.equal(configuration.writeReady, false);
+});
+
+test("approved-feed configuration never counts planner credentials", () => {
+  const configuration = describeMarketSourceConfiguration({
+    sourceScope: "approved-feeds",
+    sourcesJson: JSON.stringify([{ url: "https://feed.example/market.json" }]),
+    queryCount: 5,
+    rakuten: { enabled: true, applicationId: "id", accessKey: "key" },
+    yahoo: { enabled: true, appId: "id" },
+  });
+  assert.equal(configuration.approvedFeedSourcesConfigured, 1);
+  assert.equal(configuration.plannerApiSourcesConfigured, 0);
+  assert.equal(configuration.plannedSourceRequests.rakuten_ichiba, 0);
+  assert.equal(configuration.plannedSourceRequests.yahoo_shopping, 0);
+});
+
+test("planner fetch does not invoke approved feeds", async () => {
+  const calls = [];
+  const result = await fetchMarketListingsRaw({
+    sourceScope: "planner-apis",
+    sourcesJson: JSON.stringify([{ url: "https://feed.example/market.json" }]),
+    queries: [{ query: "series variant", variant_id: "v1", series_id: "s1" }],
+    rakuten: { enabled: true, applicationId: "id", accessKey: "key" },
+    yahoo: { enabled: true, appId: "id" },
+    adapters: sourceAdapters(calls),
+  });
+  assert.deepEqual(calls, ["rakuten", "yahoo"]);
+  assert.equal(result.approvedFeedRequestsAttempted, 0);
+  assert.equal(result.plannerApiRequestsAttempted, 2);
+});
+
+test("approved-feed fetch does not invoke Rakuten or Yahoo", async () => {
+  const calls = [];
+  const result = await fetchMarketListingsRaw({
+    sourceScope: "approved-feeds",
+    sourcesJson: JSON.stringify([{ url: "https://feed.example/market.json" }]),
+    queries: [{ query: "series variant", variant_id: "v1", series_id: "s1" }],
+    rakuten: { enabled: true, applicationId: "id", accessKey: "key" },
+    yahoo: { enabled: true, appId: "id" },
+    adapters: sourceAdapters(calls),
+  });
+  assert.deepEqual(calls, ["approved-feeds"]);
+  assert.equal(result.approvedFeedRequestsAttempted, 1);
+  assert.equal(result.plannerApiRequestsAttempted, 0);
+});
+
+test("all source fetch invokes both source families", async () => {
+  const calls = [];
+  const result = await fetchMarketListingsRaw({
+    sourceScope: "all",
+    sourcesJson: JSON.stringify([{ url: "https://feed.example/market.json" }]),
+    queries: [{ query: "series variant", variant_id: "v1", series_id: "s1" }],
+    rakuten: { enabled: true, applicationId: "id", accessKey: "key" },
+    yahoo: { enabled: true, appId: "id" },
+    adapters: sourceAdapters(calls),
+  });
+  assert.deepEqual(calls, ["approved-feeds", "rakuten", "yahoo"]);
+  assert.equal(result.configuredSources, 3);
+});
+
+test("manual workflow defaults to planner APIs while scheduled ingestion forces all", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
+  assert.match(workflow, /source_scope:[\s\S]*default: planner-apis/);
+  assert.match(workflow, /execute_sources:[\s\S]*default: false/);
+  assert.match(workflow, /source_scope=all/);
+  assert.match(workflow, /MARKET_SOURCE_SCOPE: \$\{\{ steps\.ingestion\.outputs\.source_scope \}\}/);
+  assert.equal((workflow.match(/cron:/g) ?? []).length, 3);
+});
+
+test("manual write guard runs before the ingestion process is spawned", async () => {
+  const source = await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8");
+  assert.ok(source.indexOf("if (!sourcePlan.writeReady)") < source.indexOf("spawnScript(\"scripts/run-ingestion.mjs\""));
+  assert.match(source, /No planner API source is configured\. Production write was not started\./);
+  assert.match(source, /MARKET_SOURCE_SCOPE: options\.sourceScope/);
+});
+
+function sourceAdapters(calls) {
+  const plannerResult = (source) => ({
+    ok: true,
+    enabled: true,
+    source,
+    configuredSources: 1,
+    count: 1,
+    records: [{ id: `${source}-1`, title: `${source} item`, raw: { provider: source } }],
+    issues: [],
+    feedResults: [{ name: source, source, format: "api", ok: true, status: 200, message: "" }],
+  });
+  return {
+    approvedFeeds: async (sources) => {
+      calls.push("approved-feeds");
+      return sources.map((source) => ({ ok: true, source, status: 200, data: [{ id: "feed-1", title: "feed item" }] }));
+    },
+    rakuten: async () => {
+      calls.push("rakuten");
+      return plannerResult("rakuten_ichiba");
+    },
+    yahoo: async () => {
+      calls.push("yahoo");
+      return plannerResult("yahoo_shopping");
+    },
+  };
+}

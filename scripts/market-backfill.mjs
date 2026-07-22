@@ -1,6 +1,11 @@
 import { spawn } from "node:child_process";
 import { summarizeFetchedMarketCandidates } from "../lib/domain/market-match-safety.js";
-import { fetchMarketListingsRaw } from "../lib/fetchers/market-fetcher.js";
+import {
+  MARKET_SOURCE_SCOPES,
+  describeMarketSourceConfiguration,
+  fetchMarketListingsRaw,
+  normalizeMarketSourceScope,
+} from "../lib/fetchers/market-fetcher.js";
 import { planMarketSearchQueries } from "../lib/fetchers/market-query-planner.js";
 import { loadMarketCoverageData } from "./market-coverage-data.mjs";
 
@@ -15,18 +20,19 @@ async function runDryMode(options) {
   const startedAt = Date.now();
   const data = await loadMarketCoverageData();
   const plan = planMarketSearchQueries(data.catalog, data.coverageRows, options);
-  const sourcePlan = plannedSourceRequests(plan.queries.length);
-  let sourceResult = emptySourceResult(plan.selected.length);
+  const sourcePlan = describeMarketSourceConfiguration({ sourceScope: options.sourceScope, queryCount: plan.queries.length });
+  let sourceResult = emptySourceResult(plan.selected.length, sourcePlan);
 
   if (options.executeSources) {
     if (plan.selected.length > 5) throw new Error("External dry-run is limited to 5 variants.");
-    const fetched = await fetchMarketListingsRaw({ catalog: data.catalog, queries: plan.queries });
+    const fetched = await fetchMarketListingsRaw({ catalog: data.catalog, queries: plan.queries, sourceScope: options.sourceScope });
     sourceResult = assessFetchedRecords(fetched, plan, data.catalog);
   }
 
   const summary = {
     ok: true,
     mode: "dry-run",
+    source_scope: options.sourceScope,
     write_protected: true,
     ...plan.summary,
     selected_variant_ids: plan.selected.map((entry) => entry.variantId),
@@ -39,7 +45,7 @@ async function runDryMode(options) {
     })),
     queries_generated: plan.queries.length,
     query_sample: plan.queries.slice(0, 5).map((entry) => entry.query),
-    planned_source_requests: sourcePlan,
+    planned_source_requests: sourcePlan.plannedSourceRequests,
     ...sourceResult,
     listing_upserts: 0,
     observations_created: 0,
@@ -51,12 +57,19 @@ async function runDryMode(options) {
 }
 
 async function runWriteMode(options) {
+  const sourcePlan = describeMarketSourceConfiguration({ sourceScope: options.sourceScope });
+  if (!sourcePlan.writeReady) {
+    console.error("No planner API source is configured. Production write was not started.");
+    process.exitCode = 1;
+    return;
+  }
   const env = {
     ...process.env,
     MARKET_COVERAGE_LIMIT: String(options.limit),
     MARKET_COVERAGE_PRIORITY: String(options.priority),
     MARKET_COVERAGE_RELEASE: options.release,
     MARKET_COVERAGE_COOLDOWN_HOURS: String(options.cooldownHours),
+    MARKET_SOURCE_SCOPE: options.sourceScope,
   };
   const exitCode = await spawnScript("scripts/run-ingestion.mjs", env, ["--task=market"]);
   if (exitCode !== 0) process.exitCode = exitCode;
@@ -72,13 +85,23 @@ function assessFetchedRecords(fetched, plan, catalog) {
     catalog,
   });
   return {
+    ...sourceSummary(fetched),
     ...candidateSummary,
     no_result_variants: Math.max(0, plan.selected.length - candidateSummary.variants_with_results),
   };
 }
 
-function emptySourceResult(selectedCount) {
+function emptySourceResult(selectedCount, sourcePlan) {
   return {
+    source_scope: sourcePlan.sourceScope,
+    approved_feed_sources_configured: sourcePlan.approvedFeedSourcesConfigured,
+    planner_api_sources_configured: sourcePlan.plannerApiSourcesConfigured,
+    approved_feed_requests_attempted: 0,
+    planner_api_requests_attempted: 0,
+    rakuten_requests_attempted: 0,
+    yahoo_requests_attempted: 0,
+    write_ready: sourcePlan.writeReady,
+    blocking_reason: sourcePlan.blockingReason,
     requests_attempted: 0,
     requests_succeeded: 0,
     requests_rate_limited: 0,
@@ -91,24 +114,18 @@ function emptySourceResult(selectedCount) {
   };
 }
 
-function plannedSourceRequests(queryCount) {
+function sourceSummary(fetched) {
   return {
-    approved_feed_exports: configuredFeedCount(),
-    rakuten_ichiba: enabled(process.env.RAKUTEN_MARKET_FETCH_ENABLED, process.env.RAKUTEN_APPLICATION_ID)
-      ? Math.min(queryCount, Number(process.env.RAKUTEN_MARKET_QUERY_LIMIT) || 8)
-      : 0,
-    yahoo_shopping: enabled(process.env.YAHOO_SHOPPING_FETCH_ENABLED, process.env.YAHOO_SHOPPING_APP_ID)
-      ? Math.min(queryCount, Number(process.env.YAHOO_SHOPPING_QUERY_LIMIT) || 24)
-      : 0,
+    source_scope: fetched.sourceScope,
+    approved_feed_sources_configured: fetched.approvedFeedSourcesConfigured ?? 0,
+    planner_api_sources_configured: fetched.plannerApiSourcesConfigured ?? 0,
+    approved_feed_requests_attempted: fetched.approvedFeedRequestsAttempted ?? 0,
+    planner_api_requests_attempted: fetched.plannerApiRequestsAttempted ?? 0,
+    rakuten_requests_attempted: fetched.rakutenRequestsAttempted ?? 0,
+    yahoo_requests_attempted: fetched.yahooRequestsAttempted ?? 0,
+    write_ready: Boolean(fetched.writeReady),
+    blocking_reason: fetched.blockingReason ?? null,
   };
-}
-
-function configuredFeedCount() {
-  try {
-    const parsed = JSON.parse(process.env.MARKET_RAW_FEED_SOURCES_JSON || "[]");
-    if (Array.isArray(parsed)) return parsed.length;
-  } catch {}
-  return String(process.env.MARKET_RAW_FEED_URLS || "").split(",").map((entry) => entry.trim()).filter(Boolean).length;
 }
 
 function parseOptions(args) {
@@ -127,6 +144,7 @@ function parseOptions(args) {
     release: ["released", "upcoming", "all"].includes(values.release) ? values.release : "all",
     cooldownHours: Math.max(0, Number(values.cooldownHours ?? values["cooldown-hours"] ?? 24) || 0),
     executeSources: flags.has("execute-sources"),
+    sourceScope: normalizeMarketSourceScope(values["source-scope"], MARKET_SOURCE_SCOPES.PLANNER_APIS),
   };
 }
 
@@ -136,9 +154,4 @@ function spawnScript(script, env, args = []) {
     child.once("error", reject);
     child.once("close", (code) => resolve(code ?? 1));
   });
-}
-
-function enabled(explicit, credential) {
-  if (explicit != null && String(explicit).trim() !== "") return !["0", "false", "no", "off"].includes(String(explicit).toLowerCase());
-  return Boolean(credential);
 }
