@@ -28,7 +28,7 @@ export default function Header() {
 
         <form className="global-search" action="/series" method="get" role="search">
           <Search size={18} aria-hidden="true" />
-          <input name="q" aria-label="ガチャを検索" placeholder="ガチャ名・キャラクター名で検索" />
+          <input name="q" aria-label="ガチャを検索" placeholder="商品名・作品名・キャラクター名で検索" />
           <button type="submit" aria-label="検索する" title="検索する"><Search size={19} /></button>
         </form>
 
