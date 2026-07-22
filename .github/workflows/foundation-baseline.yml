@@ -66,6 +66,22 @@ jobs:
           fi
           echo "Disposable Supabase stack started."
 
+      - name: Configure app for disposable Supabase
+        shell: bash
+        run: |
+          status_env="$(npx --yes supabase@"$SUPABASE_CLI_VERSION" status -o env)"
+          eval "$status_env"
+          : "${API_URL:?Supabase CLI did not return API_URL}"
+          : "${SERVICE_ROLE_KEY:?Supabase CLI did not return SERVICE_ROLE_KEY}"
+          echo "::add-mask::$API_URL"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "GACHA_DATA_SOURCE=supabase"
+          } >> "$GITHUB_ENV"
+          echo "Disposable Supabase app environment configured."
+
       - name: Reset empty database and apply all migrations
         shell: bash
         run: npx --yes supabase@"$SUPABASE_CLI_VERSION" db reset --local --no-seed
