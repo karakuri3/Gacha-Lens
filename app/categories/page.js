@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import { getCategoryCatalog } from "@/lib/series";
+import { buildCatalogHref } from "@/lib/domain/catalog-query";
 
 export const metadata = {
   title: "カテゴリ一覧 | Gacha Lens",
@@ -27,7 +28,7 @@ export default async function CategoriesPage() {
             {categories.map((category, index) => (
               <Link
                 key={category.name}
-                href={{ pathname: "/series", query: { category: category.name } }}
+                href={buildCatalogHref({}, { category: category.name })}
                 className="category-card"
               >
                 <div className="category-card__image">
@@ -36,6 +37,7 @@ export default async function CategoriesPage() {
                 <div>
                   <h2>{category.name}</h2>
                   <p>{category.item_count.toLocaleString("ja-JP")}件の単品</p>
+                  {category.upcoming_count > 0 ? <small>発売予定 {category.upcoming_count.toLocaleString("ja-JP")}件</small> : null}
                 </div>
                 <span aria-hidden="true">→</span>
               </Link>

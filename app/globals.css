@@ -2612,7 +2612,57 @@ button.button-link {
 .category-card__image img { object-fit: contain; }
 .category-card h2 { margin: 0; font-size: 15px; }
 .category-card p { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
+.category-card small { display: block; margin-top: 4px; color: #7a4d08; font-size: 9px; font-weight: 800; }
 .category-card > span { color: var(--accent); font-size: 18px; font-weight: 900; }
+
+.home-discovery {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.65fr) minmax(340px, 1.35fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 12px;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.035);
+}
+.home-discovery h2 { margin: 2px 0 0; font-size: 17px; }
+.home-discovery form { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; border: 1px solid #cbd0d8; border-radius: 6px; overflow: hidden; }
+.home-discovery input { min-width: 0; min-height: 42px; border: 0; outline: 0; padding: 8px 12px; font-size: 12px; }
+.home-discovery button { min-width: 82px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-left: 1px solid #dfe3e8; background: var(--ink); color: #ffffff; font-weight: 850; cursor: pointer; }
+.home-discovery nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.home-discovery nav a { border: 1px solid var(--line); border-radius: 5px; padding: 7px 9px; color: var(--ink); font-size: 10px; font-weight: 800; text-decoration: none; white-space: nowrap; }
+.home-discovery nav a:hover { border-color: #cfd3da; background: #f7f8fa; color: var(--accent); }
+
+.catalog-filter-grid { grid-template-columns: minmax(240px, 2fr) repeat(4, minmax(130px, 1fr)); }
+.catalog-filter-actions { display: flex; align-items: center; gap: 7px; }
+.catalog-filter-tabs .pill-link span { margin-left: 6px; opacity: 0.7; }
+.active-filter-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.active-filter-row strong { color: var(--muted); font-size: 10px; }
+.active-filter-row span { border: 1px solid #dfe3e8; border-radius: 4px; background: #f7f8fa; padding: 5px 7px; font-size: 10px; }
+.active-filter-row a { margin-left: auto; color: var(--accent); font-size: 10px; font-weight: 800; }
+.catalog-empty { justify-items: start; }
+
+.schedule-month-nav {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 8px;
+}
+.schedule-month-nav strong { text-align: center; font-size: 16px; }
+.schedule-month-nav a { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 5px; padding: 6px 10px; color: var(--ink); font-size: 11px; font-weight: 800; text-decoration: none; }
+.schedule-month-nav a:hover { border-color: #cfd3da; background: #f7f8fa; color: var(--accent); }
+.schedule-month-nav__today { color: var(--accent) !important; }
+.schedule-available-months { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.schedule-available-months::-webkit-scrollbar { display: none; }
+.schedule-available-months .pill-link { flex: 0 0 auto; }
+.schedule-results-head { margin-top: 12px; }
 
 .signal-list { display: grid; gap: 8px; }
 .signal-row {
@@ -2704,6 +2754,10 @@ button.button-link {
 .price-history-table th { background: #f6f7f8; color: var(--muted); font-size: 9px; }
 
 @media (max-width: 900px) {
+  .home-discovery { grid-template-columns: 1fr; gap: 8px; }
+  .home-discovery nav { justify-content: flex-start; }
+  .catalog-filter-grid { grid-template-columns: 1fr 1fr; }
+  .catalog-keyword-field { grid-column: 1 / -1; }
   .header-menu summary { width: 38px; justify-content: center; padding: 8px; }
   .header-menu summary > span { display: none; }
   .signal-row { grid-template-columns: 82px minmax(0, 1fr); }
@@ -2715,6 +2769,19 @@ button.button-link {
 }
 
 @media (max-width: 640px) {
+  .home-discovery { margin-bottom: 8px; padding: 9px; }
+  .home-discovery h2 { font-size: 14px; }
+  .home-discovery input { min-height: 38px; padding: 7px 9px; font-size: 11px; }
+  .home-discovery button { min-width: 42px; }
+  .home-discovery button span { display: none; }
+  .home-discovery nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+  .home-discovery nav a { min-width: 0; padding: 6px 4px; text-align: center; white-space: normal; }
+  .catalog-filter-actions { display: grid; grid-template-columns: 1fr auto; }
+  .active-filter-row { align-items: stretch; }
+  .active-filter-row a { width: 100%; margin-left: 0; }
+  .schedule-month-nav { grid-template-columns: 1fr 1fr 1fr; }
+  .schedule-month-nav strong { grid-column: 1 / -1; grid-row: 1; }
+  .schedule-month-nav__today { grid-column: 2; grid-row: 2; }
   .site-logo__copy small { display: none; }
   .header-actions { gap: 1px; }
   .header-actions > a,

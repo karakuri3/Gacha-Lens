@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import PriceTrendChart from "@/components/PriceTrendChart";
+import { Search } from "lucide-react";
 import { getRankingSeries } from "@/lib/series";
 import { variantHref } from "@/lib/variant-url";
 import {
@@ -51,6 +52,23 @@ export default async function Home() {
     <main className="site-main dashboard-main">
       <div className="site-shell">
         <h1 className="sr-only">いま注目のガチャがすぐ分かる Gacha Lens</h1>
+
+        <section className="home-discovery" aria-labelledby="home-discovery-title">
+          <div>
+            <p className="eyebrow">DISCOVER</p>
+            <h2 id="home-discovery-title">欲しいガチャをすぐ探す</h2>
+          </div>
+          <form action="/series" method="get" role="search">
+            <label className="sr-only" htmlFor="home-catalog-search">商品名、作品名、キャラクター名で検索</label>
+            <input id="home-catalog-search" name="q" type="search" placeholder="商品名、作品名、キャラクター名で検索" />
+            <button type="submit" aria-label="ガチャを検索"><Search size={18} aria-hidden="true" /><span>検索</span></button>
+          </form>
+          <nav aria-label="探し方">
+            <Link href="/categories">カテゴリから探す</Link>
+            <Link href="/series?release=upcoming">発売予定を見る</Link>
+            <Link href="/schedule">発売月から探す</Link>
+          </nav>
+        </section>
 
         <div className="dashboard-layout">
           <div className="dashboard-primary">

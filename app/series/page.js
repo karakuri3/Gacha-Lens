@@ -1,267 +1,225 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import SeriesCard from "@/components/SeriesCard";
 import { getCategoryCatalog, getParentSeriesCatalogPage, getRankingSeries, getSeriesCatalogCounts, getSeriesCatalogPage } from "@/lib/series";
 import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display-clean";
-
-export const metadata = {
-  title: "ガチャ一覧 | Gacha Lens",
-  description: "発売中と発売予定のガチャ単品を、価格・話題度・在庫・発売情報で探せます。",
-};
+import {
+  buildCatalogHref,
+  formatCatalogMonth,
+  hasActiveCatalogFilters,
+  parseCatalogQuery,
+  recordMatchesCatalogQuery,
+} from "@/lib/domain/catalog-query";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const filters = [
+const PAGE_SIZE = 60;
+const releaseOptions = [
   { value: "all", label: "すべて" },
   { value: "released", label: "発売中" },
-  { value: "circulating", label: "今出回っている" },
-  { value: "market", label: "相場データあり" },
   { value: "upcoming", label: "発売予定" },
-  { value: "opportunity", label: "先行注目" },
+];
+const sortOptions = [
+  { value: "relevance", label: "関連度順" },
+  { value: "newest", label: "新着順" },
+  { value: "price_asc", label: "定価が安い順" },
+  { value: "price_desc", label: "定価が高い順" },
 ];
 
-const sorts = [
-  { value: "recommended", label: "おすすめ順" },
-  { value: "watch", label: "注目度順" },
-  { value: "market", label: "参考相場順" },
-  { value: "opportunity", label: "先行注目順" },
-  { value: "release", label: "発売月順" },
-];
-
-const PAGE_SIZE = 60;
+export async function generateMetadata({ searchParams }) {
+  const query = parseCatalogQuery(await searchParams);
+  const canonical = buildCatalogHref({
+    scope: query.scope,
+    release: query.release,
+    category: query.category,
+    month: query.month,
+  });
+  return {
+    title: query.q ? `「${query.q}」の検索結果 | Gacha Lens` : "ガチャ一覧 | Gacha Lens",
+    description: "商品名・作品名・シリーズ名・カテゴリ・発売月から、公開中のガチャを探せます。",
+    alternates: { canonical },
+    robots: query.q ? { index: false, follow: true } : { index: true, follow: true },
+  };
+}
 
 export default async function SeriesPage({ searchParams }) {
-  const params = await searchParams;
-  const scope = params?.scope === "series" ? "series" : "variant";
-  const q = String(params?.q ?? "").trim();
-  const category = String(params?.category ?? "").trim();
-  const filter = filters.some((item) => item.value === params?.filter) ? params.filter : "all";
-  const sort = sorts.some((item) => item.value === params?.sort) ? params.sort : "recommended";
-  const requestedPage = Math.max(1, Number.parseInt(String(params?.page ?? "1"), 10) || 1);
-  const useDatabaseCatalog = ["all", "released", "upcoming"].includes(filter) && ["recommended", "release"].includes(sort);
-  const signalMode = ["circulating", "market", "released"].includes(filter) || ["watch", "market"].includes(sort)
-    ? "released"
-    : "upcoming";
-  const [series, catalogPage, catalogCounts, categories] = await Promise.all([
-    useDatabaseCatalog ? Promise.resolve([]) : getRankingSeries(signalMode, scope),
-    useDatabaseCatalog
-      ? (scope === "series" ? getParentSeriesCatalogPage : getSeriesCatalogPage)({ q, category, filter, sort, page: requestedPage, pageSize: PAGE_SIZE })
-      : Promise.resolve(null),
+  const query = parseCatalogQuery(await searchParams);
+  const useSignalCatalog = Boolean(query.legacyMode);
+  const signalMode = query.release === "upcoming" ? "upcoming" : "released";
+  const [signalItems, catalogPage, catalogCounts, categories] = await Promise.all([
+    useSignalCatalog ? getRankingSeries(signalMode, query.scope) : Promise.resolve([]),
+    useSignalCatalog
+      ? Promise.resolve(null)
+      : (query.scope === "series" ? getParentSeriesCatalogPage : getSeriesCatalogPage)({ ...query, pageSize: PAGE_SIZE }),
     getSeriesCatalogCounts(),
     getCategoryCatalog(),
   ]);
 
   const filtered = catalogPage
     ? catalogPage.items
-    : series
-        .filter((item) => matchesFilter(item, filter))
-        .filter((item) => matchesKeyword(item, q))
-        .filter((item) => !category || item.category === category)
-        .sort((a, b) => compareSeries(a, b, sort));
-
-  const counts = Object.fromEntries(filters.map((item) => [item.value, series.filter((entry) => matchesFilter(entry, item.value)).length]));
-  if (useDatabaseCatalog) {
-    for (const key of Object.keys(counts)) counts[key] = null;
-  }
-  if (catalogCounts && scope === "variant") Object.assign(counts, catalogCounts);
+    : signalItems
+        .filter((item) => matchesLegacyMode(item, query.legacyMode))
+        .filter((item) => recordMatchesCatalogQuery(item, query, query.scope))
+        .sort((a, b) => compareSignalItems(a, b, query.legacyMode));
   const totalCount = catalogPage?.total ?? filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const page = catalogPage?.page ?? clampPage(params?.page, totalPages);
+  const page = catalogPage?.page ?? Math.min(query.page, totalPages);
   const startIndex = (page - 1) * PAGE_SIZE;
   const visibleItems = catalogPage ? filtered : filtered.slice(startIndex, startIndex + PAGE_SIZE);
-  const hasPagination = totalCount > PAGE_SIZE;
   const displayStart = totalCount ? startIndex + 1 : 0;
   const displayEnd = startIndex + visibleItems.length;
+  const showGlobalCounts = query.scope === "variant" && !query.q && !query.category && !query.month && !query.legacyMode;
 
   return (
     <main className="site-main">
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">SEARCH</p>
-          <h1 className="page-title">ガチャ一覧</h1>
-          <p className="page-lead">{scope === "variant" ? "キャラクターやレア種を単品で探せます。" : "親シリーズ単位でラインナップとセットの動きを探せます。"}</p>
+          <h1 className="page-title">ガチャを探す</h1>
+          <p className="page-lead">商品名、作品名、キャラクター名、カテゴリ、発売月から探せます。</p>
         </section>
 
         <nav className="entity-scope-tabs" aria-label="検索単位">
-          <Link href={{ pathname: "/series", query: { scope: "variant", filter, sort, q: q || undefined, category: category || undefined } }} className={scope === "variant" ? "is-active" : ""}>
+          <Link href={buildCatalogHref(query, { scope: "variant" })} className={query.scope === "variant" ? "is-active" : ""} aria-current={query.scope === "variant" ? "page" : undefined}>
             <strong>単品から探す</strong><span>キャラクター・レア・シークレット</span>
           </Link>
-          <Link href={{ pathname: "/series", query: { scope: "series", filter, sort, q: q || undefined, category: category || undefined } }} className={scope === "series" ? "is-active" : ""}>
-            <strong>シリーズから探す</strong><span>全体ラインナップ・コンプ・発売情報</span>
+          <Link href={buildCatalogHref(query, { scope: "series" })} className={query.scope === "series" ? "is-active" : ""} aria-current={query.scope === "series" ? "page" : undefined}>
+            <strong>シリーズから探す</strong><span>ラインナップ・コンプ・発売情報</span>
           </Link>
         </nav>
 
-        <form className="card form-panel catalog-filter-form" action="/series" method="get">
-          <input type="hidden" name="scope" value={scope} />
-          <div className="form-grid">
-            <div className="field">
-              <label htmlFor="q">キーワード</label>
-              <input id="q" name="q" defaultValue={q} placeholder={scope === "variant" ? "単品名 / キャラクター / レア種別" : "シリーズ名 / 作品名 / ブランド"} />
+        <form className="card form-panel catalog-filter-form" action="/series" method="get" role="search">
+          <input type="hidden" name="scope" value={query.scope} />
+          <div className="form-grid catalog-filter-grid">
+            <div className="field catalog-keyword-field">
+              <label htmlFor="catalog-q">キーワード</label>
+              <input id="catalog-q" name="q" type="search" defaultValue={query.q} placeholder="商品名、作品名、キャラクター名で検索" />
             </div>
             <div className="field">
-              <label htmlFor="category">カテゴリ</label>
-              <select id="category" name="category" defaultValue={category}>
+              <label htmlFor="catalog-release">発売状態</label>
+              <select id="catalog-release" name="release" defaultValue={query.release}>
+                {releaseOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="catalog-category">カテゴリ</label>
+              <select id="catalog-category" name="category" defaultValue={query.category}>
                 <option value="">すべて</option>
                 {categories.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}
               </select>
             </div>
             <div className="field">
-              <label htmlFor="filter">表示</label>
-              <select id="filter" name="filter" defaultValue={filter}>
-                {filters.map((item) => (
-                  <option key={item.value} value={item.value}>{item.label}</option>
-                ))}
-              </select>
+              <label htmlFor="catalog-month">発売月</label>
+              <input id="catalog-month" name="month" type="month" defaultValue={query.month} />
             </div>
             <div className="field">
-              <label htmlFor="sort">並び替え</label>
-              <select id="sort" name="sort" defaultValue={sort}>
-                {sorts.map((item) => (
-                  <option key={item.value} value={item.value}>{item.label}</option>
-                ))}
+              <label htmlFor="catalog-sort">並び替え</label>
+              <select id="catalog-sort" name="sort" defaultValue={query.sort}>
+                {sortOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </div>
           </div>
-          <div className="tag-row">
+          <div className="catalog-filter-actions">
             <button className="button-link button-link--accent" type="submit">この条件で見る</button>
-            <Link href={{ pathname: "/series", query: { scope } }} className="button-link">リセット</Link>
+            <Link href="/series" className="button-link">条件をクリア</Link>
           </div>
         </form>
 
-        <div className="tabs catalog-filter-tabs">
-          {filters.map((item) => (
+        <nav className="tabs catalog-filter-tabs" aria-label="発売状態">
+          {releaseOptions.map((item) => (
             <Link
               key={item.value}
-              className={`pill-link ${filter === item.value ? "is-active" : ""}`}
-                href={{ pathname: "/series", query: { scope, q: q || undefined, category: category || undefined, sort, filter: item.value } }}
+              className={`pill-link ${query.release === item.value ? "is-active" : ""}`}
+              href={buildCatalogHref(query, { release: item.value, legacyMode: "", filter: "" })}
+              aria-current={query.release === item.value ? "page" : undefined}
             >
               {item.label}
-              {Number.isFinite(counts[item.value]) ? (
-                <span style={{ marginLeft: 8, opacity: 0.72 }}>{counts[item.value]}</span>
-              ) : null}
+              {showGlobalCounts && Number.isFinite(catalogCounts?.[item.value]) ? <span>{catalogCounts[item.value].toLocaleString("ja-JP")}</span> : null}
             </Link>
           ))}
-        </div>
+        </nav>
+
+        {hasActiveCatalogFilters(query) ? <ActiveFilters query={query} /> : null}
 
         <div className="section-head catalog-results-head">
           <div>
             <h2 className="section-title">
-              {totalCount
-                ? `全${totalCount.toLocaleString("ja-JP")}件中 ${displayStart.toLocaleString("ja-JP")}-${displayEnd.toLocaleString("ja-JP")}件`
-                : "0件"}
+              {query.q
+                ? `「${query.q}」の検索結果 ${totalCount.toLocaleString("ja-JP")}件`
+                : totalCount
+                  ? `全${totalCount.toLocaleString("ja-JP")}件中 ${displayStart.toLocaleString("ja-JP")}-${displayEnd.toLocaleString("ja-JP")}件`
+                  : "検索結果 0件"}
             </h2>
-            <p className="section-sub">{scope === "variant" ? "単品画像を確認できる正式ラインナップを表示しています。" : "集合画像とシリーズ全体の情報を表示しています。"}</p>
+            <p className="section-sub">{query.scope === "variant" ? "正式公開された単品だけを表示しています。" : "親シリーズ単位で表示しています。"}</p>
           </div>
         </div>
 
         {totalCount > 0 ? (
           <>
             <section className="grid grid--cards">
-              {visibleItems.map((item, index) => (
-                <SeriesCard key={item.slug} series={item} priority={index < 6} scope={scope} />
-              ))}
+              {visibleItems.map((item, index) => <SeriesCard key={item.slug} series={item} priority={index < 6} scope={query.scope} />)}
             </section>
-            {hasPagination ? (
-              <Pagination page={page} totalPages={totalPages} q={q} category={category} filter={filter} sort={sort} scope={scope} />
-            ) : null}
+            {totalCount > PAGE_SIZE ? <Pagination page={page} totalPages={totalPages} query={query} /> : null}
           </>
         ) : (
-          <div className="card empty">条件に合う{scope === "variant" ? "単品" : "シリーズ"}がありません。</div>
+          <div className="card empty catalog-empty">
+            <strong>条件に一致する商品が見つかりませんでした</strong>
+            <span>キーワードを短くするか、カテゴリ・発売状態・発売月を解除してください。</span>
+            <Link href="/series" className="button-link button-link--accent">条件をすべてクリア</Link>
+          </div>
         )}
       </div>
     </main>
   );
 }
 
-function matchesFilter(item, filter) {
-  if (filter === "released") return item.is_released;
-  if (filter === "upcoming") return !item.is_released;
-  if (filter === "market") return item.is_released && item.market_evidence?.tier !== "insufficient";
-  if (filter === "circulating") return isCirculatingItem(item);
-  if (filter === "opportunity") return !item.is_released && opportunityScore(item) >= 60;
+function ActiveFilters({ query }) {
+  const values = [
+    query.q ? `検索: ${query.q}` : "",
+    query.scope === "series" ? "シリーズ" : "",
+    query.release === "released" ? "発売中" : query.release === "upcoming" ? "発売予定" : "",
+    query.category ? `カテゴリ: ${query.category}` : "",
+    query.month ? `発売月: ${formatCatalogMonth(query.month)}` : "",
+  ].filter(Boolean);
+  return (
+    <div className="active-filter-row" aria-label="適用中の条件">
+      <strong>適用中</strong>
+      {values.map((value) => <span key={value}>{value}</span>)}
+      <Link href="/series">すべて解除</Link>
+    </div>
+  );
+}
+
+function matchesLegacyMode(item, mode) {
+  if (mode === "market") return item.is_released && item.market_evidence?.tier !== "insufficient";
+  if (mode === "circulating") return isCirculatingItem(item);
+  if (mode === "opportunity") return !item.is_released && opportunityScore(item) >= 60;
   return true;
 }
 
-function matchesKeyword(item, q) {
-  if (!q) return true;
-  const target = [item.name, item.variant_name, item.series_name, item.brand, item.character, item.category, item.rarity, item.role].join(" ").toLowerCase();
-  return target.includes(q.toLowerCase());
+function compareSignalItems(a, b, mode) {
+  if (mode === "market") return (b.market_evidence?.primaryPrice ?? -Infinity) - (a.market_evidence?.primaryPrice ?? -Infinity);
+  if (mode === "opportunity") return opportunityScore(b) - opportunityScore(a);
+  return watchScore(b) - watchScore(a);
 }
 
-function compareSeries(a, b, sort) {
-  if (sort === "market") return (b.market_evidence?.primaryPrice ?? -Infinity) - (a.market_evidence?.primaryPrice ?? -Infinity);
-  if (sort === "watch") return watchScore(b) - watchScore(a);
-  if (sort === "opportunity") return opportunityScore(b) - opportunityScore(a);
-  if (sort === "release") return getReleaseSortValue(a) - getReleaseSortValue(b);
-  return displayPriority(b) - displayPriority(a);
-}
-
-function displayPriority(item) {
-  if (!item.is_released) return opportunityScore(item) * 12 + (item.forecast_score ?? 0) * 3;
-  return watchScore(item) * 12 + (item.circulation_score ?? 0) * 4;
-}
-
-function getReleaseSortValue(item) {
-  if (item.release_date) return new Date(item.release_date).getTime();
-  const matched = String(item.schedule_month || "").match(/\d+/);
-  return matched ? Number(matched[0]) : 999;
-}
-
-function Pagination({ page, totalPages, q, category, filter, sort, scope }) {
+function Pagination({ page, totalPages, query }) {
   const pages = buildPageWindow(page, totalPages);
   return (
-    <nav className="pagination" aria-label="ページ">
-      <Link
-        className={`pill-link ${page <= 1 ? "is-disabled" : ""}`}
-        href={pageHref({ q, category, filter, sort, scope, page: Math.max(1, page - 1) })}
-        aria-disabled={page <= 1}
-      >
-        前へ
-      </Link>
+    <nav className="pagination" aria-label="検索結果のページ">
+      <Link className={`pill-link ${page <= 1 ? "is-disabled" : ""}`} href={buildCatalogHref(query, { page: Math.max(1, page - 1) }, { resetPage: false })} aria-disabled={page <= 1}>前へ</Link>
       <div className="pagination__pages">
         {pages.map((item) => (
-          <Link
-            key={item}
-            className={`pill-link ${item === page ? "is-active" : ""}`}
-            href={pageHref({ q, category, filter, sort, scope, page: item })}
-          >
-            {item.toLocaleString("ja-JP")}
-          </Link>
+          <Link key={item} className={`pill-link ${item === page ? "is-active" : ""}`} href={buildCatalogHref(query, { page: item }, { resetPage: false })} aria-current={item === page ? "page" : undefined}>{item.toLocaleString("ja-JP")}</Link>
         ))}
       </div>
-      <Link
-        className={`pill-link ${page >= totalPages ? "is-disabled" : ""}`}
-        href={pageHref({ q, category, filter, sort, scope, page: Math.min(totalPages, page + 1) })}
-        aria-disabled={page >= totalPages}
-      >
-        次へ
-      </Link>
+      <Link className={`pill-link ${page >= totalPages ? "is-disabled" : ""}`} href={buildCatalogHref(query, { page: Math.min(totalPages, page + 1) }, { resetPage: false })} aria-disabled={page >= totalPages}>次へ</Link>
     </nav>
   );
 }
 
-function pageHref({ q, category, filter, sort, scope, page }) {
-  return {
-    pathname: "/series",
-    query: {
-      q: q || undefined,
-      scope,
-      category: category || undefined,
-      filter,
-      sort,
-      page: page > 1 ? page : undefined,
-    },
-  };
-}
-
 function buildPageWindow(page, totalPages) {
-  const start = Math.max(1, page - 2);
+  const start = Math.max(1, Math.min(page - 2, totalPages - 4));
   const end = Math.min(totalPages, start + 4);
   return Array.from({ length: end - start + 1 }, (_, index) => start + index);
-}
-
-function clampPage(value, totalPages) {
-  const page = Number.parseInt(String(value ?? "1"), 10);
-  if (!Number.isFinite(page) || page < 1) return 1;
-  return Math.min(page, totalPages);
 }
