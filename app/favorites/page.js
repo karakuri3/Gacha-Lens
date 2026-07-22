@@ -2,16 +2,51 @@
 
 import Link from "next/link";
 import { Star, Trash2 } from "lucide-react";
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import ProductImage from "@/components/ProductImage";
 import { FAVORITES_STORAGE_KEY, getFavoritesSnapshot, subscribeFavorites } from "@/components/FavoriteButton";
 
 export default function FavoritesPage() {
   const snapshot = useSyncExternalStore(subscribeFavorites, getFavoritesSnapshot, () => "[]");
-  const items = useMemo(() => parseFavorites(snapshot), [snapshot]);
+  const storedItems = useMemo(() => parseFavorites(snapshot), [snapshot]);
+  const [validation, setValidation] = useState({ key: "", identifiers: new Set(), failed: false });
+  const variantIdentifiers = useMemo(
+    () => storedItems.filter((item) => !isSeriesFavorite(item)).map((item) => item.slug),
+    [storedItems]
+  );
+  const validationKey = variantIdentifiers.join("\u001f");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const request = variantIdentifiers.length
+      ? fetch(`/api/public-variants?ids=${encodeURIComponent(variantIdentifiers.join(","))}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        })
+      : Promise.resolve({ ok: true, json: async () => ({ identifiers: [] }) });
+    request
+      .then((response) => {
+        if (!response.ok) throw new Error("favorite validation failed");
+        return response.json();
+      })
+      .then((result) => setValidation({ key: validationKey, identifiers: new Set(result.identifiers ?? []), failed: false }))
+      .catch((error) => {
+        if (error.name === "AbortError") return;
+        setValidation({ key: validationKey, identifiers: new Set(), failed: true });
+      });
+    return () => controller.abort();
+  }, [validationKey, variantIdentifiers]);
+
+  const items = useMemo(
+    () => validation.key !== validationKey
+      ? []
+      : storedItems.filter((item) => isSeriesFavorite(item) || validation.identifiers.has(item.slug)),
+    [storedItems, validation, validationKey]
+  );
+  const isValidating = validation.key !== validationKey;
 
   function remove(slug) {
-    const next = items.filter((item) => item.slug !== slug);
+    const next = storedItems.filter((item) => item.slug !== slug);
     window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(next));
     window.dispatchEvent(new Event("gacha-lens:favorites-changed"));
   }
@@ -25,11 +60,13 @@ export default function FavoritesPage() {
           <p className="page-lead">気になる単品をこの端末に保存して、あとからすぐ確認できます。</p>
         </section>
 
-        {items.length ? (
+        {isValidating ? (
+          <div className="card favorites-empty"><p>お気に入りを確認しています。</p></div>
+        ) : items.length ? (
           <section className="favorites-grid">
             {items.map((item) => (
               <article key={item.slug} className="card favorite-card">
-                <Link href={`/series/${encodeURIComponent(item.slug)}`} className="favorite-card__link">
+                <Link href={favoriteHref(item)} className="favorite-card__link">
                   <div className="favorite-card__image"><ProductImage src={item.image_url} alt={item.name} /></div>
                   <div className="favorite-card__copy">
                     <span>{item.is_released ? "発売中" : "発売予定"}</span>
@@ -47,14 +84,25 @@ export default function FavoritesPage() {
         ) : (
           <div className="card favorites-empty">
             <Star size={28} aria-hidden="true" />
-            <h2>お気に入りはまだありません</h2>
-            <p>商品詳細の「お気に入りに追加」から保存できます。</p>
+            <h2>{validation.failed ? "お気に入りを確認できませんでした" : "お気に入りはまだありません"}</h2>
+            <p>{validation.failed ? "時間をおいて再度お試しください。" : "商品詳細の「お気に入りに追加」から保存できます。"}</p>
             <Link href="/ranking" className="button-link button-link--accent">ランキングを見る</Link>
           </div>
         )}
       </div>
     </main>
   );
+}
+
+function isSeriesFavorite(item) {
+  return item?.entity_type === "series" || String(item?.slug || "").startsWith("series-");
+}
+
+function favoriteHref(item) {
+  if (isSeriesFavorite(item)) {
+    return `/series/group/${encodeURIComponent(String(item.slug).replace(/^series-/, ""))}`;
+  }
+  return `/series/${encodeURIComponent(item.slug)}`;
 }
 
 function parseFavorites(snapshot) {

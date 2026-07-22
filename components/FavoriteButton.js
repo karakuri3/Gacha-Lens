@@ -16,7 +16,7 @@ export default function FavoriteButton({ item }) {
     const current = readFavorites();
     const next = current.some((entry) => entry.slug === item.slug)
       ? current.filter((entry) => entry.slug !== item.slug)
-      : [{ ...item, saved_at: new Date().toISOString() }, ...current].slice(0, 100);
+      : [{ ...item, publication_status: "public", saved_at: new Date().toISOString() }, ...current].slice(0, 100);
     window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(next));
     window.dispatchEvent(new Event("gacha-lens:favorites-changed"));
   }
