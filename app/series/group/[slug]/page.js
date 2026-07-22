@@ -88,6 +88,7 @@ export default async function ParentSeriesDetailPage({ params }) {
             <div className="detail-actions">
               <FavoriteButton item={{
                 slug: `series-${item.slug}`,
+                entity_type: "series",
                 name: item.name,
                 series_name: "シリーズ",
                 image_url: item.image_url,
@@ -105,6 +106,9 @@ export default async function ParentSeriesDetailPage({ params }) {
               <p className="eyebrow">LINEUP</p>
               <h2 className="section-title">単品ラインナップ</h2>
               <p className="section-sub">個別種が公式情報から確認できたものだけを表示します。</p>
+              {item.has_provisional_variants ? (
+                <p className="section-sub">{item.lineup_verification_status === "partial" ? "確認済みのラインナップを掲載しています。" : "ラインナップを確認中です。"}</p>
+              ) : null}
             </div>
             <Link href={{ pathname: "/series", query: { scope: "variant", q: item.name } }} className="text-link">単品一覧で見る</Link>
           </div>

@@ -28,7 +28,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:data-source": "node --test tests/data-source-policy.test.mjs",
-    "test:foundation-baseline": "node --test tests/foundation-baseline.test.mjs"
+    "test:foundation-baseline": "node --test tests/foundation-baseline.test.mjs",
+    "test:publication": "node --test tests/provisional-publication.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
