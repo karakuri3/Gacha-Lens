@@ -193,3 +193,12 @@ revoke all privileges on table public.x_reactions from anon, authenticated;
 revoke all privileges on table public.restock_events from anon, authenticated;
 revoke all privileges on table public.stock_reports from anon, authenticated;
 revoke all privileges on table public.import_issues from anon, authenticated;
+
+grant select, insert, update, delete on table public.source_weights to service_role;
+grant select, insert, update, delete on table public.series to service_role;
+grant select, insert, update, delete on table public.variants to service_role;
+grant select, insert, update, delete on table public.market_listings to service_role;
+grant select, insert, update, delete on table public.x_reactions to service_role;
+grant select, insert, update, delete on table public.restock_events to service_role;
+grant select, insert, update, delete on table public.stock_reports to service_role;
+grant select, insert, update, delete on table public.import_issues to service_role;

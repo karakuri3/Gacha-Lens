@@ -120,14 +120,15 @@ test("candidate includes only the required extension", () => {
   assert.deepEqual(extensions, ["pgcrypto"]);
 });
 
-test("candidate enables RLS and revokes anon/authenticated on all Foundation tables", () => {
+test("candidate enables RLS, blocks clients, and grants server-side CRUD", () => {
   for (const tableName of foundationTables) {
     assert.match(normalized, new RegExp(`alter\\s+table\\s+public\\.${tableName}\\s+enable\\s+row\\s+level\\s+security`));
     assert.match(normalized, new RegExp(`revoke\\s+all\\s+privileges\\s+on\\s+table\\s+public\\.${tableName}\\s+from\\s+anon,\\s*authenticated`));
+    assert.match(normalized, new RegExp(`grant\\s+select,\\s*insert,\\s*update,\\s*delete\\s+on\\s+table\\s+public\\.${tableName}\\s+to\\s+service_role`));
   }
   assert.doesNotMatch(normalized, /force\s+row\s+level\s+security/);
   assert.doesNotMatch(normalized, /create\s+policy/);
-  assert.doesNotMatch(normalized, /grant\s+(insert|update|delete|truncate)/);
+  assert.doesNotMatch(normalized, /grant[\s\S]*\bto\s+(anon|authenticated)\b/);
 });
 
 test("matched_variant_id belongs to the four signal tables", () => {
