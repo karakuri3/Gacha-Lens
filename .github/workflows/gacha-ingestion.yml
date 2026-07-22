@@ -51,7 +51,7 @@ on:
 jobs:
   upsert:
     concurrency:
-      group: gacha-ingestion-${{ github.event.schedule || inputs.task || 'manual' }}
+      group: gacha-ingestion
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 20

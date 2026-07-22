@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { marketListingsRaw } from "../lib/data/market-input.js";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
+import { applyMarketPersistenceSafety } from "../lib/domain/market-match-safety.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { loadOfficialCatalog } from "./load-official-catalog.mjs";
 import { includeStaticSampleData, productionRecords } from "./nonproduction-data.mjs";
@@ -27,7 +28,7 @@ const referenceIds = await loadReferenceIds();
 const dbMarketRows = marketRows.map((row) => applyDbReferenceSafety(row, referenceIds));
 const issueRows = dbMarketRows
   .filter((row) => row.review_required)
-  .map((row) => createImportIssue("market_listings", row.raw, "unknown_variant", row.id));
+  .map((row) => createImportIssue("market_listings", row.raw, row.classification_reason || "unknown_variant", row.id));
 const fetchIssueRows = generatedMarket.issues.map((issue) => ({
   ...issue,
   record_id: issue.record_id || issue.id,
@@ -89,7 +90,7 @@ function normalizeMarketListing(raw, catalog) {
   const matchedSeries = classification.seriesId ? catalog.seriesById.get(classification.seriesId) : null;
   const reviewRequired = classification.marketReviewType === "unknown" || (!classification.variantId && !classification.seriesId);
 
-  return {
+  const row = {
     id: text(raw.id) || stableId("market", raw.source_url, raw.title, raw.listed_at),
     variant_id: classification.variantId || null,
     matched_variant_id: classification.variantId || null,
@@ -112,6 +113,7 @@ function normalizeMarketListing(raw, catalog) {
     review_required: reviewRequired,
     raw,
   };
+  return applyMarketPersistenceSafety(row, raw);
 }
 
 function buildObservationRows(rows) {

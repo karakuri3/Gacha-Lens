@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { summarizeFetchedMarketCandidates } from "../lib/domain/market-match-safety.js";
+import { applyMarketCandidateSafety, summarizeFetchedMarketCandidates } from "../lib/domain/market-match-safety.js";
 import { fetchMarketListingsRaw } from "../lib/fetchers/market-fetcher.js";
 import { planMarketSearchQueries } from "../lib/fetchers/market-query-planner.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
@@ -13,12 +13,19 @@ const startedAt = Date.now();
 const coverageData = await loadMarketCoverageData();
 const plan = planMarketSearchQueries(coverageData.catalog, coverageData.coverageRows, plannerOptions());
 const result = await fetchMarketListingsRaw({ catalog: coverageData.catalog, queries: plan.queries });
+const safetyResult = applyMarketCandidateSafety({
+  records: result.records,
+  queryPlan: plan.queries,
+  catalog: coverageData.catalog,
+});
+result.records = safetyResult.records;
 const candidateSummary = summarizeFetchedMarketCandidates({
   records: result.records,
   rawCount: result.count,
   queryPlan: plan.queries,
   feedResults: result.feedResults,
   catalog: coverageData.catalog,
+  safetyResult,
 });
 result.coveragePlan = {
   ...plan.summary,

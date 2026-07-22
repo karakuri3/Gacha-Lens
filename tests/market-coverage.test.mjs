@@ -7,7 +7,11 @@ import {
   runMarketCollectionBatch,
   selectMarketCollectionTargets,
 } from "../lib/domain/market-coverage.js";
-import { assessMarketCandidate } from "../lib/domain/market-match-safety.js";
+import {
+  applyMarketCandidateSafety,
+  applyMarketPersistenceSafety,
+  assessMarketCandidate,
+} from "../lib/domain/market-match-safety.js";
 import { MARKET_EVIDENCE_TIERS, classifyMarketEvidence, dedupeMarketListings } from "../lib/domain/market-evidence.js";
 import { buildMarketSearchQueriesForVariant, isSafeMarketSearchQuery } from "../lib/fetchers/market-query-planner.js";
 
@@ -167,4 +171,118 @@ test("market APIs use bounded request timeouts and no retry loop", async () => {
   assert.match(rakuten, /AbortSignal\.timeout/);
   assert.match(yahoo, /AbortSignal\.timeout/);
   assert.doesNotMatch(`${rakuten}\n${yahoo}`, /retry\s*\(|for\s*\([^)]*attempt/i);
+});
+
+function assessedPersistenceFixture(title, options = {}) {
+  const query = options.query ?? buildMarketSearchQueriesForVariant(variant, series)[0];
+  const sourceRecord = {
+    title,
+    variant_id: options.explicitVariantId,
+    raw: {
+      provider: "fixture-market-api",
+      ...(options.includeQuery === false ? {} : { query }),
+    },
+  };
+  const safety = applyMarketCandidateSafety({ records: [sourceRecord], queryPlan: [query], catalog: catalog() });
+  const classifierRow = {
+    variant_id: "v3",
+    matched_variant_id: "v3",
+    series_id: "s1",
+    listing_type: "single",
+    market_review_type: "single",
+    classification_reason: "later_classifier_match",
+    classification_confidence: 0.99,
+    classification_details: { later_classifier: true },
+    confidence: 0.99,
+    review_required: false,
+  };
+  return {
+    assessment: safety.assessments[0],
+    transformed: safety.records[0],
+    row: applyMarketPersistenceSafety(classifierRow, safety.records[0]),
+  };
+}
+
+test("persistence safety stores accepted candidate on the assessed variant", () => {
+  const fixture = assessedPersistenceFixture("冒険ガチャ 勇者 ガチャ 単品");
+  assert.equal(fixture.row.variant_id, "v1");
+  assert.equal(fixture.row.matched_variant_id, "v1");
+  assert.equal(fixture.row.review_required, false);
+});
+
+test("persistence safety stores accepted candidate on the assessed series", () => {
+  assert.equal(assessedPersistenceFixture("冒険ガチャ 勇者 ガチャ 単品").row.series_id, "s1");
+});
+
+test("multiple candidates clear links and require review before persistence", () => {
+  const row = assessedPersistenceFixture("冒険ガチャ 勇者 魔法使い 2点").row;
+  assert.deepEqual([row.variant_id, row.matched_variant_id, row.series_id, row.review_required], [null, null, null, true]);
+});
+
+test("explicit variant conflicts cannot be restored by the later classifier", () => {
+  const row = assessedPersistenceFixture("冒険ガチャ 勇者 ガチャ 単品", { explicitVariantId: "v3" }).row;
+  assert.equal(row.classification_reason, "explicit_variant_conflict");
+  assert.equal(row.variant_id, null);
+});
+
+test("missing parent evidence cannot be linked", () => {
+  const row = assessedPersistenceFixture("勇者 ガチャ 単品").row;
+  assert.equal(row.classification_reason, "parent_series_evidence_missing");
+  assert.equal(row.series_id, null);
+});
+
+test("missing variant evidence cannot be linked", () => {
+  const row = assessedPersistenceFixture("冒険ガチャ ガチャ 単品").row;
+  assert.equal(row.classification_reason, "target_variant_not_confirmed");
+  assert.equal(row.variant_id, null);
+});
+
+test("set candidates are never persisted as target singles", () => {
+  const row = assessedPersistenceFixture("冒険ガチャ 勇者 2種セット").row;
+  assert.equal(row.classification_reason, "not_single_item");
+  assert.equal(row.variant_id, null);
+});
+
+test("unsafe query candidates are unlinked before persistence", () => {
+  const unsafeQuery = { query: "勇者", variant_id: "v1", series_id: "s1" };
+  const row = assessedPersistenceFixture("冒険ガチャ 勇者 ガチャ 単品", { query: unsafeQuery }).row;
+  assert.equal(row.classification_reason, "unsafe_search_query");
+  assert.equal(row.review_required, true);
+});
+
+test("API candidates without query context become review records", () => {
+  const row = assessedPersistenceFixture("冒険ガチャ 勇者 ガチャ 単品", { includeQuery: false }).row;
+  assert.equal(row.classification_reason, "query_context_missing");
+  assert.ok(row.classification_confidence <= 0.49);
+});
+
+test("rejected safety records cannot contribute public price evidence", () => {
+  const row = assessedPersistenceFixture("冒険ガチャ 勇者 2種セット").row;
+  assert.equal(classifyMarketEvidence({ subject: variant, listings: [{ ...row, id: "unsafe", status: "sold", price: 1000 }], now: NOW }).eligibleListingCount, 0);
+});
+
+test("safety metadata preserves the provider raw response for audit", () => {
+  const transformed = assessedPersistenceFixture("冒険ガチャ 勇者 ガチャ 単品").transformed;
+  assert.equal(transformed.raw.provider, "fixture-market-api");
+  assert.equal(transformed.raw.market_safety.accepted, true);
+  assert.equal(transformed.market_safety_assessed, true);
+});
+
+test("approved feed rows without planner safety metadata retain existing handling", () => {
+  const row = { variant_id: "v1", series_id: "s1", review_required: false };
+  assert.deepEqual(applyMarketPersistenceSafety(row, { provider: "approved-feed" }), row);
+});
+
+test("upsert path enforces safety and creates review issues", async () => {
+  const source = await readFile(new URL("../scripts/upsert-market-data.mjs", import.meta.url), "utf8");
+  assert.match(source, /applyMarketPersistenceSafety\(row, raw\)/);
+  assert.match(source, /filter\(\(row\) => row\.review_required\)[\s\S]*createImportIssue/);
+});
+
+test("scheduled and manual ingestion share one non-cancelling concurrency group", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
+  assert.match(workflow, /group: gacha-ingestion\s+cancel-in-progress: false/);
+  assert.equal((workflow.match(/cron:/g) ?? []).length, 3);
+  assert.match(workflow, /default: dry-run/);
+  assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then mode=write/);
 });
