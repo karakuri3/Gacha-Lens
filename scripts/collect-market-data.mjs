@@ -12,7 +12,11 @@ const outputPath = getGeneratedDataPath("market-raw.json");
 const startedAt = Date.now();
 const coverageData = await loadMarketCoverageData();
 const plan = planMarketSearchQueries(coverageData.catalog, coverageData.coverageRows, plannerOptions());
-const result = await fetchMarketListingsRaw({ catalog: coverageData.catalog, queries: plan.queries });
+const result = await fetchMarketListingsRaw({
+  catalog: coverageData.catalog,
+  queries: plan.queries,
+  sourceScope: process.env.MARKET_SOURCE_SCOPE ?? "all",
+});
 const safetyResult = applyMarketCandidateSafety({
   records: result.records,
   queryPlan: plan.queries,
@@ -37,6 +41,15 @@ result.runSummary = {
   selected_variant_ids: plan.selected.map((entry) => entry.variantId),
   queries_generated: plan.queries.length,
   no_result_variants: Math.max(0, plan.selected.length - candidateSummary.variants_with_results),
+  source_scope: result.sourceScope,
+  approved_feed_sources_configured: result.approvedFeedSourcesConfigured ?? 0,
+  planner_api_sources_configured: result.plannerApiSourcesConfigured ?? 0,
+  approved_feed_requests_attempted: result.approvedFeedRequestsAttempted ?? 0,
+  planner_api_requests_attempted: result.plannerApiRequestsAttempted ?? 0,
+  rakuten_requests_attempted: result.rakutenRequestsAttempted ?? 0,
+  yahoo_requests_attempted: result.yahooRequestsAttempted ?? 0,
+  write_ready: Boolean(result.writeReady),
+  blocking_reason: result.blockingReason ?? null,
   listing_upserts: result.records.length,
   observations_created: result.records.filter((record) => Number.isFinite(Number(record.price))).length,
   duration_ms: Date.now() - startedAt,

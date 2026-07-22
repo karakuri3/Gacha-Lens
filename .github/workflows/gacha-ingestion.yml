@@ -43,6 +43,20 @@ on:
           - all
           - released
           - upcoming
+      source_scope:
+        description: Market source scope
+        required: true
+        default: planner-apis
+        type: choice
+        options:
+          - planner-apis
+          - approved-feeds
+          - all
+      execute_sources:
+        description: Execute configured external sources during dry-run
+        required: true
+        default: false
+        type: boolean
   schedule:
     - cron: "7 * * * *"
     - cron: "17,47 * * * *"
@@ -87,6 +101,8 @@ jobs:
           MANUAL_LIMIT: ${{ inputs.limit }}
           MANUAL_PRIORITY: ${{ inputs.priority }}
           MANUAL_RELEASE: ${{ inputs.release }}
+          MANUAL_SOURCE_SCOPE: ${{ inputs.source_scope }}
+          MANUAL_EXECUTE_SOURCES: ${{ inputs.execute_sources }}
           SCHEDULE: ${{ github.event.schedule }}
         run: |
           case "$SCHEDULE" in
@@ -95,9 +111,18 @@ jobs:
             "37 * * * *") task=stock ;;
             *) task="${MANUAL_TASK:-all}" ;;
           esac
-          if [ -n "$SCHEDULE" ]; then mode=write; else mode="${MANUAL_MODE:-dry-run}"; fi
+          if [ -n "$SCHEDULE" ]; then
+            mode=write
+            source_scope=all
+            execute_sources=true
+          else
+            mode="${MANUAL_MODE:-dry-run}"
+            source_scope="${MANUAL_SOURCE_SCOPE:-planner-apis}"
+            execute_sources="${MANUAL_EXECUTE_SOURCES:-false}"
+          fi
           case "${MANUAL_LIMIT:-25}" in ''|*[!0-9]*) limit=25 ;; *) limit="$MANUAL_LIMIT" ;; esac
           case "${MANUAL_PRIORITY:-all}" in all|1|2|3|4|5) priority="${MANUAL_PRIORITY:-all}" ;; *) priority=all ;; esac
+          case "$source_scope" in planner-apis|approved-feeds|all) ;; *) source_scope=planner-apis ;; esac
           if [ "$task" = "all" ] && [ "$mode" = "dry-run" ]; then
             echo "::error::The all task writes official and stock data. Select write explicitly, or run the default market dry-run."
             exit 1
@@ -107,6 +132,8 @@ jobs:
           echo "limit=$limit" >> "$GITHUB_OUTPUT"
           echo "priority=$priority" >> "$GITHUB_OUTPUT"
           echo "release=${MANUAL_RELEASE:-all}" >> "$GITHUB_OUTPUT"
+          echo "source_scope=$source_scope" >> "$GITHUB_OUTPUT"
+          echo "execute_sources=$execute_sources" >> "$GITHUB_OUTPUT"
       - name: Run controlled market backfill
         if: ${{ github.event_name == 'workflow_dispatch' && steps.ingestion.outputs.task == 'market' }}
         env:
@@ -114,9 +141,13 @@ jobs:
           BACKFILL_LIMIT: ${{ steps.ingestion.outputs.limit }}
           BACKFILL_PRIORITY: ${{ steps.ingestion.outputs.priority }}
           BACKFILL_RELEASE: ${{ steps.ingestion.outputs.release }}
+          BACKFILL_SOURCE_SCOPE: ${{ steps.ingestion.outputs.source_scope }}
+          BACKFILL_EXECUTE_SOURCES: ${{ steps.ingestion.outputs.execute_sources }}
         run: |
           set -o pipefail
-          npm run market:backfill -- "--mode=$BACKFILL_MODE" "--limit=$BACKFILL_LIMIT" "--priority=$BACKFILL_PRIORITY" "--release=$BACKFILL_RELEASE" 2>&1 | tee ingestion.log
+          args=("--mode=$BACKFILL_MODE" "--limit=$BACKFILL_LIMIT" "--priority=$BACKFILL_PRIORITY" "--release=$BACKFILL_RELEASE" "--source-scope=$BACKFILL_SOURCE_SCOPE")
+          if [ "$BACKFILL_MODE" = "dry-run" ] && [ "$BACKFILL_EXECUTE_SOURCES" = "true" ]; then args+=("--execute-sources"); fi
+          npm run market:backfill -- "${args[@]}" 2>&1 | tee ingestion.log
       - name: Run ingestion
         if: ${{ github.event_name != 'workflow_dispatch' || steps.ingestion.outputs.task != 'market' }}
         env:
@@ -124,6 +155,7 @@ jobs:
           MARKET_COVERAGE_PRIORITY: ${{ steps.ingestion.outputs.priority }}
           MARKET_COVERAGE_RELEASE: ${{ steps.ingestion.outputs.release }}
           MARKET_COVERAGE_COOLDOWN_HOURS: 24
+          MARKET_SOURCE_SCOPE: ${{ steps.ingestion.outputs.source_scope }}
         run: |
           set -o pipefail
           npm run db:upsert-all -- --task=${{ steps.ingestion.outputs.task }} 2>&1 | tee ingestion.log
@@ -143,6 +175,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Task: ${{ steps.ingestion.outputs.task }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Mode: ${{ steps.ingestion.outputs.mode }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Market source scope: ${{ steps.ingestion.outputs.source_scope }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Status: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Review queue: /review" >> "$GITHUB_STEP_SUMMARY"
           echo "- Next check: import_issues high/medium items" >> "$GITHUB_STEP_SUMMARY"
