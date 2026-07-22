@@ -3,8 +3,8 @@ import { fetchRows } from "./supabase-rest.mjs";
 export async function loadOfficialCatalog(fallbackRows = []) {
   try {
     const [series, variants] = await Promise.all([
-      fetchRows("series", { select: "id,slug,name,franchise,brand,official_url,release_date,release_month,is_released" }),
-      fetchRows("variants", { select: "id,slug,series_id,name,variant_type,release_date,released" }),
+      fetchRows("series", { select: "id,slug,name,franchise,brand,category,official_url,release_date,release_month,is_released,updated_at" }),
+      fetchRows("variants", { select: "id,slug,series_id,name,variant_type,release_date,released,brand,updated_at" }),
     ]);
     if (series.length && variants.length) return catalogShape(series, variants);
   } catch (error) {
