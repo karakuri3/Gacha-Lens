@@ -667,6 +667,46 @@ test("Markdown escapes tables and executable HTML", () => {
   assert.doesNotMatch(markdown, /<script>/i);
 });
 
+test("Markdown renders all external text as plain text", () => {
+  const report = auditReport([auditRecord({
+    title: "[click](https://tracker.example) ![pixel](https://tracker.example/pixel) `code` **bold** ~~strike~~ | <script>",
+  })]);
+  const candidate = report.candidates[0];
+  candidate.source.provider = "[provider](https://tracker.example)";
+  candidate.target.variant_name = "![variant](https://tracker.example/pixel)";
+  candidate.target.series_name = "`series`";
+  candidate.assessment.reason = "**reason**";
+  const markdown = renderMarketCandidateAuditMarkdown(report);
+  const row = markdown.split("\n").find((line) => line.includes(candidate.candidate_key));
+
+  assert.ok(row);
+  assert.match(row, /\\\[click\\\]\\\(https:\/\/tracker\\\.example\\\)/);
+  assert.match(row, /\\!\\\[pixel\\\]\\\(https:\/\/tracker\\\.example\/pixel\\\)/);
+  assert.match(row, /\\`code\\`/);
+  assert.match(row, /\\\*\\\*bold\\\*\\\*/);
+  assert.match(row, /\\~\\~strike\\~\\~/);
+  assert.match(row, /\\\|/);
+  assert.match(row, /\\<script\\>/);
+  assert.doesNotMatch(row, /(?<!\\)!\[/);
+  assert.doesNotMatch(row, /(?<!\\)\[[^\]]+\]\(/);
+  assert.doesNotMatch(row, /(?<!\\)<script>/i);
+});
+
+test("JSON text remains readable without Markdown escaping", () => {
+  const title = "[click](url) `code` **bold**";
+  const report = auditReport([auditRecord({ title })]);
+  assert.equal(report.candidates[0].listing.title, title);
+  assert.doesNotMatch(report.candidates[0].listing.title, /\\/);
+});
+
+test("Unicode direction and format controls are removed from audit text", () => {
+  const controls = "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069\ufeff";
+  const report = auditReport([auditRecord({ title: `safe${controls} title\u0000` })]);
+  const serialized = JSON.stringify(report);
+  assert.equal(report.candidates[0].listing.title, "safe title");
+  assert.doesNotMatch(serialized, /[\u0000-\u001f\u007f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/);
+});
+
 test("audit validation rejects forbidden fields", () => {
   const report = auditReport();
   report.workflow.authorization = "private";
