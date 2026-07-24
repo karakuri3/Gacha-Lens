@@ -135,6 +135,7 @@ jobs:
           echo "source_scope=$source_scope" >> "$GITHUB_OUTPUT"
           echo "execute_sources=$execute_sources" >> "$GITHUB_OUTPUT"
       - name: Run controlled market backfill
+        id: market_backfill
         if: ${{ github.event_name == 'workflow_dispatch' && steps.ingestion.outputs.task == 'market' }}
         env:
           BACKFILL_MODE: ${{ steps.ingestion.outputs.mode }}
@@ -143,11 +144,22 @@ jobs:
           BACKFILL_RELEASE: ${{ steps.ingestion.outputs.release }}
           BACKFILL_SOURCE_SCOPE: ${{ steps.ingestion.outputs.source_scope }}
           BACKFILL_EXECUTE_SOURCES: ${{ steps.ingestion.outputs.execute_sources }}
+          MARKET_AUDIT_OUTPUT_DIR: ${{ runner.temp }}/gacha-market-audit
         run: |
           set -o pipefail
           args=("--mode=$BACKFILL_MODE" "--limit=$BACKFILL_LIMIT" "--priority=$BACKFILL_PRIORITY" "--release=$BACKFILL_RELEASE" "--source-scope=$BACKFILL_SOURCE_SCOPE")
           if [ "$BACKFILL_MODE" = "dry-run" ] && [ "$BACKFILL_EXECUTE_SOURCES" = "true" ]; then args+=("--execute-sources"); fi
           npm run market:backfill -- "${args[@]}" 2>&1 | tee ingestion.log
+      - name: Upload sanitized market candidate audit
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && steps.ingestion.outputs.task == 'market' && steps.ingestion.outputs.mode == 'dry-run' && steps.ingestion.outputs.execute_sources == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-candidate-audit-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/gacha-market-audit/market-candidate-audit.json
+            ${{ runner.temp }}/gacha-market-audit/market-candidate-audit.md
+          if-no-files-found: error
+          retention-days: 7
       - name: Run ingestion
         if: ${{ github.event_name != 'workflow_dispatch' || steps.ingestion.outputs.task != 'market' }}
         env:
@@ -176,6 +188,14 @@ jobs:
           echo "- Task: ${{ steps.ingestion.outputs.task }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Mode: ${{ steps.ingestion.outputs.mode }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Market source scope: ${{ steps.ingestion.outputs.source_scope }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ steps.market_backfill.outputs.audit_report_generated }}" ]; then
+            echo "- Candidate audit artifact: market-candidate-audit-${{ github.run_id }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Candidate count: ${{ steps.market_backfill.outputs.audit_candidate_count }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Accepted count: ${{ steps.market_backfill.outputs.audit_accepted_count }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Review count: ${{ steps.market_backfill.outputs.audit_review_count }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Report complete: ${{ steps.market_backfill.outputs.audit_report_complete }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Database writes: ${{ steps.market_backfill.outputs.database_writes }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "- Status: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Review queue: /review" >> "$GITHUB_STEP_SUMMARY"
           echo "- Next check: import_issues high/medium items" >> "$GITHUB_STEP_SUMMARY"

@@ -15,6 +15,11 @@ import {
 } from "../lib/domain/market-match-safety.js";
 import { MARKET_EVIDENCE_TIERS, classifyMarketEvidence, dedupeMarketListings } from "../lib/domain/market-evidence.js";
 import {
+  buildSanitizedMarketCandidateAudit,
+  renderMarketCandidateAuditMarkdown,
+  validateMarketCandidateAudit,
+} from "../lib/domain/market-candidate-audit.js";
+import {
   MARKET_SOURCE_SCOPES,
   describeMarketWriteReadiness,
   normalizeMarketSourceScope,
@@ -499,3 +504,248 @@ function sourceAdapters(calls) {
     },
   };
 }
+
+const auditSeries = { id: "audit-series", slug: "audit-series", name: "Audit Series", franchise: "Audit" };
+const auditVariants = [
+  { id: "audit-v1", slug: "hero", name: "Hero", series_id: auditSeries.id, variant_type: "normal" },
+  { id: "audit-v2", slug: "mage", name: "Mage", series_id: auditSeries.id, variant_type: "normal" },
+  { id: "audit-provisional", slug: "hidden", name: "Hidden Provisional", series_id: auditSeries.id, variant_type: "provisional" },
+];
+const auditCatalog = {
+  series: [auditSeries],
+  variants: auditVariants,
+  seriesById: new Map([[auditSeries.id, auditSeries]]),
+  variantById: new Map(auditVariants.map((entry) => [entry.id, entry])),
+};
+const auditQueryPlan = [{ query: "Audit Series Hero gacha single", variant_id: "audit-v1", series_id: auditSeries.id, priority: 1, priority_reason: "missing_evidence" }];
+
+function auditRecord(overrides = {}) {
+  return {
+    id: overrides.id ?? "candidate-1",
+    title: overrides.title ?? "Audit Series Hero | limited\nitem",
+    price: 1200,
+    status: "active",
+    source_url: overrides.source_url ?? "https://user:password@example.com/item/1?token=secret#tracking",
+    market_safety_assessed: overrides.market_safety_assessed ?? true,
+    market_safety: {
+      accepted: overrides.accepted ?? true,
+      review_required: overrides.review_required ?? false,
+      reason: overrides.reason ?? "variant_and_parent_evidence_confirmed",
+      variant_id: overrides.accepted === false ? null : "audit-v1",
+      series_id: overrides.accepted === false ? null : auditSeries.id,
+      listing_type: "single",
+      confidence: overrides.confidence ?? 0.86,
+      matched_variant_ids: overrides.matched_variant_ids ?? ["audit-v1", "audit-provisional"],
+      checks: {
+        variant_evidence_present: true,
+        parent_series_evidence_present: true,
+        set_signal_detected: false,
+        multiple_variant_candidates: overrides.multiple ?? false,
+        explicit_variant_conflict: false,
+        query_context_present: true,
+      },
+    },
+    raw: {
+      provider: overrides.provider ?? "yahoo_shopping",
+      code: overrides.code ?? "public-code-1",
+      itemCode: overrides.itemCode,
+      public_item_url: overrides.public_item_url,
+      query: auditQueryPlan[0],
+      applicationId: "DO_NOT_REPORT_APPLICATION_ID",
+      accessKey: "DO_NOT_REPORT_ACCESS_KEY",
+      authorization: "Bearer DO_NOT_REPORT",
+      seller: { email: "seller@example.com" },
+      response: { private: true },
+    },
+  };
+}
+
+function auditReport(records = [auditRecord()], overrides = {}) {
+  return buildSanitizedMarketCandidateAudit({
+    records,
+    queryPlan: auditQueryPlan,
+    catalog: auditCatalog,
+    runContext: {
+      generated_at: "2026-07-23T00:00:00.000Z",
+      mode: "dry-run",
+      source_scope: "planner-apis",
+      run_id: "123",
+      run_attempt: "1",
+      head_sha: "abc123",
+      event_name: "workflow_dispatch",
+      ...overrides.runContext,
+    },
+    summary: {
+      safety_assessed_records: records.filter((record) => record.market_safety_assessed).length,
+      no_result_variants: 0,
+      listing_upserts: 0,
+      observations_created: 0,
+      ingestion_runs_written: 0,
+      ...overrides.summary,
+    },
+  });
+}
+
+test("candidate audit includes stable schema and workflow metadata", () => {
+  const report = auditReport();
+  assert.equal(report.schema_version, 1);
+  assert.deepEqual(report.workflow, { run_id: "123", run_attempt: "1", head_sha: "abc123", event_name: "workflow_dispatch" });
+  assert.equal(validateMarketCandidateAudit(report), true);
+});
+
+test("candidate audit preserves selected target and parent series", () => {
+  const selected = auditReport().selection.selected_variants[0];
+  assert.deepEqual([selected.variant_id, selected.variant_name, selected.series_id, selected.series_name], ["audit-v1", "Hero", "audit-series", "Audit Series"]);
+  assert.equal(selected.priority_reason, "missing_evidence");
+});
+
+test("candidate audit preserves accepted safety decisions", () => {
+  const candidate = auditReport().candidates[0];
+  assert.equal(candidate.assessment.accepted, true);
+  assert.equal(candidate.assessment.review_required, false);
+  assert.equal(candidate.assessment.reason, "variant_and_parent_evidence_confirmed");
+});
+
+test("candidate audit preserves review reasons", () => {
+  const report = auditReport([auditRecord({ accepted: false, review_required: true, reason: "multiple_variant_candidates", multiple: true })]);
+  assert.equal(report.result.review_count, 1);
+  assert.equal(report.candidates[0].assessment.reason, "multiple_variant_candidates");
+  assert.equal(report.candidates[0].checks.multiple_variant_candidates, true);
+});
+
+test("matched variant names resolve from catalog without provisional disclosure", () => {
+  const assessment = auditReport().candidates[0].assessment;
+  assert.deepEqual(assessment.matched_variant_names, ["Hero"]);
+  assert.doesNotMatch(JSON.stringify(assessment), /Hidden Provisional/);
+  assert.equal(assessment.matched_variant_overflow, 0);
+});
+
+test("approved feed rows are excluded from planner candidate audits", () => {
+  const approved = auditRecord({ id: "approved", market_safety_assessed: false });
+  const report = auditReport([auditRecord(), approved], { summary: { safety_assessed_records: 1 } });
+  assert.equal(report.candidates.length, 1);
+});
+
+test("candidate audit serializes allowlisted fields instead of raw responses", () => {
+  const serialized = JSON.stringify(auditReport());
+  for (const forbidden of ["DO_NOT_REPORT_APPLICATION_ID", "DO_NOT_REPORT_ACCESS_KEY", "Bearer DO_NOT_REPORT", "seller@example.com", '"raw"']) {
+    assert.doesNotMatch(serialized, new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+});
+
+test("public URLs remove credentials, query strings and fragments", () => {
+  const source = auditReport().candidates[0].source;
+  assert.equal(source.public_url, "https://example.com/item/1");
+  assert.equal(source.public_url_host, "example.com");
+});
+
+test("Rakuten audit uses public item URL instead of affiliate URL", () => {
+  const record = auditRecord({
+    provider: "rakuten_ichiba",
+    source_url: "https://affiliate.example/click?affiliateId=private",
+    public_item_url: "https://item.rakuten.co.jp/shop/item?scid=tracking#fragment",
+    itemCode: "shop:item",
+  });
+  assert.equal(auditReport([record]).candidates[0].source.public_url, "https://item.rakuten.co.jp/shop/item");
+});
+
+test("invalid and non-http public URLs are omitted", () => {
+  assert.equal(auditReport([auditRecord({ source_url: "javascript:alert(1)" })]).candidates[0].source.public_url, null);
+});
+
+test("candidate titles are normalized, bounded and control-free", () => {
+  const title = `Ａ\u0000\n${"x".repeat(400)}`;
+  const output = auditReport([auditRecord({ title })]).candidates[0].listing.title;
+  assert.ok(output.startsWith("A "));
+  assert.ok(output.length <= 300);
+  assert.doesNotMatch(output, /[\u0000-\u001f\u007f]/);
+});
+
+test("Markdown escapes tables and executable HTML", () => {
+  const markdown = renderMarketCandidateAuditMarkdown(auditReport());
+  assert.match(markdown, /Audit Series Hero \\| limited item/);
+  assert.doesNotMatch(markdown, /<script>/i);
+});
+
+test("Markdown renders all external text as plain text", () => {
+  const report = auditReport([auditRecord({
+    title: "[click](https://tracker.example) ![pixel](https://tracker.example/pixel) `code` **bold** ~~strike~~ | <script>",
+  })]);
+  const candidate = report.candidates[0];
+  candidate.source.provider = "[provider](https://tracker.example)";
+  candidate.target.variant_name = "![variant](https://tracker.example/pixel)";
+  candidate.target.series_name = "`series`";
+  candidate.assessment.reason = "**reason**";
+  const markdown = renderMarketCandidateAuditMarkdown(report);
+  const row = markdown.split("\n").find((line) => line.includes(candidate.candidate_key));
+
+  assert.ok(row);
+  assert.match(row, /\\\[click\\\]\\\(https:\/\/tracker\\\.example\\\)/);
+  assert.match(row, /\\!\\\[pixel\\\]\\\(https:\/\/tracker\\\.example\/pixel\\\)/);
+  assert.match(row, /\\`code\\`/);
+  assert.match(row, /\\\*\\\*bold\\\*\\\*/);
+  assert.match(row, /\\~\\~strike\\~\\~/);
+  assert.match(row, /\\\|/);
+  assert.match(row, /\\<script\\>/);
+  assert.doesNotMatch(row, /(?<!\\)!\[/);
+  assert.doesNotMatch(row, /(?<!\\)\[[^\]]+\]\(/);
+  assert.doesNotMatch(row, /(?<!\\)<script>/i);
+});
+
+test("JSON text remains readable without Markdown escaping", () => {
+  const title = "[click](url) `code` **bold**";
+  const report = auditReport([auditRecord({ title })]);
+  assert.equal(report.candidates[0].listing.title, title);
+  assert.doesNotMatch(report.candidates[0].listing.title, /\\/);
+});
+
+test("Unicode direction and format controls are removed from audit text", () => {
+  const controls = "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069\ufeff";
+  const report = auditReport([auditRecord({ title: `safe${controls} title\u0000` })]);
+  const serialized = JSON.stringify(report);
+  assert.equal(report.candidates[0].listing.title, "safe title");
+  assert.doesNotMatch(serialized, /[\u0000-\u001f\u007f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/);
+});
+
+test("audit validation rejects forbidden fields", () => {
+  const report = auditReport();
+  report.workflow.authorization = "private";
+  assert.throws(() => validateMarketCandidateAudit(report), /Forbidden audit field/);
+});
+
+test("audit validation rejects nonzero dry-run writes", () => {
+  const report = auditReport();
+  report.database_writes.listings = 1;
+  assert.throws(() => validateMarketCandidateAudit(report), /zero database writes/);
+});
+
+test("candidate audit is deterministic apart from generated metadata", () => {
+  assert.deepEqual(auditReport(), auditReport());
+});
+
+test("candidate audit reports truncation instead of silently dropping records", () => {
+  const records = Array.from({ length: 201 }, (_, index) => auditRecord({ id: `candidate-${index}`, code: `code-${index}` }));
+  const report = auditReport(records);
+  assert.equal(report.candidates.length, 200);
+  assert.equal(report.result.report_complete, false);
+  assert.equal(report.result.truncated_count, 1);
+});
+
+test("workflow uploads only the two sanitized reports for external manual dry-runs", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
+  assert.match(workflow, /Upload sanitized market candidate audit/);
+  assert.match(workflow, /github\.event_name == 'workflow_dispatch'[\s\S]*mode == 'dry-run'[\s\S]*execute_sources == 'true'/);
+  assert.match(workflow, /market-candidate-audit\.json[\s\S]*market-candidate-audit\.md/);
+  assert.match(workflow, /if-no-files-found: error[\s\S]*retention-days: 7/);
+  assert.doesNotMatch(workflow, /gacha-market-audit\/ingestion\.log/);
+});
+
+test("market backfill writes audits to runner or OS temp and never makes them a write prerequisite", async () => {
+  const source = await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8");
+  assert.match(source, /MARKET_AUDIT_OUTPUT_DIR \|\| path\.join\(os\.tmpdir\(\), "gacha-lens-market-audit"\)/);
+  assert.match(source, /if \(options\.executeSources\)/);
+  const writeMode = source.match(
+    /async function runWriteMode[\s\S]*?\n}\n\nfunction assessFetchedRecords/,
+  )?.[0] ?? "";
+  assert.doesNotMatch(writeMode, /writeAuditReport/);
+});

@@ -1,5 +1,12 @@
 import { spawn } from "node:child_process";
-import { summarizeFetchedMarketCandidates } from "../lib/domain/market-match-safety.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {
+  buildSanitizedMarketCandidateAudit,
+  renderMarketCandidateAuditMarkdown,
+} from "../lib/domain/market-candidate-audit.js";
+import { applyMarketCandidateSafety, summarizeFetchedMarketCandidates } from "../lib/domain/market-match-safety.js";
 import {
   MARKET_SOURCE_SCOPES,
   describeMarketSourceConfiguration,
@@ -22,11 +29,14 @@ async function runDryMode(options) {
   const plan = planMarketSearchQueries(data.catalog, data.coverageRows, options);
   const sourcePlan = describeMarketSourceConfiguration({ sourceScope: options.sourceScope, queryCount: plan.queries.length });
   let sourceResult = emptySourceResult(plan.selected.length, sourcePlan);
+  let auditRecords = [];
 
   if (options.executeSources) {
     if (plan.selected.length > 5) throw new Error("External dry-run is limited to 5 variants.");
     const fetched = await fetchMarketListingsRaw({ catalog: data.catalog, queries: plan.queries, sourceScope: options.sourceScope });
-    sourceResult = assessFetchedRecords(fetched, plan, data.catalog);
+    const assessed = assessFetchedRecords(fetched, plan, data.catalog);
+    sourceResult = assessed.summary;
+    auditRecords = assessed.records;
   }
 
   const summary = {
@@ -53,6 +63,11 @@ async function runDryMode(options) {
     ingestion_runs_written: 0,
     duration_ms: Date.now() - startedAt,
   };
+  if (options.executeSources) {
+    const auditOutput = writeAuditReport({ records: auditRecords, plan, catalog: data.catalog, summary });
+    Object.assign(summary, auditOutput);
+    writeGitHubOutputs(auditOutput, summary);
+  }
   console.log(JSON.stringify(summary, null, 2));
 }
 
@@ -77,18 +92,64 @@ async function runWriteMode(options) {
 
 function assessFetchedRecords(fetched, plan, catalog) {
   const feedResults = fetched.feedResults ?? [];
+  const safetyResult = applyMarketCandidateSafety({ records: fetched.records, queryPlan: plan.queries, catalog });
   const candidateSummary = summarizeFetchedMarketCandidates({
-    records: fetched.records,
+    records: safetyResult.records,
     rawCount: fetched.count,
     queryPlan: plan.queries,
     feedResults,
     catalog,
+    safetyResult,
   });
   return {
-    ...sourceSummary(fetched),
-    ...candidateSummary,
-    no_result_variants: Math.max(0, plan.selected.length - candidateSummary.variants_with_results),
+    records: safetyResult.records,
+    summary: {
+      ...sourceSummary(fetched),
+      ...candidateSummary,
+      no_result_variants: Math.max(0, plan.selected.length - candidateSummary.variants_with_results),
+    },
   };
+}
+
+function writeAuditReport({ records, plan, catalog, summary }) {
+  const outputDir = process.env.MARKET_AUDIT_OUTPUT_DIR || path.join(os.tmpdir(), "gacha-lens-market-audit");
+  const report = buildSanitizedMarketCandidateAudit({
+    records,
+    queryPlan: plan.queries,
+    catalog,
+    runContext: {
+      mode: "dry-run",
+      source_scope: summary.source_scope,
+      run_id: process.env.GITHUB_RUN_ID,
+      run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+      head_sha: process.env.GITHUB_SHA,
+      event_name: process.env.GITHUB_EVENT_NAME,
+    },
+    summary,
+  });
+  fs.mkdirSync(outputDir, { recursive: true });
+  const jsonName = "market-candidate-audit.json";
+  const markdownName = "market-candidate-audit.md";
+  fs.writeFileSync(path.join(outputDir, jsonName), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  fs.writeFileSync(path.join(outputDir, markdownName), renderMarketCandidateAuditMarkdown(report), "utf8");
+  return {
+    audit_report_generated: true,
+    audit_report_complete: report.result.report_complete,
+    audit_candidate_count: report.result.candidate_count,
+    audit_accepted_count: report.result.accepted_count,
+    audit_review_count: report.result.review_count,
+    audit_json_path: jsonName,
+    audit_markdown_path: markdownName,
+  };
+}
+
+function writeGitHubOutputs(auditOutput, summary) {
+  if (!process.env.GITHUB_OUTPUT) return;
+  const values = {
+    ...auditOutput,
+    database_writes: Number(summary.listing_upserts || 0) + Number(summary.observations_created || 0) + Number(summary.ingestion_runs_written || 0),
+  };
+  fs.appendFileSync(process.env.GITHUB_OUTPUT, `${Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n")}\n`, "utf8");
 }
 
 function emptySourceResult(selectedCount, sourcePlan) {
