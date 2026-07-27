@@ -28,6 +28,7 @@ import {
   buildMarketCanaryRows,
   buildMarketplaceListingId,
   buildSanitizedCanaryFailureResult,
+  canonicalMarketplaceSource,
   parseCanaryCandidateKeys,
   persistMarketCanary,
   selectApprovedCanaryCandidates,
@@ -1143,6 +1144,7 @@ test("market status keeps completed sales distinct from inventory", () => {
   assert.equal(normalizeMarketplaceStatus("売り切れ"), "sold_out");
   assert.equal(normalizeMarketplaceStatus("在庫切れ"), "sold_out");
   assert.equal(normalizeMarketplaceStatus("active"), "active");
+  assert.equal(normalizeMarketplaceStatus(""), "active");
 });
 test("sold_out never becomes completed or active evidence", () => {
   const result = classifyMarketEvidence({
@@ -1343,7 +1345,26 @@ test("canary rows require a finite positive numeric price", () => {
     );
   }
 });
-test("canary rows preserve supported statuses and reject unknown status", () => {
+test("canary rows reject missing current and approved statuses before persistence", () => {
+  const missingValues = [null, undefined, "", " ", "\t", "\n"];
+  for (const value of missingValues) {
+    const fixture = productionFixture();
+    fixture.records[0].status = value;
+    assert.throws(
+      () => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+      /missing status/,
+    );
+  }
+  for (const value of missingValues) {
+    const fixture = productionFixture();
+    fixture.report.candidates[0].listing.status = value;
+    assert.throws(
+      () => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+      /missing approved status/,
+    );
+  }
+});
+test("canary rows preserve supported statuses and normalized sold-out aliases", () => {
   for (const status of ["active", "sold", "sold_out", "pre_release"]) {
     const fixture = productionFixture();
     fixture.records[0].status = status;
@@ -1351,6 +1372,17 @@ test("canary rows preserve supported statuses and reject unknown status", () => 
     const rows = buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" });
     assert.equal(rows.listingRows[0].status, status);
   }
+  const aliasFixture = productionFixture();
+  aliasFixture.records[0].status = "売り切れ";
+  aliasFixture.report.candidates[0].listing.status = "sold_out";
+  const aliasRows = buildMarketCanaryRows({
+    ...aliasFixture,
+    candidateKeys: ["1e901198049bc341"],
+    auditRunId: "30245610468",
+  });
+  assert.equal(aliasRows.listingRows[0].status, "sold_out");
+});
+test("canary rows reject unsupported and approved/current mismatched statuses", () => {
   const fixture = productionFixture();
   fixture.records[0].status = "mystery";
   fixture.report.candidates[0].listing.status = "mystery";
@@ -1358,6 +1390,69 @@ test("canary rows preserve supported statuses and reject unknown status", () => 
     () => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
     /unsupported status/,
   );
+  for (const [current, approved] of [["active", "sold_out"], ["sold_out", "sold"]]) {
+    const mismatch = productionFixture();
+    mismatch.records[0].status = current;
+    mismatch.report.candidates[0].listing.status = approved;
+    assert.throws(
+      () => buildMarketCanaryRows({ ...mismatch, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+      /status drift/,
+    );
+  }
+});
+test("canary source is derived canonically from the approved provider", () => {
+  assert.equal(canonicalMarketplaceSource("rakuten_ichiba"), "rakuten");
+  assert.equal(canonicalMarketplaceSource("yahoo_shopping"), "yahoo_shopping");
+  const fixture = productionFixture();
+  const rows = buildMarketCanaryRows({
+    ...fixture,
+    candidateKeys: ["1e901198049bc341", "2e833931e4e7cb26"],
+    auditRunId: "30245610468",
+  });
+  assert.deepEqual(rows.listingRows.map((row) => row.source), ["rakuten", "yahoo_shopping"]);
+  assert.deepEqual(rows.observationRows.map((row) => row.source), ["rakuten", "yahoo_shopping"]);
+});
+test("canary rows reject unsupported providers and source identity drift", () => {
+  const unsupported = productionFixture();
+  unsupported.report.candidates[0].source.provider = "unknown";
+  assert.throws(
+    () => buildMarketCanaryRows({ ...unsupported, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+    /unsupported provider/,
+  );
+  for (const [index, source] of [[0, "yahoo_shopping"], [1, "rakuten"]]) {
+    const drift = productionFixture();
+    drift.records[index].source = source;
+    assert.throws(
+      () => buildMarketCanaryRows({
+        ...drift,
+        candidateKeys: [productionCandidateFixtures[index].key],
+        auditRunId: "30245610468",
+      }),
+      /source identity drift/,
+    );
+  }
+  const missing = productionFixture();
+  missing.records[0].source = "";
+  assert.throws(
+    () => buildMarketCanaryRows({ ...missing, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+    /missing source/,
+  );
+});
+test("status and source rejection occurs before any DB store call", () => {
+  const store = memoryCanaryStore();
+  const statusFixture = productionFixture();
+  statusFixture.records[0].status = "";
+  assert.throws(
+    () => buildMarketCanaryRows({ ...statusFixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+    /missing status/,
+  );
+  const sourceFixture = productionFixture();
+  sourceFixture.records[0].source = "yahoo_shopping";
+  assert.throws(
+    () => buildMarketCanaryRows({ ...sourceFixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+    /source identity drift/,
+  );
+  assert.deepEqual(store.calls, []);
 });
 test("sanitized pre-write failures report zero writes without raw or credentials", () => {
   for (const stage of ["request_validation", "approved_audit_validation", "exact_audit_match"]) {
