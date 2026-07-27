@@ -51,6 +51,10 @@ const series = Object.freeze({ id: "s1", slug: "adventure", name: "冒険ガチ�
 const variant = Object.freeze({ id: "v1", slug: "hero", series_id: "s1", name: "勇者", variant_type: "normal", released: true, release_date: "2026-07-01" });
 const upcoming = Object.freeze({ ...variant, id: "v2", slug: "future", name: "未来勇者", released: false, release_date: "2026-08-10" });
 
+function normalizeSourceLineEndings(value) {
+  return String(value).replace(/\r\n?/g, "\n");
+}
+
 function listing(id, overrides = {}) {
   return {
     id,
@@ -1679,13 +1683,23 @@ test("workflow keeps canary separate from normal ingestion and cleanup", async (
   assert.match(workflow, /Remove validation-only signal rows[\s\S]*mode == 'write'/);
   assert.doesNotMatch(workflow, /mode == 'canary-write'[\s\S]{0,160}cleanup/i);
 });
+test("canary source normalization supports LF and CRLF checkouts", () => {
+  const lf = "function canaryStore() {\n  allowSchemaFallback: false\n}\n\nfunction buildCanaryResult";
+  const crlf = lf.replaceAll("\n", "\r\n");
+  assert.equal(normalizeSourceLineEndings(lf), lf);
+  assert.equal(normalizeSourceLineEndings(crlf), lf);
+});
 test("canary implementation never invokes the normal ingestion runner", async () => {
-  const source = await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8");
+  const source = normalizeSourceLineEndings(
+    await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8"),
+  );
   const canary = source.match(/async function runCanaryWriteMode[\s\S]*?\n}\n\nfunction assessFetchedRecords/)?.[0] ?? "";
   assert.doesNotMatch(canary, /run-ingestion|upsert-market-data|cleanup/);
 });
 test("canary store uses strict upserts for writes and rollback restoration", async () => {
-  const source = await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8");
+  const source = normalizeSourceLineEndings(
+    await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8"),
+  );
   const store = source.match(/function canaryStore\(\)[\s\S]*?\n}\n\nfunction buildCanaryResult/)?.[0] ?? "";
   assert.match(store, /allowSchemaFallback:\s*false/);
   const rollback = await readFile(new URL("../lib/domain/market-canary-write.js", import.meta.url), "utf8");
@@ -1693,7 +1707,9 @@ test("canary store uses strict upserts for writes and rollback restoration", asy
   assert.match(rollback, /store\.upsertRows\("market_listing_observations", beforeObservations\)/);
 });
 test("canary implementation has no cleanup invocation", async () => {
-  const source = await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8");
+  const source = normalizeSourceLineEndings(
+    await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8"),
+  );
   const canary = source.match(/async function runCanaryWriteMode[\s\S]*?\n}\n\nfunction assessFetchedRecords/)?.[0] ?? "";
   assert.doesNotMatch(canary, /cleanup/i);
 });
