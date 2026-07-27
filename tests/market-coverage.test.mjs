@@ -1683,6 +1683,43 @@ test("workflow keeps canary separate from normal ingestion and cleanup", async (
   assert.match(workflow, /Remove validation-only signal rows[\s\S]*mode == 'write'/);
   assert.doesNotMatch(workflow, /mode == 'canary-write'[\s\S]{0,160}cleanup/i);
 });
+test("workflow checkout is full only for manual canary writes", async () => {
+  const source = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
+  const assertCheckoutPolicy = (value) => {
+    const workflow = normalizeSourceLineEndings(value);
+    const full = workflow.match(/      - name: Checkout full history for canary write\n[\s\S]*?(?=\n      - name: Checkout shallow history)/)?.[0] ?? "";
+    const shallow = workflow.match(/      - name: Checkout shallow history\n[\s\S]*?(?=\n      - uses: actions\/setup-node@v6)/)?.[0] ?? "";
+
+    assert.match(full, /if: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.mode == 'canary-write' \}\}/);
+    assert.match(full, /uses: actions\/checkout@v6/);
+    assert.match(full, /fetch-depth: 0/);
+    assert.match(shallow, /if: \$\{\{ github\.event_name != 'workflow_dispatch' \|\| inputs\.mode != 'canary-write' \}\}/);
+    assert.match(shallow, /uses: actions\/checkout@v6/);
+    assert.doesNotMatch(shallow, /fetch-depth:/);
+    assert.equal(workflow.match(/uses: actions\/checkout@v6/g)?.length, 2);
+    assert.doesNotMatch(workflow, /^\s*-\s+(?:name:\s+.*git fetch|run:\s+git fetch)\s*$/m);
+  };
+
+  const lf = normalizeSourceLineEndings(source);
+  assertCheckoutPolicy(lf);
+  assertCheckoutPolicy(lf.replaceAll("\n", "\r\n"));
+});
+test("workflow checkout conditions are mutually exclusive", () => {
+  const cases = [
+    { event: "workflow_dispatch", mode: "canary-write", full: true, shallow: false },
+    { event: "workflow_dispatch", mode: "dry-run", full: false, shallow: true },
+    { event: "workflow_dispatch", mode: "write", full: false, shallow: true },
+    { event: "schedule", mode: "", full: false, shallow: true },
+  ];
+
+  for (const item of cases) {
+    const full = item.event === "workflow_dispatch" && item.mode === "canary-write";
+    const shallow = item.event !== "workflow_dispatch" || item.mode !== "canary-write";
+    assert.equal(full, item.full);
+    assert.equal(shallow, item.shallow);
+    assert.notEqual(full, shallow);
+  }
+});
 test("canary source normalization supports LF and CRLF checkouts", () => {
   const lf = "function canaryStore() {\n  allowSchemaFallback: false\n}\n\nfunction buildCanaryResult";
   const crlf = lf.replaceAll("\n", "\r\n");
