@@ -3,7 +3,7 @@ import path from "node:path";
 import { marketListingsRaw } from "../lib/data/market-input.js";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
 import { applyMarketPersistenceSafety } from "../lib/domain/market-match-safety.js";
-import { compactMarketRawPayload } from "../lib/domain/market-raw.js";
+import { compactMarketRawPayload, mergeMarketRawRecords } from "../lib/domain/market-raw.js";
 import { normalizeMarketplaceStatus } from "../lib/domain/market-status.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { loadOfficialCatalog } from "./load-official-catalog.mjs";
@@ -21,11 +21,17 @@ loadEnvFile(".env.local");
 const catalog = await loadOfficialCatalog([...officialSchedule, ...officialProducts]);
 const generatedMarket = loadGeneratedMarketRaw();
 const generatedProductionRows = productionRecords(generatedMarket.records);
-const generatedIds = new Set(generatedProductionRows.map((row) => text(row.id) || stableId("market", row.source_url || row.url, row.title || row.name, row.listed_at || row.created_at || row.createdAt)).filter(Boolean));
-const existingUnlinked = await loadExistingUnlinkedMarketRows();
+const generatedIds = new Set(generatedProductionRows.map(marketRecordId).filter(Boolean));
+const existingMarketRows = productionRecords(await loadExistingMarketRows());
 const sampleRows = includeStaticSampleData() ? marketListingsRaw : [];
-const safeMarketRaw = productionRecords(dedupeRawById([...existingUnlinked, ...generatedMarket.records, ...sampleRows]));
-const marketRows = safeMarketRaw.map((raw) => normalizeMarketListing(raw, catalog));
+const freshMarketRows = productionRecords([...generatedMarket.records, ...sampleRows]);
+const marketInputs = mergeMarketRawRecords({
+  existingRecords: existingMarketRows,
+  freshRecords: freshMarketRows,
+  getId: marketRecordId,
+});
+const safeMarketRaw = marketInputs.map((entry) => entry.record);
+const marketRows = marketInputs.map((entry) => normalizeMarketListing(entry.record, catalog, entry));
 const referenceIds = await loadReferenceIds();
 const dbMarketRows = marketRows.map((row) => applyDbReferenceSafety(row, referenceIds));
 const issueRows = dbMarketRows
@@ -75,18 +81,19 @@ function loadGeneratedMarketRaw() {
   };
 }
 
-async function loadExistingUnlinkedMarketRows() {
+async function loadExistingMarketRows() {
   const rows = await fetchRows("market_listings", {
     select: "id,title,price,status,source,source_type,source_url,listed_at,sold_at,raw",
   });
   return rows.map((row) => ({ ...(row.raw ?? {}), ...row }));
 }
 
-function dedupeRawById(records) {
-  return [...new Map(records.filter(Boolean).map((record) => [text(record.id || record.source_url || record.url || record.title), record])).values()];
+function marketRecordId(record) {
+  return text(record.id)
+    || stableId("market", record.source_url || record.url, record.title || record.name, record.listed_at || record.created_at || record.createdAt);
 }
 
-function normalizeMarketListing(raw, catalog) {
+function normalizeMarketListing(raw, catalog, input = {}) {
   const classification = classifyMarketListing(raw, catalog);
   const matchedVariant = classification.variantId ? catalog.variantById.get(classification.variantId) : null;
   const matchedSeries = classification.seriesId ? catalog.seriesById.get(classification.seriesId) : null;
@@ -113,7 +120,7 @@ function normalizeMarketListing(raw, catalog) {
     last_observed_at: nullableText(raw.last_observed_at || raw.observed_at || raw.fetched_at || raw.raw?.fetchedAt || raw.listed_at || new Date().toISOString()),
     confidence: reviewRequired ? 0.25 : classification.confidence,
     review_required: reviewRequired,
-    raw: compactMarketRawPayload(raw),
+    raw: input.fresh ? compactMarketRawPayload(raw) : input.preservedRaw,
   };
   return applyMarketPersistenceSafety(row, raw);
 }

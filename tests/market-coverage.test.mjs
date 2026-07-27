@@ -38,7 +38,7 @@ import {
   validateApprovedMarketAudit,
   validateCanaryRequest,
 } from "../lib/domain/market-canary-write.js";
-import { compactMarketRawPayload } from "../lib/domain/market-raw.js";
+import { compactMarketRawPayload, mergeMarketRawRecords } from "../lib/domain/market-raw.js";
 import { normalizeMarketplaceStatus } from "../lib/domain/market-status.js";
 import {
   MARKET_SOURCE_SCOPES,
@@ -1546,11 +1546,68 @@ test("normal market raw compaction is stable across repeated save and reload cyc
   assert.deepEqual(third, first);
   assert.equal(JSON.stringify(third).includes('"raw"'), false);
 });
-test("normal market raw compaction terminates cyclic raw input without retaining the cycle", () => {
+test("normal market raw compaction fails closed for cyclic input", () => {
   const raw = { provider: "rakuten_ichiba", itemCode: "shop:item" };
   raw.raw = raw;
-  const compacted = compactMarketRawPayload({ raw });
-  assert.deepEqual(compacted, { provider: "rakuten_ichiba", itemCode: "shop:item" });
+  assert.throws(() => compactMarketRawPayload({ raw }), /cycle/);
+});
+test("existing recursive raw stays canonical-equal while a different fresh row alone is compacted", () => {
+  const existingRaw = {
+    id: "existing",
+    raw: {
+      id: "existing",
+      raw: { provider: "rakuten_ichiba", itemCode: "shop:existing" },
+    },
+  };
+  const existing = { id: "existing", title: "existing", raw: existingRaw };
+  const fresh = {
+    id: "fresh",
+    title: "fresh",
+    raw: {
+      raw: { provider: "yahoo_shopping", code: "shop_fresh" },
+      fetch_context: { source: "generated" },
+    },
+  };
+  const merged = mergeMarketRawRecords({
+    existingRecords: [existing],
+    freshRecords: [fresh],
+    getId: (record) => record.id,
+  });
+  const persisted = merged.map((entry) => ({
+    id: entry.id,
+    raw: entry.fresh ? compactMarketRawPayload(entry.record) : entry.preservedRaw,
+  }));
+  assert.deepEqual(persisted.find((entry) => entry.id === "existing").raw, existingRaw);
+  assert.deepEqual(persisted.find((entry) => entry.id === "fresh").raw, {
+    provider: "yahoo_shopping",
+    code: "shop_fresh",
+    fetch_context: { source: "generated" },
+  });
+  assert.equal(Object.hasOwn(persisted.find((entry) => entry.id === "fresh").raw, "raw"), false);
+});
+test("a fresh record wins over an existing row with the same ID", () => {
+  const existingRaw = { provider: "rakuten_ichiba", itemCode: "shop:old" };
+  const freshRaw = { provider: "rakuten_ichiba", itemCode: "shop:new" };
+  const merged = mergeMarketRawRecords({
+    existingRecords: [{ id: "same", title: "old", raw: existingRaw }],
+    freshRecords: [{ id: "same", title: "new", raw: freshRaw }],
+    getId: (record) => record.id,
+  });
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].fresh, true);
+  assert.equal(merged[0].record.title, "new");
+  assert.deepEqual(compactMarketRawPayload(merged[0].record), freshRaw);
+});
+test("normal market raw compaction rejects 129 levels instead of truncating", () => {
+  let raw = { provider: "rakuten_ichiba", itemCode: "shop:deep" };
+  for (let depth = 1; depth < 129; depth += 1) raw = { depth, raw };
+  assert.throws(() => compactMarketRawPayload({ raw }), /exceeds 128 levels/);
+});
+test("normal market upsert keeps import issue and generated-only observation boundaries", async () => {
+  const source = await readFile(new URL("../scripts/upsert-market-data.mjs", import.meta.url), "utf8");
+  assert.match(source, /dbMarketRows\s*\.filter\(\(row\) => row\.review_required\)\s*\.map\(\(row\) => createImportIssue/);
+  assert.match(source, /buildObservationRows\(dbMarketRows\.filter\(\(row\) => generatedIds\.has\(row\.id\)\)\)/);
+  assert.match(source, /input\.fresh \? compactMarketRawPayload\(raw\) : input\.preservedRaw/);
 });
 test("strict upsert fails once without deleting a missing column", async () => {
   const row = { id: "strict-1", known: "kept", missing_column: "must-not-be-removed" };
