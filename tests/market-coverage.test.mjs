@@ -64,6 +64,42 @@ function catalog(extraVariants = []) {
   return { series: [series], variants, seriesById: new Map([[series.id, series]]), variantById: new Map(variants.map((entry) => [entry.id, entry])) };
 }
 
+function matchingFixtureCatalog(parentSeries, targetVariant, siblingVariants = [], crossSeriesVariants = []) {
+  const crossSeries = { id: "cross-series", slug: "cross-series", name: "別シリーズ", franchise: "別作品" };
+  const variants = [targetVariant, ...siblingVariants, ...crossSeriesVariants.map((entry) => ({
+    variant_type: "normal",
+    ...entry,
+    series_id: crossSeries.id,
+  }))];
+  const allSeries = [parentSeries, crossSeries];
+  return {
+    series: allSeries,
+    variants,
+    seriesById: new Map(allSeries.map((entry) => [entry.id, entry])),
+    variantById: new Map(variants.map((entry) => [entry.id, entry])),
+  };
+}
+
+function assessMatchingFixture({ title, parentName, targetName, siblings = [], collisions = [], targetId = "target" }) {
+  const parentSeries = { id: "target-series", slug: "machine-id", name: parentName, franchise: parentName };
+  const targetVariant = { id: targetId, slug: "machine-variant-id", series_id: parentSeries.id, name: targetName, variant_type: "normal" };
+  const siblingVariants = siblings.map((entry, index) => ({
+    id: entry.id ?? `sibling-${index}`,
+    slug: entry.slug ?? `sibling-slug-${index}`,
+    series_id: parentSeries.id,
+    name: entry.name,
+    variant_type: entry.variant_type ?? "normal",
+  }));
+  const crossSeriesVariants = collisions.map((name, index) => ({
+    id: `collision-${index}`,
+    slug: `collision-slug-${index}`,
+    name,
+  }));
+  const fixtureCatalog = matchingFixtureCatalog(parentSeries, targetVariant, siblingVariants, crossSeriesVariants);
+  const query = { query: `${parentName} ${targetName}`, variant_id: targetVariant.id, series_id: parentSeries.id };
+  return assessMarketCandidate({ title }, query, fixtureCatalog);
+}
+
 test("1 sold market is not a collection target", () => assert.equal(coverage(variant, listings(5)).priority, null));
 test("2 reference market is not a collection target", () => assert.equal(coverage(variant, listings(3)).priority, null));
 test("3 two completed listings are highest priority", () => assert.equal(coverage(variant, listings(2)).priority, 1));
@@ -135,6 +171,113 @@ test("32 matched_variant_id wins over variant_id", () => assert.equal(classifyMa
 test("33 explicit conflicting variant is reviewed", () => {
   const query = buildMarketSearchQueriesForVariant(variant, series)[0];
   assert.equal(assessMarketCandidate({ title: "冒険ガチャ 勇者 ガチャ 単品", variant_id: "v3" }, query, catalog()).reviewRequired, true);
+});
+
+test("Production GT-R candidate ignores cross-series ネコ and スカイ collisions", () => {
+  const assessment = assessMatchingFixture({
+    title: "tomica PREMIUM BOX型シリコンポーチ [4.日産 スカイライン GT-R (KPGC10)]【ネコポス配送対応】",
+    parentName: "tomica PREMIUM BOX型シリコンポーチ",
+    targetName: "日産 スカイライン GT-R(KPGC10)",
+    collisions: ["ネコ", "スカイ"],
+  });
+  assert.equal(assessment.accepted, true);
+  assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
+  assert.equal(assessment.confidence, 0.86);
+});
+
+test("Production マイク candidate ignores unrelated catalog collisions", () => {
+  const assessment = assessMatchingFixture({
+    title: "モンスターズ・インクへようこそ [3.マイク]【ネコポス配送対応】",
+    parentName: "モンスターズ・インクへようこそ",
+    targetName: "マイク",
+    collisions: ["ネコ", "マイ", "モンスターズ・インク"],
+  });
+  assert.equal(assessment.accepted, true);
+  assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
+});
+
+test("Production スポンジ candidate ignores cross-series ネコ collision", () => {
+  const assessment = assessMatchingFixture({
+    title: "PEANUTS リラクシングバスタイム [2.スポンジ]【ネコポス配送対応】",
+    parentName: "PEANUTS リラクシングバスタイム",
+    targetName: "スポンジ",
+    collisions: ["ネコ"],
+  });
+  assert.equal(assessment.accepted, true);
+  assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
+});
+
+test("Production ランドール candidate ignores unrelated catalog collisions", () => {
+  const assessment = assessMatchingFixture({
+    title: "モンスターズ・インクへようこそ [4.ランドール]【ネコポス配送対応】",
+    parentName: "モンスターズ・インクへようこそ",
+    targetName: "ランドール",
+    collisions: ["ネコ", "ラン", "モンスターズ・インク"],
+  });
+  assert.equal(assessment.accepted, true);
+  assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
+});
+
+test("same-series longer name shadows a contained shorter name", () => {
+  const assessment = assessMatchingFixture({
+    title: "対象シリーズ [3.マイク]",
+    parentName: "対象シリーズ",
+    targetName: "マイク",
+    siblings: [{ id: "short", name: "マイ" }],
+  });
+  assert.equal(assessment.accepted, true);
+  assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
+  assert.deepEqual(assessment.classification.details.suppressed_overlap_variant_ids, ["short"]);
+});
+
+test("contained short target is not accepted as evidence for the longer sibling", () => {
+  const assessment = assessMatchingFixture({
+    title: "対象シリーズ [3.マイク]",
+    parentName: "対象シリーズ",
+    targetName: "マイ",
+    siblings: [{ id: "long", name: "マイク" }],
+  });
+  assert.equal(assessment.accepted, false);
+  assert.equal(assessment.reason, "target_variant_not_confirmed");
+  assert.deepEqual(assessment.classification.details.matched_variant_ids, ["long"]);
+});
+
+test("independent same-series sibling occurrences remain ambiguous", () => {
+  const assessment = assessMatchingFixture({
+    title: "対象シリーズ マイ / マイク",
+    parentName: "対象シリーズ",
+    targetName: "マイク",
+    siblings: [{ id: "short", name: "マイ" }],
+  });
+  assert.equal(assessment.accepted, false);
+  assert.equal(assessment.reason, "multiple_variant_candidates");
+  assert.deepEqual(new Set(assessment.classification.details.matched_variant_ids), new Set(["target", "short"]));
+});
+
+test("duplicate normalized sibling names remain ambiguous", () => {
+  const assessment = assessMatchingFixture({
+    title: "対象シリーズ ネコ",
+    parentName: "対象シリーズ",
+    targetName: "ネコ",
+    siblings: [{ id: "duplicate", name: "ネコ" }],
+  });
+  assert.equal(assessment.accepted, false);
+  assert.equal(assessment.reason, "multiple_variant_candidates");
+  assert.deepEqual(new Set(assessment.classification.details.matched_variant_ids), new Set(["target", "duplicate"]));
+});
+
+test("matching only scans formal variants in the target series", () => {
+  const collisions = Array.from({ length: 10000 }, (_, index) => `衝突${index}`);
+  collisions.push("マイク");
+  const assessment = assessMatchingFixture({
+    title: "対象シリーズ マイク",
+    parentName: "対象シリーズ",
+    targetName: "マイク",
+    siblings: [{ id: "provisional", name: "マイク", variant_type: "provisional" }],
+    collisions,
+  });
+  assert.equal(assessment.accepted, true);
+  assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
 });
 
 test("34 dry-run declares zero database writes", async () => {
