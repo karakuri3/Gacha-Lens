@@ -11,6 +11,9 @@ import {
   applyMarketCandidateSafety,
   applyMarketPersistenceSafety,
   assessMarketCandidate,
+  buildFormalVariantsBySeries,
+  findVariantNameOccurrences,
+  prepareMarketSafetyCatalog,
   requiresPlannerMarketSafety,
 } from "../lib/domain/market-match-safety.js";
 import { MARKET_EVIDENCE_TIERS, classifyMarketEvidence, dedupeMarketListings } from "../lib/domain/market-evidence.js";
@@ -218,7 +221,7 @@ test("Production ランドール candidate ignores unrelated catalog collisions"
   assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
 });
 
-test("same-series longer name shadows a contained shorter name", () => {
+test("same-series longer name rejects a contained shorter name before overlap handling", () => {
   const assessment = assessMatchingFixture({
     title: "対象シリーズ [3.マイク]",
     parentName: "対象シリーズ",
@@ -227,7 +230,7 @@ test("same-series longer name shadows a contained shorter name", () => {
   });
   assert.equal(assessment.accepted, true);
   assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
-  assert.deepEqual(assessment.classification.details.suppressed_overlap_variant_ids, ["short"]);
+  assert.deepEqual(assessment.classification.details.suppressed_overlap_variant_ids, []);
 });
 
 test("contained short target is not accepted as evidence for the longer sibling", () => {
@@ -278,6 +281,113 @@ test("matching only scans formal variants in the target series", () => {
   });
   assert.equal(assessment.accepted, true);
   assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
+});
+
+test("same-series ネコ does not match inside ネコポス delivery text", () => {
+  const assessment = assessMatchingFixture({
+    title: "対象シリーズ [3.マイク]【ネコポス配送対応】",
+    parentName: "対象シリーズ",
+    targetName: "マイク",
+    siblings: [{ id: "cat", name: "ネコ" }],
+  });
+  assert.equal(assessment.accepted, true);
+  assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
+  assert.deepEqual(assessment.classification.details.suppressed_overlap_variant_ids, []);
+});
+
+test("delivery text alone cannot confirm the ネコ target", () => {
+  const assessment = assessMatchingFixture({
+    title: "対象シリーズ [2.イヌ]【ネコポス配送対応】",
+    parentName: "対象シリーズ",
+    targetName: "ネコ",
+    siblings: [{ id: "dog", name: "イヌ" }],
+  });
+  assert.equal(assessment.accepted, false);
+  assert.equal(assessment.reason, "target_variant_not_confirmed");
+  assert.deepEqual(assessment.classification.details.matched_variant_ids, ["dog"]);
+});
+
+test("formal bracketed ネコ remains valid target evidence", () => {
+  const assessment = assessMatchingFixture({
+    title: "対象シリーズ [1.ネコ]",
+    parentName: "対象シリーズ",
+    targetName: "ネコ",
+  });
+  assert.equal(assessment.accepted, true);
+  assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
+});
+
+test("variant matcher rejects incidental Japanese and ASCII substrings", () => {
+  assert.equal(findVariantNameOccurrences("ランドール", "ラン").length, 0);
+  assert.equal(findVariantNameOccurrences("スカイライン", "スカイ").length, 0);
+  assert.equal(findVariantNameOccurrences("CARTON", "CAR").length, 0);
+  assert.equal(findVariantNameOccurrences("マイ / ク", "マイク").length, 0);
+  assert.equal(findVariantNameOccurrences("[1.ネコ]", "ネコ").length, 1);
+});
+
+test("variant matcher preserves punctuation and width variations inside a formal name", () => {
+  const assessment = assessMatchingFixture({
+    title: "シリーズ名 [4.日産 スカイライン GT-R (KPGC10)]",
+    parentName: "シリーズ名",
+    targetName: "日産 スカイライン GT-R（ＫＰＧＣ１０）",
+  });
+  assert.equal(assessment.accepted, true);
+  assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
+});
+
+test("formal variant index groups once and excludes provisional records", () => {
+  const index = buildFormalVariantsBySeries([
+    { id: "a", series_id: "s1", name: "A", variant_type: "normal" },
+    { id: "b", series_id: "s1", name: "B", variant_type: "provisional" },
+    { id: "c", series_id: "s2", name: "C", variant_type: "normal" },
+  ]);
+  assert.deepEqual(index.get("s1").map((entry) => entry.id), ["a"]);
+  assert.deepEqual(index.get("s2").map((entry) => entry.id), ["c"]);
+});
+
+test("candidate safety builds the formal variant index once per batch", () => {
+  const parentSeries = { id: "batch-series", slug: "batch-series", name: "対象シリーズ", franchise: "対象作品" };
+  const targetVariant = { id: "batch-target", slug: "batch-target", series_id: parentSeries.id, name: "マイク", variant_type: "normal" };
+  let catalogScans = 0;
+  const variants = new Proxy([targetVariant], {
+    get(target, property, receiver) {
+      if (property === Symbol.iterator) catalogScans += 1;
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  const batchCatalog = {
+    series: [parentSeries],
+    variants,
+    seriesById: new Map([[parentSeries.id, parentSeries]]),
+    variantById: new Map([[targetVariant.id, targetVariant]]),
+  };
+  const query = { query: "対象シリーズ マイク", variant_id: targetVariant.id, series_id: parentSeries.id };
+  const records = [
+    { id: "one", title: "対象シリーズ [3.マイク]", raw: { provider: "yahoo_shopping", query } },
+    { id: "two", title: "対象シリーズ マイク 単品", raw: { provider: "rakuten_ichiba", query } },
+  ];
+  const result = applyMarketCandidateSafety({ records, queryPlan: [query], catalog: batchCatalog });
+  assert.equal(result.summary.accepted_listings, 2);
+  assert.equal(catalogScans, 1);
+});
+
+test("prepared catalog matching never reads the full variants collection", () => {
+  const parentSeries = { id: "prepared-series", slug: "prepared-series", name: "対象シリーズ", franchise: "対象作品" };
+  const targetVariant = { id: "prepared-target", slug: "prepared-target", series_id: parentSeries.id, name: "マイク", variant_type: "normal" };
+  const prepared = prepareMarketSafetyCatalog({
+    series: [parentSeries],
+    variants: [targetVariant],
+    seriesById: new Map([[parentSeries.id, parentSeries]]),
+    variantById: new Map([[targetVariant.id, targetVariant]]),
+  });
+  Object.defineProperty(prepared, "variants", {
+    get() {
+      throw new Error("full catalog variants must not be read after preparation");
+    },
+  });
+  const query = { query: "対象シリーズ マイク", variant_id: targetVariant.id, series_id: parentSeries.id };
+  const assessment = assessMarketCandidate({ title: "対象シリーズ [3.マイク]" }, query, prepared);
+  assert.equal(assessment.accepted, true);
 });
 
 test("34 dry-run declares zero database writes", async () => {
