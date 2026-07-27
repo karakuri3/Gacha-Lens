@@ -3,6 +3,7 @@ import path from "node:path";
 import { marketListingsRaw } from "../lib/data/market-input.js";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
 import { applyMarketPersistenceSafety } from "../lib/domain/market-match-safety.js";
+import { compactMarketRawPayload } from "../lib/domain/market-raw.js";
 import { normalizeMarketplaceStatus } from "../lib/domain/market-status.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { loadOfficialCatalog } from "./load-official-catalog.mjs";
@@ -112,7 +113,7 @@ function normalizeMarketListing(raw, catalog) {
     last_observed_at: nullableText(raw.last_observed_at || raw.observed_at || raw.fetched_at || raw.raw?.fetchedAt || raw.listed_at || new Date().toISOString()),
     confidence: reviewRequired ? 0.25 : classification.confidence,
     review_required: reviewRequired,
-    raw,
+    raw: compactMarketRawPayload(raw),
   };
   return applyMarketPersistenceSafety(row, raw);
 }

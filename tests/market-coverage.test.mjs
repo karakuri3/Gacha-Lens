@@ -29,13 +29,16 @@ import {
   buildMarketplaceListingId,
   buildSanitizedCanaryFailureResult,
   canonicalMarketplaceSource,
+  normalizeCanaryRollback,
   parseCanaryCandidateKeys,
   persistMarketCanary,
+  renderMarketCanaryResultMarkdown,
   resolveStoredMarketplaceIdentity,
   selectApprovedCanaryCandidates,
   validateApprovedMarketAudit,
   validateCanaryRequest,
 } from "../lib/domain/market-canary-write.js";
+import { compactMarketRawPayload } from "../lib/domain/market-raw.js";
 import { normalizeMarketplaceStatus } from "../lib/domain/market-status.js";
 import {
   MARKET_SOURCE_SCOPES,
@@ -1075,8 +1078,17 @@ test("canary audit rejects an expired artifact", () => {
 test("canary request rejects invalid candidate key format", () => {
   assert.throws(() => parseCanaryCandidateKeys("ABC"), /lowercase hex/);
 });
-test("canary request rejects three candidate keys", () => {
-  assert.throws(() => parseCanaryCandidateKeys("1111111111111111,2222222222222222,3333333333333333"), /one or two/);
+test("guarded small-batch accepts four candidate keys and rejects five", () => {
+  assert.equal(parseCanaryCandidateKeys([
+    "1111111111111111",
+    "2222222222222222",
+    "3333333333333333",
+    "4444444444444444",
+  ]).length, 4);
+  assert.throws(
+    () => parseCanaryCandidateKeys("1111111111111111,2222222222222222,3333333333333333,4444444444444444,5555555555555555"),
+    /one and four/,
+  );
 });
 test("canary request rejects duplicate candidate keys", () => {
   assert.throws(() => parseCanaryCandidateKeys("1111111111111111,1111111111111111"), /duplicates/);
@@ -1294,6 +1306,17 @@ test("Production fixture selects only GT-R and Mike with correct statuses", () =
   assert.deepEqual(rows.listingRows.map((row) => [row.variant_id, row.status]), [["gt-r", "active"], ["mike", "sold_out"]]);
   assert.equal(rows.listingRows.some((row) => ["sponge", "randall"].includes(row.variant_id)), false);
 });
+test("guarded small-batch builds all four explicitly approved Production fixtures", () => {
+  const fixture = productionFixture();
+  const rows = buildMarketCanaryRows({
+    ...fixture,
+    candidateKeys: productionCandidateFixtures.map((entry) => entry.key),
+    auditRunId: "30245610468",
+    observedAt: "2026-07-27T08:00:00.000Z",
+  });
+  assert.equal(rows.listingRows.length, 4);
+  assert.deepEqual(rows.listingRows.map((row) => row.variant_id), ["gt-r", "mike", "sponge", "randall"]);
+});
 test("canary rows use only the safety-linked variant and series", () => {
   const fixture = productionFixture();
   const rows = buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" });
@@ -1476,6 +1499,58 @@ test("sanitized pre-write failures report zero writes without raw or credentials
     const serialized = JSON.stringify(result);
     assert.doesNotMatch(serialized, /private raw response|service-role-secret|credentials|rawResponse/);
   }
+});
+test("successful canary rollback is always a structured zero-count result", () => {
+  assert.deepEqual(normalizeCanaryRollback(false), {
+    attempted: false,
+    verified: false,
+    listings_deleted: 0,
+    observations_deleted: 0,
+    listings_restored: 0,
+    observations_restored: 0,
+  });
+});
+test("legacy rollback false renders a complete canary Markdown result without undefined", () => {
+  const markdown = renderMarketCanaryResultMarkdown({
+    source_audit_run_id: "30253757681",
+    workflow_run_id: "30264689615",
+    head_sha: "0bb34ed4d17963207d0c34c63e89917fc3330b68",
+    candidate_count: 2,
+    listing_writes: 2,
+    observation_writes: 2,
+    verification: true,
+    rollback: false,
+    health: { database: "ok" },
+    candidates: [],
+  });
+  assert.match(markdown, /Rollback: not required/);
+  assert.match(markdown, /listings deleted 0, observations deleted 0, listings restored 0, observations restored 0/);
+  assert.doesNotMatch(markdown, /undefined/);
+});
+test("normal market raw compaction removes the verified 84-level Production raw chain", () => {
+  const fixture = productionFixture().records[0];
+  let raw = structuredClone(fixture.raw);
+  for (let depth = 1; depth < 84; depth += 1) raw = { id: fixture.id, source_url: fixture.source_url, raw };
+  const compacted = compactMarketRawPayload({ ...fixture, raw });
+  assert.equal(Object.hasOwn(compacted, "raw"), false);
+  assert.equal(compacted.provider, "rakuten_ichiba");
+  assert.equal(compacted.itemCode, "auc-toysanta:10380564");
+  assert.equal(compacted.source_url, fixture.source_url);
+});
+test("normal market raw compaction is stable across repeated save and reload cycles", () => {
+  const fixture = productionFixture().records[0];
+  const first = compactMarketRawPayload(fixture);
+  const second = compactMarketRawPayload({ ...fixture, raw: first });
+  const third = compactMarketRawPayload({ ...fixture, raw: second });
+  assert.deepEqual(second, first);
+  assert.deepEqual(third, first);
+  assert.equal(JSON.stringify(third).includes('"raw"'), false);
+});
+test("normal market raw compaction terminates cyclic raw input without retaining the cycle", () => {
+  const raw = { provider: "rakuten_ichiba", itemCode: "shop:item" };
+  raw.raw = raw;
+  const compacted = compactMarketRawPayload({ raw });
+  assert.deepEqual(compacted, { provider: "rakuten_ichiba", itemCode: "shop:item" });
 });
 test("strict upsert fails once without deleting a missing column", async () => {
   const row = { id: "strict-1", known: "kept", missing_column: "must-not-be-removed" };
@@ -1774,6 +1849,28 @@ test("canary persistence writes listings before observations", async () => {
   await persistMarketCanary({ ...rows, store });
   assert.ok(store.calls.indexOf("upsert:market_listings") < store.calls.indexOf("upsert:market_listing_observations"));
 });
+test("guarded small-batch persists four rows with verification and no rollback", async () => {
+  const fixture = productionFixture();
+  const rows = buildMarketCanaryRows({
+    ...fixture,
+    candidateKeys: productionCandidateFixtures.map((entry) => entry.key),
+    auditRunId: "30245610468",
+    observedAt: "2026-07-27T08:00:00.000Z",
+  });
+  const store = memoryCanaryStore();
+  const result = await persistMarketCanary({ ...rows, store });
+  assert.equal(result.listing_writes, 4);
+  assert.equal(result.observation_writes, 4);
+  assert.equal(result.verification, true);
+  assert.deepEqual(result.rollback, normalizeCanaryRollback());
+  assert.deepEqual(result.db_deltas, {
+    market_listings: 4,
+    market_listing_observations: 4,
+    import_issues: 0,
+    ingestion_runs: 0,
+    review_required: 0,
+  });
+});
 test("canary persistence writes only allowlisted rows", async () => {
   const rows = fixtureCanaryRows();
   const store = memoryCanaryStore();
@@ -1859,6 +1956,8 @@ test("workflow keeps canary separate from normal ingestion and cleanup", async (
   assert.match(workflow, /canary-write/);
   assert.match(workflow, /Download approved market candidate audit/);
   assert.match(workflow, /market-canary-result-\$\{\{ github\.run_id \}\}/);
+  assert.match(workflow, /maximum 4/);
+  assert.match(workflow, /"\$\{#canary_keys\[@\]\}" -gt 4/);
   assert.match(workflow, /Remove validation-only signal rows[\s\S]*mode == 'write'/);
   assert.doesNotMatch(workflow, /mode == 'canary-write'[\s\S]{0,160}cleanup/i);
 });
