@@ -22,6 +22,20 @@ import {
   renderMarketCandidateAuditMarkdown,
   validateMarketCandidateAudit,
 } from "../lib/domain/market-candidate-audit.js";
+import { buildMarketCandidateKey } from "../lib/domain/market-candidate-key.js";
+import {
+  assertExactMarketAuditMatch,
+  buildMarketCanaryRows,
+  buildMarketplaceListingId,
+  buildSanitizedCanaryFailureResult,
+  canonicalMarketplaceSource,
+  parseCanaryCandidateKeys,
+  persistMarketCanary,
+  selectApprovedCanaryCandidates,
+  validateApprovedMarketAudit,
+  validateCanaryRequest,
+} from "../lib/domain/market-canary-write.js";
+import { normalizeMarketplaceStatus } from "../lib/domain/market-status.js";
 import {
   MARKET_SOURCE_SCOPES,
   describeMarketWriteReadiness,
@@ -30,6 +44,7 @@ import {
 } from "../lib/domain/market-source-scope.js";
 import { describeMarketSourceConfiguration, fetchMarketListingsRaw } from "../lib/fetchers/market-fetcher.js";
 import { buildMarketSearchQueriesForVariant, isSafeMarketSearchQuery } from "../lib/fetchers/market-query-planner.js";
+import { upsertRows } from "../scripts/supabase-rest.mjs";
 
 const NOW = new Date("2026-07-22T12:00:00Z");
 const series = Object.freeze({ id: "s1", slug: "adventure", name: "冒険ガチャ", franchise: "冒険物語", brand: "テスト社", release_date: "2026-07-01" });
@@ -1004,4 +1019,681 @@ test("market backfill writes audits to runner or OS temp and never makes them a 
     /async function runWriteMode[\s\S]*?\n}\n\nfunction assessFetchedRecords/,
   )?.[0] ?? "";
   assert.doesNotMatch(writeMode, /writeAuditReport/);
+});
+
+function approvedAudit(overrides = {}) {
+  const report = structuredClone(auditReport());
+  Object.assign(report, overrides);
+  if (overrides.workflow) report.workflow = { ...auditReport().workflow, ...overrides.workflow };
+  if (overrides.result) report.result = { ...auditReport().result, ...overrides.result };
+  if (overrides.database_writes) report.database_writes = { ...auditReport().database_writes, ...overrides.database_writes };
+  return report;
+}
+
+function validAuditOptions(overrides = {}) {
+  return {
+    auditRunId: "123",
+    isAncestor: true,
+    now: "2026-07-24T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+test("canary audit rejects a schema version mismatch", () => {
+  assert.throws(() => validateApprovedMarketAudit(approvedAudit({ schema_version: 2 }), validAuditOptions()), /schema/i);
+});
+test("canary audit rejects a non-dry-run report", () => {
+  assert.throws(() => validateApprovedMarketAudit(approvedAudit({ mode: "write" }), validAuditOptions()), /dry-run/);
+});
+test("canary audit rejects non-planner sources", () => {
+  assert.throws(() => validateApprovedMarketAudit(approvedAudit({ source_scope: "all" }), validAuditOptions()), /planner-apis/);
+});
+test("canary audit rejects an incomplete report", () => {
+  assert.throws(() => validateApprovedMarketAudit(approvedAudit({ result: { report_complete: false } }), validAuditOptions()), /incomplete/);
+});
+test("canary audit rejects a truncated report", () => {
+  const report = approvedAudit({ result: { report_complete: false, truncated_count: 1 } });
+  assert.throws(() => validateApprovedMarketAudit(report, validAuditOptions()), /incomplete|truncated/);
+});
+test("canary audit rejects prior database writes", () => {
+  assert.throws(() => validateApprovedMarketAudit(approvedAudit({ database_writes: { listings: 1 } }), validAuditOptions()), /zero database writes/);
+});
+test("canary audit rejects a different run ID", () => {
+  assert.throws(() => validateApprovedMarketAudit(approvedAudit(), validAuditOptions({ auditRunId: "999" })), /run ID/);
+});
+test("canary audit rejects a non-ancestor head", () => {
+  assert.throws(() => validateApprovedMarketAudit(approvedAudit(), validAuditOptions({ isAncestor: false })), /ancestor/);
+});
+test("canary audit rejects an expired artifact", () => {
+  assert.throws(() => validateApprovedMarketAudit(approvedAudit(), validAuditOptions({ now: "2026-08-01T00:00:01.000Z" })), /expired/);
+});
+test("canary request rejects invalid candidate key format", () => {
+  assert.throws(() => parseCanaryCandidateKeys("ABC"), /lowercase hex/);
+});
+test("canary request rejects three candidate keys", () => {
+  assert.throws(() => parseCanaryCandidateKeys("1111111111111111,2222222222222222,3333333333333333"), /one or two/);
+});
+test("canary request rejects duplicate candidate keys", () => {
+  assert.throws(() => parseCanaryCandidateKeys("1111111111111111,1111111111111111"), /duplicates/);
+});
+test("canary subset rejects a key absent from the audit", () => {
+  assert.throws(() => selectApprovedCanaryCandidates(approvedAudit(), ["1111111111111111"]), /not present/);
+});
+test("canary subset rejects a review candidate", () => {
+  const report = approvedAudit();
+  report.candidates[0].assessment.accepted = false;
+  report.candidates[0].assessment.review_required = true;
+  assert.throws(() => selectApprovedCanaryCandidates(report, [report.candidates[0].candidate_key]), /not approved/);
+});
+test("canary request requires manual market planner released constraints", () => {
+  const input = { eventName: "workflow_dispatch", task: "market", mode: "canary-write", sourceScope: "planner-apis", limit: 5, priority: "1", release: "released", auditRunId: "123", candidateKeys: "1111111111111111" };
+  assert.equal(validateCanaryRequest(input).candidateKeys.length, 1);
+  for (const change of [{ eventName: "schedule" }, { task: "all" }, { sourceScope: "all" }, { limit: 6 }, { priority: "all" }, { priority: "2" }, { release: "all" }]) {
+    assert.throws(() => validateCanaryRequest({ ...input, ...change }));
+  }
+});
+
+function changedAudit(mutator) {
+  const report = approvedAudit();
+  mutator(report);
+  return report;
+}
+
+test("exact comparison rejects an added candidate", () => {
+  assert.throws(() => assertExactMarketAuditMatch(approvedAudit(), changedAudit((report) => {
+    report.candidates.push(structuredClone(report.candidates[0]));
+    report.candidates[1].candidate_key = "1111111111111111";
+    report.result.candidate_count = 2;
+    report.result.accepted_count = 2;
+  })), /exactly match/);
+});
+test("exact comparison rejects a missing candidate", () => {
+  assert.throws(() => assertExactMarketAuditMatch(approvedAudit(), changedAudit((report) => {
+    report.candidates = [];
+    report.result.candidate_count = 0;
+    report.result.accepted_count = 0;
+  })), /exactly match/);
+});
+for (const [name, mutate] of [
+  ["title", (report) => { report.candidates[0].listing.title += " changed"; }],
+  ["price", (report) => { report.candidates[0].listing.price += 1; }],
+  ["status", (report) => { report.candidates[0].listing.status = "sold_out"; }],
+  ["URL", (report) => { report.candidates[0].source.public_url = "https://example.com/item/2"; }],
+  ["target", (report) => { report.candidates[0].target.variant_id = "other"; }],
+  ["confidence", (report) => { report.candidates[0].assessment.confidence = 0.85; }],
+  ["query", (report) => { report.selection.selected_variants[0].query += " changed"; }],
+]) {
+  test(`exact comparison rejects a ${name} change`, () => {
+    assert.throws(() => assertExactMarketAuditMatch(approvedAudit(), changedAudit(mutate)), /exactly match/);
+  });
+}
+test("exact comparison accepts only an exact report while ignoring run metadata", () => {
+  const current = changedAudit((report) => {
+    report.generated_at = "2026-07-24T01:00:00.000Z";
+    report.workflow.run_id = "456";
+    report.workflow.run_attempt = "2";
+    report.workflow.head_sha = "def456";
+  });
+  assert.equal(assertExactMarketAuditMatch(approvedAudit(), current), true);
+});
+
+test("market status keeps completed sales distinct from inventory", () => {
+  assert.equal(normalizeMarketplaceStatus("sold"), "sold");
+  assert.equal(normalizeMarketplaceStatus("売却済み"), "sold");
+  assert.equal(normalizeMarketplaceStatus("sold_out"), "sold_out");
+  assert.equal(normalizeMarketplaceStatus("売り切れ"), "sold_out");
+  assert.equal(normalizeMarketplaceStatus("在庫切れ"), "sold_out");
+  assert.equal(normalizeMarketplaceStatus("active"), "active");
+  assert.equal(normalizeMarketplaceStatus(""), "active");
+});
+test("sold_out never becomes completed or active evidence", () => {
+  const result = classifyMarketEvidence({
+    subject: variant,
+    listings: [listing("sold-out", { status: "sold_out", sold_at: "", last_observed_at: "2026-07-21T00:00:00Z" })],
+    now: NOW,
+  });
+  assert.equal(result.completedCount, 0);
+  assert.equal(result.activeCount, 0);
+});
+test("only sold contributes completed evidence", () => {
+  const result = classifyMarketEvidence({
+    subject: variant,
+    listings: [
+      listing("sold", { status: "sold" }),
+      listing("sold-out", { status: "sold_out", sold_at: "", last_observed_at: "2026-07-21T00:00:00Z" }),
+    ],
+    now: NOW,
+  });
+  assert.equal(result.completedCount, 1);
+});
+
+const productionCandidateFixtures = [
+  {
+    key: "1e901198049bc341",
+    provider: "rakuten_ichiba",
+    listingId: "auc-toysanta:10380564",
+    url: "https://item.rakuten.co.jp/auc-toysanta/g-5l3e0018ii-004/",
+    rowId: "rakuten-auc-toysanta-10380564",
+    variantId: "gt-r",
+    seriesId: "tomica",
+    variantName: "日産 スカイライン GT-R(KPGC10)",
+    status: "active",
+  },
+  {
+    key: "2e833931e4e7cb26",
+    provider: "yahoo_shopping",
+    listingId: "toysanta_g-5l3e0018if-003-57687",
+    url: "https://store.shopping.yahoo.co.jp/toysanta/g-5l3e0018if-003-57687.html",
+    rowId: "yahoo-toysanta-g-5l3e0018if-003-57687",
+    variantId: "mike",
+    seriesId: "monsters",
+    variantName: "マイク",
+    status: "sold_out",
+  },
+  {
+    key: "65bf088fb494c114",
+    provider: "rakuten_ichiba",
+    listingId: "auc-toysanta:10380498",
+    url: "https://item.rakuten.co.jp/auc-toysanta/g-5l3e0018io-002/",
+    rowId: "rakuten-auc-toysanta-10380498",
+    variantId: "sponge",
+    seriesId: "peanuts",
+    variantName: "スポンジ",
+    status: "active",
+  },
+  {
+    key: "f1e9adfb8785c509",
+    provider: "yahoo_shopping",
+    listingId: "toysanta_g-5l3e0018if-004-57687",
+    url: "https://store.shopping.yahoo.co.jp/toysanta/g-5l3e0018if-004-57687.html",
+    rowId: "yahoo-toysanta-g-5l3e0018if-004-57687",
+    variantId: "randall",
+    seriesId: "monsters",
+    variantName: "ランドール",
+    status: "sold_out",
+  },
+];
+
+function productionFixture() {
+  const records = productionCandidateFixtures.map((fixture) => ({
+    id: fixture.rowId,
+    title: `${fixture.seriesId} ${fixture.variantName}`,
+    price: 568,
+    status: fixture.status,
+    source: fixture.provider === "rakuten_ichiba" ? "rakuten" : "yahoo_shopping",
+    source_url: fixture.url,
+    listed_at: "2026-07-27T07:17:30.000Z",
+    market_safety_assessed: true,
+    market_safety: {
+      accepted: true,
+      review_required: false,
+      reason: "variant_and_parent_evidence_confirmed",
+      variant_id: fixture.variantId,
+      series_id: fixture.seriesId,
+      listing_type: "single",
+      confidence: 0.86,
+      matched_variant_ids: [fixture.variantId],
+      checks: {
+        variant_evidence_present: true,
+        parent_series_evidence_present: true,
+        set_signal_detected: false,
+        multiple_variant_candidates: false,
+        explicit_variant_conflict: false,
+        query_context_present: true,
+      },
+    },
+    raw: {
+      provider: fixture.provider,
+      itemCode: fixture.provider === "rakuten_ichiba" ? fixture.listingId : undefined,
+      code: fixture.provider === "yahoo_shopping" ? fixture.listingId : undefined,
+      public_item_url: fixture.provider === "rakuten_ichiba" ? fixture.url : undefined,
+      fetchedAt: "2026-07-27T07:17:30.000Z",
+      seller: { email: "private@example.com" },
+      accessKey: "private",
+    },
+  }));
+  const candidates = productionCandidateFixtures.map((fixture, index) => ({
+    candidate_key: fixture.key,
+    source: { provider: fixture.provider, listing_id: fixture.listingId, public_url: fixture.url, public_url_host: new URL(fixture.url).hostname },
+    listing: { title: records[index].title, price: 568, status: fixture.status, listing_type: "single" },
+    target: { variant_id: fixture.variantId, variant_slug: fixture.variantId, variant_name: fixture.variantName, series_id: fixture.seriesId, series_slug: fixture.seriesId, series_name: fixture.seriesId, search_query: `${fixture.seriesId} ${fixture.variantName}` },
+    assessment: { accepted: true, review_required: false, reason: "variant_and_parent_evidence_confirmed", confidence: 0.86, matched_variant_ids: [fixture.variantId], matched_variant_names: [fixture.variantName], matched_variant_overflow: 0 },
+    checks: { variant_evidence_present: true, parent_series_evidence_present: true, set_signal_detected: false, multiple_variant_candidates: false, explicit_variant_conflict: false, query_context_present: true },
+  }));
+  const report = {
+    schema_version: 1,
+    generated_at: "2026-07-27T07:17:57.612Z",
+    mode: "dry-run",
+    source_scope: "planner-apis",
+    workflow: { run_id: "30245610468", run_attempt: "1", head_sha: "9bb9bd44384a03976fe7ea550d9c0214330b036b", event_name: "workflow_dispatch" },
+    selection: { selected_variant_count: 4, selected_variants: candidates.map((candidate) => ({ variant_id: candidate.target.variant_id, query: candidate.target.search_query })), query_count: 4 },
+    result: { candidate_count: 4, accepted_count: 4, review_count: 0, no_result_variant_count: 0, report_complete: true, truncated_count: 0 },
+    database_writes: { listings: 0, observations: 0, ingestion_runs: 0 },
+    candidates,
+  };
+  return { records, report };
+}
+
+test("Production fixture candidate keys preserve the approved run values", () => {
+  const { records } = productionFixture();
+  assert.deepEqual(records.map(buildMarketCandidateKey), productionCandidateFixtures.map((fixture) => fixture.key));
+});
+test("Production fixture selects only GT-R and Mike with correct statuses", () => {
+  const fixture = productionFixture();
+  const rows = buildMarketCanaryRows({
+    ...fixture,
+    candidateKeys: ["1e901198049bc341", "2e833931e4e7cb26"],
+    auditRunId: "30245610468",
+    observedAt: "2026-07-27T08:00:00.000Z",
+  });
+  assert.deepEqual(rows.listingRows.map((row) => [row.variant_id, row.status]), [["gt-r", "active"], ["mike", "sold_out"]]);
+  assert.equal(rows.listingRows.some((row) => ["sponge", "randall"].includes(row.variant_id)), false);
+});
+test("canary rows use only the safety-linked variant and series", () => {
+  const fixture = productionFixture();
+  const rows = buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" });
+  assert.deepEqual([rows.listingRows[0].variant_id, rows.listingRows[0].matched_variant_id, rows.listingRows[0].series_id], ["gt-r", "gt-r", "tomica"]);
+});
+test("canary raw allowlist excludes seller and credentials", () => {
+  const fixture = productionFixture();
+  const rows = buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" });
+  const raw = JSON.stringify(rows.listingRows[0].raw);
+  assert.doesNotMatch(raw, /seller|private@example|accessKey/i);
+  assert.match(raw, /canary_candidate_key/);
+});
+test("canary rows refuse a review safety assessment", () => {
+  const fixture = productionFixture();
+  fixture.records[0].market_safety.review_required = true;
+  assert.throws(() => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }), /invalid/);
+});
+test("Rakuten canary listing ID matches the existing normalizer identity", () => {
+  assert.equal(buildMarketplaceListingId({
+    provider: "rakuten_ichiba",
+    sourceListingId: "auc-toysanta:10380564",
+    publicUrl: "https://item.rakuten.co.jp/auc-toysanta/g-5l3e0018ii-004/",
+    title: "ignored fallback",
+  }), "rakuten-auc-toysanta-10380564");
+});
+test("Yahoo canary listing ID matches the existing normalizer identity", () => {
+  assert.equal(buildMarketplaceListingId({
+    provider: "yahoo_shopping",
+    sourceListingId: "toysanta_g-5l3e0018if-003-57687",
+    publicUrl: "https://store.shopping.yahoo.co.jp/toysanta/g-5l3e0018if-003-57687.html",
+    title: "ignored fallback",
+  }), "yahoo-toysanta-g-5l3e0018if-003-57687");
+});
+test("marketplace listing identity is deterministic and source-specific", () => {
+  const input = { provider: "rakuten_ichiba", sourceListingId: "shop:item-1", publicUrl: "https://example.com/1", title: "item" };
+  assert.equal(buildMarketplaceListingId(input), buildMarketplaceListingId(input));
+  assert.notEqual(buildMarketplaceListingId(input), buildMarketplaceListingId({ ...input, sourceListingId: "shop:item-2" }));
+});
+test("canary rows reject record ID drift before persistence", () => {
+  const fixture = productionFixture();
+  fixture.records[0].id = "rakuten-drifted";
+  assert.throws(
+    () => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+    /identity drift/,
+  );
+});
+test("canary rows require a finite positive numeric price", () => {
+  for (const value of [null, undefined, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1, "568"]) {
+    const fixture = productionFixture();
+    fixture.report.candidates[0].listing.price = value;
+    assert.throws(
+      () => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+      /invalid price/,
+    );
+  }
+});
+test("canary rows reject missing current and approved statuses before persistence", () => {
+  const missingValues = [null, undefined, "", " ", "\t", "\n"];
+  for (const value of missingValues) {
+    const fixture = productionFixture();
+    fixture.records[0].status = value;
+    assert.throws(
+      () => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+      /missing status/,
+    );
+  }
+  for (const value of missingValues) {
+    const fixture = productionFixture();
+    fixture.report.candidates[0].listing.status = value;
+    assert.throws(
+      () => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+      /missing approved status/,
+    );
+  }
+});
+test("canary rows preserve supported statuses and normalized sold-out aliases", () => {
+  for (const status of ["active", "sold", "sold_out", "pre_release"]) {
+    const fixture = productionFixture();
+    fixture.records[0].status = status;
+    fixture.report.candidates[0].listing.status = status;
+    const rows = buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" });
+    assert.equal(rows.listingRows[0].status, status);
+  }
+  const aliasFixture = productionFixture();
+  aliasFixture.records[0].status = "売り切れ";
+  aliasFixture.report.candidates[0].listing.status = "sold_out";
+  const aliasRows = buildMarketCanaryRows({
+    ...aliasFixture,
+    candidateKeys: ["1e901198049bc341"],
+    auditRunId: "30245610468",
+  });
+  assert.equal(aliasRows.listingRows[0].status, "sold_out");
+});
+test("canary rows reject unsupported and approved/current mismatched statuses", () => {
+  const fixture = productionFixture();
+  fixture.records[0].status = "mystery";
+  fixture.report.candidates[0].listing.status = "mystery";
+  assert.throws(
+    () => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+    /unsupported status/,
+  );
+  for (const [current, approved] of [["active", "sold_out"], ["sold_out", "sold"]]) {
+    const mismatch = productionFixture();
+    mismatch.records[0].status = current;
+    mismatch.report.candidates[0].listing.status = approved;
+    assert.throws(
+      () => buildMarketCanaryRows({ ...mismatch, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+      /status drift/,
+    );
+  }
+});
+test("canary source is derived canonically from the approved provider", () => {
+  assert.equal(canonicalMarketplaceSource("rakuten_ichiba"), "rakuten");
+  assert.equal(canonicalMarketplaceSource("yahoo_shopping"), "yahoo_shopping");
+  const fixture = productionFixture();
+  const rows = buildMarketCanaryRows({
+    ...fixture,
+    candidateKeys: ["1e901198049bc341", "2e833931e4e7cb26"],
+    auditRunId: "30245610468",
+  });
+  assert.deepEqual(rows.listingRows.map((row) => row.source), ["rakuten", "yahoo_shopping"]);
+  assert.deepEqual(rows.observationRows.map((row) => row.source), ["rakuten", "yahoo_shopping"]);
+});
+test("canary rows reject unsupported providers and source identity drift", () => {
+  const unsupported = productionFixture();
+  unsupported.report.candidates[0].source.provider = "unknown";
+  assert.throws(
+    () => buildMarketCanaryRows({ ...unsupported, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+    /unsupported provider/,
+  );
+  for (const [index, source] of [[0, "yahoo_shopping"], [1, "rakuten"]]) {
+    const drift = productionFixture();
+    drift.records[index].source = source;
+    assert.throws(
+      () => buildMarketCanaryRows({
+        ...drift,
+        candidateKeys: [productionCandidateFixtures[index].key],
+        auditRunId: "30245610468",
+      }),
+      /source identity drift/,
+    );
+  }
+  const missing = productionFixture();
+  missing.records[0].source = "";
+  assert.throws(
+    () => buildMarketCanaryRows({ ...missing, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+    /missing source/,
+  );
+});
+test("status and source rejection occurs before any DB store call", () => {
+  const store = memoryCanaryStore();
+  const statusFixture = productionFixture();
+  statusFixture.records[0].status = "";
+  assert.throws(
+    () => buildMarketCanaryRows({ ...statusFixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+    /missing status/,
+  );
+  const sourceFixture = productionFixture();
+  sourceFixture.records[0].source = "yahoo_shopping";
+  assert.throws(
+    () => buildMarketCanaryRows({ ...sourceFixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+    /source identity drift/,
+  );
+  assert.deepEqual(store.calls, []);
+});
+test("sanitized pre-write failures report zero writes without raw or credentials", () => {
+  for (const stage of ["request_validation", "approved_audit_validation", "exact_audit_match"]) {
+    const result = buildSanitizedCanaryFailureResult({
+      failedStage: stage,
+      auditRunId: "30245610468",
+      workflowRunId: "999",
+      headSha: "1775181dd2c75d5b67dbfad4c8e3e265c4f08bb3",
+      candidateKeys: "1e901198049bc341",
+      rawResponse: "private raw response",
+      credentials: "service-role-secret",
+    });
+    assert.equal(result.failed_stage, stage);
+    assert.equal(result.listing_writes, 0);
+    assert.equal(result.observation_writes, 0);
+    const serialized = JSON.stringify(result);
+    assert.doesNotMatch(serialized, /private raw response|service-role-secret|credentials|rawResponse/);
+  }
+});
+test("strict upsert fails once without deleting a missing column", async () => {
+  const row = { id: "strict-1", known: "kept", missing_column: "must-not-be-removed" };
+  const original = structuredClone(row);
+  const bodies = [];
+  await withMockSupabase(async () => {
+    globalThis.fetch = async (_url, options) => {
+      bodies.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({ message: "Could not find the 'missing_column' column" }), { status: 400 });
+    };
+    await assert.rejects(
+      () => upsertRows("market_listings", [row], { allowSchemaFallback: false }),
+      /strict upsert failed/,
+    );
+  });
+  assert.equal(bodies.length, 1);
+  assert.deepEqual(bodies[0], [original]);
+  assert.deepEqual(row, original);
+});
+test("normal upsert retains the existing schema fallback", async () => {
+  const row = { id: "normal-1", known: "kept", missing_column: "fallback-only" };
+  const original = structuredClone(row);
+  const bodies = [];
+  await withMockSupabase(async () => {
+    globalThis.fetch = async (_url, options) => {
+      bodies.push(JSON.parse(options.body));
+      return bodies.length === 1
+        ? new Response(JSON.stringify({ message: "Could not find the 'missing_column' column" }), { status: 400 })
+        : new Response("", { status: 201 });
+    };
+    await upsertRows("market_listings", [row]);
+  });
+  assert.equal(bodies.length, 2);
+  assert.deepEqual(bodies[0], [original]);
+  assert.deepEqual(bodies[1], [{ id: "normal-1", known: "kept" }]);
+  assert.deepEqual(row, original);
+});
+
+async function withMockSupabase(run) {
+  const previousFetch = globalThis.fetch;
+  const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const previousKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-only-key";
+  try {
+    await run();
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+    if (previousKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = previousKey;
+  }
+}
+
+function memoryCanaryStore(options = {}) {
+  const tables = {
+    market_listings: new Map((options.listings ?? []).map((row) => [row.id, structuredClone(row)])),
+    market_listing_observations: new Map((options.observations ?? []).map((row) => [row.id, structuredClone(row)])),
+  };
+  const calls = [];
+  let failOnce = options.failOnObservation === true;
+  let corruptOnce = options.corruptVerification === true || Boolean(options.corruptField);
+  return {
+    tables,
+    calls,
+    async fetchRowsByIds(table, ids) {
+      calls.push(`fetch:${table}`);
+      const rows = ids.map((id) => tables[table].get(id)).filter(Boolean).map((row) => structuredClone(row));
+      if (corruptOnce && calls.includes(`upsert:${table}`) && (!options.corruptTable || options.corruptTable === table)) {
+        corruptOnce = false;
+        return rows.map((row) => {
+          const next = structuredClone(row);
+          delete next[options.corruptField || "status"];
+          return next;
+        });
+      }
+      return rows;
+    },
+    async fetchCounts() {
+      return {
+        market_listings: tables.market_listings.size,
+        market_listing_observations: tables.market_listing_observations.size,
+        import_issues: 10,
+        ingestion_runs: 20,
+        review_required: [...tables.market_listings.values()].filter((row) => row.review_required).length,
+      };
+    },
+    async upsertRows(table, rows) {
+      calls.push(`upsert:${table}`);
+      rows.forEach((row) => tables[table].set(row.id, structuredClone(row)));
+      if (table === "market_listing_observations" && failOnce) {
+        failOnce = false;
+        throw new Error("fixture failure");
+      }
+    },
+    async deleteRowsByIds(table, ids) {
+      calls.push(`delete:${table}`);
+      ids.forEach((id) => tables[table].delete(id));
+      return ids.length;
+    },
+  };
+}
+
+function fixtureCanaryRows() {
+  const fixture = productionFixture();
+  return buildMarketCanaryRows({
+    ...fixture,
+    candidateKeys: ["1e901198049bc341", "2e833931e4e7cb26"],
+    auditRunId: "30245610468",
+    observedAt: "2026-07-27T08:00:00.000Z",
+  });
+}
+
+test("canary persistence writes listings before observations", async () => {
+  const rows = fixtureCanaryRows();
+  const store = memoryCanaryStore();
+  await persistMarketCanary({ ...rows, store });
+  assert.ok(store.calls.indexOf("upsert:market_listings") < store.calls.indexOf("upsert:market_listing_observations"));
+});
+test("canary persistence writes only allowlisted rows", async () => {
+  const rows = fixtureCanaryRows();
+  const store = memoryCanaryStore();
+  await persistMarketCanary({ ...rows, store });
+  assert.equal(store.tables.market_listings.size, 2);
+  assert.equal(store.tables.market_listing_observations.size, 2);
+});
+test("post-write mismatch triggers compensating rollback", async () => {
+  const rows = fixtureCanaryRows();
+  const store = memoryCanaryStore({ corruptVerification: true });
+  await assert.rejects(() => persistMarketCanary({ ...rows, store }), /rollback verified/);
+  assert.equal(store.tables.market_listings.size, 0);
+  assert.equal(store.tables.market_listing_observations.size, 0);
+});
+test("missing raw field triggers post-write rollback", async () => {
+  const rows = fixtureCanaryRows();
+  const store = memoryCanaryStore({ corruptTable: "market_listings", corruptField: "raw" });
+  await assert.rejects(() => persistMarketCanary({ ...rows, store }), /rollback verified/);
+  assert.equal(store.tables.market_listings.size, 0);
+  assert.equal(store.tables.market_listing_observations.size, 0);
+});
+test("missing classification field triggers post-write rollback", async () => {
+  const rows = fixtureCanaryRows();
+  const store = memoryCanaryStore({ corruptTable: "market_listings", corruptField: "classification_details" });
+  await assert.rejects(() => persistMarketCanary({ ...rows, store }), /rollback verified/);
+  assert.equal(store.tables.market_listings.size, 0);
+  assert.equal(store.tables.market_listing_observations.size, 0);
+});
+test("new rows are removed during rollback", async () => {
+  const rows = fixtureCanaryRows();
+  const store = memoryCanaryStore({ failOnObservation: true });
+  await assert.rejects(() => persistMarketCanary({ ...rows, store }));
+  assert.equal(store.tables.market_listings.size, 0);
+  assert.equal(store.tables.market_listing_observations.size, 0);
+});
+test("existing rows are restored during rollback", async () => {
+  const rows = fixtureCanaryRows();
+  const priorListing = { ...rows.listingRows[0], price: 500 };
+  const priorObservation = { ...rows.observationRows[0], price: 500 };
+  const store = memoryCanaryStore({ listings: [priorListing], observations: [priorObservation], failOnObservation: true });
+  await assert.rejects(() => persistMarketCanary({ ...rows, listingRows: [rows.listingRows[0]], observationRows: [rows.observationRows[0]], store }));
+  assert.equal(store.tables.market_listings.get(priorListing.id).price, 500);
+  assert.equal(store.tables.market_listing_observations.get(priorObservation.id).price, 500);
+});
+test("rollback never deletes unrelated IDs", async () => {
+  const rows = fixtureCanaryRows();
+  const unrelated = { ...rows.listingRows[0], id: "unrelated" };
+  const store = memoryCanaryStore({ listings: [unrelated], failOnObservation: true });
+  await assert.rejects(() => persistMarketCanary({ ...rows, store }));
+  assert.equal(store.tables.market_listings.has("unrelated"), true);
+});
+test("canary persistence never writes import issues", async () => {
+  const rows = fixtureCanaryRows();
+  const store = memoryCanaryStore();
+  await persistMarketCanary({ ...rows, store });
+  assert.equal(store.calls.some((call) => call.includes("import_issues")), false);
+});
+test("canary persistence never writes ingestion runs", async () => {
+  const rows = fixtureCanaryRows();
+  const store = memoryCanaryStore();
+  await persistMarketCanary({ ...rows, store });
+  assert.equal(store.calls.some((call) => call.includes("ingestion_runs")), false);
+});
+test("canary persistence is idempotent for the same daily rows", async () => {
+  const rows = fixtureCanaryRows();
+  const store = memoryCanaryStore();
+  await persistMarketCanary({ ...rows, store });
+  const second = await persistMarketCanary({ ...rows, store });
+  assert.deepEqual(second.db_deltas, { market_listings: 0, market_listing_observations: 0, import_issues: 0, ingestion_runs: 0, review_required: 0 });
+});
+test("preflight rejects a listing identity collision before writes", async () => {
+  const rows = fixtureCanaryRows();
+  const conflict = { ...rows.listingRows[0], source_url: "https://example.com/different", raw: { source_listing_id: "different" } };
+  const store = memoryCanaryStore({ listings: [conflict] });
+  await assert.rejects(
+    () => persistMarketCanary({ ...rows, listingRows: [rows.listingRows[0]], observationRows: [rows.observationRows[0]], store }),
+    (error) => error.canaryStage === "preflight" && error.canaryResult?.rollback?.attempted === false,
+  );
+  assert.equal(store.calls.some((call) => call.startsWith("upsert:") || call.startsWith("delete:")), false);
+});
+test("workflow keeps canary separate from normal ingestion and cleanup", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
+  assert.match(workflow, /canary-write/);
+  assert.match(workflow, /Download approved market candidate audit/);
+  assert.match(workflow, /market-canary-result-\$\{\{ github\.run_id \}\}/);
+  assert.match(workflow, /Remove validation-only signal rows[\s\S]*mode == 'write'/);
+  assert.doesNotMatch(workflow, /mode == 'canary-write'[\s\S]{0,160}cleanup/i);
+});
+test("canary implementation never invokes the normal ingestion runner", async () => {
+  const source = await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8");
+  const canary = source.match(/async function runCanaryWriteMode[\s\S]*?\n}\n\nfunction assessFetchedRecords/)?.[0] ?? "";
+  assert.doesNotMatch(canary, /run-ingestion|upsert-market-data|cleanup/);
+});
+test("canary store uses strict upserts for writes and rollback restoration", async () => {
+  const source = await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8");
+  const store = source.match(/function canaryStore\(\)[\s\S]*?\n}\n\nfunction buildCanaryResult/)?.[0] ?? "";
+  assert.match(store, /allowSchemaFallback:\s*false/);
+  const rollback = await readFile(new URL("../lib/domain/market-canary-write.js", import.meta.url), "utf8");
+  assert.match(rollback, /store\.upsertRows\("market_listings", beforeListings\)/);
+  assert.match(rollback, /store\.upsertRows\("market_listing_observations", beforeObservations\)/);
+});
+test("canary implementation has no cleanup invocation", async () => {
+  const source = await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8");
+  const canary = source.match(/async function runCanaryWriteMode[\s\S]*?\n}\n\nfunction assessFetchedRecords/)?.[0] ?? "";
+  assert.doesNotMatch(canary, /cleanup/i);
 });

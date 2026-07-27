@@ -3,6 +3,7 @@ import path from "node:path";
 import { marketListingsRaw } from "../lib/data/market-input.js";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
 import { applyMarketPersistenceSafety } from "../lib/domain/market-match-safety.js";
+import { normalizeMarketplaceStatus } from "../lib/domain/market-status.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { loadOfficialCatalog } from "./load-official-catalog.mjs";
 import { includeStaticSampleData, productionRecords } from "./nonproduction-data.mjs";
@@ -102,7 +103,7 @@ function normalizeMarketListing(raw, catalog) {
     classification_confidence: classification.confidence,
     classification_details: classification.details,
     price: number(raw.price),
-    status: normalizeMarketStatus(raw.status),
+    status: normalizeMarketplaceStatus(raw.status),
     source: text(raw.source) || "mercari",
     source_type: "marketplace",
     source_url: text(raw.source_url || raw.url),
@@ -345,13 +346,6 @@ function expandAliases(value = "") {
     }
     return expanded;
   }, String(value));
-}
-
-function normalizeMarketStatus(value) {
-  const status = text(value).toLowerCase();
-  if (["sold", "sold_out", "soldout", "売り切れ", "売却済み"].includes(status)) return "sold";
-  if (["pre_release", "予約", "発売前"].includes(status)) return "pre_release";
-  return status || "active";
 }
 
 function countBy(rows, key) {
