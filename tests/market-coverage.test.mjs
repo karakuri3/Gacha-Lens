@@ -197,6 +197,7 @@ test("Production マイク candidate ignores unrelated catalog collisions", () =
   });
   assert.equal(assessment.accepted, true);
   assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
+  assert.equal(assessment.confidence, 0.86);
 });
 
 test("Production スポンジ candidate ignores cross-series ネコ collision", () => {
@@ -208,6 +209,7 @@ test("Production スポンジ candidate ignores cross-series ネコ collision", 
   });
   assert.equal(assessment.accepted, true);
   assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
+  assert.equal(assessment.confidence, 0.86);
 });
 
 test("Production ランドール candidate ignores unrelated catalog collisions", () => {
@@ -219,6 +221,7 @@ test("Production ランドール candidate ignores unrelated catalog collisions"
   });
   assert.equal(assessment.accepted, true);
   assert.deepEqual(assessment.classification.details.matched_variant_ids, ["target"]);
+  assert.equal(assessment.confidence, 0.86);
 });
 
 test("same-series longer name rejects a contained shorter name before overlap handling", () => {
