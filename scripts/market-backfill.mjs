@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -6,6 +6,13 @@ import {
   buildSanitizedMarketCandidateAudit,
   renderMarketCandidateAuditMarkdown,
 } from "../lib/domain/market-candidate-audit.js";
+import {
+  assertExactMarketAuditMatch,
+  buildMarketCanaryRows,
+  persistMarketCanary,
+  validateApprovedMarketAudit,
+  validateCanaryRequest,
+} from "../lib/domain/market-canary-write.js";
 import { applyMarketCandidateSafety, summarizeFetchedMarketCandidates } from "../lib/domain/market-match-safety.js";
 import {
   MARKET_SOURCE_SCOPES,
@@ -15,9 +22,12 @@ import {
 } from "../lib/fetchers/market-fetcher.js";
 import { planMarketSearchQueries } from "../lib/fetchers/market-query-planner.js";
 import { loadMarketCoverageData } from "./market-coverage-data.mjs";
+import { deleteRowsByIds, fetchRowCount, fetchRows, upsertRows } from "./supabase-rest.mjs";
 
 const options = parseOptions(process.argv.slice(2));
-if (options.mode === "write") {
+if (options.mode === "canary-write") {
+  await runCanaryWriteMode(options);
+} else if (options.mode === "write") {
   await runWriteMode(options);
 } else {
   await runDryMode(options);
@@ -88,6 +98,98 @@ async function runWriteMode(options) {
   };
   const exitCode = await spawnScript("scripts/run-ingestion.mjs", env, ["--task=market"]);
   if (exitCode !== 0) process.exitCode = exitCode;
+}
+
+async function runCanaryWriteMode(options) {
+  const request = validateCanaryRequest({
+    eventName: process.env.GITHUB_EVENT_NAME,
+    task: process.env.BACKFILL_TASK || "market",
+    mode: options.mode,
+    sourceScope: options.sourceScope,
+    limit: options.limit,
+    release: options.release,
+    auditRunId: options.auditRunId,
+    candidateKeys: options.candidateKeys,
+  });
+  const approvedPath = path.resolve(options.approvedAuditPath || "");
+  if (!approvedPath || !fs.existsSync(approvedPath) || path.basename(approvedPath) !== "market-candidate-audit.json") {
+    throw new Error("The approved market candidate audit JSON is missing.");
+  }
+  const approved = JSON.parse(fs.readFileSync(approvedPath, "utf8"));
+  const currentHead = process.env.GITHUB_SHA || gitOutput(["rev-parse", "HEAD"]);
+  validateApprovedMarketAudit(approved, {
+    auditRunId: request.auditRunId,
+    isAncestor: gitIsAncestor(approved.workflow?.head_sha, currentHead),
+  });
+
+  const startedAt = Date.now();
+  const approvedTime = new Date(approved.generated_at);
+  const data = await loadMarketCoverageData({ now: approvedTime });
+  const plan = planMarketSearchQueries(data.catalog, data.coverageRows, { ...options, now: approvedTime });
+  const fetched = await fetchMarketListingsRaw({
+    catalog: data.catalog,
+    queries: plan.queries,
+    sourceScope: options.sourceScope,
+  });
+  const assessed = assessFetchedRecords(fetched, plan, data.catalog);
+  const currentAudit = buildSanitizedMarketCandidateAudit({
+    records: assessed.records,
+    queryPlan: plan.queries,
+    catalog: data.catalog,
+    runContext: {
+      mode: "dry-run",
+      source_scope: options.sourceScope,
+      run_id: process.env.GITHUB_RUN_ID,
+      run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+      head_sha: currentHead,
+      event_name: process.env.GITHUB_EVENT_NAME,
+    },
+    summary: {
+      ...assessed.summary,
+      source_scope: options.sourceScope,
+      listing_upserts: 0,
+      observations_created: 0,
+      ingestion_runs_written: 0,
+    },
+  });
+  assertExactMarketAuditMatch(approved, currentAudit);
+
+  const rows = buildMarketCanaryRows({
+    records: assessed.records,
+    report: currentAudit,
+    candidateKeys: request.candidateKeys,
+    auditRunId: request.auditRunId,
+  });
+  let persistence;
+  try {
+    persistence = await persistMarketCanary({
+      listingRows: rows.listingRows,
+      observationRows: rows.observationRows,
+      store: canaryStore(),
+    });
+  } catch (error) {
+    const failedResult = buildCanaryResult({
+      request,
+      currentHead,
+      rows,
+      persistence: error.canaryResult ?? { ok: false, rollback: { attempted: false, verified: false } },
+      durationMs: Date.now() - startedAt,
+    });
+    writeCanaryResult(failedResult);
+    writeCanaryGitHubOutputs(failedResult);
+    throw error;
+  }
+
+  const result = buildCanaryResult({
+    request,
+    currentHead,
+    rows,
+    persistence,
+    durationMs: Date.now() - startedAt,
+  });
+  writeCanaryResult(result);
+  writeCanaryGitHubOutputs(result);
+  console.log(JSON.stringify(result, null, 2));
 }
 
 function assessFetchedRecords(fetched, plan, catalog) {
@@ -195,7 +297,7 @@ function parseOptions(args) {
     return [key, rest.join("=")];
   }));
   const flags = new Set(args.filter((arg) => arg.startsWith("--") && !arg.includes("=")).map((arg) => arg.slice(2)));
-  const mode = values.mode === "write" ? "write" : "dry-run";
+  const mode = ["dry-run", "canary-write", "write"].includes(values.mode) ? values.mode : "dry-run";
   const limit = Math.min(200, Math.max(1, Number(values.limit ?? 25) || 25));
   if (flags.has("execute-sources") && limit > 5) throw new Error("--execute-sources requires --limit=5 or less.");
   return {
@@ -206,6 +308,9 @@ function parseOptions(args) {
     cooldownHours: Math.max(0, Number(values.cooldownHours ?? values["cooldown-hours"] ?? 24) || 0),
     executeSources: flags.has("execute-sources"),
     sourceScope: normalizeMarketSourceScope(values["source-scope"], MARKET_SOURCE_SCOPES.PLANNER_APIS),
+    auditRunId: values["audit-run-id"] ?? "",
+    candidateKeys: values["candidate-keys"] ?? "",
+    approvedAuditPath: values["approved-audit-path"] ?? "",
   };
 }
 
@@ -215,4 +320,125 @@ function spawnScript(script, env, args = []) {
     child.once("error", reject);
     child.once("close", (code) => resolve(code ?? 1));
   });
+}
+
+function canaryStore() {
+  return {
+    fetchRowsByIds(table, ids, select) {
+      return fetchRows(table, {
+        select,
+        pageSize: Math.max(1, ids.length),
+        params: { id: `in.(${ids.map(escapeInValue).join(",")})` },
+      });
+    },
+    fetchCounts: async () => {
+      const [marketListings, observations, importIssues, ingestionRuns, reviewRequired] = await Promise.all([
+        fetchRowCount("market_listings"),
+        fetchRowCount("market_listing_observations"),
+        fetchRowCount("import_issues"),
+        fetchRowCount("ingestion_runs"),
+        fetchRowCount("market_listings", { review_required: "eq.true" }),
+      ]);
+      return {
+        market_listings: marketListings,
+        market_listing_observations: observations,
+        import_issues: importIssues,
+        ingestion_runs: ingestionRuns,
+        review_required: reviewRequired,
+      };
+    },
+    upsertRows: (table, rows) => upsertRows(table, rows, { label: "market-canary", batchSize: 2 }),
+    deleteRowsByIds: (table, ids) => deleteRowsByIds(table, ids, { batchSize: 2 }),
+  };
+}
+
+function buildCanaryResult({ request, currentHead, rows, persistence, durationMs }) {
+  const listingOperations = new Map((persistence.listings ?? []).map((entry) => [entry.id, entry.operation]));
+  const observationOperations = new Map((persistence.observations ?? []).map((entry) => [entry.id, entry.operation]));
+  return {
+    schema_version: 1,
+    source_audit_run_id: request.auditRunId,
+    workflow_run_id: String(process.env.GITHUB_RUN_ID || ""),
+    head_sha: currentHead,
+    mode: "canary-write",
+    candidate_count: rows.selected.length,
+    candidates: rows.selected.map((candidate, index) => ({
+      candidate_key: candidate.candidate_key,
+      provider: candidate.source.provider,
+      target_variant_id: candidate.target.variant_id,
+      target_variant_name: candidate.target.variant_name,
+      status: rows.listingRows[index].status,
+      listing_operation: listingOperations.get(rows.listingRows[index].id) ?? "not_written",
+      observation_operation: observationOperations.get(rows.observationRows[index].id) ?? "not_written",
+    })),
+    listing_writes: Number(persistence.listing_writes || 0),
+    observation_writes: Number(persistence.observation_writes || 0),
+    verification: persistence.verification === true,
+    rollback: persistence.rollback ?? { attempted: false, verified: false },
+    db_deltas: persistence.db_deltas ?? {},
+    health: persistence.health ?? { database: "unknown" },
+    ok: persistence.ok === true,
+    duration_ms: durationMs,
+  };
+}
+
+function writeCanaryResult(result) {
+  const outputDir = process.env.MARKET_CANARY_OUTPUT_DIR || path.join(os.tmpdir(), "gacha-lens-market-canary");
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(path.join(outputDir, "market-canary-result.json"), `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  const lines = [
+    "# Market Canary Result",
+    "",
+    `- Source audit run: ${result.source_audit_run_id}`,
+    `- Workflow run: ${result.workflow_run_id || "local"}`,
+    `- Head SHA: ${result.head_sha}`,
+    `- Candidate count: ${result.candidate_count}`,
+    `- Listing writes: ${result.listing_writes}`,
+    `- Observation writes: ${result.observation_writes}`,
+    `- Verification: ${result.verification}`,
+    `- Rollback: ${result.rollback.attempted ? (result.rollback.verified ? "verified" : "failed") : "not required"}`,
+    `- Health: ${result.health.database}`,
+    "",
+    "| Key | Provider | Target variant | Status | Listing | Observation |",
+    "|---|---|---|---|---|---|",
+    ...result.candidates.map((candidate) => `| ${candidate.candidate_key} | ${candidate.provider} | ${escapeMarkdown(candidate.target_variant_name)} | ${candidate.status} | ${candidate.listing_operation} | ${candidate.observation_operation} |`),
+    "",
+  ];
+  fs.writeFileSync(path.join(outputDir, "market-canary-result.md"), lines.join("\n"), "utf8");
+}
+
+function writeCanaryGitHubOutputs(result) {
+  if (!process.env.GITHUB_OUTPUT) return;
+  const outputs = {
+    canary_result_generated: true,
+    canary_audit_run_id: result.source_audit_run_id,
+    canary_candidate_count: result.candidate_count,
+    canary_listing_writes: result.listing_writes,
+    canary_observation_writes: result.observation_writes,
+    canary_rollback: result.rollback.attempted ? (result.rollback.verified ? "verified" : "failed") : "not-required",
+    canary_verification: result.verification,
+  };
+  fs.appendFileSync(process.env.GITHUB_OUTPUT, `${Object.entries(outputs).map(([key, value]) => `${key}=${value}`).join("\n")}\n`, "utf8");
+}
+
+function gitIsAncestor(ancestor, current) {
+  if (!/^[0-9a-f]{7,40}$/i.test(String(ancestor ?? "")) || !/^[0-9a-f]{7,40}$/i.test(String(current ?? ""))) return false;
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", String(ancestor), String(current)], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function gitOutput(args) {
+  return execFileSync("git", args, { encoding: "utf8" }).trim();
+}
+
+function escapeInValue(value) {
+  return `"${String(value).replaceAll('"', '\\"')}"`;
+}
+
+function escapeMarkdown(value) {
+  return String(value ?? "").replace(/[\\|`*_[\]{}()<>#+\-.!~]/g, "\\$&");
 }

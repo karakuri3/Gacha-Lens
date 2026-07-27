@@ -1,5 +1,9 @@
 name: Gacha ingestion
 
+permissions:
+  contents: read
+  actions: read
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -23,6 +27,7 @@ on:
         type: choice
         options:
           - dry-run
+          - canary-write
           - write
       limit:
         description: Maximum market variants (1-200)
@@ -57,6 +62,14 @@ on:
         required: true
         default: false
         type: boolean
+      canary_audit_run_id:
+        description: Approved dry-run workflow run ID
+        required: false
+        type: string
+      canary_candidate_keys:
+        description: Comma-separated approved candidate keys, maximum 2
+        required: false
+        type: string
   schedule:
     - cron: "7 * * * *"
     - cron: "17,47 * * * *"
@@ -103,6 +116,8 @@ jobs:
           MANUAL_RELEASE: ${{ inputs.release }}
           MANUAL_SOURCE_SCOPE: ${{ inputs.source_scope }}
           MANUAL_EXECUTE_SOURCES: ${{ inputs.execute_sources }}
+          CANARY_AUDIT_RUN_ID: ${{ inputs.canary_audit_run_id }}
+          CANARY_CANDIDATE_KEYS: ${{ inputs.canary_candidate_keys }}
           SCHEDULE: ${{ github.event.schedule }}
         run: |
           case "$SCHEDULE" in
@@ -127,6 +142,35 @@ jobs:
             echo "::error::The all task writes official and stock data. Select write explicitly, or run the default market dry-run."
             exit 1
           fi
+          if [ "$mode" = "canary-write" ]; then
+            if [ -n "$SCHEDULE" ]; then echo "::error::Canary write cannot run on a schedule."; exit 1; fi
+            if [ "$task" != "market" ] || [ "$source_scope" != "planner-apis" ] || [ "${MANUAL_RELEASE:-all}" != "released" ]; then
+              echo "::error::Canary write requires task=market, source_scope=planner-apis and release=released."
+              exit 1
+            fi
+            if [ "$limit" -lt 1 ] || [ "$limit" -gt 5 ]; then
+              echo "::error::Canary write limit must be between 1 and 5."
+              exit 1
+            fi
+            if ! [[ "$CANARY_AUDIT_RUN_ID" =~ ^[0-9]+$ ]]; then
+              echo "::error::Canary audit run ID must contain digits only."
+              exit 1
+            fi
+            IFS=',' read -ra canary_keys <<< "$CANARY_CANDIDATE_KEYS"
+            if [ "${#canary_keys[@]}" -lt 1 ] || [ "${#canary_keys[@]}" -gt 2 ]; then
+              echo "::error::Canary write requires one or two candidate keys."
+              exit 1
+            fi
+            declare -A seen_keys
+            for key in "${canary_keys[@]}"; do
+              if ! [[ "$key" =~ ^[0-9a-f]{16}$ ]] || [ -n "${seen_keys[$key]:-}" ]; then
+                echo "::error::Candidate keys must be unique 16-character lowercase hex values."
+                exit 1
+              fi
+              seen_keys[$key]=1
+            done
+            execute_sources=true
+          fi
           echo "task=$task" >> "$GITHUB_OUTPUT"
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "limit=$limit" >> "$GITHUB_OUTPUT"
@@ -134,6 +178,17 @@ jobs:
           echo "release=${MANUAL_RELEASE:-all}" >> "$GITHUB_OUTPUT"
           echo "source_scope=$source_scope" >> "$GITHUB_OUTPUT"
           echo "execute_sources=$execute_sources" >> "$GITHUB_OUTPUT"
+          echo "canary_audit_run_id=$CANARY_AUDIT_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "canary_candidate_keys=$CANARY_CANDIDATE_KEYS" >> "$GITHUB_OUTPUT"
+      - name: Download approved market candidate audit
+        if: ${{ steps.ingestion.outputs.mode == 'canary-write' }}
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.ingestion.outputs.canary_audit_run_id }}
+          name: market-candidate-audit-${{ steps.ingestion.outputs.canary_audit_run_id }}
+          path: ${{ runner.temp }}/approved-market-audit
       - name: Run controlled market backfill
         id: market_backfill
         if: ${{ github.event_name == 'workflow_dispatch' && steps.ingestion.outputs.task == 'market' }}
@@ -144,11 +199,18 @@ jobs:
           BACKFILL_RELEASE: ${{ steps.ingestion.outputs.release }}
           BACKFILL_SOURCE_SCOPE: ${{ steps.ingestion.outputs.source_scope }}
           BACKFILL_EXECUTE_SOURCES: ${{ steps.ingestion.outputs.execute_sources }}
+          BACKFILL_TASK: ${{ steps.ingestion.outputs.task }}
+          CANARY_AUDIT_RUN_ID: ${{ steps.ingestion.outputs.canary_audit_run_id }}
+          CANARY_CANDIDATE_KEYS: ${{ steps.ingestion.outputs.canary_candidate_keys }}
           MARKET_AUDIT_OUTPUT_DIR: ${{ runner.temp }}/gacha-market-audit
+          MARKET_CANARY_OUTPUT_DIR: ${{ runner.temp }}/gacha-market-canary
         run: |
           set -o pipefail
           args=("--mode=$BACKFILL_MODE" "--limit=$BACKFILL_LIMIT" "--priority=$BACKFILL_PRIORITY" "--release=$BACKFILL_RELEASE" "--source-scope=$BACKFILL_SOURCE_SCOPE")
           if [ "$BACKFILL_MODE" = "dry-run" ] && [ "$BACKFILL_EXECUTE_SOURCES" = "true" ]; then args+=("--execute-sources"); fi
+          if [ "$BACKFILL_MODE" = "canary-write" ]; then
+            args+=("--execute-sources" "--audit-run-id=$CANARY_AUDIT_RUN_ID" "--candidate-keys=$CANARY_CANDIDATE_KEYS" "--approved-audit-path=${{ runner.temp }}/approved-market-audit/market-candidate-audit.json")
+          fi
           npm run market:backfill -- "${args[@]}" 2>&1 | tee ingestion.log
       - name: Upload sanitized market candidate audit
         if: ${{ always() && github.event_name == 'workflow_dispatch' && steps.ingestion.outputs.task == 'market' && steps.ingestion.outputs.mode == 'dry-run' && steps.ingestion.outputs.execute_sources == 'true' }}
@@ -158,6 +220,16 @@ jobs:
           path: |
             ${{ runner.temp }}/gacha-market-audit/market-candidate-audit.json
             ${{ runner.temp }}/gacha-market-audit/market-candidate-audit.md
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload sanitized market canary result
+        if: ${{ always() && steps.ingestion.outputs.mode == 'canary-write' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-canary-result-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/gacha-market-canary/market-canary-result.json
+            ${{ runner.temp }}/gacha-market-canary/market-canary-result.md
           if-no-files-found: error
           retention-days: 7
       - name: Run ingestion
@@ -195,6 +267,14 @@ jobs:
             echo "- Review count: ${{ steps.market_backfill.outputs.audit_review_count }}" >> "$GITHUB_STEP_SUMMARY"
             echo "- Report complete: ${{ steps.market_backfill.outputs.audit_report_complete }}" >> "$GITHUB_STEP_SUMMARY"
             echo "- Database writes: ${{ steps.market_backfill.outputs.database_writes }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -n "${{ steps.market_backfill.outputs.canary_result_generated }}" ]; then
+            echo "- Approved audit run: ${{ steps.market_backfill.outputs.canary_audit_run_id }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Selected candidate count: ${{ steps.market_backfill.outputs.canary_candidate_count }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Listing writes: ${{ steps.market_backfill.outputs.canary_listing_writes }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Observation writes: ${{ steps.market_backfill.outputs.canary_observation_writes }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Rollback: ${{ steps.market_backfill.outputs.canary_rollback }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Verification: ${{ steps.market_backfill.outputs.canary_verification }}" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "- Status: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Review queue: /review" >> "$GITHUB_STEP_SUMMARY"

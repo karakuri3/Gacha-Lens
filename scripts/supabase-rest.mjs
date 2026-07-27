@@ -75,6 +75,21 @@ export async function fetchRows(table, options = {}) {
   return rows;
 }
 
+export async function fetchRowCount(table, params = {}) {
+  const response = await fetch(restUrl(table, {
+    ...params,
+    select: "id",
+    limit: "1",
+  }), {
+    method: "HEAD",
+    headers: restHeaders({ Prefer: "count=exact" }),
+  });
+  if (!response.ok) throw new Error(`${table} count failed: ${await errorMessage(response)}`);
+  const total = parseContentRangeTotal(response.headers.get("content-range"));
+  if (!Number.isFinite(total)) throw new Error(`${table} count response is missing an exact total.`);
+  return total;
+}
+
 export async function deleteRowsByIds(table, ids, options = {}) {
   const safeIds = [...new Set(ids.filter(Boolean))];
   for (const batch of chunk(safeIds, options.batchSize ?? 80)) {
