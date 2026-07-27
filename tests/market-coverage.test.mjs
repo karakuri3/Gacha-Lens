@@ -26,6 +26,8 @@ import { buildMarketCandidateKey } from "../lib/domain/market-candidate-key.js";
 import {
   assertExactMarketAuditMatch,
   buildMarketCanaryRows,
+  buildMarketplaceListingId,
+  buildSanitizedCanaryFailureResult,
   parseCanaryCandidateKeys,
   persistMarketCanary,
   selectApprovedCanaryCandidates,
@@ -41,6 +43,7 @@ import {
 } from "../lib/domain/market-source-scope.js";
 import { describeMarketSourceConfiguration, fetchMarketListingsRaw } from "../lib/fetchers/market-fetcher.js";
 import { buildMarketSearchQueriesForVariant, isSafeMarketSearchQuery } from "../lib/fetchers/market-query-planner.js";
+import { upsertRows } from "../scripts/supabase-rest.mjs";
 
 const NOW = new Date("2026-07-22T12:00:00Z");
 const series = Object.freeze({ id: "s1", slug: "adventure", name: "冒険ガチャ", franchise: "冒険物語", brand: "テスト社", release_date: "2026-07-01" });
@@ -1082,9 +1085,9 @@ test("canary subset rejects a review candidate", () => {
   assert.throws(() => selectApprovedCanaryCandidates(report, [report.candidates[0].candidate_key]), /not approved/);
 });
 test("canary request requires manual market planner released constraints", () => {
-  const input = { eventName: "workflow_dispatch", task: "market", mode: "canary-write", sourceScope: "planner-apis", limit: 5, release: "released", auditRunId: "123", candidateKeys: "1111111111111111" };
+  const input = { eventName: "workflow_dispatch", task: "market", mode: "canary-write", sourceScope: "planner-apis", limit: 5, priority: "1", release: "released", auditRunId: "123", candidateKeys: "1111111111111111" };
   assert.equal(validateCanaryRequest(input).candidateKeys.length, 1);
-  for (const change of [{ eventName: "schedule" }, { task: "all" }, { sourceScope: "all" }, { limit: 6 }, { release: "all" }]) {
+  for (const change of [{ eventName: "schedule" }, { task: "all" }, { sourceScope: "all" }, { limit: 6 }, { priority: "all" }, { priority: "2" }, { release: "all" }]) {
     assert.throws(() => validateCanaryRequest({ ...input, ...change }));
   }
 });
@@ -1301,6 +1304,132 @@ test("canary rows refuse a review safety assessment", () => {
   fixture.records[0].market_safety.review_required = true;
   assert.throws(() => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }), /invalid/);
 });
+test("Rakuten canary listing ID matches the existing normalizer identity", () => {
+  assert.equal(buildMarketplaceListingId({
+    provider: "rakuten_ichiba",
+    sourceListingId: "auc-toysanta:10380564",
+    publicUrl: "https://item.rakuten.co.jp/auc-toysanta/g-5l3e0018ii-004/",
+    title: "ignored fallback",
+  }), "rakuten-auc-toysanta-10380564");
+});
+test("Yahoo canary listing ID matches the existing normalizer identity", () => {
+  assert.equal(buildMarketplaceListingId({
+    provider: "yahoo_shopping",
+    sourceListingId: "toysanta_g-5l3e0018if-003-57687",
+    publicUrl: "https://store.shopping.yahoo.co.jp/toysanta/g-5l3e0018if-003-57687.html",
+    title: "ignored fallback",
+  }), "yahoo-toysanta-g-5l3e0018if-003-57687");
+});
+test("marketplace listing identity is deterministic and source-specific", () => {
+  const input = { provider: "rakuten_ichiba", sourceListingId: "shop:item-1", publicUrl: "https://example.com/1", title: "item" };
+  assert.equal(buildMarketplaceListingId(input), buildMarketplaceListingId(input));
+  assert.notEqual(buildMarketplaceListingId(input), buildMarketplaceListingId({ ...input, sourceListingId: "shop:item-2" }));
+});
+test("canary rows reject record ID drift before persistence", () => {
+  const fixture = productionFixture();
+  fixture.records[0].id = "rakuten-drifted";
+  assert.throws(
+    () => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+    /identity drift/,
+  );
+});
+test("canary rows require a finite positive numeric price", () => {
+  for (const value of [null, undefined, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1, "568"]) {
+    const fixture = productionFixture();
+    fixture.report.candidates[0].listing.price = value;
+    assert.throws(
+      () => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+      /invalid price/,
+    );
+  }
+});
+test("canary rows preserve supported statuses and reject unknown status", () => {
+  for (const status of ["active", "sold", "sold_out", "pre_release"]) {
+    const fixture = productionFixture();
+    fixture.records[0].status = status;
+    fixture.report.candidates[0].listing.status = status;
+    const rows = buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" });
+    assert.equal(rows.listingRows[0].status, status);
+  }
+  const fixture = productionFixture();
+  fixture.records[0].status = "mystery";
+  fixture.report.candidates[0].listing.status = "mystery";
+  assert.throws(
+    () => buildMarketCanaryRows({ ...fixture, candidateKeys: ["1e901198049bc341"], auditRunId: "30245610468" }),
+    /unsupported status/,
+  );
+});
+test("sanitized pre-write failures report zero writes without raw or credentials", () => {
+  for (const stage of ["request_validation", "approved_audit_validation", "exact_audit_match"]) {
+    const result = buildSanitizedCanaryFailureResult({
+      failedStage: stage,
+      auditRunId: "30245610468",
+      workflowRunId: "999",
+      headSha: "1775181dd2c75d5b67dbfad4c8e3e265c4f08bb3",
+      candidateKeys: "1e901198049bc341",
+      rawResponse: "private raw response",
+      credentials: "service-role-secret",
+    });
+    assert.equal(result.failed_stage, stage);
+    assert.equal(result.listing_writes, 0);
+    assert.equal(result.observation_writes, 0);
+    const serialized = JSON.stringify(result);
+    assert.doesNotMatch(serialized, /private raw response|service-role-secret|credentials|rawResponse/);
+  }
+});
+test("strict upsert fails once without deleting a missing column", async () => {
+  const row = { id: "strict-1", known: "kept", missing_column: "must-not-be-removed" };
+  const original = structuredClone(row);
+  const bodies = [];
+  await withMockSupabase(async () => {
+    globalThis.fetch = async (_url, options) => {
+      bodies.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({ message: "Could not find the 'missing_column' column" }), { status: 400 });
+    };
+    await assert.rejects(
+      () => upsertRows("market_listings", [row], { allowSchemaFallback: false }),
+      /strict upsert failed/,
+    );
+  });
+  assert.equal(bodies.length, 1);
+  assert.deepEqual(bodies[0], [original]);
+  assert.deepEqual(row, original);
+});
+test("normal upsert retains the existing schema fallback", async () => {
+  const row = { id: "normal-1", known: "kept", missing_column: "fallback-only" };
+  const original = structuredClone(row);
+  const bodies = [];
+  await withMockSupabase(async () => {
+    globalThis.fetch = async (_url, options) => {
+      bodies.push(JSON.parse(options.body));
+      return bodies.length === 1
+        ? new Response(JSON.stringify({ message: "Could not find the 'missing_column' column" }), { status: 400 })
+        : new Response("", { status: 201 });
+    };
+    await upsertRows("market_listings", [row]);
+  });
+  assert.equal(bodies.length, 2);
+  assert.deepEqual(bodies[0], [original]);
+  assert.deepEqual(bodies[1], [{ id: "normal-1", known: "kept" }]);
+  assert.deepEqual(row, original);
+});
+
+async function withMockSupabase(run) {
+  const previousFetch = globalThis.fetch;
+  const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const previousKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-only-key";
+  try {
+    await run();
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+    if (previousKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = previousKey;
+  }
+}
 
 function memoryCanaryStore(options = {}) {
   const tables = {
@@ -1309,16 +1438,20 @@ function memoryCanaryStore(options = {}) {
   };
   const calls = [];
   let failOnce = options.failOnObservation === true;
-  let corruptOnce = options.corruptVerification === true;
+  let corruptOnce = options.corruptVerification === true || Boolean(options.corruptField);
   return {
     tables,
     calls,
     async fetchRowsByIds(table, ids) {
       calls.push(`fetch:${table}`);
       const rows = ids.map((id) => tables[table].get(id)).filter(Boolean).map((row) => structuredClone(row));
-      if (table === "market_listing_observations" && corruptOnce && calls.includes("upsert:market_listing_observations")) {
+      if (corruptOnce && calls.includes(`upsert:${table}`) && (!options.corruptTable || options.corruptTable === table)) {
         corruptOnce = false;
-        return rows.map((row) => ({ ...row, status: "wrong" }));
+        return rows.map((row) => {
+          const next = structuredClone(row);
+          delete next[options.corruptField || "status"];
+          return next;
+        });
       }
       return rows;
     },
@@ -1342,6 +1475,7 @@ function memoryCanaryStore(options = {}) {
     async deleteRowsByIds(table, ids) {
       calls.push(`delete:${table}`);
       ids.forEach((id) => tables[table].delete(id));
+      return ids.length;
     },
   };
 }
@@ -1372,6 +1506,20 @@ test("canary persistence writes only allowlisted rows", async () => {
 test("post-write mismatch triggers compensating rollback", async () => {
   const rows = fixtureCanaryRows();
   const store = memoryCanaryStore({ corruptVerification: true });
+  await assert.rejects(() => persistMarketCanary({ ...rows, store }), /rollback verified/);
+  assert.equal(store.tables.market_listings.size, 0);
+  assert.equal(store.tables.market_listing_observations.size, 0);
+});
+test("missing raw field triggers post-write rollback", async () => {
+  const rows = fixtureCanaryRows();
+  const store = memoryCanaryStore({ corruptTable: "market_listings", corruptField: "raw" });
+  await assert.rejects(() => persistMarketCanary({ ...rows, store }), /rollback verified/);
+  assert.equal(store.tables.market_listings.size, 0);
+  assert.equal(store.tables.market_listing_observations.size, 0);
+});
+test("missing classification field triggers post-write rollback", async () => {
+  const rows = fixtureCanaryRows();
+  const store = memoryCanaryStore({ corruptTable: "market_listings", corruptField: "classification_details" });
   await assert.rejects(() => persistMarketCanary({ ...rows, store }), /rollback verified/);
   assert.equal(store.tables.market_listings.size, 0);
   assert.equal(store.tables.market_listing_observations.size, 0);
@@ -1422,8 +1570,11 @@ test("preflight rejects a listing identity collision before writes", async () =>
   const rows = fixtureCanaryRows();
   const conflict = { ...rows.listingRows[0], source_url: "https://example.com/different", raw: { source_listing_id: "different" } };
   const store = memoryCanaryStore({ listings: [conflict] });
-  await assert.rejects(() => persistMarketCanary({ ...rows, listingRows: [rows.listingRows[0]], observationRows: [rows.observationRows[0]], store }), /identity conflicts/);
-  assert.equal(store.calls.some((call) => call.startsWith("upsert:")), false);
+  await assert.rejects(
+    () => persistMarketCanary({ ...rows, listingRows: [rows.listingRows[0]], observationRows: [rows.observationRows[0]], store }),
+    (error) => error.canaryStage === "preflight" && error.canaryResult?.rollback?.attempted === false,
+  );
+  assert.equal(store.calls.some((call) => call.startsWith("upsert:") || call.startsWith("delete:")), false);
 });
 test("workflow keeps canary separate from normal ingestion and cleanup", async () => {
   const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
@@ -1437,6 +1588,14 @@ test("canary implementation never invokes the normal ingestion runner", async ()
   const source = await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8");
   const canary = source.match(/async function runCanaryWriteMode[\s\S]*?\n}\n\nfunction assessFetchedRecords/)?.[0] ?? "";
   assert.doesNotMatch(canary, /run-ingestion|upsert-market-data|cleanup/);
+});
+test("canary store uses strict upserts for writes and rollback restoration", async () => {
+  const source = await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8");
+  const store = source.match(/function canaryStore\(\)[\s\S]*?\n}\n\nfunction buildCanaryResult/)?.[0] ?? "";
+  assert.match(store, /allowSchemaFallback:\s*false/);
+  const rollback = await readFile(new URL("../lib/domain/market-canary-write.js", import.meta.url), "utf8");
+  assert.match(rollback, /store\.upsertRows\("market_listings", beforeListings\)/);
+  assert.match(rollback, /store\.upsertRows\("market_listing_observations", beforeObservations\)/);
 });
 test("canary implementation has no cleanup invocation", async () => {
   const source = await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8");

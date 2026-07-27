@@ -9,6 +9,7 @@ import {
 import {
   assertExactMarketAuditMatch,
   buildMarketCanaryRows,
+  buildSanitizedCanaryFailureResult,
   persistMarketCanary,
   validateApprovedMarketAudit,
   validateCanaryRequest,
@@ -101,95 +102,115 @@ async function runWriteMode(options) {
 }
 
 async function runCanaryWriteMode(options) {
-  const request = validateCanaryRequest({
-    eventName: process.env.GITHUB_EVENT_NAME,
-    task: process.env.BACKFILL_TASK || "market",
-    mode: options.mode,
-    sourceScope: options.sourceScope,
-    limit: options.limit,
-    release: options.release,
-    auditRunId: options.auditRunId,
-    candidateKeys: options.candidateKeys,
-  });
-  const approvedPath = path.resolve(options.approvedAuditPath || "");
-  if (!approvedPath || !fs.existsSync(approvedPath) || path.basename(approvedPath) !== "market-candidate-audit.json") {
-    throw new Error("The approved market candidate audit JSON is missing.");
-  }
-  const approved = JSON.parse(fs.readFileSync(approvedPath, "utf8"));
-  const currentHead = process.env.GITHUB_SHA || gitOutput(["rev-parse", "HEAD"]);
-  validateApprovedMarketAudit(approved, {
-    auditRunId: request.auditRunId,
-    isAncestor: gitIsAncestor(approved.workflow?.head_sha, currentHead),
-  });
-
   const startedAt = Date.now();
-  const approvedTime = new Date(approved.generated_at);
-  const data = await loadMarketCoverageData({ now: approvedTime });
-  const plan = planMarketSearchQueries(data.catalog, data.coverageRows, { ...options, now: approvedTime });
-  const fetched = await fetchMarketListingsRaw({
-    catalog: data.catalog,
-    queries: plan.queries,
-    sourceScope: options.sourceScope,
-  });
-  const assessed = assessFetchedRecords(fetched, plan, data.catalog);
-  const currentAudit = buildSanitizedMarketCandidateAudit({
-    records: assessed.records,
-    queryPlan: plan.queries,
-    catalog: data.catalog,
-    runContext: {
-      mode: "dry-run",
-      source_scope: options.sourceScope,
-      run_id: process.env.GITHUB_RUN_ID,
-      run_attempt: process.env.GITHUB_RUN_ATTEMPT,
-      head_sha: currentHead,
-      event_name: process.env.GITHUB_EVENT_NAME,
-    },
-    summary: {
-      ...assessed.summary,
-      source_scope: options.sourceScope,
-      listing_upserts: 0,
-      observations_created: 0,
-      ingestion_runs_written: 0,
-    },
-  });
-  assertExactMarketAuditMatch(approved, currentAudit);
-
-  const rows = buildMarketCanaryRows({
-    records: assessed.records,
-    report: currentAudit,
-    candidateKeys: request.candidateKeys,
-    auditRunId: request.auditRunId,
-  });
-  let persistence;
+  let stage = "request_validation";
+  let request = null;
+  let rows = { selected: [], listingRows: [], observationRows: [] };
+  let currentHead = safeGitHead();
   try {
-    persistence = await persistMarketCanary({
+    request = validateCanaryRequest({
+      eventName: process.env.GITHUB_EVENT_NAME,
+      task: process.env.BACKFILL_TASK || "market",
+      mode: options.mode,
+      sourceScope: options.sourceScope,
+      limit: options.limit,
+      priority: options.priority,
+      release: options.release,
+      auditRunId: options.auditRunId,
+      candidateKeys: options.candidateKeys,
+    });
+    stage = "approved_audit_load";
+    const approvedPath = path.resolve(options.approvedAuditPath || "");
+    if (!approvedPath || !fs.existsSync(approvedPath) || path.basename(approvedPath) !== "market-candidate-audit.json") {
+      throw new Error("The approved market candidate audit JSON is missing.");
+    }
+    const approved = JSON.parse(fs.readFileSync(approvedPath, "utf8"));
+    stage = "approved_audit_validation";
+    validateApprovedMarketAudit(approved, {
+      auditRunId: request.auditRunId,
+      isAncestor: true,
+    });
+    stage = "ancestor_validation";
+    if (!gitIsAncestor(approved.workflow?.head_sha, currentHead)) throw new Error("Approved audit head is not an ancestor.");
+
+    const approvedTime = new Date(approved.generated_at);
+    stage = "coverage_plan";
+    const data = await loadMarketCoverageData({ now: approvedTime });
+    const plan = planMarketSearchQueries(data.catalog, data.coverageRows, { ...options, now: approvedTime });
+    stage = "external_fetch";
+    const fetched = await fetchMarketListingsRaw({
+      catalog: data.catalog,
+      queries: plan.queries,
+      sourceScope: options.sourceScope,
+    });
+    stage = "candidate_assessment";
+    const assessed = assessFetchedRecords(fetched, plan, data.catalog);
+    const currentAudit = buildSanitizedMarketCandidateAudit({
+      records: assessed.records,
+      queryPlan: plan.queries,
+      catalog: data.catalog,
+      runContext: {
+        mode: "dry-run",
+        source_scope: options.sourceScope,
+        run_id: process.env.GITHUB_RUN_ID,
+        run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+        head_sha: currentHead,
+        event_name: process.env.GITHUB_EVENT_NAME,
+      },
+      summary: {
+        ...assessed.summary,
+        source_scope: options.sourceScope,
+        listing_upserts: 0,
+        observations_created: 0,
+        ingestion_runs_written: 0,
+      },
+    });
+    stage = "exact_audit_match";
+    assertExactMarketAuditMatch(approved, currentAudit);
+    stage = "row_build";
+    rows = buildMarketCanaryRows({
+      records: assessed.records,
+      report: currentAudit,
+      candidateKeys: request.candidateKeys,
+      auditRunId: request.auditRunId,
+    });
+    const persistence = await persistMarketCanary({
       listingRows: rows.listingRows,
       observationRows: rows.observationRows,
       store: canaryStore(),
+      onStage: (nextStage) => {
+        stage = nextStage;
+      },
     });
-  } catch (error) {
-    const failedResult = buildCanaryResult({
+    stage = "complete";
+    const result = buildCanaryResult({
       request,
       currentHead,
       rows,
-      persistence: error.canaryResult ?? { ok: false, rollback: { attempted: false, verified: false } },
+      persistence,
       durationMs: Date.now() - startedAt,
     });
+    writeCanaryResult(result);
+    writeCanaryGitHubOutputs(result);
+    console.log(JSON.stringify(result, null, 2));
+  } catch (error) {
+    if (error.canaryStage) stage = error.canaryStage;
+    const persistence = error.canaryResult ?? {};
+    const failedResult = buildSanitizedCanaryFailureResult({
+      failedStage: stage,
+      auditRunId: request?.auditRunId ?? options.auditRunId,
+      workflowRunId: process.env.GITHUB_RUN_ID,
+      headSha: currentHead,
+      candidateKeys: request?.candidateKeys ?? options.candidateKeys,
+      listingWrites: persistence.listing_writes,
+      observationWrites: persistence.observation_writes,
+      rollback: persistence.rollback,
+    });
+    failedResult.duration_ms = Date.now() - startedAt;
     writeCanaryResult(failedResult);
     writeCanaryGitHubOutputs(failedResult);
-    throw error;
+    throw new Error(`Canary write failed at ${failedResult.failed_stage} (${failedResult.error_code}).`);
   }
-
-  const result = buildCanaryResult({
-    request,
-    currentHead,
-    rows,
-    persistence,
-    durationMs: Date.now() - startedAt,
-  });
-  writeCanaryResult(result);
-  writeCanaryGitHubOutputs(result);
-  console.log(JSON.stringify(result, null, 2));
 }
 
 function assessFetchedRecords(fetched, plan, catalog) {
@@ -347,7 +368,11 @@ function canaryStore() {
         review_required: reviewRequired,
       };
     },
-    upsertRows: (table, rows) => upsertRows(table, rows, { label: "market-canary", batchSize: 2 }),
+    upsertRows: (table, rows) => upsertRows(table, rows, {
+      label: "market-canary",
+      batchSize: 2,
+      allowSchemaFallback: false,
+    }),
     deleteRowsByIds: (table, ids) => deleteRowsByIds(table, ids, { batchSize: 2 }),
   };
 }
@@ -374,7 +399,7 @@ function buildCanaryResult({ request, currentHead, rows, persistence, durationMs
     listing_writes: Number(persistence.listing_writes || 0),
     observation_writes: Number(persistence.observation_writes || 0),
     verification: persistence.verification === true,
-    rollback: persistence.rollback ?? { attempted: false, verified: false },
+    rollback: persistence.rollback ?? emptyRollback(),
     db_deltas: persistence.db_deltas ?? {},
     health: persistence.health ?? { database: "unknown" },
     ok: persistence.ok === true,
@@ -395,8 +420,10 @@ function writeCanaryResult(result) {
     `- Candidate count: ${result.candidate_count}`,
     `- Listing writes: ${result.listing_writes}`,
     `- Observation writes: ${result.observation_writes}`,
+    ...(result.failed_stage ? [`- Failed stage: ${result.failed_stage}`, `- Error code: ${result.error_code}`] : []),
     `- Verification: ${result.verification}`,
     `- Rollback: ${result.rollback.attempted ? (result.rollback.verified ? "verified" : "failed") : "not required"}`,
+    `- Rollback counts: listings deleted ${result.rollback.listings_deleted}, observations deleted ${result.rollback.observations_deleted}, listings restored ${result.rollback.listings_restored}, observations restored ${result.rollback.observations_restored}`,
     `- Health: ${result.health.database}`,
     "",
     "| Key | Provider | Target variant | Status | Listing | Observation |",
@@ -433,6 +460,25 @@ function gitIsAncestor(ancestor, current) {
 
 function gitOutput(args) {
   return execFileSync("git", args, { encoding: "utf8" }).trim();
+}
+
+function safeGitHead() {
+  try {
+    return process.env.GITHUB_SHA || gitOutput(["rev-parse", "HEAD"]);
+  } catch {
+    return "";
+  }
+}
+
+function emptyRollback() {
+  return {
+    attempted: false,
+    verified: false,
+    listings_deleted: 0,
+    observations_deleted: 0,
+    listings_restored: 0,
+    observations_restored: 0,
+  };
 }
 
 function escapeInValue(value) {

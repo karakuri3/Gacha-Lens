@@ -143,29 +143,34 @@ jobs:
             exit 1
           fi
           if [ "$mode" = "canary-write" ]; then
-            if [ -n "$SCHEDULE" ]; then echo "::error::Canary write cannot run on a schedule."; exit 1; fi
-            if [ "$task" != "market" ] || [ "$source_scope" != "planner-apis" ] || [ "${MANUAL_RELEASE:-all}" != "released" ]; then
-              echo "::error::Canary write requires task=market, source_scope=planner-apis and release=released."
+            fail_canary() {
+              mkdir -p "$RUNNER_TEMP/gacha-market-canary"
+              printf '%s\n' \
+                '{"schema_version":1,"source_audit_run_id":"","workflow_run_id":"'"$GITHUB_RUN_ID"'","head_sha":"'"$GITHUB_SHA"'","mode":"canary-write","ok":false,"failed_stage":"request_validation","error_code":"canary_request_validation_failed","candidate_count":0,"candidate_keys":[],"candidates":[],"listing_writes":0,"observation_writes":0,"verification":false,"rollback":{"attempted":false,"verified":false,"listings_deleted":0,"observations_deleted":0,"listings_restored":0,"observations_restored":0},"db_deltas":{},"health":{"database":"unknown"}}' \
+                > "$RUNNER_TEMP/gacha-market-canary/market-canary-result.json"
+              printf '%s\n' '# Market Canary Result' '' '- Failed stage: request_validation' '- Error code: canary_request_validation_failed' '- Listing writes: 0' '- Observation writes: 0' '- Rollback: not required' \
+                > "$RUNNER_TEMP/gacha-market-canary/market-canary-result.md"
+              echo "::error::$1"
               exit 1
+            }
+            if [ -n "$SCHEDULE" ]; then echo "::error::Canary write cannot run on a schedule."; exit 1; fi
+            if [ "$task" != "market" ] || [ "$source_scope" != "planner-apis" ] || [ "${MANUAL_RELEASE:-all}" != "released" ] || [ "$priority" != "1" ]; then
+              fail_canary "Canary write requires task=market, priority=1, source_scope=planner-apis and release=released."
             fi
             if [ "$limit" -lt 1 ] || [ "$limit" -gt 5 ]; then
-              echo "::error::Canary write limit must be between 1 and 5."
-              exit 1
+              fail_canary "Canary write limit must be between 1 and 5."
             fi
             if ! [[ "$CANARY_AUDIT_RUN_ID" =~ ^[0-9]+$ ]]; then
-              echo "::error::Canary audit run ID must contain digits only."
-              exit 1
+              fail_canary "Canary audit run ID must contain digits only."
             fi
             IFS=',' read -ra canary_keys <<< "$CANARY_CANDIDATE_KEYS"
             if [ "${#canary_keys[@]}" -lt 1 ] || [ "${#canary_keys[@]}" -gt 2 ]; then
-              echo "::error::Canary write requires one or two candidate keys."
-              exit 1
+              fail_canary "Canary write requires one or two candidate keys."
             fi
             declare -A seen_keys
             for key in "${canary_keys[@]}"; do
               if ! [[ "$key" =~ ^[0-9a-f]{16}$ ]] || [ -n "${seen_keys[$key]:-}" ]; then
-                echo "::error::Candidate keys must be unique 16-character lowercase hex values."
-                exit 1
+                fail_canary "Candidate keys must be unique 16-character lowercase hex values."
               fi
               seen_keys[$key]=1
             done
@@ -182,6 +187,7 @@ jobs:
           echo "canary_candidate_keys=$CANARY_CANDIDATE_KEYS" >> "$GITHUB_OUTPUT"
       - name: Download approved market candidate audit
         if: ${{ steps.ingestion.outputs.mode == 'canary-write' }}
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
@@ -223,7 +229,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Upload sanitized market canary result
-        if: ${{ always() && steps.ingestion.outputs.mode == 'canary-write' }}
+        if: ${{ always() && inputs.mode == 'canary-write' }}
         uses: actions/upload-artifact@v4
         with:
           name: market-canary-result-${{ github.run_id }}

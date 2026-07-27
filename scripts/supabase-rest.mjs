@@ -2,10 +2,15 @@ export async function upsertRows(table, rows, options = {}) {
   if (!rows.length) return;
   const label = options.label || "upsert";
   const batchSize = options.batchSize ?? 500;
+  const allowSchemaFallback = options.allowSchemaFallback !== false;
   const batches = chunk(dedupeRowsById(rows), batchSize);
 
   for (let index = 0; index < batches.length; index += 1) {
-    await upsertBatch(table, batches[index], { label, batch: `${index + 1}/${batches.length}` });
+    await upsertBatch(table, batches[index], {
+      label,
+      batch: `${index + 1}/${batches.length}`,
+      allowSchemaFallback,
+    });
   }
 }
 
@@ -23,6 +28,7 @@ async function upsertBatch(table, rows, options = {}) {
     if (response.ok) return;
 
     const message = await errorMessage(response);
+    if (!options.allowSchemaFallback) throw new Error(`${table} strict upsert failed: ${message}`);
     const missingColumn = parseMissingColumn(message);
     if (!missingColumn) throw new Error(`${table} upsert failed: ${message}`);
 
