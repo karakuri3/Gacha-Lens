@@ -31,6 +31,7 @@ import {
   canonicalMarketplaceSource,
   parseCanaryCandidateKeys,
   persistMarketCanary,
+  resolveStoredMarketplaceIdentity,
   selectApprovedCanaryCandidates,
   validateApprovedMarketAudit,
   validateCanaryRequest,
@@ -1588,6 +1589,184 @@ function fixtureCanaryRows() {
     observedAt: "2026-07-27T08:00:00.000Z",
   });
 }
+
+function legacyMarketplaceRow(row, { provider, externalKey, depth = 1 } = {}) {
+  let raw = {
+    provider,
+    [externalKey]: row.raw.source_listing_id,
+    source_url: row.source_url,
+  };
+  for (let index = 1; index < depth; index += 1) {
+    raw = {
+      id: row.id,
+      raw,
+      source_url: row.source_url,
+    };
+  }
+  return { ...structuredClone(row), raw };
+}
+
+test("current canary marketplace identities resolve for Rakuten and Yahoo", () => {
+  const rows = fixtureCanaryRows();
+  for (const row of rows.listingRows) {
+    const identity = resolveStoredMarketplaceIdentity(row);
+    assert.equal(identity.complete, true);
+    assert.equal(identity.derivedId, row.id);
+  }
+});
+test("legacy provider-specific marketplace identities resolve through nested raw", () => {
+  const rows = fixtureCanaryRows();
+  const rakuten = legacyMarketplaceRow(rows.listingRows[0], {
+    provider: "rakuten_ichiba",
+    externalKey: "itemCode",
+  });
+  const yahoo = legacyMarketplaceRow(rows.listingRows[1], {
+    provider: "yahoo_shopping",
+    externalKey: "code",
+  });
+  assert.equal(resolveStoredMarketplaceIdentity(rakuten).complete, true);
+  assert.equal(resolveStoredMarketplaceIdentity(yahoo).complete, true);
+});
+test("verified Production raw depth resolves without widening the raw traversal", () => {
+  const rows = fixtureCanaryRows();
+  const rakuten = legacyMarketplaceRow(rows.listingRows[0], {
+    provider: "rakuten_ichiba",
+    externalKey: "itemCode",
+    depth: 58,
+  });
+  const yahoo = legacyMarketplaceRow(rows.listingRows[1], {
+    provider: "yahoo_shopping",
+    externalKey: "code",
+    depth: 58,
+  });
+  assert.deepEqual(
+    [resolveStoredMarketplaceIdentity(rakuten).depth, resolveStoredMarketplaceIdentity(yahoo).depth],
+    [58, 58],
+  );
+  assert.equal(resolveStoredMarketplaceIdentity(rakuten).complete, true);
+  assert.equal(resolveStoredMarketplaceIdentity(yahoo).complete, true);
+});
+test("matching duplicate identity values across raw levels are allowed", () => {
+  const row = fixtureCanaryRows().listingRows[0];
+  const legacy = legacyMarketplaceRow(row, {
+    provider: "rakuten_ichiba",
+    externalKey: "itemCode",
+  });
+  legacy.raw = {
+    provider: "rakuten_ichiba",
+    itemCode: row.raw.source_listing_id,
+    source_listing_id: row.raw.source_listing_id,
+    public_url: row.source_url,
+    raw: legacy.raw,
+  };
+  assert.equal(resolveStoredMarketplaceIdentity(legacy).complete, true);
+});
+test("conflicting marketplace external IDs fail closed", () => {
+  const rows = fixtureCanaryRows();
+  for (const [index, provider, externalKey] of [
+    [0, "rakuten_ichiba", "itemCode"],
+    [1, "yahoo_shopping", "code"],
+  ]) {
+    const legacy = legacyMarketplaceRow(rows.listingRows[index], { provider, externalKey });
+    legacy.raw.source_listing_id = "conflicting-id";
+    const identity = resolveStoredMarketplaceIdentity(legacy);
+    assert.equal(identity.complete, false);
+    assert.equal(identity.conflicts.source_listing_id, true);
+  }
+});
+test("provider, source and URL mismatches fail closed", () => {
+  const row = fixtureCanaryRows().listingRows[0];
+  const providerMismatch = legacyMarketplaceRow(row, {
+    provider: "yahoo_shopping",
+    externalKey: "itemCode",
+  });
+  const sourceMismatch = { ...legacyMarketplaceRow(row, {
+    provider: "rakuten_ichiba",
+    externalKey: "itemCode",
+  }), source: "yahoo_shopping" };
+  const urlMismatch = legacyMarketplaceRow(row, {
+    provider: "rakuten_ichiba",
+    externalKey: "itemCode",
+  });
+  urlMismatch.raw.source_url = "https://example.com/different";
+  assert.equal(resolveStoredMarketplaceIdentity(providerMismatch).complete, false);
+  assert.equal(resolveStoredMarketplaceIdentity(sourceMismatch).complete, false);
+  assert.equal(resolveStoredMarketplaceIdentity(urlMismatch).complete, false);
+});
+test("missing provider or external ID fails closed", () => {
+  const row = fixtureCanaryRows().listingRows[0];
+  const missingProvider = legacyMarketplaceRow(row, {
+    provider: "",
+    externalKey: "itemCode",
+  });
+  const missingExternalId = legacyMarketplaceRow(row, {
+    provider: "rakuten_ichiba",
+    externalKey: "itemCode",
+  });
+  delete missingExternalId.raw.itemCode;
+  assert.equal(resolveStoredMarketplaceIdentity(missingProvider).complete, false);
+  assert.equal(resolveStoredMarketplaceIdentity(missingExternalId).complete, false);
+});
+test("provider-specific IDs cannot cross marketplace boundaries", () => {
+  const rows = fixtureCanaryRows();
+  const rakutenWithYahooCode = legacyMarketplaceRow(rows.listingRows[0], {
+    provider: "rakuten_ichiba",
+    externalKey: "code",
+  });
+  const yahooWithRakutenItemCode = legacyMarketplaceRow(rows.listingRows[1], {
+    provider: "yahoo_shopping",
+    externalKey: "itemCode",
+  });
+  assert.equal(resolveStoredMarketplaceIdentity(rakutenWithYahooCode).complete, false);
+  assert.equal(resolveStoredMarketplaceIdentity(yahooWithRakutenItemCode).complete, false);
+});
+test("deterministic marketplace ID mismatch is rejected before writes", async () => {
+  const rows = fixtureCanaryRows();
+  const desired = { ...rows.listingRows[0], id: "rakuten-wrong-id" };
+  const existing = legacyMarketplaceRow(desired, {
+    provider: "rakuten_ichiba",
+    externalKey: "itemCode",
+  });
+  const observation = { ...rows.observationRows[0], listing_id: desired.id };
+  const store = memoryCanaryStore({ listings: [existing] });
+  await assert.rejects(
+    () => persistMarketCanary({ listingRows: [desired], observationRows: [observation], store }),
+    (error) => error.canaryStage === "preflight" && error.canaryResult?.rollback?.attempted === false,
+  );
+  assert.equal(store.calls.some((call) => call.startsWith("upsert:") || call.startsWith("delete:")), false);
+});
+test("verified legacy rows pass preflight without touching unrelated IDs", async () => {
+  const rows = fixtureCanaryRows();
+  const existing = rows.listingRows.map((row, index) => legacyMarketplaceRow(row, {
+    provider: index === 0 ? "rakuten_ichiba" : "yahoo_shopping",
+    externalKey: index === 0 ? "itemCode" : "code",
+    depth: 58,
+  }));
+  const unrelated = { ...existing[0], id: "unrelated-listing" };
+  const store = memoryCanaryStore({ listings: [...existing, unrelated] });
+  await persistMarketCanary({ ...rows, store });
+  assert.equal(store.tables.market_listings.has("unrelated-listing"), true);
+  assert.deepEqual(rows.listingRows.map((row) => store.tables.market_listings.get(row.id).status), ["active", "sold_out"]);
+});
+test("legacy preflight rejection performs no write, delete or rollback", async () => {
+  const rows = fixtureCanaryRows();
+  const conflict = legacyMarketplaceRow(rows.listingRows[0], {
+    provider: "rakuten_ichiba",
+    externalKey: "itemCode",
+  });
+  conflict.raw.itemCode = "different";
+  const store = memoryCanaryStore({ listings: [conflict] });
+  await assert.rejects(
+    () => persistMarketCanary({
+      listingRows: [rows.listingRows[0]],
+      observationRows: [rows.observationRows[0]],
+      store,
+    }),
+    (error) => error.canaryStage === "preflight" && error.canaryResult?.rollback?.attempted === false,
+  );
+  assert.equal(store.calls.some((call) => call.startsWith("upsert:")), false);
+  assert.equal(store.calls.some((call) => call.startsWith("delete:")), false);
+});
 
 test("canary persistence writes listings before observations", async () => {
   const rows = fixtureCanaryRows();
