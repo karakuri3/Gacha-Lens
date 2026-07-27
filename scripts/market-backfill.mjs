@@ -10,7 +10,9 @@ import {
   assertExactMarketAuditMatch,
   buildMarketCanaryRows,
   buildSanitizedCanaryFailureResult,
+  normalizeCanaryRollback,
   persistMarketCanary,
+  renderMarketCanaryResultMarkdown,
   validateApprovedMarketAudit,
   validateCanaryRequest,
 } from "../lib/domain/market-canary-write.js";
@@ -399,7 +401,7 @@ function buildCanaryResult({ request, currentHead, rows, persistence, durationMs
     listing_writes: Number(persistence.listing_writes || 0),
     observation_writes: Number(persistence.observation_writes || 0),
     verification: persistence.verification === true,
-    rollback: persistence.rollback ?? emptyRollback(),
+    rollback: normalizeCanaryRollback(persistence.rollback),
     db_deltas: persistence.db_deltas ?? {},
     health: persistence.health ?? { database: "unknown" },
     ok: persistence.ok === true,
@@ -411,27 +413,7 @@ function writeCanaryResult(result) {
   const outputDir = process.env.MARKET_CANARY_OUTPUT_DIR || path.join(os.tmpdir(), "gacha-lens-market-canary");
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(path.join(outputDir, "market-canary-result.json"), `${JSON.stringify(result, null, 2)}\n`, "utf8");
-  const lines = [
-    "# Market Canary Result",
-    "",
-    `- Source audit run: ${result.source_audit_run_id}`,
-    `- Workflow run: ${result.workflow_run_id || "local"}`,
-    `- Head SHA: ${result.head_sha}`,
-    `- Candidate count: ${result.candidate_count}`,
-    `- Listing writes: ${result.listing_writes}`,
-    `- Observation writes: ${result.observation_writes}`,
-    ...(result.failed_stage ? [`- Failed stage: ${result.failed_stage}`, `- Error code: ${result.error_code}`] : []),
-    `- Verification: ${result.verification}`,
-    `- Rollback: ${result.rollback.attempted ? (result.rollback.verified ? "verified" : "failed") : "not required"}`,
-    `- Rollback counts: listings deleted ${result.rollback.listings_deleted}, observations deleted ${result.rollback.observations_deleted}, listings restored ${result.rollback.listings_restored}, observations restored ${result.rollback.observations_restored}`,
-    `- Health: ${result.health.database}`,
-    "",
-    "| Key | Provider | Target variant | Status | Listing | Observation |",
-    "|---|---|---|---|---|---|",
-    ...result.candidates.map((candidate) => `| ${candidate.candidate_key} | ${candidate.provider} | ${escapeMarkdown(candidate.target_variant_name)} | ${candidate.status} | ${candidate.listing_operation} | ${candidate.observation_operation} |`),
-    "",
-  ];
-  fs.writeFileSync(path.join(outputDir, "market-canary-result.md"), lines.join("\n"), "utf8");
+  fs.writeFileSync(path.join(outputDir, "market-canary-result.md"), renderMarketCanaryResultMarkdown(result), "utf8");
 }
 
 function writeCanaryGitHubOutputs(result) {
@@ -470,21 +452,6 @@ function safeGitHead() {
   }
 }
 
-function emptyRollback() {
-  return {
-    attempted: false,
-    verified: false,
-    listings_deleted: 0,
-    observations_deleted: 0,
-    listings_restored: 0,
-    observations_restored: 0,
-  };
-}
-
 function escapeInValue(value) {
   return `"${String(value).replaceAll('"', '\\"')}"`;
-}
-
-function escapeMarkdown(value) {
-  return String(value ?? "").replace(/[\\|`*_[\]{}()<>#+\-.!~]/g, "\\$&");
 }

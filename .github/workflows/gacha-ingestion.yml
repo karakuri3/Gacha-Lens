@@ -67,7 +67,7 @@ on:
         required: false
         type: string
       canary_candidate_keys:
-        description: Comma-separated approved candidate keys, maximum 2
+        description: Comma-separated approved candidate keys, maximum 4
         required: false
         type: string
   schedule:
@@ -171,8 +171,8 @@ jobs:
               fail_canary "Canary audit run ID must contain digits only."
             fi
             IFS=',' read -ra canary_keys <<< "$CANARY_CANDIDATE_KEYS"
-            if [ "${#canary_keys[@]}" -lt 1 ] || [ "${#canary_keys[@]}" -gt 2 ]; then
-              fail_canary "Canary write requires one or two candidate keys."
+            if [ "${#canary_keys[@]}" -lt 1 ] || [ "${#canary_keys[@]}" -gt 4 ]; then
+              fail_canary "Canary write requires between one and four candidate keys."
             fi
             declare -A seen_keys
             for key in "${canary_keys[@]}"; do
