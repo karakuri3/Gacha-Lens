@@ -17,6 +17,7 @@ import {
   requiresPlannerMarketSafety,
 } from "../lib/domain/market-match-safety.js";
 import { MARKET_EVIDENCE_TIERS, classifyMarketEvidence, dedupeMarketListings } from "../lib/domain/market-evidence.js";
+import { buildMarketSummary } from "../lib/domain/market-summary.js";
 import {
   buildSanitizedMarketCandidateAudit,
   renderMarketCandidateAuditMarkdown,
@@ -53,6 +54,7 @@ import {
 } from "../lib/domain/market-source-scope.js";
 import { describeMarketSourceConfiguration, fetchMarketListingsRaw } from "../lib/fetchers/market-fetcher.js";
 import { buildMarketSearchQueriesForVariant, isSafeMarketSearchQuery } from "../lib/fetchers/market-query-planner.js";
+import { stableId } from "../lib/fetchers/feed-source-utils.js";
 import { fetchRows, upsertRows } from "../scripts/supabase-rest.mjs";
 
 const NOW = new Date("2026-07-22T12:00:00Z");
@@ -1893,6 +1895,19 @@ function fixtureCanaryRows() {
   });
 }
 
+function normalObservationFor(row, observedAt = "2026-07-27T00:00:00.000Z") {
+  const bucket = observedAt.slice(0, 10).replaceAll("-", "");
+  return {
+    ...structuredClone(row),
+    id: stableId("market-observation", bucket, row.listing_id),
+    observed_at: observedAt,
+    raw: {
+      classification_confidence: 0.86,
+      review_required: false,
+    },
+  };
+}
+
 function legacyMarketplaceRow(row, { provider, externalKey, depth = 1 } = {}) {
   let raw = {
     provider,
@@ -2077,6 +2092,114 @@ test("canary persistence writes listings before observations", async () => {
   await persistMarketCanary({ ...rows, store });
   assert.ok(store.calls.indexOf("upsert:market_listings") < store.calls.indexOf("upsert:market_listing_observations"));
 });
+test("canary marker IDs are deterministic and isolated by audit and candidate", () => {
+  const fixture = productionFixture();
+  const base = {
+    ...fixture,
+    candidateKeys: ["1e901198049bc341"],
+    observedAt: "2026-07-27T08:00:00.000Z",
+  };
+  const first = buildMarketCanaryRows({ ...base, auditRunId: "30245610468" });
+  const repeated = buildMarketCanaryRows({ ...base, auditRunId: "30245610468" });
+  const otherAudit = buildMarketCanaryRows({ ...base, auditRunId: "30245610469" });
+  const otherCandidate = buildMarketCanaryRows({
+    ...fixture,
+    candidateKeys: ["2e833931e4e7cb26"],
+    auditRunId: "30245610468",
+    observedAt: base.observedAt,
+  });
+
+  assert.equal(first.observationRows[0].id, repeated.observationRows[0].id);
+  assert.notEqual(first.observationRows[0].id, otherAudit.observationRows[0].id);
+  assert.notEqual(first.observationRows[0].id, otherCandidate.observationRows[0].id);
+  assert.equal(
+    first.observationRows[0].id,
+    stableId(
+      "market-canary-observation",
+      "30245610468",
+      "1e901198049bc341",
+      first.listingRows[0].id,
+    ),
+  );
+});
+test("different audits retain independent markers and the first approval remains consumed", async () => {
+  const fixture = productionFixture();
+  const input = {
+    ...fixture,
+    candidateKeys: ["1e901198049bc341"],
+    observedAt: "2026-07-27T08:00:00.000Z",
+  };
+  const first = buildMarketCanaryRows({ ...input, auditRunId: "30245610468" });
+  const second = buildMarketCanaryRows({ ...input, auditRunId: "30245610469" });
+  const store = memoryCanaryStore();
+
+  await persistMarketCanary({ ...first, store });
+  await persistMarketCanary({ ...second, store });
+
+  assert.notEqual(first.observationRows[0].id, second.observationRows[0].id);
+  assert.equal(store.tables.market_listing_observations.has(first.observationRows[0].id), true);
+  assert.equal(store.tables.market_listing_observations.has(second.observationRows[0].id), true);
+  assert.equal(store.tables.market_listing_observations.size, 2);
+  const callsBeforeReuse = store.calls.length;
+  await assert.rejects(
+    () => persistMarketCanary({ ...first, store }),
+    (error) => (
+      error.canaryStage === "approval_reuse_preflight"
+      && error.canaryResult?.listing_writes === 0
+      && error.canaryResult?.observation_writes === 0
+      && error.canaryResult?.rollback?.attempted === false
+    ),
+  );
+  assert.equal(
+    store.calls.slice(callsBeforeReuse).some((call) => call.startsWith("upsert:") || call.startsWith("delete:")),
+    false,
+  );
+  assert.equal(store.tables.market_listing_observations.size, 2);
+});
+test("normal daily observations cannot collide with or overwrite canary markers", async () => {
+  const rows = fixtureCanaryRows();
+  const canary = {
+    listingRows: [rows.listingRows[0]],
+    observationRows: [rows.observationRows[0]],
+  };
+  const normal = normalObservationFor(rows.observationRows[0]);
+  const store = memoryCanaryStore();
+
+  await persistMarketCanary({ ...canary, store });
+  assert.notEqual(normal.id, canary.observationRows[0].id);
+  await store.upsertRows("market_listing_observations", [normal]);
+
+  assert.equal(store.tables.market_listing_observations.size, 2);
+  assert.deepEqual(
+    store.tables.market_listing_observations.get(canary.observationRows[0].id).raw,
+    canary.observationRows[0].raw,
+  );
+  assert.deepEqual(store.tables.market_listing_observations.get(normal.id).raw, normal.raw);
+});
+test("legacy daily-ID canary markers remain consumed", async () => {
+  const rows = fixtureCanaryRows();
+  const legacy = {
+    ...structuredClone(rows.observationRows[0]),
+    id: stableId("market-observation", "20260727", rows.observationRows[0].listing_id),
+  };
+  const store = memoryCanaryStore({ observations: [legacy] });
+
+  await assert.rejects(
+    () => persistMarketCanary({
+      listingRows: [rows.listingRows[0]],
+      observationRows: [rows.observationRows[0]],
+      store,
+    }),
+    (error) => (
+      error.canaryStage === "approval_reuse_preflight"
+      && error.canaryResult?.listing_writes === 0
+      && error.canaryResult?.observation_writes === 0
+      && error.canaryResult?.rollback?.attempted === false
+    ),
+  );
+  assert.equal(store.tables.market_listing_observations.has(legacy.id), true);
+  assert.equal(store.calls.some((call) => call.startsWith("upsert:") || call.startsWith("delete:")), false);
+});
 test("guarded small-batch persists four rows with verification and no rollback", async () => {
   const fixture = productionFixture();
   const rows = buildMarketCanaryRows({
@@ -2149,6 +2272,55 @@ test("rollback never deletes unrelated IDs", async () => {
   const store = memoryCanaryStore({ listings: [unrelated], failOnObservation: true });
   await assert.rejects(() => persistMarketCanary({ ...rows, store }));
   assert.equal(store.tables.market_listings.has("unrelated"), true);
+});
+test("canary rollback deletes only current markers and preserves normal observations", async () => {
+  const rows = fixtureCanaryRows();
+  const normal = normalObservationFor(rows.observationRows[0]);
+  const store = memoryCanaryStore({ observations: [normal], failOnObservation: true });
+
+  await assert.rejects(() => persistMarketCanary({
+    listingRows: [rows.listingRows[0]],
+    observationRows: [rows.observationRows[0]],
+    store,
+  }), /rollback verified/);
+
+  assert.equal(store.tables.market_listing_observations.size, 1);
+  assert.deepEqual(store.tables.market_listing_observations.get(normal.id), normal);
+  assert.equal(store.tables.market_listing_observations.has(rows.observationRows[0].id), false);
+});
+test("multiple observation markers never duplicate one marketplace listing in price evidence", () => {
+  const rows = fixtureCanaryRows();
+  const first = {
+    ...rows.listingRows[0],
+    listing_type: "single",
+    market_review_type: "single",
+    status: "sold",
+    sold_at: "2026-07-27T07:00:00.000Z",
+    last_observed_at: "2026-07-27T07:00:00.000Z",
+  };
+  const later = {
+    ...first,
+    price: first.price + 100,
+    last_observed_at: "2026-07-27T08:00:00.000Z",
+  };
+
+  const evidence = classifyMarketEvidence({
+    subject: { ...variant, id: first.variant_id },
+    listings: [first, later],
+    now: "2026-07-27T12:00:00.000Z",
+  });
+  const summary = buildMarketSummary(
+    { ...variant, id: first.variant_id },
+    [first, later],
+    { now: "2026-07-27T12:00:00.000Z" },
+  );
+
+  assert.equal(dedupeMarketListings([first, later]).length, 1);
+  assert.equal(evidence.completedCount, 1);
+  assert.equal(evidence.eligibleListingCount, 1);
+  assert.deepEqual(evidence.observedCompletedPrices, [later.price]);
+  assert.equal(summary.all_time_listing_count, 1);
+  assert.equal(summary.sold_count, 1);
 });
 test("canary persistence never writes import issues", async () => {
   const rows = fixtureCanaryRows();
