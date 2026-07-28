@@ -25,6 +25,10 @@ import {
 } from "../lib/domain/market-candidate-audit.js";
 import { buildMarketCandidateKey } from "../lib/domain/market-candidate-key.js";
 import {
+  buildApprovedCanaryQueryPlan,
+  sanitizeCanaryQueryReplay,
+} from "../lib/domain/market-approved-query-replay.js";
+import {
   assertApprovedCanaryCandidatesMatch,
   assertExactMarketAuditMatch,
   buildCanaryAuditMismatchDiagnostics,
@@ -1055,6 +1059,239 @@ function validAuditOptions(overrides = {}) {
     ...overrides,
   };
 }
+
+function approvedReplayFixture() {
+  const report = approvedAudit();
+  return {
+    report,
+    catalog: structuredCloneCatalog(auditCatalog),
+    candidateKeys: [report.candidates[0].candidate_key],
+  };
+}
+
+function structuredCloneCatalog(catalog) {
+  const seriesRows = structuredClone(catalog.series);
+  const variantRows = structuredClone(catalog.variants);
+  return {
+    series: seriesRows,
+    variants: variantRows,
+    seriesById: new Map(seriesRows.map((entry) => [entry.id, entry])),
+    variantById: new Map(variantRows.map((entry) => [entry.id, entry])),
+  };
+}
+
+test("approved canary query replay creates a deterministic planner-compatible plan", () => {
+  const fixture = approvedReplayFixture();
+  const first = buildApprovedCanaryQueryPlan(fixture.report, fixture.catalog, fixture.candidateKeys);
+  const second = buildApprovedCanaryQueryPlan(
+    structuredClone(fixture.report),
+    structuredCloneCatalog(fixture.catalog),
+    [...fixture.candidateKeys].reverse(),
+  );
+  assert.deepEqual(first, second);
+  assert.equal(first.selected.length, 1);
+  assert.deepEqual(first.queries[0], {
+    query: auditQueryPlan[0].query,
+    kind: "variant",
+    variant_id: "audit-v1",
+    series_id: "audit-series",
+    release_date: "",
+    priority: 1,
+    priority_reason: "missing_evidence",
+    coverage_state: "approved_audit",
+  });
+  assert.deepEqual(first.queryReplay, {
+    source: "approved_audit",
+    approved_selected_count: 1,
+    replayed_query_count: 1,
+    catalog_identity_match: true,
+    query_safety_match: true,
+  });
+});
+
+for (const [name, mutate] of [
+  ["variant ID", (fixture) => { fixture.report.selection.selected_variants[0].variant_id = "missing"; }],
+  ["variant slug", (fixture) => { fixture.catalog.variants[0].slug = "changed"; }],
+  ["variant name", (fixture) => { fixture.catalog.variants[0].name = "Changed"; }],
+  ["series ID", (fixture) => { fixture.report.selection.selected_variants[0].series_id = "missing"; }],
+  ["series slug", (fixture) => { fixture.catalog.series[0].slug = "changed"; }],
+  ["series name", (fixture) => { fixture.catalog.series[0].name = "Changed"; }],
+  ["parent relationship", (fixture) => { fixture.catalog.variants[0].series_id = "other-series"; }],
+  ["provisional state", (fixture) => { fixture.catalog.variants[0].variant_type = "provisional"; }],
+]) {
+  test(`approved canary query replay rejects ${name} drift`, () => {
+    const fixture = approvedReplayFixture();
+    mutate(fixture);
+    assert.throws(
+      () => buildApprovedCanaryQueryPlan(fixture.report, fixture.catalog, fixture.candidateKeys),
+      /catalog|selection/i,
+    );
+  });
+}
+
+test("approved canary query replay rejects a query that no longer contains variant evidence", () => {
+  const fixture = approvedReplayFixture();
+  fixture.report.selection.selected_variants[0].query = "Audit Series unrelated gacha";
+  fixture.report.candidates[0].target.search_query = fixture.report.selection.selected_variants[0].query;
+  assert.throws(
+    () => buildApprovedCanaryQueryPlan(fixture.report, fixture.catalog, fixture.candidateKeys),
+    /safe/i,
+  );
+});
+
+test("approved canary query replay rejects a query that no longer contains parent evidence", () => {
+  const fixture = approvedReplayFixture();
+  fixture.report.selection.selected_variants[0].query = "Hero unrelated gacha";
+  fixture.report.candidates[0].target.search_query = fixture.report.selection.selected_variants[0].query;
+  assert.throws(
+    () => buildApprovedCanaryQueryPlan(fixture.report, fixture.catalog, fixture.candidateKeys),
+    /safe/i,
+  );
+});
+
+test("approved canary query replay rejects duplicate variant IDs and queries", () => {
+  for (const mutate of [
+    (second) => { second.variant_id = "audit-v1"; },
+    (second, first) => { second.query = first.query; },
+  ]) {
+    const fixture = approvedReplayFixture();
+    const second = {
+      ...structuredClone(fixture.report.selection.selected_variants[0]),
+      variant_id: "audit-v2",
+      variant_slug: "mage",
+      variant_name: "Mage",
+      query: "Audit Series Mage gacha single",
+    };
+    mutate(second, fixture.report.selection.selected_variants[0]);
+    fixture.report.selection.selected_variants.push(second);
+    fixture.report.selection.selected_variant_count = 2;
+    fixture.report.selection.query_count = 2;
+    assert.throws(
+      () => buildApprovedCanaryQueryPlan(fixture.report, fixture.catalog, fixture.candidateKeys),
+      /duplicate/i,
+    );
+  }
+});
+
+test("approved canary query replay enforces one to five selected variants", () => {
+  const empty = approvedReplayFixture();
+  empty.report.selection.selected_variants = [];
+  empty.report.selection.selected_variant_count = 0;
+  empty.report.selection.query_count = 0;
+  assert.throws(() => buildApprovedCanaryQueryPlan(empty.report, empty.catalog, empty.candidateKeys), /selection/i);
+
+  const oversized = approvedReplayFixture();
+  oversized.report.selection.selected_variants = Array.from({ length: 6 }, (_, index) => ({
+    ...structuredClone(oversized.report.selection.selected_variants[0]),
+    variant_id: `variant-${index}`,
+    query: `Audit Series Variant ${index} gacha`,
+  }));
+  oversized.report.selection.selected_variant_count = 6;
+  oversized.report.selection.query_count = 6;
+  assert.throws(() => buildApprovedCanaryQueryPlan(oversized.report, oversized.catalog, oversized.candidateKeys), /selection/i);
+});
+
+test("approved canary query replay rejects incomplete and inconsistent selection totals", () => {
+  for (const mutate of [
+    (report) => { report.selection.selected_variant_count = 2; },
+    (report) => { report.selection.query_count = 2; },
+    (report) => { report.selection.selected_variants[0].query = ""; },
+    (report) => { report.selection.selected_variants[0].series_slug = ""; },
+  ]) {
+    const fixture = approvedReplayFixture();
+    mutate(fixture.report);
+    assert.throws(
+      () => buildApprovedCanaryQueryPlan(fixture.report, fixture.catalog, fixture.candidateKeys),
+      /selection/i,
+    );
+  }
+});
+
+test("approved canary query replay rejects requested candidate targets outside the selection", () => {
+  for (const mutate of [
+    (target) => { target.search_query = "Audit Series Mage gacha single"; },
+    (target) => { target.variant_slug = "changed"; },
+    (target) => { target.variant_name = "Changed"; },
+    (target) => { target.series_slug = "changed"; },
+    (target) => { target.series_name = "Changed"; },
+  ]) {
+    const fixture = approvedReplayFixture();
+    mutate(fixture.report.candidates[0].target);
+    assert.throws(
+      () => buildApprovedCanaryQueryPlan(fixture.report, fixture.catalog, fixture.candidateKeys),
+      /outside/i,
+    );
+  }
+});
+
+test("approved canary query replay rejects missing, review and weak requested candidates", () => {
+  for (const mutate of [
+    (fixture) => { fixture.candidateKeys = ["aaaaaaaaaaaaaaaa"]; },
+    (fixture) => {
+      fixture.report.candidates[0].assessment.accepted = false;
+      fixture.report.candidates[0].assessment.review_required = true;
+    },
+    (fixture) => { fixture.report.candidates[0].assessment.confidence = 0.79; },
+  ]) {
+    const fixture = approvedReplayFixture();
+    mutate(fixture);
+    assert.throws(
+      () => buildApprovedCanaryQueryPlan(fixture.report, fixture.catalog, fixture.candidateKeys),
+      /absent|approved/i,
+    );
+  }
+});
+
+test("approved canary query replay rejects incomplete, truncated and write-bearing audits", () => {
+  for (const mutate of [
+    (report) => { report.result.report_complete = false; },
+    (report) => { report.result.report_complete = false; report.result.truncated_count = 1; },
+    (report) => { report.database_writes.listings = 1; },
+  ]) {
+    const fixture = approvedReplayFixture();
+    mutate(fixture.report);
+    assert.throws(
+      () => buildApprovedCanaryQueryPlan(fixture.report, fixture.catalog, fixture.candidateKeys),
+      /complete|truncated|zero database writes/i,
+    );
+  }
+});
+
+test("query replay diagnostics are sanitized and deterministic in JSON and Markdown", () => {
+  const fixture = approvedReplayFixture();
+  fixture.catalog.variants[0].name = "Changed private title";
+  let error;
+  try {
+    buildApprovedCanaryQueryPlan(fixture.report, fixture.catalog, fixture.candidateKeys);
+  } catch (caught) {
+    error = caught;
+  }
+  const replay = sanitizeCanaryQueryReplay(error.canaryQueryReplay);
+  const result = buildSanitizedCanaryFailureResult({
+    failedStage: "approved_query_plan",
+    auditRunId: "30354810437",
+    candidateKeys: fixture.candidateKeys,
+    queryReplay: error.canaryQueryReplay,
+    credential: "DO_NOT_REPORT",
+    title: "Changed private title",
+    url: "https://user:password@example.com/private",
+  });
+  const markdown = renderMarketCanaryResultMarkdown(result);
+  assert.deepEqual(result.query_replay, replay);
+  assert.match(markdown, /Query replay/);
+  assert.doesNotMatch(`${JSON.stringify(result)}\n${markdown}`, /DO_NOT_REPORT|private title|password|https?:\/\//i);
+});
+
+test("canary backfill replays approved queries without live coverage selection", async () => {
+  const source = normalizeSourceLineEndings(
+    await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8"),
+  );
+  const canary = source.match(/async function runCanaryWriteMode[\s\S]*?\n}\n\nfunction assessFetchedRecords/)?.[0] ?? "";
+  assert.match(canary, /loadOfficialCatalog\(\)/);
+  assert.match(canary, /buildApprovedCanaryQueryPlan\(approved, catalog, request\.candidateKeys\)/);
+  assert.doesNotMatch(canary, /loadMarketCoverageData|planMarketSearchQueries/);
+  assert.ok(canary.indexOf("buildApprovedCanaryQueryPlan") < canary.indexOf("fetchMarketListingsRaw"));
+});
 
 function rolloutAudit(candidateCount = 6) {
   const base = productionFixture().report;
