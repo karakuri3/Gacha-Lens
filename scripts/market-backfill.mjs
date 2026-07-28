@@ -18,12 +18,17 @@ import {
 } from "../lib/domain/market-canary-write.js";
 import { applyMarketCandidateSafety, summarizeFetchedMarketCandidates } from "../lib/domain/market-match-safety.js";
 import {
+  buildApprovedCanaryQueryPlan,
+  sanitizeCanaryQueryReplay,
+} from "../lib/domain/market-approved-query-replay.js";
+import {
   MARKET_SOURCE_SCOPES,
   describeMarketSourceConfiguration,
   fetchMarketListingsRaw,
   normalizeMarketSourceScope,
 } from "../lib/fetchers/market-fetcher.js";
 import { planMarketSearchQueries } from "../lib/fetchers/market-query-planner.js";
+import { loadOfficialCatalog } from "./load-official-catalog.mjs";
 import { loadMarketCoverageData } from "./market-coverage-data.mjs";
 import { deleteRowsByIds, fetchRowCount, fetchRows, upsertRows } from "./supabase-rest.mjs";
 
@@ -108,6 +113,7 @@ async function runCanaryWriteMode(options) {
   let stage = "request_validation";
   let request = null;
   let rows = { selected: [], listingRows: [], observationRows: [] };
+  let queryReplay = null;
   let currentHead = safeGitHead();
   try {
     request = validateCanaryRequest({
@@ -135,22 +141,22 @@ async function runCanaryWriteMode(options) {
     stage = "ancestor_validation";
     if (!gitIsAncestor(approved.workflow?.head_sha, currentHead)) throw new Error("Approved audit head is not an ancestor.");
 
-    const approvedTime = new Date(approved.generated_at);
-    stage = "coverage_plan";
-    const data = await loadMarketCoverageData({ now: approvedTime });
-    const plan = planMarketSearchQueries(data.catalog, data.coverageRows, { ...options, now: approvedTime });
+    stage = "approved_query_plan";
+    const catalog = await loadOfficialCatalog();
+    const plan = buildApprovedCanaryQueryPlan(approved, catalog, request.candidateKeys);
+    queryReplay = plan.queryReplay;
     stage = "external_fetch";
     const fetched = await fetchMarketListingsRaw({
-      catalog: data.catalog,
+      catalog,
       queries: plan.queries,
       sourceScope: options.sourceScope,
     });
     stage = "candidate_assessment";
-    const assessed = assessFetchedRecords(fetched, plan, data.catalog);
+    const assessed = assessFetchedRecords(fetched, plan, catalog);
     const currentAudit = buildSanitizedMarketCandidateAudit({
       records: assessed.records,
       queryPlan: plan.queries,
-      catalog: data.catalog,
+      catalog,
       runContext: {
         mode: "dry-run",
         source_scope: options.sourceScope,
@@ -190,6 +196,7 @@ async function runCanaryWriteMode(options) {
       currentHead,
       rows,
       persistence,
+      queryReplay,
       durationMs: Date.now() - startedAt,
     });
     writeCanaryResult(result);
@@ -208,6 +215,7 @@ async function runCanaryWriteMode(options) {
       observationWrites: persistence.observation_writes,
       rollback: persistence.rollback,
       auditMismatch: error.canaryAuditMismatch,
+      queryReplay: error.canaryQueryReplay ?? queryReplay,
     });
     failedResult.duration_ms = Date.now() - startedAt;
     writeCanaryResult(failedResult);
@@ -390,7 +398,7 @@ function canaryStore() {
   };
 }
 
-function buildCanaryResult({ request, currentHead, rows, persistence, durationMs }) {
+function buildCanaryResult({ request, currentHead, rows, persistence, queryReplay, durationMs }) {
   const listingOperations = new Map((persistence.listings ?? []).map((entry) => [entry.id, entry.operation]));
   const observationOperations = new Map((persistence.observations ?? []).map((entry) => [entry.id, entry.operation]));
   return {
@@ -415,6 +423,7 @@ function buildCanaryResult({ request, currentHead, rows, persistence, durationMs
     rollback: normalizeCanaryRollback(persistence.rollback),
     db_deltas: persistence.db_deltas ?? {},
     health: persistence.health ?? { database: "unknown" },
+    query_replay: sanitizeCanaryQueryReplay(queryReplay),
     ok: persistence.ok === true,
     duration_ms: durationMs,
   };
