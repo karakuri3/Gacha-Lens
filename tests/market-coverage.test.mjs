@@ -34,10 +34,15 @@ import {
   persistMarketCanary,
   renderMarketCanaryResultMarkdown,
   resolveStoredMarketplaceIdentity,
+  assertCanaryApprovalUnused,
   selectApprovedCanaryCandidates,
   validateApprovedMarketAudit,
   validateCanaryRequest,
 } from "../lib/domain/market-canary-write.js";
+import {
+  buildSanitizedMarketRolloutPlan,
+  validateRolloutAudit,
+} from "../lib/domain/market-rollout-plan.js";
 import { compactMarketRawPayload, mergeMarketRawRecords } from "../lib/domain/market-raw.js";
 import { normalizeMarketplaceStatus } from "../lib/domain/market-status.js";
 import {
@@ -1047,6 +1052,102 @@ function validAuditOptions(overrides = {}) {
   };
 }
 
+function rolloutAudit(candidateCount = 6) {
+  const base = productionFixture().report;
+  const candidates = Array.from({ length: candidateCount }, (_, index) => {
+    const candidate = structuredClone(base.candidates[index % base.candidates.length]);
+    candidate.candidate_key = (index + 1).toString(16).padStart(16, "0");
+    candidate.target.variant_id = `rollout-variant-${index + 1}`;
+    candidate.target.variant_name = `Rollout Variant ${index + 1}`;
+    candidate.source.listing_id = `rollout-listing-${index + 1}`;
+    return candidate;
+  });
+  return {
+    ...structuredClone(base),
+    workflow: {
+      ...base.workflow,
+      run_id: "30290000000",
+      head_sha: "0ff69840b9b630ce54b8c4f5ccf711d5dd3b1100",
+    },
+    result: {
+      ...base.result,
+      candidate_count: candidates.length,
+      accepted_count: candidates.length,
+      review_count: 0,
+      report_complete: true,
+      truncated_count: 0,
+    },
+    candidates,
+  };
+}
+
+test("guarded rollout plan is deterministic and splits batches at four", () => {
+  const report = rolloutAudit(9);
+  report.candidates.reverse();
+  const options = { generatedAt: "2026-07-28T08:00:00.000Z" };
+  const first = buildSanitizedMarketRolloutPlan(report, options);
+  const second = buildSanitizedMarketRolloutPlan(structuredClone(report), options);
+  assert.deepEqual(first, second);
+  assert.deepEqual(first.batches.map((batch) => batch.candidate_count), [4, 4, 1]);
+  assert.deepEqual(
+    first.batches.flatMap((batch) => batch.candidate_keys),
+    Array.from({ length: 9 }, (_, index) => (index + 1).toString(16).padStart(16, "0")),
+  );
+  assert.equal(new Set(first.batches.flatMap((batch) => batch.candidate_keys)).size, 9);
+  assert.equal(new Set(first.batches.map((batch) => batch.batch_digest)).size, 3);
+  assert.equal(first.database_writes, 0);
+});
+test("guarded rollout plan excludes review, weak confidence and unsupported reasons", () => {
+  const report = rolloutAudit(4);
+  report.candidates[0].assessment.accepted = false;
+  report.candidates[0].assessment.review_required = true;
+  report.candidates[1].assessment.confidence = 0.79;
+  report.candidates[2].assessment.reason = "series_only_match";
+  report.result.accepted_count = 3;
+  report.result.review_count = 1;
+  const plan = buildSanitizedMarketRolloutPlan(report, { generatedAt: "2026-07-28T08:00:00.000Z" });
+  assert.equal(plan.accepted_candidate_count, 1);
+  assert.equal(plan.review_required_count, 1);
+  assert.deepEqual(plan.batches[0].candidate_keys, [report.candidates[3].candidate_key]);
+});
+test("guarded rollout plan rejects duplicate keys and inconsistent totals", () => {
+  const duplicate = rolloutAudit(2);
+  duplicate.candidates[1].candidate_key = duplicate.candidates[0].candidate_key;
+  assert.throws(() => validateRolloutAudit(duplicate), /duplicate/);
+
+  const inconsistent = rolloutAudit(2);
+  inconsistent.result.accepted_count = 1;
+  assert.throws(() => validateRolloutAudit(inconsistent), /totals/);
+});
+test("guarded rollout plan rejects incomplete and truncated audits", () => {
+  const incomplete = rolloutAudit(2);
+  incomplete.result.report_complete = false;
+  assert.throws(() => buildSanitizedMarketRolloutPlan(incomplete), /incomplete/);
+
+  const truncated = rolloutAudit(2);
+  truncated.result.report_complete = false;
+  truncated.result.truncated_count = 1;
+  assert.throws(() => buildSanitizedMarketRolloutPlan(truncated), /incomplete|truncated/);
+});
+test("guarded rollout plan rejects incomplete accepted candidate fields", () => {
+  for (const mutate of [
+    (candidate) => { candidate.target.variant_id = ""; },
+    (candidate) => { candidate.target.variant_name = ""; },
+    (candidate) => { candidate.source.provider = ""; },
+    (candidate) => { candidate.listing.status = ""; },
+    (candidate) => { candidate.listing.price = null; },
+  ]) {
+    const report = rolloutAudit(1);
+    mutate(report.candidates[0]);
+    assert.throws(() => buildSanitizedMarketRolloutPlan(report), /incomplete/);
+  }
+});
+test("rollout plan implementation is read-only and does not dispatch workflows", async () => {
+  const source = await readFile(new URL("../scripts/market-rollout-plan.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /supabase-rest|upsertRows|deleteRows|workflow dispatch|gh workflow run/i);
+  assert.match(source, /database_writes:\s*0/);
+});
+
 test("canary audit rejects a schema version mismatch", () => {
   assert.throws(() => validateApprovedMarketAudit(approvedAudit({ schema_version: 2 }), validAuditOptions()), /schema/i);
 });
@@ -1674,6 +1775,16 @@ function memoryCanaryStore(options = {}) {
   return {
     tables,
     calls,
+    async fetchConsumedCanaryObservations(auditRunId, candidateKeys) {
+      calls.push("fetch:consumed-canary-observations");
+      const keys = new Set(candidateKeys);
+      return [...tables.market_listing_observations.values()]
+        .filter((row) => (
+          String(row.raw?.canary_audit_run_id ?? "") === String(auditRunId)
+          && keys.has(String(row.raw?.canary_candidate_key ?? ""))
+        ))
+        .map((row) => structuredClone(row));
+    },
     async fetchRowsByIds(table, ids) {
       calls.push(`fetch:${table}`);
       const rows = ids.map((id) => tables[table].get(id)).filter(Boolean).map((row) => structuredClone(row));
@@ -1991,12 +2102,90 @@ test("canary persistence never writes ingestion runs", async () => {
   await persistMarketCanary({ ...rows, store });
   assert.equal(store.calls.some((call) => call.includes("ingestion_runs")), false);
 });
-test("canary persistence is idempotent for the same daily rows", async () => {
+test("canary persistence rejects reuse of the same audit and candidate keys", async () => {
   const rows = fixtureCanaryRows();
   const store = memoryCanaryStore();
   await persistMarketCanary({ ...rows, store });
-  const second = await persistMarketCanary({ ...rows, store });
-  assert.deepEqual(second.db_deltas, { market_listings: 0, market_listing_observations: 0, import_issues: 0, ingestion_runs: 0, review_required: 0 });
+  const listingBefore = structuredClone([...store.tables.market_listings.values()]);
+  const observationCountBefore = store.tables.market_listing_observations.size;
+  await assert.rejects(
+    () => persistMarketCanary({ ...rows, store }),
+    (error) => (
+      error.canaryStage === "approval_reuse_preflight"
+      && error.canaryResult?.listing_writes === 0
+      && error.canaryResult?.observation_writes === 0
+      && error.canaryResult?.rollback?.attempted === false
+    ),
+  );
+  assert.deepEqual([...store.tables.market_listings.values()], listingBefore);
+  assert.equal(store.tables.market_listing_observations.size, observationCountBefore);
+  assert.equal(store.calls.filter((call) => call.startsWith("upsert:")).length, 2);
+});
+test("one consumed key rejects the entire canary batch before writes", async () => {
+  const rows = fixtureCanaryRows();
+  const consumed = {
+    ...structuredClone(rows.observationRows[0]),
+    id: "prior-consumed-observation",
+    observed_at: "2026-07-26T08:00:00.000Z",
+  };
+  const existingListing = {
+    ...structuredClone(rows.listingRows[0]),
+    last_observed_at: "2026-07-26T08:00:00.000Z",
+  };
+  const store = memoryCanaryStore({ listings: [existingListing], observations: [consumed] });
+  await assert.rejects(
+    () => persistMarketCanary({ ...rows, store }),
+    (error) => error.canaryStage === "approval_reuse_preflight",
+  );
+  assert.equal(store.calls.some((call) => call.startsWith("upsert:") || call.startsWith("delete:")), false);
+  assert.equal(store.tables.market_listings.get(existingListing.id).last_observed_at, "2026-07-26T08:00:00.000Z");
+  assert.equal(store.tables.market_listing_observations.size, 1);
+});
+test("the same listing under a different audit does not consume the approval", async () => {
+  const rows = fixtureCanaryRows();
+  const prior = {
+    ...structuredClone(rows.observationRows[0]),
+    id: "different-audit-observation",
+    raw: {
+      canary_audit_run_id: "99999999",
+      canary_candidate_key: rows.observationRows[0].raw.canary_candidate_key,
+    },
+  };
+  const store = memoryCanaryStore({ observations: [prior] });
+  const result = await persistMarketCanary({ ...rows, store });
+  assert.equal(result.verification, true);
+  assert.equal(result.listing_writes, 2);
+});
+test("reuse preflight distinguishes candidates within the same audit", () => {
+  const rows = fixtureCanaryRows();
+  assert.equal(assertCanaryApprovalUnused([{
+    raw: {
+      canary_audit_run_id: rows.observationRows[0].raw.canary_audit_run_id,
+      canary_candidate_key: "ffffffffffffffff",
+    },
+  }], {
+    auditRunId: rows.observationRows[0].raw.canary_audit_run_id,
+    candidateKeys: rows.observationRows.map((row) => row.raw.canary_candidate_key),
+  }), true);
+});
+test("approval reuse failure is sanitized without consumed row data", () => {
+  const result = buildSanitizedCanaryFailureResult({
+    failedStage: "approval_reuse_preflight",
+    auditRunId: "30245610468",
+    candidateKeys: ["1e901198049bc341"],
+    listingWrites: 0,
+    observationWrites: 0,
+    rollback: { attempted: false },
+    credential: "must-not-appear",
+    seller: "must-not-appear",
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.failed_stage, "approval_reuse_preflight");
+  assert.equal(result.error_code, "canary_approval_reuse_preflight_failed");
+  assert.equal(result.listing_writes, 0);
+  assert.equal(result.observation_writes, 0);
+  assert.equal(result.rollback.attempted, false);
+  assert.doesNotMatch(serialized, /credential|seller|must-not-appear/i);
 });
 test("preflight rejects a listing identity collision before writes", async () => {
   const rows = fixtureCanaryRows();
@@ -2074,6 +2263,8 @@ test("canary store uses strict upserts for writes and rollback restoration", asy
   );
   const store = source.match(/function canaryStore\(\)[\s\S]*?\n}\n\nfunction buildCanaryResult/)?.[0] ?? "";
   assert.match(store, /allowSchemaFallback:\s*false/);
+  assert.match(store, /raw->>canary_audit_run_id/);
+  assert.match(store, /fetchConsumedCanaryObservations/);
   const rollback = await readFile(new URL("../lib/domain/market-canary-write.js", import.meta.url), "utf8");
   assert.match(rollback, /store\.upsertRows\("market_listings", beforeListings\)/);
   assert.match(rollback, /store\.upsertRows\("market_listing_observations", beforeObservations\)/);
