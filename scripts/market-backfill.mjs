@@ -347,6 +347,16 @@ function spawnScript(script, env, args = []) {
 
 function canaryStore() {
   return {
+    fetchConsumedCanaryObservations(auditRunId, candidateKeys) {
+      return fetchRows("market_listing_observations", {
+        select: "id,listing_id,observed_at,raw",
+        pageSize: Math.max(1, candidateKeys.length),
+        params: {
+          "raw->>canary_audit_run_id": `eq.${auditRunId}`,
+          order: "id.asc",
+        },
+      });
+    },
     fetchRowsByIds(table, ids, select) {
       return fetchRows(table, {
         select,
