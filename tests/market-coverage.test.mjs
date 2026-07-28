@@ -53,7 +53,7 @@ import {
 } from "../lib/domain/market-source-scope.js";
 import { describeMarketSourceConfiguration, fetchMarketListingsRaw } from "../lib/fetchers/market-fetcher.js";
 import { buildMarketSearchQueriesForVariant, isSafeMarketSearchQuery } from "../lib/fetchers/market-query-planner.js";
-import { upsertRows } from "../scripts/supabase-rest.mjs";
+import { fetchRows, upsertRows } from "../scripts/supabase-rest.mjs";
 
 const NOW = new Date("2026-07-22T12:00:00Z");
 const series = Object.freeze({ id: "s1", slug: "adventure", name: "冒険ガチャ", franchise: "冒険物語", brand: "テスト社", release_date: "2026-07-01" });
@@ -1119,6 +1119,22 @@ test("guarded rollout plan rejects duplicate keys and inconsistent totals", () =
   inconsistent.result.accepted_count = 1;
   assert.throws(() => validateRolloutAudit(inconsistent), /totals/);
 });
+test("guarded rollout plan rejects inconsistent selected variant totals", () => {
+  const selectedCountMismatch = rolloutAudit(2);
+  selectedCountMismatch.selection.selected_variant_count = selectedCountMismatch.selection.selected_variants.length + 1;
+  assert.throws(() => validateRolloutAudit(selectedCountMismatch), /selected variant total/);
+
+  const queryCountMismatch = rolloutAudit(2);
+  queryCountMismatch.selection.query_count = queryCountMismatch.selection.selected_variants.length + 1;
+  assert.throws(() => validateRolloutAudit(queryCountMismatch), /query total/);
+});
+test("guarded rollout plan rejects bad selection totals even when candidate totals match", () => {
+  const report = rolloutAudit(3);
+  assert.equal(report.result.accepted_count, report.candidates.length);
+  assert.equal(report.result.candidate_count, report.candidates.length);
+  report.selection.query_count = 0;
+  assert.throws(() => buildSanitizedMarketRolloutPlan(report), /query total/);
+});
 test("guarded rollout plan rejects incomplete and truncated audits", () => {
   const incomplete = rolloutAudit(2);
   incomplete.result.report_complete = false;
@@ -1746,6 +1762,50 @@ test("normal upsert retains the existing schema fallback", async () => {
   assert.deepEqual(bodies[1], [{ id: "normal-1", known: "kept" }]);
   assert.deepEqual(row, original);
 });
+test("consumed observation query uses stable pagination and finds a later page", async () => {
+  const auditRunId = "30290000000";
+  const observations = Array.from({ length: 5 }, (_, index) => ({
+    id: `observation-${index + 1}`,
+    listing_id: `listing-${index + 1}`,
+    observed_at: `2026-07-2${index + 1}T00:00:00.000Z`,
+    raw: {
+      canary_audit_run_id: auditRunId,
+      canary_candidate_key: (index + 1).toString(16).padStart(16, "0"),
+    },
+  }));
+  const requests = [];
+  await withMockSupabase(async () => {
+    globalThis.fetch = async (input) => {
+      const url = new URL(input);
+      requests.push(url);
+      const offset = Number(url.searchParams.get("offset"));
+      return new Response(JSON.stringify([observations[offset]]), {
+        status: 200,
+        headers: { "content-range": `${offset}-${offset}/${observations.length}` },
+      });
+    };
+    const fetched = await fetchRows("market_listing_observations", {
+      select: "id,listing_id,observed_at,raw",
+      pageSize: 1,
+      params: {
+        "raw->>canary_audit_run_id": `eq.${auditRunId}`,
+        order: "id.asc",
+      },
+    });
+    assert.equal(fetched.length, 5);
+    assert.deepEqual(requests.map((url) => Number(url.searchParams.get("offset"))).sort((a, b) => a - b), [0, 1, 2, 3, 4]);
+    assert.equal(requests.every((url) => url.searchParams.get("order") === "id.asc"), true);
+    assert.equal(requests.every((url) => url.searchParams.get("raw->>canary_audit_run_id") === `eq.${auditRunId}`), true);
+    assert.throws(() => assertCanaryApprovalUnused(fetched, {
+      auditRunId,
+      candidateKeys: [observations[4].raw.canary_candidate_key],
+    }), /already been consumed/);
+    assert.equal(assertCanaryApprovalUnused(fetched, {
+      auditRunId,
+      candidateKeys: ["ffffffffffffffff"],
+    }), true);
+  });
+});
 
 async function withMockSupabase(run) {
   const previousFetch = globalThis.fetch;
@@ -2141,6 +2201,45 @@ test("one consumed key rejects the entire canary batch before writes", async () 
   assert.equal(store.tables.market_listings.get(existingListing.id).last_observed_at, "2026-07-26T08:00:00.000Z");
   assert.equal(store.tables.market_listing_observations.size, 1);
 });
+test("malformed approval markers reject the batch before writes", async () => {
+  const rows = fixtureCanaryRows();
+  const malformedMarkers = [
+    { canary_audit_run_id: rows.observationRows[0].raw.canary_audit_run_id },
+    {
+      canary_audit_run_id: rows.observationRows[0].raw.canary_audit_run_id,
+      canary_candidate_key: "INVALID",
+    },
+    null,
+  ];
+
+  for (const raw of malformedMarkers) {
+    const existingListing = {
+      ...structuredClone(rows.listingRows[0]),
+      last_observed_at: "2026-07-26T08:00:00.000Z",
+    };
+    const store = memoryCanaryStore({ listings: [existingListing] });
+    store.fetchConsumedCanaryObservations = async () => [{
+      id: "malformed-marker",
+      listing_id: existingListing.id,
+      observed_at: "2026-07-26T08:00:00.000Z",
+      raw,
+      seller: "must-not-appear",
+    }];
+    await assert.rejects(
+      () => persistMarketCanary({ ...rows, store }),
+      (error) => (
+        error.canaryStage === "approval_reuse_preflight"
+        && error.canaryResult?.listing_writes === 0
+        && error.canaryResult?.observation_writes === 0
+        && error.canaryResult?.rollback?.attempted === false
+        && !JSON.stringify(error.canaryResult).includes("must-not-appear")
+      ),
+    );
+    assert.equal(store.calls.some((call) => call.startsWith("upsert:") || call.startsWith("delete:")), false);
+    assert.equal(store.tables.market_listings.get(existingListing.id).last_observed_at, "2026-07-26T08:00:00.000Z");
+    assert.equal(store.tables.market_listing_observations.size, 0);
+  }
+});
 test("the same listing under a different audit does not consume the approval", async () => {
   const rows = fixtureCanaryRows();
   const prior = {
@@ -2265,6 +2364,7 @@ test("canary store uses strict upserts for writes and rollback restoration", asy
   assert.match(store, /allowSchemaFallback:\s*false/);
   assert.match(store, /raw->>canary_audit_run_id/);
   assert.match(store, /fetchConsumedCanaryObservations/);
+  assert.match(store, /order:\s*"id\.asc"/);
   const rollback = await readFile(new URL("../lib/domain/market-canary-write.js", import.meta.url), "utf8");
   assert.match(rollback, /store\.upsertRows\("market_listings", beforeListings\)/);
   assert.match(rollback, /store\.upsertRows\("market_listing_observations", beforeObservations\)/);
