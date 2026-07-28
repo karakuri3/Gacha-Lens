@@ -90,6 +90,31 @@ test("same-time ID tie-break is independent of input order", () => {
   assert.deepEqual([forward[0].id, forward[0].price, forward[0].status], ["b", 1200, "sold"]);
 });
 
+test("newer created_at wins when observed_at is identical regardless of input order", () => {
+  const input = [
+    observation("newer-created", {
+      price: 1400,
+      status: "SOLD",
+      observed_at: "2026-07-28T04:00:00Z",
+      created_at: "2026-07-28T04:02:00Z",
+    }),
+    observation("older-created", {
+      price: 900,
+      status: "active",
+      observed_at: "2026-07-28T04:00:00Z",
+      created_at: "2026-07-28T04:01:00Z",
+    }),
+  ];
+  const forward = dedupeMarketObservationsByListingDay(input);
+  const reversed = dedupeMarketObservationsByListingDay([...input].reverse());
+
+  assert.deepEqual(forward, reversed);
+  assert.deepEqual(
+    [forward[0].id, forward[0].price, forward[0].status],
+    ["newer-created", 1400, "sold"],
+  );
+});
+
 test("legacy daily-ID canary marker and normal observation count once", () => {
   const rows = dedupeMarketObservationsByListingDay([
     observation("market-observation-legacy", { observed_at: "2026-07-28T01:00:00Z" }),
