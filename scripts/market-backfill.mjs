@@ -7,7 +7,7 @@ import {
   renderMarketCandidateAuditMarkdown,
 } from "../lib/domain/market-candidate-audit.js";
 import {
-  assertExactMarketAuditMatch,
+  assertApprovedCanaryCandidatesMatch,
   buildMarketCanaryRows,
   buildSanitizedCanaryFailureResult,
   normalizeCanaryRollback,
@@ -168,7 +168,7 @@ async function runCanaryWriteMode(options) {
       },
     });
     stage = "exact_audit_match";
-    assertExactMarketAuditMatch(approved, currentAudit);
+    assertApprovedCanaryCandidatesMatch(approved, currentAudit, request.candidateKeys);
     stage = "row_build";
     rows = buildMarketCanaryRows({
       records: assessed.records,
@@ -207,6 +207,7 @@ async function runCanaryWriteMode(options) {
       listingWrites: persistence.listing_writes,
       observationWrites: persistence.observation_writes,
       rollback: persistence.rollback,
+      auditMismatch: error.canaryAuditMismatch,
     });
     failedResult.duration_ms = Date.now() - startedAt;
     writeCanaryResult(failedResult);
