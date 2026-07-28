@@ -25,7 +25,9 @@ import {
 } from "../lib/domain/market-candidate-audit.js";
 import { buildMarketCandidateKey } from "../lib/domain/market-candidate-key.js";
 import {
+  assertApprovedCanaryCandidatesMatch,
   assertExactMarketAuditMatch,
+  buildCanaryAuditMismatchDiagnostics,
   buildMarketCanaryRows,
   buildMarketplaceListingId,
   buildSanitizedCanaryFailureResult,
@@ -1271,6 +1273,213 @@ test("exact comparison accepts only an exact report while ignoring run metadata"
     report.workflow.head_sha = "def456";
   });
   assert.equal(assertExactMarketAuditMatch(approvedAudit(), current), true);
+});
+
+function candidateScopedAuditFixture() {
+  const approved = structuredClone(productionFixture().report);
+  const reviewCandidate = approved.candidates.at(-1);
+  reviewCandidate.assessment = {
+    ...reviewCandidate.assessment,
+    accepted: false,
+    review_required: true,
+    reason: "target_variant_not_confirmed",
+    confidence: 0.49,
+  };
+  syncCandidateTotals(approved);
+  return {
+    approved,
+    current: structuredClone(approved),
+    requestedKeys: approved.candidates.slice(0, 3).map((candidate) => candidate.candidate_key),
+    reviewKey: reviewCandidate.candidate_key,
+  };
+}
+
+function syncCandidateTotals(report) {
+  report.result.candidate_count = report.candidates.length;
+  report.result.accepted_count = report.candidates.filter((candidate) => candidate.assessment.accepted === true).length;
+  report.result.review_count = report.candidates.filter((candidate) => candidate.assessment.review_required === true).length;
+}
+
+function unrelatedReviewCandidate(report, candidateKey = "aaaaaaaaaaaaaaaa") {
+  const candidate = structuredClone(report.candidates.at(-1));
+  candidate.candidate_key = candidateKey;
+  candidate.source.listing_id = `unrelated-${candidateKey}`;
+  candidate.source.public_url = `https://example.com/unrelated/${candidateKey}`;
+  candidate.listing.title = `Unrelated review ${candidateKey}`;
+  candidate.target.variant_id = `unrelated-${candidateKey}`;
+  candidate.target.variant_name = `Unrelated ${candidateKey}`;
+  candidate.assessment.accepted = false;
+  candidate.assessment.review_required = true;
+  candidate.assessment.reason = "target_variant_not_confirmed";
+  candidate.assessment.confidence = 0.49;
+  return candidate;
+}
+
+test("candidate-scoped match allows an unrelated review candidate to change", () => {
+  const fixture = candidateScopedAuditFixture();
+  const review = fixture.current.candidates.find((candidate) => candidate.candidate_key === fixture.reviewKey);
+  review.listing.price += 100;
+  review.listing.title += " changed";
+  review.assessment.confidence = 0.2;
+  assert.equal(assertApprovedCanaryCandidatesMatch(fixture.approved, fixture.current, fixture.requestedKeys), true);
+});
+
+test("candidate-scoped match allows an unrelated candidate to be added", () => {
+  const fixture = candidateScopedAuditFixture();
+  fixture.current.candidates.push(unrelatedReviewCandidate(fixture.current));
+  syncCandidateTotals(fixture.current);
+  assert.equal(assertApprovedCanaryCandidatesMatch(fixture.approved, fixture.current, fixture.requestedKeys), true);
+});
+
+test("candidate-scoped match allows an unrelated candidate to disappear", () => {
+  const fixture = candidateScopedAuditFixture();
+  fixture.current.candidates = fixture.current.candidates.filter((candidate) => candidate.candidate_key !== fixture.reviewKey);
+  syncCandidateTotals(fixture.current);
+  assert.equal(assertApprovedCanaryCandidatesMatch(fixture.approved, fixture.current, fixture.requestedKeys), true);
+});
+
+for (const [name, mutate] of [
+  ["price", (candidate) => { candidate.listing.price += 1; }],
+  ["status", (candidate) => { candidate.listing.status = "sold"; }],
+  ["title", (candidate) => { candidate.listing.title += " changed"; }],
+  ["provider", (candidate) => { candidate.source.provider = "yahoo_shopping"; }],
+  ["listing ID", (candidate) => { candidate.source.listing_id += "-changed"; }],
+  ["URL", (candidate) => { candidate.source.public_url = "https://example.com/changed"; }],
+  ["target variant", (candidate) => { candidate.target.variant_id = "changed-variant"; }],
+  ["target series", (candidate) => { candidate.target.series_id = "changed-series"; }],
+  ["confidence", (candidate) => { candidate.assessment.confidence = 0.85; }],
+  ["reason", (candidate) => { candidate.assessment.reason = "changed-reason"; }],
+  ["safety checks", (candidate) => { candidate.checks.query_context_present = false; }],
+]) {
+  test(`candidate-scoped match rejects requested ${name} drift`, () => {
+    const fixture = candidateScopedAuditFixture();
+    mutate(fixture.current.candidates[0]);
+    assert.throws(
+      () => assertApprovedCanaryCandidatesMatch(fixture.approved, fixture.current, fixture.requestedKeys),
+      /requested candidate/i,
+    );
+  });
+}
+
+test("candidate-scoped match rejects a requested candidate becoming review-required", () => {
+  const fixture = candidateScopedAuditFixture();
+  fixture.current.candidates[0].assessment.accepted = false;
+  fixture.current.candidates[0].assessment.review_required = true;
+  fixture.current.candidates[0].assessment.reason = "target_variant_not_confirmed";
+  fixture.current.candidates[0].assessment.confidence = 0.49;
+  syncCandidateTotals(fixture.current);
+  assert.throws(
+    () => assertApprovedCanaryCandidatesMatch(fixture.approved, fixture.current, fixture.requestedKeys),
+    /not accepted/,
+  );
+});
+
+test("candidate-scoped match rejects a missing requested candidate", () => {
+  const fixture = candidateScopedAuditFixture();
+  fixture.current.candidates = fixture.current.candidates.slice(1);
+  syncCandidateTotals(fixture.current);
+  assert.throws(
+    () => assertApprovedCanaryCandidatesMatch(fixture.approved, fixture.current, fixture.requestedKeys),
+    /missing/,
+  );
+});
+
+test("candidate-scoped match rejects selection and query changes", () => {
+  for (const mutate of [
+    (report) => { report.selection.selected_variants[0].query += " changed"; },
+    (report) => { report.selection.selected_variants[0].variant_id = "changed"; },
+    (report) => { report.selection.query_count -= 1; },
+  ]) {
+    const fixture = candidateScopedAuditFixture();
+    mutate(fixture.current);
+    assert.throws(
+      () => assertApprovedCanaryCandidatesMatch(fixture.approved, fixture.current, fixture.requestedKeys),
+      /selection/,
+    );
+  }
+});
+
+test("candidate-scoped match rejects incomplete and truncated current audits", () => {
+  const incomplete = candidateScopedAuditFixture();
+  incomplete.current.result.report_complete = false;
+  assert.throws(
+    () => assertApprovedCanaryCandidatesMatch(incomplete.approved, incomplete.current, incomplete.requestedKeys),
+    /incomplete/,
+  );
+
+  const truncated = candidateScopedAuditFixture();
+  truncated.current.result.report_complete = false;
+  truncated.current.result.truncated_count = 1;
+  assert.throws(
+    () => assertApprovedCanaryCandidatesMatch(truncated.approved, truncated.current, truncated.requestedKeys),
+    /incomplete|truncated/,
+  );
+});
+
+test("candidate-scoped match rejects nonzero current database writes", () => {
+  const fixture = candidateScopedAuditFixture();
+  fixture.current.database_writes.listings = 1;
+  assert.throws(
+    () => assertApprovedCanaryCandidatesMatch(fixture.approved, fixture.current, fixture.requestedKeys),
+    /zero database writes/,
+  );
+});
+
+test("candidate-scoped mismatch diagnostics are deterministic and candidate-key only", () => {
+  const fixture = candidateScopedAuditFixture();
+  fixture.current.candidates[0].listing.title = "private title must not appear";
+  fixture.current.candidates[0].source.public_url = "https://user:password@example.com/private?token=secret";
+  fixture.current.candidates = fixture.current.candidates.filter((candidate) => candidate.candidate_key !== fixture.reviewKey);
+  fixture.current.candidates.push(unrelatedReviewCandidate(fixture.current, "bbbbbbbbbbbbbbbb"));
+  syncCandidateTotals(fixture.current);
+
+  let error;
+  try {
+    assertApprovedCanaryCandidatesMatch(
+      fixture.approved,
+      fixture.current,
+      [...fixture.requestedKeys].reverse(),
+    );
+  } catch (caught) {
+    error = caught;
+  }
+  assert.ok(error);
+  const diagnostics = buildCanaryAuditMismatchDiagnostics(
+    fixture.approved,
+    fixture.current,
+    [...fixture.requestedKeys].reverse(),
+  );
+  assert.deepEqual(error.canaryAuditMismatch, diagnostics);
+  assert.deepEqual(diagnostics.requested_candidate_keys, [...fixture.requestedKeys].sort());
+  assert.deepEqual(diagnostics.changed_requested_keys, [fixture.requestedKeys[0]]);
+  assert.deepEqual(diagnostics.unrelated_added_keys, ["bbbbbbbbbbbbbbbb"]);
+  assert.deepEqual(diagnostics.unrelated_removed_keys, [fixture.reviewKey]);
+
+  const result = buildSanitizedCanaryFailureResult({
+    failedStage: "exact_audit_match",
+    auditRunId: "30348659878",
+    candidateKeys: fixture.requestedKeys,
+    auditMismatch: error.canaryAuditMismatch,
+    title: "private title must not appear",
+    url: "https://user:password@example.com/private?token=secret",
+    credential: "private credential",
+  });
+  const markdown = renderMarketCanaryResultMarkdown(result);
+  const serialized = JSON.stringify(result);
+  assert.deepEqual(result.audit_mismatch, diagnostics);
+  assert.match(markdown, /Audit mismatch/);
+  assert.match(markdown, /Changed requested keys/);
+  assert.doesNotMatch(`${serialized}\n${markdown}`, /private title|password|token|credential/i);
+});
+
+test("market backfill canary path uses requested candidate-scoped matching", async () => {
+  const source = normalizeSourceLineEndings(
+    await readFile(new URL("../scripts/market-backfill.mjs", import.meta.url), "utf8"),
+  );
+  const canary = source.match(/async function runCanaryWriteMode[\s\S]*?\n}\n\nfunction assessFetchedRecords/)?.[0] ?? "";
+  assert.match(canary, /assertApprovedCanaryCandidatesMatch\(approved, currentAudit, request\.candidateKeys\)/);
+  assert.doesNotMatch(canary, /assertExactMarketAuditMatch/);
+  assert.match(canary, /auditMismatch: error\.canaryAuditMismatch/);
 });
 
 test("market status keeps completed sales distinct from inventory", () => {
