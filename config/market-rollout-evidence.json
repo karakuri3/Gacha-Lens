@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "workflow_sha256": "be6644f99a5f7636ffa64faad287e3e98c8b5ab87b34fc986a5bb062a6e10da2",
+  "phase4": {
+    "complete": true,
+    "workflow_unchanged": true,
+    "audits": [
+      {
+        "run_id": "30365904563",
+        "report_complete": true,
+        "truncated_count": 0,
+        "candidate_count": 4,
+        "accepted_count": 3,
+        "review_required_count": 1,
+        "no_result_variant_count": 1,
+        "providers": [
+          {
+            "provider": "rakuten_ichiba",
+            "audited_candidate_count": 4,
+            "accepted_count": 3,
+            "review_required_count": 1
+          }
+        ]
+      }
+    ],
+    "canaries": [
+      {
+        "run_id": "30264689615",
+        "source_audit_run_id": "30253757681",
+        "ok": true,
+        "verification": true,
+        "listing_writes": 2,
+        "observation_writes": 2,
+        "candidate_keys": [
+          "1e901198049bc341",
+          "2e833931e4e7cb26"
+        ],
+        "rollback": {
+          "attempted": false,
+          "verified": false
+        },
+        "providers": [
+          {
+            "provider": "rakuten_ichiba",
+            "rollback_count": 0
+          },
+          {
+            "provider": "yahoo_shopping",
+            "rollback_count": 0
+          }
+        ]
+      },
+      {
+        "run_id": "30280796120",
+        "source_audit_run_id": "30278197797",
+        "ok": true,
+        "verification": true,
+        "listing_writes": 3,
+        "observation_writes": 3,
+        "candidate_keys": [
+          "5d7cb7a3f9eb122c",
+          "65bf088fb494c114",
+          "f1e9adfb8785c509"
+        ],
+        "rollback": {
+          "attempted": false,
+          "verified": false
+        },
+        "providers": [
+          {
+            "provider": "rakuten_ichiba",
+            "rollback_count": 0
+          },
+          {
+            "provider": "yahoo_shopping",
+            "rollback_count": 0
+          }
+        ]
+      },
+      {
+        "run_id": "30484636298",
+        "source_audit_run_id": "30365904563",
+        "ok": true,
+        "verification": true,
+        "listing_writes": 3,
+        "observation_writes": 3,
+        "candidate_keys": [
+          "58fa0fbd97373dfc",
+          "dce072831c296dda",
+          "f95e4845828bba73"
+        ],
+        "rollback": {
+          "attempted": false,
+          "verified": false
+        },
+        "providers": [
+          {
+            "provider": "rakuten_ichiba",
+            "rollback_count": 0
+          }
+        ]
+      }
+    ]
+  }
+}
