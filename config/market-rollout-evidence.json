@@ -1,0 +1,514 @@
+{
+  "schema_version": 2,
+  "workflow_sha256": "be6644f99a5f7636ffa64faad287e3e98c8b5ab87b34fc986a5bb062a6e10da2",
+  "phase4": {
+    "complete": true,
+    "workflow_unchanged": true,
+    "audits": [
+      {
+        "run_id": "30253757681",
+        "head_sha": "0822fd523093fd9909c610c11bbffc21a58e21aa",
+        "mode": "dry-run",
+        "source_scope": "planner-apis",
+        "report_complete": true,
+        "truncated_count": 0,
+        "selected_variant_count": 5,
+        "query_count": 5,
+        "candidate_count": 4,
+        "accepted_count": 4,
+        "review_required_count": 0,
+        "no_result_variant_count": 1,
+        "database_writes": {
+          "listings": 0,
+          "observations": 0,
+          "ingestion_runs": 0
+        },
+        "candidates": [
+          {
+            "candidate_key": "1e901198049bc341",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "2e833931e4e7cb26",
+            "provider": "yahoo_shopping",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "65bf088fb494c114",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "f1e9adfb8785c509",
+            "provider": "yahoo_shopping",
+            "accepted": true,
+            "review_required": false
+          }
+        ],
+        "provenance": {
+          "type": "github_actions_artifact",
+          "artifact_id": "8648027093",
+          "artifact_name": "market-candidate-audit-30253757681",
+          "digest": "sha256:aa8669fb3bb186e384bf4eed50b8ee4d482480b891918f0ee5b865b290b83a81",
+          "commit_sha": "0822fd523093fd9909c610c11bbffc21a58e21aa",
+          "expired": false
+        }
+      },
+      {
+        "run_id": "30278197797",
+        "head_sha": "0ff69840b9b630ce54b8c4f5ccf711d5dd3b1100",
+        "mode": "dry-run",
+        "source_scope": "planner-apis",
+        "report_complete": true,
+        "truncated_count": 0,
+        "selected_variant_count": 5,
+        "query_count": 5,
+        "candidate_count": 4,
+        "accepted_count": 3,
+        "review_required_count": 1,
+        "no_result_variant_count": 1,
+        "database_writes": {
+          "listings": 0,
+          "observations": 0,
+          "ingestion_runs": 0
+        },
+        "candidates": [
+          {
+            "candidate_key": "3908a16901a36053",
+            "provider": "rakuten_ichiba",
+            "accepted": false,
+            "review_required": true
+          },
+          {
+            "candidate_key": "5d7cb7a3f9eb122c",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "65bf088fb494c114",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "f1e9adfb8785c509",
+            "provider": "yahoo_shopping",
+            "accepted": true,
+            "review_required": false
+          }
+        ],
+        "provenance": {
+          "type": "github_actions_artifact",
+          "artifact_id": "8657681732",
+          "artifact_name": "market-candidate-audit-30278197797",
+          "digest": "sha256:ac5011c1ec0b8144ea441dbd4698273b1f2486640e05a845bf999423e57db5cd",
+          "commit_sha": "0ff69840b9b630ce54b8c4f5ccf711d5dd3b1100",
+          "expired": false
+        }
+      },
+      {
+        "run_id": "30348659878",
+        "head_sha": "3220efe830f89c353903548d72ec9c8b21624377",
+        "mode": "dry-run",
+        "source_scope": "planner-apis",
+        "report_complete": true,
+        "truncated_count": 0,
+        "selected_variant_count": 5,
+        "query_count": 5,
+        "candidate_count": 4,
+        "accepted_count": 3,
+        "review_required_count": 1,
+        "no_result_variant_count": 1,
+        "database_writes": {
+          "listings": 0,
+          "observations": 0,
+          "ingestion_runs": 0
+        },
+        "candidates": [
+          {
+            "candidate_key": "3908a16901a36053",
+            "provider": "rakuten_ichiba",
+            "accepted": false,
+            "review_required": true
+          },
+          {
+            "candidate_key": "58fa0fbd97373dfc",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "dce072831c296dda",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "f95e4845828bba73",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          }
+        ],
+        "provenance": {
+          "type": "github_actions_artifact",
+          "artifact_id": "8683953618",
+          "artifact_name": "market-candidate-audit-30348659878",
+          "digest": "sha256:e6fff16387e94e59a5e8fb982308a0deefbbc1a3d5786841ee55d2534b8806b1",
+          "commit_sha": "3220efe830f89c353903548d72ec9c8b21624377",
+          "expired": false
+        }
+      },
+      {
+        "run_id": "30354810437",
+        "head_sha": "7df915abc036a5b0e81c357cbab4a367f244e966",
+        "mode": "dry-run",
+        "source_scope": "planner-apis",
+        "report_complete": true,
+        "truncated_count": 0,
+        "selected_variant_count": 5,
+        "query_count": 5,
+        "candidate_count": 4,
+        "accepted_count": 3,
+        "review_required_count": 1,
+        "no_result_variant_count": 1,
+        "database_writes": {
+          "listings": 0,
+          "observations": 0,
+          "ingestion_runs": 0
+        },
+        "candidates": [
+          {
+            "candidate_key": "3908a16901a36053",
+            "provider": "rakuten_ichiba",
+            "accepted": false,
+            "review_required": true
+          },
+          {
+            "candidate_key": "58fa0fbd97373dfc",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "dce072831c296dda",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "f95e4845828bba73",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          }
+        ],
+        "provenance": {
+          "type": "github_actions_artifact",
+          "artifact_id": "8686359984",
+          "artifact_name": "market-candidate-audit-30354810437",
+          "digest": "sha256:ff4b2b4a00be920d3c6d04b2d1d789256cf2dfcfe4d0e470f8c0027bf97f2d50",
+          "commit_sha": "7df915abc036a5b0e81c357cbab4a367f244e966",
+          "expired": false
+        }
+      },
+      {
+        "run_id": "30365904563",
+        "head_sha": "4dcc11009b33a741ed0f5aa80bc51920a24fa46d",
+        "mode": "dry-run",
+        "source_scope": "planner-apis",
+        "report_complete": true,
+        "truncated_count": 0,
+        "selected_variant_count": 5,
+        "query_count": 5,
+        "candidate_count": 4,
+        "accepted_count": 3,
+        "review_required_count": 1,
+        "no_result_variant_count": 1,
+        "database_writes": {
+          "listings": 0,
+          "observations": 0,
+          "ingestion_runs": 0
+        },
+        "candidates": [
+          {
+            "candidate_key": "3908a16901a36053",
+            "provider": "rakuten_ichiba",
+            "accepted": false,
+            "review_required": true
+          },
+          {
+            "candidate_key": "58fa0fbd97373dfc",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "dce072831c296dda",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "f95e4845828bba73",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          }
+        ],
+        "provenance": {
+          "type": "github_actions_artifact",
+          "artifact_id": "8690763721",
+          "artifact_name": "market-candidate-audit-30365904563",
+          "digest": "sha256:4cf456df8edf94a19b423f19ebc13313ba80dee8e4ea8a446e757b920a16d0fa",
+          "commit_sha": "4dcc11009b33a741ed0f5aa80bc51920a24fa46d",
+          "expired": false
+        }
+      }
+    ],
+    "canaries": [
+      {
+        "run_id": "30264689615",
+        "source_audit_run_id": "30253757681",
+        "head_sha": "0bb34ed4d17963207d0c34c63e89917fc3330b68",
+        "outcome": "success",
+        "conclusion": "success",
+        "failed_stage": "",
+        "error_code": "",
+        "verification": true,
+        "listing_writes": 2,
+        "observation_writes": 2,
+        "consumption_markers": 2,
+        "candidate_keys": [
+          "1e901198049bc341",
+          "2e833931e4e7cb26"
+        ],
+        "providers": [
+          {
+            "provider": "rakuten_ichiba",
+            "candidate_count": 1
+          },
+          {
+            "provider": "yahoo_shopping",
+            "candidate_count": 1
+          }
+        ],
+        "production_delta": {
+          "market_listings": 0,
+          "market_listing_observations": 2,
+          "import_issues": 0,
+          "ingestion_runs": 0,
+          "review_required": 0
+        },
+        "rollback": {
+          "attempted": false,
+          "verified": false
+        },
+        "workflow_final_state": "disabled_manually",
+        "schedule_run_count": 0,
+        "rerun_count": 0,
+        "provenance": {
+          "type": "github_actions_artifact",
+          "artifact_id": "8652292453",
+          "artifact_name": "market-canary-result-30264689615",
+          "digest": "sha256:2f3b14fe859c8bd42dd764ddaf2bc5e733a3e3a6a9eab75b345ef3c1e486a938",
+          "commit_sha": "0bb34ed4d17963207d0c34c63e89917fc3330b68",
+          "expired": false
+        }
+      },
+      {
+        "run_id": "30280796120",
+        "source_audit_run_id": "30278197797",
+        "head_sha": "0ff69840b9b630ce54b8c4f5ccf711d5dd3b1100",
+        "outcome": "success",
+        "conclusion": "success",
+        "failed_stage": "",
+        "error_code": "",
+        "verification": true,
+        "listing_writes": 3,
+        "observation_writes": 3,
+        "consumption_markers": 3,
+        "candidate_keys": [
+          "5d7cb7a3f9eb122c",
+          "65bf088fb494c114",
+          "f1e9adfb8785c509"
+        ],
+        "providers": [
+          {
+            "provider": "rakuten_ichiba",
+            "candidate_count": 2
+          },
+          {
+            "provider": "yahoo_shopping",
+            "candidate_count": 1
+          }
+        ],
+        "production_delta": {
+          "market_listings": 0,
+          "market_listing_observations": 3,
+          "import_issues": 0,
+          "ingestion_runs": 0,
+          "review_required": 0
+        },
+        "rollback": {
+          "attempted": false,
+          "verified": false
+        },
+        "workflow_final_state": "disabled_manually",
+        "schedule_run_count": 0,
+        "rerun_count": 0,
+        "provenance": {
+          "type": "github_actions_artifact",
+          "artifact_id": "8658734779",
+          "artifact_name": "market-canary-result-30280796120",
+          "digest": "sha256:2bdd49ff3fee59294b1cbac34ca32d4ce4cd08ae464e772ecaa678cccbbdf308",
+          "commit_sha": "0ff69840b9b630ce54b8c4f5ccf711d5dd3b1100",
+          "expired": false
+        }
+      },
+      {
+        "run_id": "30352652078",
+        "source_audit_run_id": "30348659878",
+        "head_sha": "3220efe830f89c353903548d72ec9c8b21624377",
+        "outcome": "failed_safe",
+        "conclusion": "failure",
+        "failed_stage": "exact_audit_match",
+        "error_code": "canary_exact_audit_match_failed",
+        "verification": false,
+        "listing_writes": 0,
+        "observation_writes": 0,
+        "consumption_markers": 0,
+        "candidate_keys": [
+          "58fa0fbd97373dfc",
+          "dce072831c296dda",
+          "f95e4845828bba73"
+        ],
+        "providers": [
+          {
+            "provider": "rakuten_ichiba",
+            "candidate_count": 3
+          }
+        ],
+        "production_delta": {
+          "market_listings": 0,
+          "market_listing_observations": 0,
+          "import_issues": 0,
+          "ingestion_runs": 0,
+          "review_required": 0
+        },
+        "rollback": {
+          "attempted": false,
+          "verified": false
+        },
+        "workflow_final_state": "disabled_manually",
+        "schedule_run_count": 0,
+        "rerun_count": 0,
+        "provenance": {
+          "type": "github_actions_artifact",
+          "artifact_id": "8685510155",
+          "artifact_name": "market-canary-result-30352652078",
+          "digest": "sha256:d38c313292ee3a2e04004a4c8f3353f784ce5d36806f81a67e39af17ce8b2c65",
+          "commit_sha": "3220efe830f89c353903548d72ec9c8b21624377",
+          "expired": false
+        }
+      },
+      {
+        "run_id": "30358862209",
+        "source_audit_run_id": "30354810437",
+        "head_sha": "7df915abc036a5b0e81c357cbab4a367f244e966",
+        "outcome": "failed_safe",
+        "conclusion": "failure",
+        "failed_stage": "exact_audit_match",
+        "error_code": "canary_exact_audit_match_failed",
+        "verification": false,
+        "listing_writes": 0,
+        "observation_writes": 0,
+        "consumption_markers": 0,
+        "candidate_keys": [
+          "58fa0fbd97373dfc",
+          "dce072831c296dda",
+          "f95e4845828bba73"
+        ],
+        "providers": [
+          {
+            "provider": "rakuten_ichiba",
+            "candidate_count": 3
+          }
+        ],
+        "production_delta": {
+          "market_listings": 0,
+          "market_listing_observations": 0,
+          "import_issues": 0,
+          "ingestion_runs": 0,
+          "review_required": 0
+        },
+        "rollback": {
+          "attempted": false,
+          "verified": false
+        },
+        "workflow_final_state": "disabled_manually",
+        "schedule_run_count": 0,
+        "rerun_count": 0,
+        "provenance": {
+          "type": "github_actions_artifact",
+          "artifact_id": "8687935173",
+          "artifact_name": "market-canary-result-30358862209",
+          "digest": "sha256:aa5b8a748de13972d54b7fd9def87a61fd23edae0596a29350f8bbe129e80b56",
+          "commit_sha": "7df915abc036a5b0e81c357cbab4a367f244e966",
+          "expired": false
+        }
+      },
+      {
+        "run_id": "30484636298",
+        "source_audit_run_id": "30365904563",
+        "head_sha": "4dcc11009b33a741ed0f5aa80bc51920a24fa46d",
+        "outcome": "success",
+        "conclusion": "success",
+        "failed_stage": "",
+        "error_code": "",
+        "verification": true,
+        "listing_writes": 3,
+        "observation_writes": 3,
+        "consumption_markers": 3,
+        "candidate_keys": [
+          "58fa0fbd97373dfc",
+          "dce072831c296dda",
+          "f95e4845828bba73"
+        ],
+        "providers": [
+          {
+            "provider": "rakuten_ichiba",
+            "candidate_count": 3
+          }
+        ],
+        "production_delta": {
+          "market_listings": 0,
+          "market_listing_observations": 3,
+          "import_issues": 0,
+          "ingestion_runs": 0,
+          "review_required": 0
+        },
+        "rollback": {
+          "attempted": false,
+          "verified": false
+        },
+        "workflow_final_state": "disabled_manually",
+        "schedule_run_count": 0,
+        "rerun_count": 0,
+        "provenance": {
+          "type": "github_actions_artifact",
+          "artifact_id": "8737112456",
+          "artifact_name": "market-canary-result-30484636298",
+          "digest": "sha256:900fe7383e9621371a02cd0bd8e8391d6722683265e624e7641c214e3b983036",
+          "commit_sha": "4dcc11009b33a741ed0f5aa80bc51920a24fa46d",
+          "expired": false
+        }
+      }
+    ]
+  }
+}

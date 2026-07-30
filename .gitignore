@@ -33,6 +33,7 @@ dev-server*.log
 
 # generated ingestion snapshots
 /data/generated/
+/artifacts/
 
 # env files (can opt-in for committing if needed)
 .env*
