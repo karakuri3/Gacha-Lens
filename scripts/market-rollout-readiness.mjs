@@ -16,6 +16,7 @@ const workflowDigest = createHash("sha256")
   .digest("hex");
 const phase4Evidence = {
   ...evidence.phase4,
+  complete: evidence.schema_version === 2 && evidence.phase4?.complete === true,
   workflow_unchanged: workflowDigest === String(evidence.workflow_sha256 ?? "").toLowerCase(),
 };
 let productionReadComplete = true;
