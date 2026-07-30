@@ -280,7 +280,7 @@ test("contained short target is not accepted as evidence for the longer sibling"
     siblings: [{ id: "long", name: "マイク" }],
   });
   assert.equal(assessment.accepted, false);
-  assert.equal(assessment.reason, "target_variant_not_confirmed");
+  assert.equal(assessment.reason, "explicit_variant_label_conflict");
   assert.deepEqual(assessment.classification.details.matched_variant_ids, ["long"]);
 });
 
@@ -342,7 +342,7 @@ test("delivery text alone cannot confirm the ネコ target", () => {
     siblings: [{ id: "dog", name: "イヌ" }],
   });
   assert.equal(assessment.accepted, false);
-  assert.equal(assessment.reason, "target_variant_not_confirmed");
+  assert.equal(assessment.reason, "explicit_variant_label_conflict");
   assert.deepEqual(assessment.classification.details.matched_variant_ids, ["dog"]);
 });
 
