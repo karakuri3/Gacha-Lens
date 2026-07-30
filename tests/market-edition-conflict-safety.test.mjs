@@ -322,3 +322,243 @@ test("31 standalone edition detector ignores unrelated numbers", () => {
     targetVariantName: "勇者",
   }), false);
 });
+
+test("32 unknown top-level label with target text fails closed", () => {
+  const result = assess("ならぶんです。 Winnie the Pooh くまのプーさん 【未知variantB】");
+  assert.equal(result.accepted, false);
+  assert.equal(result.reviewRequired, true);
+  assert.equal(result.reason, "explicit_variant_label_unresolved");
+  assert.equal(result.auditChecks.explicitLabelUnresolved, true);
+});
+
+test("33 unknown top-level label without target text fails closed", () => {
+  const result = assess("ならぶんです。 Winnie the Pooh 【未知variantB】");
+  assert.equal(result.accepted, false);
+  assert.equal(result.reviewRequired, true);
+  assert.equal(result.reason, "explicit_variant_label_unresolved");
+});
+
+test("34 nested parentheses belong to the outer product label", () => {
+  const labels = extractBracketLabels("[2.ブレス(キュアアンサー)]");
+  assert.equal(labels.length, 2);
+  assert.deepEqual(labels.map((entry) => ({
+    text: entry.text,
+    depth: entry.depth,
+    topLevel: entry.topLevel,
+    contained: entry.containedByAnotherLabel,
+  })), [
+    {
+      text: "2.ブレス(キュアアンサー)",
+      depth: 0,
+      topLevel: true,
+      contained: false,
+    },
+    {
+      text: "キュアアンサー",
+      depth: 1,
+      topLevel: false,
+      contained: true,
+    },
+  ]);
+  assert.deepEqual(labels[1].parentRange, {
+    start: labels[0].start,
+    end: labels[0].end,
+  });
+});
+
+test("35 nested sibling text does not conflict with the outer target label", () => {
+  const series = { id: "precure", slug: "precure", name: "名探偵プリキュア! アクセサリーコレクション" };
+  const target = { id: "bracelet", slug: "bracelet", series_id: series.id, name: "ブレス(キュアアンサー)", variant_type: "normal" };
+  const sibling = { id: "answer", slug: "answer", series_id: series.id, name: "キュアアンサー", variant_type: "normal" };
+  const result = assess("名探偵プリキュア! アクセサリーコレクション [2.ブレス(キュアアンサー)]", {
+    series,
+    target,
+    siblings: [sibling],
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.reason, "variant_and_parent_evidence_confirmed");
+  assert.equal(result.auditChecks.explicitLabelOtherVariantMatch, false);
+});
+
+test("36 standalone parenthesized variant remains a product label", () => {
+  const series = { id: "tigger-series", slug: "tigger-series", name: "対象シリーズ" };
+  const target = { id: "tigger", slug: "tigger", series_id: series.id, name: "ティガー", variant_type: "normal" };
+  const result = assess("対象シリーズ (ティガー)", {
+    series,
+    target,
+    siblings: [],
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.auditChecks.explicitLabelPresent, true);
+  assert.equal(result.auditChecks.explicitLabelTargetMatch, true);
+});
+
+test("37 sibling-only explicit label is always an explicit conflict", () => {
+  const result = assess("ならぶんです。 Winnie the Pooh 【ピグレットB】");
+  assert.equal(result.accepted, false);
+  assert.equal(result.reviewRequired, true);
+  assert.equal(result.reason, "explicit_variant_label_conflict");
+  assert.equal(result.auditChecks.explicitLabelOtherVariantMatch, true);
+});
+
+test("38 sibling label remains an explicit conflict when target text is present", () => {
+  const result = assess("ならぶんです。 Winnie the Pooh くまのプーさん 【ピグレットB】");
+  assert.equal(result.reason, "explicit_variant_label_conflict");
+});
+
+test("39 Japanese Classic is allowed as the formal target variant", () => {
+  const series = { id: "classic-ja-series", slug: "classic-ja-series", name: "対象シリーズ" };
+  const target = { id: "classic-ja", slug: "classic-ja", series_id: series.id, name: "クラシック", variant_type: "normal" };
+  const result = assess("対象シリーズ クラシック【クラシック】", {
+    series,
+    target,
+    siblings: [],
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.auditChecks.parentSeriesEditionConflict, false);
+});
+
+test("40 English Classic is allowed as the formal target variant", () => {
+  const series = { id: "classic-en-series", slug: "classic-en-series", name: "Example Series" };
+  const target = { id: "classic-en", slug: "classic-en", series_id: series.id, name: "Classic", variant_type: "normal" };
+  const result = assess("Example Series Classic [Classic]", {
+    series,
+    target,
+    siblings: [],
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.auditChecks.parentSeriesEditionConflict, false);
+});
+
+test("41 a formal sibling named Classic is not treated as an edition marker", () => {
+  assert.equal(detectParentSeriesEditionConflict({
+    title: "Example Series Classic [Classic]",
+    parentSeriesName: "Example Series",
+    targetVariantName: "Hero",
+    siblingVariantNames: ["Classic"],
+    beforeIndex: "Example Series Classic ".length,
+  }), false);
+});
+
+test("42 standalone English Classic remains a true edition conflict", () => {
+  const series = { id: "edition-en", slug: "edition-en", name: "Example Series" };
+  const target = { id: "hero-en", slug: "hero-en", series_id: series.id, name: "Hero", variant_type: "normal" };
+  const result = assess("Example Series Classic [Hero]", {
+    series,
+    target,
+    siblings: [],
+  });
+  assert.equal(result.reason, "parent_series_edition_conflict");
+});
+
+test("43 standalone Japanese Classic remains a true edition conflict", () => {
+  const series = { id: "edition-ja", slug: "edition-ja", name: "対象シリーズ" };
+  const target = { id: "hero-ja", slug: "hero-ja", series_id: series.id, name: "勇者", variant_type: "normal" };
+  const result = assess("対象シリーズ クラシック【勇者】", {
+    series,
+    target,
+    siblings: [],
+  });
+  assert.equal(result.reason, "parent_series_edition_conflict");
+});
+
+test("44 ASCII word endings are not stripped as short variant suffixes", () => {
+  assert.equal(explicitLabelMatchesVariant("Loki", "Lok"), false);
+});
+
+test("45 Japanese variant suffix B remains supported", () => {
+  assert.equal(explicitLabelMatchesVariant("ピグレットB", "ピグレット"), true);
+});
+
+const GENERIC_LABELS = [
+  "ネコポス配送対応",
+  "ゆうパケット対応",
+  "メール便",
+  "宅配便",
+  "即納",
+  "在庫品",
+  "在庫あり",
+  "予約",
+  "新品",
+  "中古",
+  "数量限定",
+  "期間限定",
+  "店舗限定",
+  "限定",
+  "単品",
+  "バラ売り",
+  "セット",
+  "全5種",
+  "全6種",
+  "ガチャ",
+  "カプセルトイ",
+  "送料無料",
+  "C",
+];
+
+for (const [index, label] of GENERIC_LABELS.entries()) {
+  test(`${46 + index} generic label ${label} is ignored`, () => {
+    const analysis = analyzeExplicitMarketLabels(
+      `対象シリーズ 勇者【${label}】`,
+      [{ id: "hero", name: "勇者" }],
+      "hero",
+    );
+    assert.equal(analysis.explicitLabelPresent, false);
+    assert.equal(analysis.explicitLabelUnresolved, false);
+  });
+}
+
+test("69 unresolved label audit exposes only a boolean diagnostic", () => {
+  const record = acceptedRecord("ならぶんです。 Winnie the Pooh くまのプーさん 【未知variantB】", "unknown-label");
+  const safety = applyMarketCandidateSafety({
+    records: [record],
+    queryPlan: [POOH_QUERY],
+    catalog: fixtureCatalog(),
+  });
+  const report = buildSanitizedMarketCandidateAudit({
+    records: safety.records,
+    queryPlan: [POOH_QUERY],
+    catalog: fixtureCatalog(),
+    runContext: { run_id: "30532684353", head_sha: "58460de77c35828004c993583bda5830d65362cf" },
+    summary: { safety_assessed_records: 1 },
+  });
+  assert.equal(report.candidates[0].checks.explicit_label_unresolved, true);
+  assert.equal(JSON.stringify(report).match(/未知variantB/g)?.length, 1);
+});
+
+test("70 unresolved label Markdown does not duplicate label text", () => {
+  const record = acceptedRecord("ならぶんです。 Winnie the Pooh くまのプーさん 【未知variantB】", "unknown-label-md");
+  const safety = applyMarketCandidateSafety({
+    records: [record],
+    queryPlan: [POOH_QUERY],
+    catalog: fixtureCatalog(),
+  });
+  const report = buildSanitizedMarketCandidateAudit({
+    records: safety.records,
+    queryPlan: [POOH_QUERY],
+    catalog: fixtureCatalog(),
+    runContext: { run_id: "30532684353", head_sha: "58460de77c35828004c993583bda5830d65362cf" },
+    summary: { safety_assessed_records: 1 },
+  });
+  assert.equal(renderMarketCandidateAuditMarkdown(report).match(/未知variantB/g)?.length, 1);
+});
+
+for (const [index, suffix] of [
+  "A",
+  "B",
+  "C",
+  "1",
+  "2",
+  "3",
+  "I",
+  "II",
+  "III",
+  "Ver.A",
+  "Ver.B",
+  "カラーA",
+  "カラーB",
+].entries()) {
+  test(`${71 + index} explicit Japanese suffix ${suffix} remains supported`, () => {
+    assert.equal(explicitLabelMatchesVariant(`ピグレット${suffix}`, "ピグレット"), true);
+  });
+}
