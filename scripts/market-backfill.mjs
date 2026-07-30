@@ -28,6 +28,12 @@ import {
   normalizeMarketSourceScope,
 } from "../lib/fetchers/market-fetcher.js";
 import { planMarketSearchQueries } from "../lib/fetchers/market-query-planner.js";
+import {
+  buildMarketManualCanarySelectionDiagnostics,
+  loadMarketManualCanarySelectionProfile,
+  manualCanarySelectionOptions,
+  shouldApplyMarketManualCanarySelection,
+} from "../lib/domain/market-manual-canary-selection.js";
 import { loadOfficialCatalog } from "./load-official-catalog.mjs";
 import { loadMarketCoverageData } from "./market-coverage-data.mjs";
 import { deleteRowsByIds, fetchRowCount, fetchRows, upsertRows } from "./supabase-rest.mjs";
@@ -44,7 +50,14 @@ if (options.mode === "canary-write") {
 async function runDryMode(options) {
   const startedAt = Date.now();
   const data = await loadMarketCoverageData();
-  const plan = planMarketSearchQueries(data.catalog, data.coverageRows, options);
+  const manualProfile = resolveManualSelectionProfile(options);
+  const selectionOptions = manualProfile
+    ? { ...options, ...manualCanarySelectionOptions(manualProfile) }
+    : options;
+  const plan = planMarketSearchQueries(data.catalog, data.coverageRows, selectionOptions);
+  const selectionProfile = manualProfile
+    ? buildMarketManualCanarySelectionDiagnostics(manualProfile, plan.summary)
+    : null;
   const sourcePlan = describeMarketSourceConfiguration({ sourceScope: options.sourceScope, queryCount: plan.queries.length });
   let sourceResult = emptySourceResult(plan.selected.length, sourcePlan);
   let auditRecords = [];
@@ -63,6 +76,7 @@ async function runDryMode(options) {
     source_scope: options.sourceScope,
     write_protected: true,
     ...plan.summary,
+    ...(selectionProfile ? { selection_profile: selectionProfile } : {}),
     selected_variant_ids: plan.selected.map((entry) => entry.variantId),
     selected_sample: plan.selected.slice(0, 5).map((entry) => ({
       variant_id: entry.variantId,
@@ -87,6 +101,19 @@ async function runDryMode(options) {
     writeGitHubOutputs(auditOutput, summary);
   }
   console.log(JSON.stringify(summary, null, 2));
+}
+
+function resolveManualSelectionProfile(options) {
+  const applies = shouldApplyMarketManualCanarySelection({
+    task: process.env.BACKFILL_TASK,
+    mode: options.mode,
+    executeSources: options.executeSources,
+    eventName: process.env.GITHUB_EVENT_NAME,
+  });
+  if (!applies) return null;
+  const profilePath = process.env.MARKET_MANUAL_CANARY_SELECTION_PATH
+    || path.resolve("config/market-manual-canary-selection.json");
+  return loadMarketManualCanarySelectionProfile(profilePath);
 }
 
 async function runWriteMode(options) {

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "profile": "manual_canary_diversity",
+  "max_variants_per_series": 1,
+  "blocked_variants": [
+    {
+      "variant_id": "gashapon-4570118183576000-ガスパール",
+      "reason": "repeated_target_variant_not_confirmed",
+      "evidence_candidate_key": "3908a16901a36053"
+    }
+  ]
+}
