@@ -464,6 +464,7 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
       "30358862209",
       "30484636298",
       "30568203750",
+      "30651440275",
     ],
   );
   assert.deepEqual(
@@ -482,6 +483,7 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
       "f95e4845828bba73",
       "806b7bdc9c03bf81",
       "aa2672a09667cec2",
+      "7a8c4ec1b1a0d846",
     ].sort(),
   );
   assert.deepEqual(
@@ -493,21 +495,22 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
       "30354810437",
       "30365904563",
       "30565886734",
+      "30572554031",
     ],
   );
   const audit = evidence.phase4.audits.at(-1);
   assert.deepEqual(audit, {
-    run_id: "30565886734",
-    head_sha: "1309be9df609fa084aa5b8b3780232e8b8dc6106",
+    run_id: "30572554031",
+    head_sha: "8b2f0c95e44f40f3b3479a2a44f2e83752a2192e",
     mode: "dry-run",
     source_scope: "planner-apis",
     report_complete: true,
     truncated_count: 0,
     selected_variant_count: 5,
     query_count: 5,
-    candidate_count: 6,
-    accepted_count: 2,
-    review_required_count: 4,
+    candidate_count: 11,
+    accepted_count: 1,
+    review_required_count: 10,
     no_result_variant_count: 2,
     database_writes: { listings: 0, observations: 0, ingestion_runs: 0 },
     candidates: [
@@ -524,22 +527,52 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
         review_required: true,
       },
       {
+        candidate_key: "5e08f193af49dbf9",
+        provider: "yahoo_shopping",
+        accepted: false,
+        review_required: true,
+      },
+      {
         candidate_key: "6d1aaac520172ae5",
         provider: "rakuten_ichiba",
         accepted: false,
         review_required: true,
       },
       {
-        candidate_key: "806b7bdc9c03bf81",
+        candidate_key: "7a8c4ec1b1a0d846",
         provider: "rakuten_ichiba",
         accepted: true,
         review_required: false,
       },
       {
-        candidate_key: "aa2672a09667cec2",
+        candidate_key: "939a0ae56d23e979",
+        provider: "yahoo_shopping",
+        accepted: false,
+        review_required: true,
+      },
+      {
+        candidate_key: "c0a06ea538d0c6a6",
+        provider: "yahoo_shopping",
+        accepted: false,
+        review_required: true,
+      },
+      {
+        candidate_key: "d8f6b383d1c838c5",
         provider: "rakuten_ichiba",
-        accepted: true,
-        review_required: false,
+        accepted: false,
+        review_required: true,
+      },
+      {
+        candidate_key: "e724818ddc2066e4",
+        provider: "yahoo_shopping",
+        accepted: false,
+        review_required: true,
+      },
+      {
+        candidate_key: "efef962964b26fbf",
+        provider: "yahoo_shopping",
+        accepted: false,
+        review_required: true,
       },
       {
         candidate_key: "ff5baa7deca4ff32",
@@ -550,31 +583,31 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
     ],
     provenance: {
       type: "github_actions_artifact",
-      artifact_id: "8768801830",
-      artifact_name: "market-candidate-audit-30565886734",
-      digest: "sha256:374cbb426a4a34c264bc647cb3a27ea69357afb15cb55e6b38daec3b7b574864",
-      commit_sha: "1309be9df609fa084aa5b8b3780232e8b8dc6106",
+      artifact_id: "8771381977",
+      artifact_name: "market-candidate-audit-30572554031",
+      digest: "sha256:874b91e4d18024152f90b866ed7b7a0c15101f318bfe0450fda164ac8c619286",
+      commit_sha: "8b2f0c95e44f40f3b3479a2a44f2e83752a2192e",
       expired: false,
     },
   });
   const canary = evidence.phase4.canaries.at(-1);
   assert.deepEqual(canary, {
-    run_id: "30568203750",
-    source_audit_run_id: "30565886734",
-    head_sha: "1309be9df609fa084aa5b8b3780232e8b8dc6106",
+    run_id: "30651440275",
+    source_audit_run_id: "30572554031",
+    head_sha: "8b2f0c95e44f40f3b3479a2a44f2e83752a2192e",
     outcome: "success",
     conclusion: "success",
     failed_stage: "",
     error_code: "",
     verification: true,
-    listing_writes: 2,
-    observation_writes: 2,
-    consumption_markers: 2,
-    candidate_keys: ["806b7bdc9c03bf81", "aa2672a09667cec2"],
-    providers: [{ provider: "rakuten_ichiba", candidate_count: 2 }],
+    listing_writes: 1,
+    observation_writes: 1,
+    consumption_markers: 1,
+    candidate_keys: ["7a8c4ec1b1a0d846"],
+    providers: [{ provider: "rakuten_ichiba", candidate_count: 1 }],
     production_delta: {
       market_listings: 0,
-      market_listing_observations: 2,
+      market_listing_observations: 1,
       import_issues: 0,
       ingestion_runs: 0,
       review_required: 0,
@@ -585,10 +618,10 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
     rerun_count: 0,
     provenance: {
       type: "github_actions_artifact",
-      artifact_id: "8769702250",
-      artifact_name: "market-canary-result-30568203750",
-      digest: "sha256:3a07429ff2855d10068f7c1dc04b6b65556c279bda73d6dd60f714468c819e51",
-      commit_sha: "1309be9df609fa084aa5b8b3780232e8b8dc6106",
+      artifact_id: "8801545826",
+      artifact_name: "market-canary-result-30651440275",
+      digest: "sha256:e118734c0b46f4a4ef3b82aa94394f3e5b7585c59ea2a5ddbdacb59e047ddc58",
+      commit_sha: "8b2f0c95e44f40f3b3479a2a44f2e83752a2192e",
       expired: false,
     },
   });
@@ -609,6 +642,53 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
     audit.candidates.filter((row) => row.review_required).every((row) => !row.accepted),
     true,
   );
+  assert.equal(audit.candidates.filter((row) => row.review_required).length, 10);
+  assert.deepEqual(
+    audit.candidates.filter((row) => row.accepted).map((row) => row.candidate_key),
+    ["7a8c4ec1b1a0d846"],
+  );
+  assert.deepEqual(
+    audit.candidates
+      .filter((row) => [
+        "0d255efb944230e5",
+        "25f5906df352c016",
+        "5e08f193af49dbf9",
+        "6d1aaac520172ae5",
+        "939a0ae56d23e979",
+        "c0a06ea538d0c6a6",
+        "e724818ddc2066e4",
+        "efef962964b26fbf",
+        "ff5baa7deca4ff32",
+      ].includes(row.candidate_key))
+      .map((row) => [row.candidate_key, row.accepted, row.review_required]),
+    [
+      ["0d255efb944230e5", false, true],
+      ["25f5906df352c016", false, true],
+      ["5e08f193af49dbf9", false, true],
+      ["6d1aaac520172ae5", false, true],
+      ["939a0ae56d23e979", false, true],
+      ["c0a06ea538d0c6a6", false, true],
+      ["e724818ddc2066e4", false, true],
+      ["efef962964b26fbf", false, true],
+      ["ff5baa7deca4ff32", false, true],
+    ],
+  );
+  assert.deepEqual(
+    audit.candidates
+      .filter((row) => row.candidate_key === "d8f6b383d1c838c5")
+      .map((row) => [row.accepted, row.review_required]),
+    [[false, true]],
+  );
+  assert.equal(
+    evidence.phase4.audits.filter((row) => row.run_id === "30572554031").length,
+    1,
+  );
+  assert.equal(
+    evidence.phase4.canaries.filter((row) => row.run_id === "30651440275").length,
+    1,
+  );
+  assert.equal(new Set(evidence.phase4.audits.map((row) => row.run_id)).size, evidence.phase4.audits.length);
+  assert.equal(new Set(evidence.phase4.canaries.map((row) => row.run_id)).size, evidence.phase4.canaries.length);
   const consumedPairs = evidence.phase4.canaries
     .filter((row) => row.outcome === "success")
     .flatMap((row) => row.candidate_keys.map((key) => `${row.source_audit_run_id}:${key}`));
