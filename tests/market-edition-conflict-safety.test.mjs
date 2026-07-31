@@ -562,3 +562,171 @@ for (const [index, suffix] of [
     assert.equal(explicitLabelMatchesVariant(`ピグレット${suffix}`, "ピグレット"), true);
   });
 }
+
+const STITCH_SERIES = {
+  id: "stitch-series",
+  slug: "stitch-series",
+  name: "肩ズンFig. リロ&スティッチ Part2",
+};
+const JUMBA = {
+  id: "jumba",
+  slug: "jumba",
+  series_id: STITCH_SERIES.id,
+  name: "ジャンバ",
+  variant_type: "normal",
+};
+const LILO = {
+  id: "lilo",
+  slug: "lilo",
+  series_id: STITCH_SERIES.id,
+  name: "リロ",
+  variant_type: "normal",
+};
+const STITCH = {
+  id: "stitch",
+  slug: "stitch",
+  series_id: STITCH_SERIES.id,
+  name: "スティッチ",
+  variant_type: "normal",
+};
+
+for (const [index, label] of [
+  "ネコポス不可",
+  " ネコポス 不可 ",
+  "ネコポス　　不可",
+  "ゆうパケット不可",
+  "メール便不可",
+  "宅配便不可",
+].entries()) {
+  test(`${84 + index} known unavailable shipping label ${label.trim()} is ignored`, () => {
+    const analysis = analyzeExplicitMarketLabels(
+      `対象シリーズ [1.勇者]【${label}】`,
+      [{ id: "hero", name: "勇者" }],
+      "hero",
+    );
+    assert.equal(analysis.explicitLabelPresent, true);
+    assert.equal(analysis.explicitLabelTargetMatch, true);
+    assert.equal(analysis.explicitLabelUnresolved, false);
+  });
+}
+
+for (const [index, label] of ["不可", "特別仕様"].entries()) {
+  test(`${90 + index} unknown label ${label} remains unresolved`, () => {
+    const analysis = analyzeExplicitMarketLabels(
+      `対象シリーズ [1.勇者]【${label}】`,
+      [{ id: "hero", name: "勇者" }],
+      "hero",
+    );
+    assert.equal(analysis.explicitLabelUnresolved, true);
+  });
+}
+
+test("92 Production おふろ candidate with unavailable shipping label is accepted", () => {
+  const series = { id: "george", slug: "george", name: "おさるのジョージ ジョージの一日フィギュア" };
+  const target = { id: "bath", slug: "bath", series_id: series.id, name: "おふろ", variant_type: "normal" };
+  const result = assess("おさるのジョージ ジョージの一日フィギュア [3.おふろ]【 ネコポス不可 】【C】", {
+    series,
+    target,
+    siblings: [],
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.reviewRequired, false);
+  assert.equal(result.reason, "variant_and_parent_evidence_confirmed");
+  assert.equal(result.listingType, "single");
+  assert.equal(result.confidence, 0.86);
+  assert.equal(result.auditChecks.explicitLabelTargetMatch, true);
+  assert.equal(result.auditChecks.explicitLabelUnresolved, false);
+});
+
+test("93 Production ジャンバ candidate ignores sibling names contained by the parent series", () => {
+  const result = assess("肩ズンFig. リロ&スティッチ Part2 [1.ジャンバ]【 ネコポス不可 】【C】", {
+    series: STITCH_SERIES,
+    target: JUMBA,
+    siblings: [LILO, STITCH],
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.reviewRequired, false);
+  assert.equal(result.reason, "variant_and_parent_evidence_confirmed");
+  assert.equal(result.listingType, "single");
+  assert.equal(result.confidence, 0.86);
+  assert.deepEqual(result.classification.details.matched_variant_ids, [JUMBA.id]);
+  assert.equal(result.auditChecks.multipleVariantCandidates, false);
+  assert.equal(result.auditChecks.explicitLabelTargetMatch, true);
+  assert.equal(result.auditChecks.explicitLabelOtherVariantMatch, false);
+  assert.equal(result.auditChecks.explicitLabelUnresolved, false);
+});
+
+test("94 sibling text outside the exact parent series remains a conflict", () => {
+  const result = assess("肩ズンFig. リロ&スティッチ Part2 リロ [1.ジャンバ]", {
+    series: STITCH_SERIES,
+    target: JUMBA,
+    siblings: [LILO, STITCH],
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.reason, "multiple_variant_candidates");
+});
+
+test("95 sibling text inside and outside the parent keeps the outside match", () => {
+  const result = assess("肩ズンFig. リロ&スティッチ Part2 [1.ジャンバ] / リロ", {
+    series: STITCH_SERIES,
+    target: JUMBA,
+    siblings: [LILO, STITCH],
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.reason, "multiple_variant_candidates");
+  assert.deepEqual(new Set(result.classification.details.matched_variant_ids), new Set([JUMBA.id, LILO.id]));
+});
+
+test("96 an explicit sibling label remains a conflict", () => {
+  const result = assess("肩ズンFig. リロ&スティッチ Part2 [1.ジャンバ]【リロ】", {
+    series: STITCH_SERIES,
+    target: JUMBA,
+    siblings: [LILO, STITCH],
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.reason, "explicit_variant_label_conflict");
+});
+
+test("97 a true multi-variant listing remains review-required", () => {
+  const result = assess("肩ズンFig. リロ&スティッチ Part2 ジャンバ / リロ", {
+    series: STITCH_SERIES,
+    target: JUMBA,
+    siblings: [LILO, STITCH],
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.reviewRequired, true);
+  assert.equal(result.reason, "multiple_variant_candidates");
+});
+
+test("98 a true set listing remains not_single_item", () => {
+  const result = assess("肩ズンFig. リロ&スティッチ Part2 ジャンバ リロ 2種セット", {
+    series: STITCH_SERIES,
+    target: JUMBA,
+    siblings: [LILO, STITCH],
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.reason, "not_single_item");
+});
+
+test("99 unavailable shipping labels are compared after NFKC normalization", () => {
+  const analysis = analyzeExplicitMarketLabels(
+    "対象シリーズ [1.勇者]【 ﾈｺﾎﾟｽ 不可 】",
+    [{ id: "hero", name: "勇者" }],
+    "hero",
+  );
+  assert.equal(analysis.explicitLabelTargetMatch, true);
+  assert.equal(analysis.explicitLabelUnresolved, false);
+});
+
+test("100 Production PICO PARK デザインA candidate remains accepted", () => {
+  const series = { id: "pico-park", slug: "pico-park", name: "PICO PARK キーボードチャーム" };
+  const target = { id: "design-a", slug: "design-a", series_id: series.id, name: "デザインA", variant_type: "normal" };
+  const result = assess("PICO PARK キーボードチャーム [1.デザインA]【ネコポス配送対応】【C】", {
+    series,
+    target,
+    siblings: [],
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.reason, "variant_and_parent_evidence_confirmed");
+  assert.equal(result.confidence, 0.86);
+});
