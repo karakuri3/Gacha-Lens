@@ -106,6 +106,8 @@ jobs:
       AUTOMATIC_INGESTION_WRITE_ENABLED: ${{ vars.AUTOMATIC_INGESTION_WRITE_ENABLED || 'false' }}
       AUTOMATIC_INGESTION_ROLLOUT_STAGE: ${{ vars.AUTOMATIC_INGESTION_ROLLOUT_STAGE || 'disabled' }}
       AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST: ${{ vars.AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST || '' }}
+      AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED: ${{ vars.AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED || 'false' }}
+      AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ${{ vars.AUTOMATIC_INGESTION_BOUNDED_APPROVAL || '' }}
       GH_READ_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout full history for canary write
@@ -238,6 +240,17 @@ jobs:
           --head-sha=${{ github.sha }}
           --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
           --automatic-write-enabled=${{ env.AUTOMATIC_INGESTION_WRITE_ENABLED }}
+          --bounded-persistence-enabled=${{ env.AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED }}
+      - name: Generate blocked bounded result before source fetch
+        id: bounded_blocked_result
+        if: ${{ always() && steps.ingestion.outputs.mode == 'rollout' && env.AUTOMATIC_INGESTION_ROLLOUT_STAGE == 'market-bounded' && steps.rollout.outputs.allowed != 'true' }}
+        run: >-
+          npm run market:bounded-persist -- blocked
+          --output-dir=${{ runner.temp }}/gacha-rollout-report
+          --preflight=${{ runner.temp }}/gacha-rollout-report/ingestion-rollout-preflight.json
+          --event-name=${{ github.event_name }}
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
       - name: Run execution preflight
         id: execution_preflight
         if: ${{ steps.ingestion.outputs.mode == 'write' }}
@@ -312,6 +325,36 @@ jobs:
           --output-dir=${{ runner.temp }}/gacha-rollout-report
           --preflight=${{ runner.temp }}/gacha-rollout-report/ingestion-rollout-preflight.json
           --audit=${{ runner.temp }}/gacha-market-audit/market-candidate-audit.json
+      - name: Generate bounded persistence preview
+        id: persistence_preview
+        if: ${{ steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.stage == 'market-bounded' && steps.rollout.outputs.allowed == 'true' && steps.rollout_plan.outputs.plan_generated == 'true' }}
+        run: >-
+          node scripts/automatic-ingestion-rollout.mjs preview
+          --output-dir=${{ runner.temp }}/gacha-rollout-report
+          --preflight=${{ runner.temp }}/gacha-rollout-report/ingestion-rollout-preflight.json
+          --audit=${{ runner.temp }}/gacha-market-audit/market-candidate-audit.json
+          --plan=${{ runner.temp }}/gacha-rollout-report/market-bounded-write-plan.json
+          --event-name=${{ github.event_name }}
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
+      - name: Run bounded market persistence
+        id: bounded_persistence
+        if: ${{ github.event_name == 'schedule' && github.event.schedule == '17,47 * * * *' && steps.ingestion.outputs.task == 'market' && steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.stage == 'market-bounded' && steps.rollout.outputs.allowed == 'true' && steps.rollout.outputs.persistence_authorized == 'true' && steps.rollout.outputs.bounded_persistence_enabled == 'true' && steps.rollout.outputs.bounded_approval_valid == 'true' && steps.rollout_plan.outputs.budget_state == 'within_budget' && steps.persistence_preview.outputs.preview_generated == 'true' }}
+        run: >-
+          npm run market:bounded-persist -- persist
+          --output-dir=${{ runner.temp }}/gacha-rollout-report
+          --audit=${{ runner.temp }}/gacha-market-audit/market-candidate-audit.json
+          --plan=${{ runner.temp }}/gacha-rollout-report/market-bounded-write-plan.json
+          --event-name=${{ github.event_name }}
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
+          --main-sha-verified=${{ steps.rollout.outputs.main_sha_verified }}
+          --task=market
+          --schedule=${{ github.event.schedule }}
+          --stage=market-bounded
+          --automatic-write-enabled=${{ env.AUTOMATIC_INGESTION_WRITE_ENABLED }}
+          --bounded-persistence-enabled=${{ env.AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED }}
+          --policy-digest=${{ steps.rollout.outputs.policy_digest }}
       - name: Scan rollout report
         if: ${{ always() && steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.report_generated == 'true' }}
         run: >-
@@ -329,7 +372,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Enforce rollout result
-        if: ${{ always() && steps.ingestion.outputs.mode == 'rollout' && (steps.rollout.outputs.allowed != 'true' || steps.rollout_plan.outputs.plan_generated != 'true' || steps.rollout_plan.outputs.database_writes != '0') }}
+        if: ${{ always() && steps.ingestion.outputs.mode == 'rollout' && (steps.rollout.outputs.allowed != 'true' || steps.rollout_plan.outputs.plan_generated != 'true' || (steps.rollout.outputs.stage == 'market-bounded' && (steps.persistence_preview.outputs.preview_generated != 'true' || (steps.rollout.outputs.persistence_authorized == 'true' && steps.bounded_persistence.outputs.result_generated != 'true')))) }}
         run: |
           echo "::error::Automatic rollout failed closed before persistence."
           exit 1

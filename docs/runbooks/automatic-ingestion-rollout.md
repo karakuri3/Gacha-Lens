@@ -1,5 +1,13 @@
 # Automatic ingestion rollout
 
+## Phase 6-D bounded persistence
+
+`market-bounded` now has a dedicated, maximum-two-row persistence implementation. It remains unreachable unless the automatic write switch, bounded persistence switch, policy digest, and exact head-bound approval are all configured. Defaults remain disabled and empty.
+
+The market audit byte digest and canonical plan digest are verified in the same scheduled Run, and plans expire after 15 minutes. Candidate safety, listing identity, write budgets, post-write rows, database deltas, and rollback are revalidated fail closed. See [market-bounded-persistence.md](./market-bounded-persistence.md).
+
+The Rollout Simulation workflow stops at `market-bounded-persistence-preview`; it never invokes the persistence runner and always reports zero Production writes.
+
 Automatic Production ingestion uses a reviewed policy with three explicit stages. The policy lives at `config/automatic-ingestion-rollout-policy.json`; its SHA-256 digest binds any future bounded-write authorization to the exact policy on `main`.
 
 ## Stages

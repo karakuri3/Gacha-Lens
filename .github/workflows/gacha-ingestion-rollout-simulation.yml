@@ -31,6 +31,8 @@ jobs:
       INGESTION_WRITE_DISABLED: "true"
       MARKET_BACKFILL_WRITE_DISABLED: "true"
       AUTOMATIC_INGESTION_WRITE_ENABLED: "false"
+      AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED: "false"
+      AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ""
       BACKFILL_TASK: market
     steps:
       - uses: actions/checkout@v6
@@ -83,6 +85,20 @@ jobs:
           --output-dir=${{ runner.temp }}/gacha-rollout-report
           --preflight=${{ runner.temp }}/gacha-rollout-report/ingestion-rollout-preflight.json
           --audit=${{ runner.temp }}/gacha-market-audit/market-candidate-audit.json
+      - name: Generate bounded persistence preview without writes
+        id: persistence_preview
+        if: ${{ steps.rollout.outputs.stage == 'market-bounded' && steps.rollout.outputs.allowed == 'true' && steps.rollout_plan.outputs.plan_generated == 'true' }}
+        run: >-
+          node scripts/automatic-ingestion-rollout.mjs preview
+          --output-dir=${{ runner.temp }}/gacha-rollout-report
+          --preflight=${{ runner.temp }}/gacha-rollout-report/ingestion-rollout-preflight.json
+          --audit=${{ runner.temp }}/gacha-market-audit/market-candidate-audit.json
+          --plan=${{ runner.temp }}/gacha-rollout-report/market-bounded-write-plan.json
+          --policy=config/automatic-ingestion-rollout-policy.json
+          --simulation=true
+          --event-name=workflow_dispatch
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
       - name: Scan sanitized rollout artifact
         if: ${{ always() && steps.rollout.outputs.report_generated == 'true' }}
         run: >-
@@ -100,7 +116,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Enforce simulation result
-        if: ${{ always() && (steps.rollout.outputs.allowed != 'true' || steps.rollout_plan.outputs.plan_generated != 'true' || steps.rollout_plan.outputs.database_writes != '0') }}
+        if: ${{ always() && (steps.rollout.outputs.allowed != 'true' || steps.rollout_plan.outputs.plan_generated != 'true' || (steps.rollout.outputs.stage == 'market-bounded' && (steps.persistence_preview.outputs.preview_generated != 'true' || steps.persistence_preview.outputs.database_writes != '0'))) }}
         run: |
           echo "::error::Rollout simulation failed closed."
           exit 1

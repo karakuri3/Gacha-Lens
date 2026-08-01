@@ -90,11 +90,11 @@ test("shadow persistence authorization is always false", () => assert.equal(roll
 test("bounded digest missing fails closed", () => assert.equal(rollout({ stage: "market-bounded", automatic_write_enabled: "true" }).reason_code, "rollout_policy_digest_missing"));
 test("bounded digest mismatch fails closed", () => assert.equal(rollout({ stage: "market-bounded", configured_policy_digest: "f".repeat(64), automatic_write_enabled: "true" }).reason_code, "rollout_policy_digest_mismatch"));
 test("bounded kill switch false fails closed", () => assert.equal(rollout({ stage: "market-bounded", configured_policy_digest: digest, automatic_write_enabled: "false" }).reason_code, "automatic_ingestion_disabled"));
-test("bounded valid gates allow plan only", () => {
-  const result = rollout({ stage: "market-bounded", configured_policy_digest: digest, automatic_write_enabled: "true" });
+test("bounded valid gates authorize only the dedicated bounded path", () => {
+  const result = rollout({ stage: "market-bounded", configured_policy_digest: digest, automatic_write_enabled: "true", bounded_persistence_enabled: "true", bounded_approval: `APPROVE_MARKET_BOUNDED:${digest}:${"a".repeat(40)}`, head_sha: "a".repeat(40) });
   assert.equal(result.ok, true);
   assert.equal(result.action, "bounded-plan");
-  assert.equal(result.persistence_authorized, false);
+  assert.equal(result.persistence_authorized, true);
 });
 test("bounded simulation permits prediction with kill switch false", () => {
   const result = rollout({ stage: "market-bounded", simulation: true, prediction_only: true, configured_policy_digest: digest, automatic_write_enabled: "false", event_name: "workflow_dispatch", schedule: "" });
@@ -263,7 +263,10 @@ test("Production workflow defaults policy digest empty", () => assert.match(prod
 test("Production workflow resolves rollout before backfill", () => assert.ok(productionWorkflow.indexOf("Resolve rollout policy and throttle") < productionWorkflow.indexOf("Run controlled market backfill")));
 test("Production workflow scans rollout report", () => assert.match(productionWorkflow, /Scan rollout report/));
 test("Production workflow uploads blocked rollout report", () => assert.match(productionWorkflow, /always\(\).*mode == 'rollout'.*report_generated/));
-test("Production rollout does not invoke bounded persistence", () => assert.doesNotMatch(productionWorkflow, /market-bounded-write\.mjs|Run bounded persistence/));
+test("Production rollout invokes only the dedicated bounded persistence runner", () => {
+  assert.match(productionWorkflow, /Run bounded market persistence/);
+  assert.match(productionWorkflow, /market:bounded-persist -- persist/);
+});
 test("Production canary path remains available", () => {
   assert.match(productionWorkflow, /mode == 'canary-write'/);
   assert.match(productionWorkflow, /market-canary-result-/);

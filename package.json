@@ -40,7 +40,9 @@
     "market:coverage": "node scripts/market-coverage-report.mjs",
     "market:backfill": "node scripts/market-backfill.mjs",
     "market:rollout-plan": "node scripts/market-rollout-plan.mjs",
-    "market:rollout-readiness": "node scripts/market-rollout-readiness.mjs"
+    "market:rollout-readiness": "node scripts/market-rollout-readiness.mjs",
+    "market:bounded-persist": "node scripts/market-bounded-persistence.mjs",
+    "test:market-bounded-write": "node --test tests/market-bounded-write.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
