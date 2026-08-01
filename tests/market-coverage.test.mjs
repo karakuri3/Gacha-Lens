@@ -643,7 +643,7 @@ test("scheduled and manual ingestion share one non-cancelling concurrency group"
   assert.match(workflow, /group: gacha-ingestion\s+cancel-in-progress: false/);
   assert.equal((workflow.match(/cron:/g) ?? []).length, 3);
   assert.match(workflow, /default: dry-run/);
-  assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then\s+mode=write/);
+  assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then\s+mode=rollout/);
 });
 
 test("market source scope normalizes invalid input to the requested safe default", () => {
@@ -757,11 +757,13 @@ test("all source fetch invokes both source families", async () => {
   assert.equal(result.configuredSources, 3);
 });
 
-test("manual workflow defaults to planner APIs while scheduled ingestion forces all", async () => {
+test("manual workflow defaults to planner APIs while scheduled ingestion uses the rollout contract", async () => {
   const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
   assert.match(workflow, /source_scope:[\s\S]*default: planner-apis/);
   assert.match(workflow, /execute_sources:[\s\S]*default: false/);
-  assert.match(workflow, /source_scope=all/);
+  assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then[\s\S]*mode=rollout/);
+  assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then[\s\S]*source_scope=planner-apis/);
+  assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then[\s\S]*execute_sources=true/);
   assert.match(workflow, /MARKET_SOURCE_SCOPE: \$\{\{ steps\.ingestion\.outputs\.source_scope \}\}/);
   assert.equal((workflow.match(/cron:/g) ?? []).length, 3);
 });
