@@ -1,5 +1,11 @@
 # Ingestion execution safety
 
+## Bounded market path
+
+The Phase 6-D bounded market path is separate from normal ingestion and manual canary writes. Only the scheduled market slot can reach it, and only after the rollout preflight and exact bounded arming gate succeed. Normal `db:upsert-all`, cleanup jobs, schema fallback, and canary markers are not used by this branch.
+
+Any blocked gate produces a sanitized bounded result without starting a market fetch or writing Production data. Once a write starts, verification failure invokes one compensating rollback and then stops.
+
 Production ingestion remains disabled by default. Enabling the Production workflow does not authorize writes by itself.
 
 Automatic stage resolution is defined in `automatic-ingestion-rollout.md`. A missing rollout-stage variable remains `disabled`; Phase 6-C does not create or change rollout variables.

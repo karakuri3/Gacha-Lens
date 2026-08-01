@@ -10,6 +10,15 @@ import {
   renderAutomaticMarketRolloutPlanMarkdown,
 } from "../lib/domain/automatic-ingestion-rollout.js";
 import {
+  bindMarketBoundedPlanIdentity,
+  buildMarketBoundedResult,
+  buildMarketBoundedRows,
+  calculateMarketAuditDigest,
+  planMarketBoundedOperations,
+  renderMarketBoundedResultMarkdown,
+  validateMarketBoundedPlanIdentity,
+} from "../lib/domain/market-bounded-write.js";
+import {
   evaluateIngestionCircuitBreaker,
   evaluateIngestionConcurrency,
 } from "../lib/domain/ingestion-execution-safety.js";
@@ -24,8 +33,9 @@ const policyPath = path.resolve(options.policy || "config/automatic-ingestion-ro
 
 if (command === "preflight") await preflight();
 else if (command === "plan") await plan();
+else if (command === "preview") await preview();
 else if (command === "scan") scan();
-else throw new Error("Expected command: preflight, plan, or scan.");
+else throw new Error("Expected command: preflight, plan, preview, or scan.");
 
 async function preflight() {
   const outputDir = outputDirectory();
@@ -70,6 +80,9 @@ async function preflight() {
     schedule: options.schedule,
     event_name: options["event-name"],
     automatic_write_enabled: options["automatic-write-enabled"],
+    bounded_persistence_enabled: options["bounded-persistence-enabled"] ?? process.env.AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED,
+    bounded_approval: options["bounded-approval"] ?? process.env.AUTOMATIC_INGESTION_BOUNDED_APPROVAL,
+    head_sha: options["head-sha"],
     history_rows: historyRows,
     running_rows: runningRows,
     github_rows: githubRows,
@@ -101,7 +114,9 @@ async function preflight() {
     github_metadata: { available: githubRows !== null, completed_shadow_artifacts_checked: githubRows?.length ?? 0 },
     production_snapshot: { available: counts !== null, counts },
     automatic_write_enabled: String(options["automatic-write-enabled"]) === "true",
-    persistence_authorized: false,
+    bounded_persistence_enabled: decision.bounded_persistence_enabled === true,
+    bounded_approval_valid: decision.bounded_approval_valid === true,
+    persistence_authorized: decision.persistence_authorized === true,
     ingestion_started: false,
     cleanup_started: false,
     database_writes: 0,
@@ -113,12 +128,16 @@ async function preflight() {
   writeOutput("stage", decision.stage);
   writeOutput("reason_code", decision.reason_code ?? "none");
   writeOutput("policy_digest", digest);
+  writeOutput("main_sha_verified", mainVerified);
   writeOutput("mode", decision.contract?.mode ?? "blocked");
   writeOutput("limit", decision.contract?.limit ?? 0);
   writeOutput("priority", decision.contract?.priority ?? "none");
   writeOutput("release", decision.contract?.release ?? "none");
   writeOutput("source_scope", decision.contract?.source_scope ?? "none");
   writeOutput("execute_sources", decision.contract?.execute_sources === true);
+  writeOutput("bounded_persistence_enabled", decision.bounded_persistence_enabled === true);
+  writeOutput("bounded_approval_valid", decision.bounded_approval_valid === true);
+  writeOutput("persistence_authorized", decision.persistence_authorized === true);
   writeOutput("report_generated", true);
   console.log(JSON.stringify({ ok: decision.ok, stage: decision.stage, action: decision.action, reason_code: decision.reason_code, database_writes: 0 }));
 }
@@ -130,12 +149,14 @@ async function plan() {
   if (preflightReport.decision !== "allowed" || !["shadow", "bounded-plan"].includes(preflightReport.action)) {
     throw new Error("Rollout preflight did not authorize prediction planning.");
   }
-  const audit = readJson(required(options.audit, "--audit"));
+  const auditPath = required(options.audit, "--audit");
+  const auditBytes = fs.readFileSync(auditPath);
+  const audit = JSON.parse(auditBytes.toString("utf8"));
   const { policy, digest } = loadAutomaticIngestionRolloutPolicy(policyPath);
   if (digest !== preflightReport.policy_digest) throw new Error("Rollout policy changed after preflight.");
   let rolloutPlan;
   try {
-    rolloutPlan = buildAutomaticMarketRolloutPlan({
+    rolloutPlan = bindMarketBoundedPlanIdentity(buildAutomaticMarketRolloutPlan({
       policy,
       policy_digest: digest,
       stage: preflightReport.stage,
@@ -143,7 +164,7 @@ async function plan() {
       source_run_id: audit.workflow?.run_id || process.env.GITHUB_RUN_ID,
       head_sha: preflightReport.workflow?.head_sha,
       throttle: preflightReport.throttle,
-    });
+    }), { audit_digest: calculateMarketAuditDigest(auditBytes) });
   } catch (error) {
     if (error?.plan) {
       writePlanFiles(outputDir, error.plan);
@@ -176,6 +197,71 @@ async function plan() {
   console.log(JSON.stringify({ ok: true, stage: rolloutPlan.stage, auto_eligible_count: rolloutPlan.auto_eligible_count, budget_state: rolloutPlan.budget_checks.state, database_writes: 0 }));
 }
 
+async function preview() {
+  const outputDir = outputDirectory();
+  fs.mkdirSync(outputDir, { recursive: true });
+  const auditPath = required(options.audit, "--audit");
+  const auditBytes = fs.readFileSync(auditPath);
+  const audit = JSON.parse(auditBytes.toString("utf8"));
+  const planValue = readJson(required(options.plan, "--plan"));
+  const preflightReport = readJson(required(options.preflight, "--preflight"));
+  const { digest } = loadAutomaticIngestionRolloutPolicy(policyPath);
+  const workflow = workflowIdentity();
+  validateMarketBoundedPlanIdentity({
+    audit_bytes: auditBytes,
+    audit,
+    plan: planValue,
+    workflow,
+    policy_digest: digest,
+    simulation: options.simulation === "true",
+  });
+  const rows = buildMarketBoundedRows({ audit, plan: planValue, workflow, observed_at: planValue.generated_at });
+  const [existingListings, existingObservations] = await Promise.all([
+    fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)),
+    fetchRowsByIds("market_listing_observations", rows.observationRows.map((row) => row.id)),
+  ]);
+  const operations = planMarketBoundedOperations({
+    listingRows: rows.listingRows,
+    observationRows: rows.observationRows,
+    existingListings,
+    existingObservations,
+  });
+  const after = await productionCounts();
+  assertCountsUnchanged(preflightReport.production_snapshot?.counts, after);
+  const result = buildMarketBoundedResult({
+    workflow,
+    plan: planValue,
+    rows,
+    operations,
+    status: rows.candidates.length ? "blocked" : "no-op",
+    reason_code: rows.candidates.length ? "bounded_persistence_not_enabled" : null,
+    bounded_persistence_enabled: false,
+    bounded_approval_valid: false,
+    database_writes: 0,
+  });
+  const previewValue = {
+    schema_version: 1,
+    workflow,
+    persistence_preview_generated: true,
+    listing_rows_previewed: rows.listingRows.length,
+    observation_rows_previewed: rows.observationRows.length,
+    operations: result.operations,
+    audit_digest_verified: true,
+    plan_digest_verified: true,
+    candidate_set_verified: true,
+    row_identity_verified: true,
+    idempotency_preflight_verified: true,
+    bounded_persistence_started: false,
+    database_writes: 0,
+  };
+  writeJson(path.join(outputDir, "market-bounded-persistence-preview.json"), previewValue);
+  fs.writeFileSync(path.join(outputDir, "market-bounded-persistence-preview.md"), renderPreviewMarkdown(previewValue), "utf8");
+  writeJson(path.join(outputDir, "market-bounded-result.json"), result);
+  fs.writeFileSync(path.join(outputDir, "market-bounded-result.md"), renderMarketBoundedResultMarkdown(result), "utf8");
+  writeOutput("preview_generated", true);
+  writeOutput("database_writes", 0);
+}
+
 function scan() {
   const directories = required(options.directories, "--directories").split(",").map((entry) => path.resolve(entry));
   const files = directories.flatMap(listFiles).map((file) => ({ name: path.basename(file), text: fs.readFileSync(file, "utf8") }));
@@ -196,6 +282,15 @@ async function productionCounts() {
     fetchRowCount("market_listings", { review_required: "eq.true" }),
   ]);
   return Object.fromEntries([...tables, "review_required"].map((key, index) => [key, values[index]]));
+}
+
+async function fetchRowsByIds(table, ids) {
+  if (!ids.length) return [];
+  return fetchRows(table, {
+    select: "*",
+    pageSize: Math.max(2, ids.length),
+    params: { id: `in.(${ids.map((id) => `\"${String(id).replaceAll('"', '\\"')}\"`).join(",")})`, order: "id.asc" },
+  });
 }
 
 async function fetchGithubRolloutRows(stage, task) {
@@ -236,10 +331,10 @@ function assertCountsUnchanged(before, after) {
 function workflowIdentity() {
   return {
     run_id: process.env.GITHUB_RUN_ID || options["run-id"] || "0",
-    run_attempt: process.env.GITHUB_RUN_ATTEMPT || "1",
-    head_sha: String(options["head-sha"] || "").toLowerCase(),
-    event_name: options["event-name"] || "workflow_dispatch",
-    ref: options.ref || "refs/heads/main",
+    run_attempt: process.env.GITHUB_RUN_ATTEMPT || options["run-attempt"] || "1",
+    head_sha: String(process.env.GITHUB_SHA || options["head-sha"] || "").toLowerCase(),
+    event_name: process.env.GITHUB_EVENT_NAME || options["event-name"] || "workflow_dispatch",
+    ref: process.env.GITHUB_REF || options.ref || "refs/heads/main",
   };
 }
 
@@ -257,6 +352,23 @@ function renderPreflightMarkdown(report) {
     `- Throttle: ${report.throttle?.state ?? "unavailable"}`,
     "- Ingestion started: false",
     "- Cleanup started: false",
+    "- Production writes: 0",
+    "",
+  ].join("\n");
+}
+
+function renderPreviewMarkdown(value) {
+  return [
+    "# Market bounded persistence preview",
+    "",
+    `- Listing rows previewed: ${value.listing_rows_previewed}`,
+    `- Observation rows previewed: ${value.observation_rows_previewed}`,
+    `- Audit digest verified: ${value.audit_digest_verified}`,
+    `- Plan digest verified: ${value.plan_digest_verified}`,
+    `- Candidate set verified: ${value.candidate_set_verified}`,
+    `- Row identity verified: ${value.row_identity_verified}`,
+    `- Idempotency preflight verified: ${value.idempotency_preflight_verified}`,
+    "- Bounded persistence started: false",
     "- Production writes: 0",
     "",
   ].join("\n");

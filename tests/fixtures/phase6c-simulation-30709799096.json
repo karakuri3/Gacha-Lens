@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "source_simulation_run_id": "30709799096",
+  "source_simulation_job_id": "91395143652",
+  "source_simulation_artifact_id": "8821493746",
+  "source_simulation_artifact_digest": "sha256:3f3d47f7ea193cd58ac740c2403b53d25044835f5f7f961467e8f39b3541430d",
+  "head_sha": "88497b8ab09454a744c91c71b097252ca4ff0f9f",
+  "policy_digest": "617b37800b0fc931824ee4eba34895f7caf3c1b72455c2dd2dfd8a02c87a0624",
+  "selected_variant_count": 5,
+  "candidate_count": 11,
+  "auto_eligible_count": 2,
+  "excluded_count": 9,
+  "listing_writes_planned": 2,
+  "observation_writes_planned": 2,
+  "review_required_writes_planned": 0,
+  "budget_state": "within_budget",
+  "database_writes": 0,
+  "eligible_candidates": [
+    {
+      "candidate_key": "c1282dd4558639ec",
+      "provider": "rakuten_ichiba",
+      "variant_name": "水やり",
+      "variant_id": "tarts-y901539-水やり",
+      "source_listing_id": "rakuten-auc-toysanta-10381208",
+      "price": 568,
+      "status": "active",
+      "listing_type": "single",
+      "confidence": 0.86,
+      "predicted_listing_operation": "update",
+      "predicted_observation_operation": "insert"
+    },
+    {
+      "candidate_key": "c61bf253eb5fae1c",
+      "provider": "rakuten_ichiba",
+      "variant_name": "エリキテル",
+      "variant_id": "tarts-y098369-エリキテル",
+      "source_listing_id": "rakuten-auc-toysanta-10359807",
+      "price": 458,
+      "status": "active",
+      "listing_type": "single",
+      "confidence": 0.86,
+      "predicted_listing_operation": "insert",
+      "predicted_observation_operation": "insert"
+    }
+  ],
+  "human_approved": false,
+  "canary_authorized": false,
+  "bounded_persistence_authorized": false
+}
