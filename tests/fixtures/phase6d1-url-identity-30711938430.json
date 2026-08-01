@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "source_run_id": "30711938430",
+  "source_artifact_id": "8822150112",
+  "source_artifact_digest": "sha256:e7224fa73d1c54bb7a219c408bd0739feb4cb3d3b6fd74a30861d09a10d70cdc",
+  "head_sha": "224ae818769abf45585d7a8ee13758a94b820ae9",
+  "failed_stage": "persistence_preview",
+  "reason_code": "bounded_candidate_identity_mismatch",
+  "database_writes": 0,
+  "selected_variant_count": 5,
+  "candidate_count": 11,
+  "eligible_count": 2,
+  "excluded_count": 9,
+  "eligible_candidate_keys": [
+    "c1282dd4558639ec",
+    "c61bf253eb5fae1c"
+  ],
+  "expected_operations_after_fix": {
+    "listing_updates": 1,
+    "listing_inserts": 1,
+    "observation_inserts": 2,
+    "database_writes": 0
+  },
+  "failed_candidate": {
+    "candidate_key": "c1282dd4558639ec",
+    "provider": "rakuten_ichiba",
+    "listing_id": "rakuten-auc-toysanta-10381208",
+    "canonical_public_url": "https://item.rakuten.co.jp/auc-toysanta/g-5l3l0018ik-001",
+    "conflict_field": "public_url",
+    "existing_representation": "tracking_query_and_trailing_slash",
+    "fresh_representation": "canonical_without_query"
+  },
+  "human_approved": false,
+  "production_write_authorized": false
+}
