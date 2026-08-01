@@ -23,6 +23,7 @@ import {
 } from "../lib/domain/market-approved-query-replay.js";
 import {
   MARKET_SOURCE_SCOPES,
+  assertMarketFetchComplete,
   describeMarketSourceConfiguration,
   fetchMarketListingsRaw,
   normalizeMarketSourceScope,
@@ -67,7 +68,11 @@ async function runDryMode(options) {
 
   if (options.executeSources) {
     if (plan.selected.length > 5) throw new Error("External dry-run is limited to 5 variants.");
-    const fetched = await fetchMarketListingsRaw({ catalog: data.catalog, queries: plan.queries, sourceScope: options.sourceScope });
+    const fetched = assertMarketFetchComplete(await fetchMarketListingsRaw({
+      catalog: data.catalog,
+      queries: plan.queries,
+      sourceScope: options.sourceScope,
+    }));
     const assessed = assessFetchedRecords(fetched, plan, data.catalog);
     sourceResult = assessed.summary;
     auditRecords = assessed.records;
@@ -176,11 +181,11 @@ async function runCanaryWriteMode(options) {
     const plan = buildApprovedCanaryQueryPlan(approved, catalog, request.candidateKeys);
     queryReplay = plan.queryReplay;
     stage = "external_fetch";
-    const fetched = await fetchMarketListingsRaw({
+    const fetched = assertMarketFetchComplete(await fetchMarketListingsRaw({
       catalog,
       queries: plan.queries,
       sourceScope: options.sourceScope,
-    });
+    }));
     stage = "candidate_assessment";
     const assessed = assessFetchedRecords(fetched, plan, catalog);
     const currentAudit = buildSanitizedMarketCandidateAudit({
@@ -348,6 +353,13 @@ function sourceSummary(fetched) {
     planner_api_requests_attempted: fetched.plannerApiRequestsAttempted ?? 0,
     rakuten_requests_attempted: fetched.rakutenRequestsAttempted ?? 0,
     yahoo_requests_attempted: fetched.yahooRequestsAttempted ?? 0,
+    requests_retried: fetched.requests_retried ?? 0,
+    retry_attempts_total: fetched.retry_attempts_total ?? 0,
+    transient_failures_recovered: fetched.transient_failures_recovered ?? 0,
+    requests_timed_out: fetched.requests_timed_out ?? 0,
+    requests_rate_limited: fetched.requests_rate_limited ?? 0,
+    requests_permanently_failed: fetched.requests_permanently_failed ?? 0,
+    duplicate_queries_skipped: fetched.duplicate_queries_skipped ?? 0,
     write_ready: Boolean(fetched.writeReady),
     blocking_reason: fetched.blockingReason ?? null,
   };
