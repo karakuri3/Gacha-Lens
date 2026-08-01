@@ -429,6 +429,101 @@
           "commit_sha": "8b2f0c95e44f40f3b3479a2a44f2e83752a2192e",
           "expired": false
         }
+      },
+      {
+        "run_id": "30695160539",
+        "head_sha": "38dfd4cbdac32a6ca20625af6b99e51fcd610794",
+        "mode": "dry-run",
+        "source_scope": "planner-apis",
+        "report_complete": true,
+        "truncated_count": 0,
+        "selected_variant_count": 5,
+        "query_count": 5,
+        "candidate_count": 11,
+        "accepted_count": 2,
+        "review_required_count": 9,
+        "no_result_variant_count": 2,
+        "database_writes": {
+          "listings": 0,
+          "observations": 0,
+          "ingestion_runs": 0
+        },
+        "candidates": [
+          {
+            "candidate_key": "0d255efb944230e5",
+            "provider": "rakuten_ichiba",
+            "accepted": false,
+            "review_required": true
+          },
+          {
+            "candidate_key": "25f5906df352c016",
+            "provider": "rakuten_ichiba",
+            "accepted": false,
+            "review_required": true
+          },
+          {
+            "candidate_key": "5e08f193af49dbf9",
+            "provider": "yahoo_shopping",
+            "accepted": false,
+            "review_required": true
+          },
+          {
+            "candidate_key": "6d1aaac520172ae5",
+            "provider": "rakuten_ichiba",
+            "accepted": false,
+            "review_required": true
+          },
+          {
+            "candidate_key": "739e69fd68b39a6f",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "939a0ae56d23e979",
+            "provider": "yahoo_shopping",
+            "accepted": false,
+            "review_required": true
+          },
+          {
+            "candidate_key": "c0a06ea538d0c6a6",
+            "provider": "yahoo_shopping",
+            "accepted": false,
+            "review_required": true
+          },
+          {
+            "candidate_key": "d8f6b383d1c838c5",
+            "provider": "rakuten_ichiba",
+            "accepted": true,
+            "review_required": false
+          },
+          {
+            "candidate_key": "e724818ddc2066e4",
+            "provider": "yahoo_shopping",
+            "accepted": false,
+            "review_required": true
+          },
+          {
+            "candidate_key": "efef962964b26fbf",
+            "provider": "yahoo_shopping",
+            "accepted": false,
+            "review_required": true
+          },
+          {
+            "candidate_key": "ff5baa7deca4ff32",
+            "provider": "rakuten_ichiba",
+            "accepted": false,
+            "review_required": true
+          }
+        ],
+        "provenance": {
+          "type": "github_actions_artifact",
+          "artifact_id": "8816998490",
+          "artifact_name": "market-candidate-audit-30695160539",
+          "digest": "sha256:7a7d2d90bc46473d5b2a866a1bb7cc0d7930bb6a06e2f92170d3dd7bb28f2d8d",
+          "commit_sha": "38dfd4cbdac32a6ca20625af6b99e51fcd610794",
+          "expired": false
+        }
       }
     ],
     "canaries": [
@@ -755,6 +850,51 @@
           "artifact_name": "market-canary-result-30651440275",
           "digest": "sha256:e118734c0b46f4a4ef3b82aa94394f3e5b7585c59ea2a5ddbdacb59e047ddc58",
           "commit_sha": "8b2f0c95e44f40f3b3479a2a44f2e83752a2192e",
+          "expired": false
+        }
+      },
+      {
+        "run_id": "30695715591",
+        "source_audit_run_id": "30695160539",
+        "head_sha": "38dfd4cbdac32a6ca20625af6b99e51fcd610794",
+        "outcome": "success",
+        "conclusion": "success",
+        "failed_stage": "",
+        "error_code": "",
+        "verification": true,
+        "listing_writes": 2,
+        "observation_writes": 2,
+        "consumption_markers": 2,
+        "candidate_keys": [
+          "739e69fd68b39a6f",
+          "d8f6b383d1c838c5"
+        ],
+        "providers": [
+          {
+            "provider": "rakuten_ichiba",
+            "candidate_count": 2
+          }
+        ],
+        "production_delta": {
+          "market_listings": 0,
+          "market_listing_observations": 2,
+          "import_issues": 0,
+          "ingestion_runs": 0,
+          "review_required": 0
+        },
+        "rollback": {
+          "attempted": false,
+          "verified": false
+        },
+        "workflow_final_state": "disabled_manually",
+        "schedule_run_count": 0,
+        "rerun_count": 0,
+        "provenance": {
+          "type": "github_actions_artifact",
+          "artifact_id": "8817178091",
+          "artifact_name": "market-canary-result-30695715591",
+          "digest": "sha256:dca90df3a0d36e7de71015b3a3f07a7002b73bc0419d88d8b53ef7acea54ed80",
+          "commit_sha": "38dfd4cbdac32a6ca20625af6b99e51fcd610794",
           "expired": false
         }
       }
