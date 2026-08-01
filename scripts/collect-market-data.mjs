@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { applyMarketCandidateSafety, summarizeFetchedMarketCandidates } from "../lib/domain/market-match-safety.js";
-import { fetchMarketListingsRaw } from "../lib/fetchers/market-fetcher.js";
+import { assertMarketFetchComplete, fetchMarketListingsRaw } from "../lib/fetchers/market-fetcher.js";
 import { planMarketSearchQueries } from "../lib/fetchers/market-query-planner.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { loadMarketCoverageData } from "./market-coverage-data.mjs";
@@ -12,11 +12,11 @@ const outputPath = getGeneratedDataPath("market-raw.json");
 const startedAt = Date.now();
 const coverageData = await loadMarketCoverageData();
 const plan = planMarketSearchQueries(coverageData.catalog, coverageData.coverageRows, plannerOptions());
-const result = await fetchMarketListingsRaw({
+const result = assertMarketFetchComplete(await fetchMarketListingsRaw({
   catalog: coverageData.catalog,
   queries: plan.queries,
   sourceScope: process.env.MARKET_SOURCE_SCOPE ?? "all",
-});
+}));
 const safetyResult = applyMarketCandidateSafety({
   records: result.records,
   queryPlan: plan.queries,
@@ -48,6 +48,13 @@ result.runSummary = {
   planner_api_requests_attempted: result.plannerApiRequestsAttempted ?? 0,
   rakuten_requests_attempted: result.rakutenRequestsAttempted ?? 0,
   yahoo_requests_attempted: result.yahooRequestsAttempted ?? 0,
+  requests_retried: result.requests_retried ?? 0,
+  retry_attempts_total: result.retry_attempts_total ?? 0,
+  transient_failures_recovered: result.transient_failures_recovered ?? 0,
+  requests_timed_out: result.requests_timed_out ?? 0,
+  requests_rate_limited: result.requests_rate_limited ?? 0,
+  requests_permanently_failed: result.requests_permanently_failed ?? 0,
+  duplicate_queries_skipped: result.duplicate_queries_skipped ?? 0,
   write_ready: Boolean(result.writeReady),
   blocking_reason: result.blockingReason ?? null,
   listing_upserts: result.records.length,

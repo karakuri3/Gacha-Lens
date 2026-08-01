@@ -470,12 +470,15 @@ test("manual workflow defaults to dry-run without changing schedule frequency", 
   assert.match(workflow, /"17,47 \* \* \* \*"/);
 });
 
-test("market APIs use bounded request timeouts and no retry loop", async () => {
+test("market APIs use the shared bounded retry and timeout policy", async () => {
   const rakuten = await readFile(new URL("../lib/fetchers/rakuten-market-fetcher.js", import.meta.url), "utf8");
   const yahoo = await readFile(new URL("../lib/fetchers/yahoo-shopping-fetcher.js", import.meta.url), "utf8");
-  assert.match(rakuten, /AbortSignal\.timeout/);
-  assert.match(yahoo, /AbortSignal\.timeout/);
-  assert.doesNotMatch(`${rakuten}\n${yahoo}`, /retry\s*\(|for\s*\([^)]*attempt/i);
+  const retry = await readFile(new URL("../lib/fetchers/retryable-json-request.js", import.meta.url), "utf8");
+  assert.match(rakuten, /retryableJsonRequest/);
+  assert.match(yahoo, /retryableJsonRequest/);
+  assert.match(retry, /AbortSignal\.timeout/);
+  assert.match(retry, /clampInteger\(options\.maxAttempts, 1, 3/);
+  assert.match(retry, /\[408, 425, 429, 500, 502, 503, 504\]/);
 });
 
 function assessedPersistenceFixture(title, options = {}) {
