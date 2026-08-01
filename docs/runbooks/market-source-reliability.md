@@ -1,5 +1,26 @@
 # Market source reliability
 
+## Audit artifact diagnostics
+
+Schema version 1 remains unchanged. New manual dry-run artifacts optionally include
+`request_diagnostics` with aggregate, provider, query, and per-attempt diagnostics.
+Artifacts created before Phase 6-A.1 remain valid when this field is absent.
+
+Only provider identity, a sanitized search query, query index, HTTP status,
+retry/timeout/rate-limit state, duration, and allowlisted failure categories are
+stored. API URLs, endpoint query strings, credentials, headers, cookies, seller
+data, environment values, and raw response bodies are never stored.
+
+The aggregate is derived from provider query diagnostics and validated again when
+an artifact is created or read. A no-retry run with zero retry counters is normal.
+Reviewers can validate the JSON without job logs by comparing provider totals with
+the aggregate and inspecting each query's attempts, delays, and final state.
+
+Run `30697724263` demonstrated the previous gap: ten requests succeeded and the
+aggregate appeared in job logs, but query diagnostics were absent from its
+artifact. Phase 6-A.1 closes that verification gap without authorizing the
+historical run for a canary write.
+
 楽天市場APIとYahoo!ショッピングAPIは、同じ境界の再試行・重複排除・診断を使用します。公開商品レコード、candidate key、分類器、タイトル安全判定は変更しません。
 
 ## Request policy

@@ -1,0 +1,24 @@
+{
+  "source_run_id": "30697724263",
+  "source_job_id": "91363325924",
+  "source_artifact_id": "8817799743",
+  "expected_aggregate": {
+    "requests_attempted": 10,
+    "requests_succeeded": 10,
+    "requests_failed": 0,
+    "requests_retried": 0,
+    "retry_attempts_total": 0,
+    "transient_failures_recovered": 0,
+    "requests_timed_out": 0,
+    "requests_rate_limited": 0,
+    "requests_permanently_failed": 0,
+    "duplicate_queries_skipped": 0
+  },
+  "expected_providers": {
+    "rakuten_ichiba": { "requests_attempted": 5, "requests_succeeded": 5, "requests_failed": 0 },
+    "yahoo_shopping": { "requests_attempted": 5, "requests_succeeded": 5, "requests_failed": 0 }
+  },
+  "audit_canary_authorized": false,
+  "human_review_for_canary_completed": false,
+  "evidence_manifest_registered": false
+}

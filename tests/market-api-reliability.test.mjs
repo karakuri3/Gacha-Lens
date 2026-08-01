@@ -178,6 +178,8 @@ test("Rakuten retries a transient response and preserves its normalized record f
   assert.equal(result.records[0].price, 1280);
   assert.equal(result.feedResults[0].attempt_count, 2);
   assert.equal(result.feedResults[0].recovered_after_retry, true);
+  assert.equal(result.feedResults[0].query, query.query);
+  assert.equal(result.feedResults[0].query_index, 0);
 });
 
 test("Yahoo retries rate limits, dedupes before limit, and preserves unique queries", async () => {
@@ -199,6 +201,8 @@ test("Yahoo retries rate limits, dedupes before limit, and preserves unique quer
   assert.equal(result.duplicateQueriesSkipped, 1);
   assert.deepEqual(calledQueries, [query.query, query.query, "Example Series Mage ガチャ"]);
   assert.equal(result.feedResults[0].rate_limited, true);
+  assert.equal(result.feedResults[0].query, query.query);
+  assert.equal(result.feedResults[0].query_index, 0);
   assert.equal(result.records[0].source, "yahoo_shopping");
 });
 

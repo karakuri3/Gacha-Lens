@@ -1,5 +1,18 @@
 # Manual market audit workflow
 
+## Request diagnostics review
+
+Schema v1 artifacts may optionally contain `request_diagnostics`. The field is
+absent from older artifacts for backward compatibility. New Phase 6-A.1 artifacts
+persist sanitized aggregate, provider, query, and attempt diagnostics so retry
+behavior can be reviewed without GitHub job logs.
+
+Confirm aggregate totals equal provider/query totals. Every query must have one to
+three attempts, `retry_count = attempt_count - 1`, and one retry delay per retry.
+The artifact must not contain API URLs, credentials, headers, cookies, seller
+details, environment values, or raw responses. A no-retry run with zero retry
+counters is valid and expected when every request succeeds initially.
+
 `Gacha Market Manual Audit` isolates human-approved market dry-runs from the scheduled Production ingestion workflow.
 
 ## Safety contract
