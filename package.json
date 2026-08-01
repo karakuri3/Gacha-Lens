@@ -33,6 +33,7 @@
     "test:market-evidence": "node --test tests/market-evidence.test.mjs",
     "test:market-observation-history": "node --test tests/market-observation-history.test.mjs",
     "test:manual-market-audit-workflow": "node --test tests/manual-market-audit-workflow.test.mjs",
+    "test:ingestion-safety": "node --test tests/ingestion-execution-safety.test.mjs tests/ingestion-run-report.test.mjs tests/ingestion-workflow-safety.test.mjs",
     "test:catalog-discovery": "node --test tests/catalog-discovery.test.mjs",
     "test:market-coverage": "node --test tests/market-coverage.test.mjs",
     "market:coverage": "node scripts/market-coverage-report.mjs",
