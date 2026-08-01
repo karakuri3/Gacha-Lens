@@ -17,6 +17,7 @@ import {
   validateCanaryRequest,
 } from "../lib/domain/market-canary-write.js";
 import { applyMarketCandidateSafety, summarizeFetchedMarketCandidates } from "../lib/domain/market-match-safety.js";
+import { buildSanitizedMarketRequestDiagnostics } from "../lib/domain/market-request-diagnostics.js";
 import {
   buildApprovedCanaryQueryPlan,
   sanitizeCanaryQueryReplay,
@@ -317,6 +318,17 @@ function writeGitHubOutputs(auditOutput, summary) {
   const values = {
     ...auditOutput,
     database_writes: Number(summary.listing_upserts || 0) + Number(summary.observations_created || 0) + Number(summary.ingestion_runs_written || 0),
+    requests_attempted: summary.request_diagnostics?.aggregate?.requests_attempted ?? 0,
+    requests_succeeded: summary.request_diagnostics?.aggregate?.requests_succeeded ?? 0,
+    requests_failed: summary.request_diagnostics?.aggregate?.requests_failed ?? 0,
+    requests_retried: summary.request_diagnostics?.aggregate?.requests_retried ?? 0,
+    retry_attempts_total: summary.request_diagnostics?.aggregate?.retry_attempts_total ?? 0,
+    transient_failures_recovered: summary.request_diagnostics?.aggregate?.transient_failures_recovered ?? 0,
+    requests_timed_out: summary.request_diagnostics?.aggregate?.requests_timed_out ?? 0,
+    requests_rate_limited: summary.request_diagnostics?.aggregate?.requests_rate_limited ?? 0,
+    requests_permanently_failed: summary.request_diagnostics?.aggregate?.requests_permanently_failed ?? 0,
+    duplicate_queries_skipped: summary.request_diagnostics?.aggregate?.duplicate_queries_skipped ?? 0,
+    diagnostic_query_count: summary.request_diagnostics?.queries?.length ?? 0,
   };
   fs.appendFileSync(process.env.GITHUB_OUTPUT, `${Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n")}\n`, "utf8");
 }
@@ -360,6 +372,10 @@ function sourceSummary(fetched) {
     requests_rate_limited: fetched.requests_rate_limited ?? 0,
     requests_permanently_failed: fetched.requests_permanently_failed ?? 0,
     duplicate_queries_skipped: fetched.duplicate_queries_skipped ?? 0,
+    request_diagnostics: buildSanitizedMarketRequestDiagnostics(
+      fetched.feedResults ?? [],
+      fetched.duplicateQueriesSkipped ?? fetched.duplicate_queries_skipped ?? 0,
+    ),
     write_ready: Boolean(fetched.writeReady),
     blocking_reason: fetched.blockingReason ?? null,
   };

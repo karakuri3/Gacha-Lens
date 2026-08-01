@@ -24,7 +24,7 @@ test("manual audit workflow has only workflow_dispatch trigger", () => {
 });
 
 test("manual audit workflow exposes only a bounded limit input", () => {
-  const inputBlock = workflow.match(/inputs:([\s\S]*?)\n\njobs:/)?.[1] ?? "";
+  const inputBlock = workflow.match(/inputs:([\s\S]*?)\r?\n\r?\njobs:/)?.[1] ?? "";
   assert.match(inputBlock, /^\s+limit:/m);
   assert.doesNotMatch(inputBlock, /^\s+(mode|task|source_scope|execute_sources|canary_audit_run_id|canary_candidate_keys):/m);
   for (const value of ["1", "2", "3", "4", "5"]) assert.match(inputBlock, new RegExp(`- "${value}"`));
