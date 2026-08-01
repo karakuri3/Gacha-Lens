@@ -26,6 +26,10 @@ Current RLS permits the required catalog reads through `service_role`, so the wo
 
 Canary writes remain a separate workflow operation and require a separate approval naming the exact source audit Run and candidate keys.
 
+## Environment loading
+
+The workflow receives its configuration through GitHub Actions Secrets and does not require a checked-out `.env.local` file. Manual audit scripts load `.env.local` only when it exists, preserve existing `process.env` values when it does not, and fail closed for read or parse failures other than a missing file.
+
 ## Permanently excluded evidence
 
 Run `30688709185` is an orphaned queued Run with zero jobs and no artifact:
@@ -45,6 +49,16 @@ The following historical audits must not be used as canary sources:
 30572554031
 30655163177
 30688709185
+30694540362
+```
+
+Run `30694540362` failed before the market dry-run because the GitHub runner did not contain `.env.local`. It produced no artifact or candidates and is permanently excluded:
+
+```text
+audit_source_authorized: false
+canary_source_authorized: false
+permanently_excluded_from_rollout: true
+reason: failed before market dry-run and produced no artifact
 ```
 
 Do not operate on the stuck Run from this workflow. GitHub Support follow-up remains a separate, deferred task.

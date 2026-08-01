@@ -6,9 +6,10 @@ import {
   validateManualMarketAuditReport,
 } from "../lib/domain/manual-market-audit-safety.js";
 import { loadMarketManualCanarySelectionProfile } from "../lib/domain/market-manual-canary-selection.js";
+import { loadOptionalEnvFile } from "./load-optional-env.mjs";
 import { fetchRowCount } from "./supabase-rest.mjs";
 
-process.loadEnvFile?.(".env.local");
+loadOptionalEnvFile();
 
 const command = process.argv[2];
 const options = parseOptions(process.argv.slice(3));

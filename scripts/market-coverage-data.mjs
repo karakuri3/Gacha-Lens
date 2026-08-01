@@ -1,5 +1,6 @@
 import { buildMarketCoverageRows, summarizeMarketCoverage } from "../lib/domain/market-coverage.js";
 import { loadOfficialCatalog } from "./load-official-catalog.mjs";
+import { loadOptionalEnvFile } from "./load-optional-env.mjs";
 import { fetchRows } from "./supabase-rest.mjs";
 
 export async function loadMarketCoverageData(options = {}) {
@@ -87,7 +88,5 @@ function round(value, digits) {
 }
 
 function loadLocalEnv() {
-  try {
-    process.loadEnvFile(".env.local");
-  } catch {}
+  loadOptionalEnvFile();
 }

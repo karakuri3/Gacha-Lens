@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   assertManualMarketAuditCountsUnchanged,
+  FAILED_MANUAL_MARKET_AUDIT_RUN,
   findManualMarketAuditSecretLeaks,
   MANUAL_MARKET_AUDIT_EXCLUDED_RUN_IDS,
   STUCK_MARKET_AUDIT_RUN,
@@ -87,8 +88,68 @@ test("stuck Run is permanently excluded from audit and canary sources", () => {
 
 test("all superseded audit Runs remain excluded", () => {
   assert.deepEqual(MANUAL_MARKET_AUDIT_EXCLUDED_RUN_IDS, [
-    "30532684353", "30565886734", "30572554031", "30655163177", "30688709185",
+    "30532684353", "30565886734", "30572554031", "30655163177", "30688709185", "30694540362",
   ]);
+});
+
+test("failed pre-audit Run is permanently excluded from audit and canary sources", () => {
+  assert.equal(FAILED_MANUAL_MARKET_AUDIT_RUN.audit_source_authorized, false);
+  assert.equal(FAILED_MANUAL_MARKET_AUDIT_RUN.canary_source_authorized, false);
+  assert.equal(FAILED_MANUAL_MARKET_AUDIT_RUN.permanently_excluded_from_rollout, true);
+  assert.match(FAILED_MANUAL_MARKET_AUDIT_RUN.reason, /failed before market dry-run and produced no artifact/);
+  assert.ok(MANUAL_MARKET_AUDIT_EXCLUDED_RUN_IDS.includes("30694540362"));
+});
+
+test("optional env loader tolerates a missing file and preserves process env", () => {
+  const result = runEnvLoaderCase(`
+    process.env.PHASE_5_H_EXISTING = "preserved";
+    const loaded = loadOptionalEnvFile("missing.env");
+    console.log(JSON.stringify({ loaded, value: process.env.PHASE_5_H_EXISTING }));
+  `);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout.trim()), { loaded: false, value: "preserved" });
+});
+
+test("optional env loader reads an existing file", () => {
+  const result = runEnvLoaderCase(`
+    process.env.PHASE_5_H_PRESERVED = "from-process";
+    fs.writeFileSync("present.env", "PHASE_5_H_LOADED=from-file\\nPHASE_5_H_PRESERVED=from-file\\n", "utf8");
+    const loaded = loadOptionalEnvFile("present.env");
+    console.log(JSON.stringify({ loaded, value: process.env.PHASE_5_H_LOADED, preserved: process.env.PHASE_5_H_PRESERVED }));
+  `);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout.trim()), { loaded: true, value: "from-file", preserved: "from-process" });
+});
+
+test("optional env loader only suppresses ENOENT", () => {
+  const enoent = runEnvLoaderCase(`
+    fs.writeFileSync("race.env", "VALUE=1\\n", "utf8");
+    process.loadEnvFile = () => { const error = new Error("gone"); error.code = "ENOENT"; throw error; };
+    console.log(JSON.stringify({ loaded: loadOptionalEnvFile("race.env") }));
+  `);
+  assert.equal(enoent.status, 0, enoent.stderr);
+  assert.deepEqual(JSON.parse(enoent.stdout.trim()), { loaded: false });
+
+  const denied = runEnvLoaderCase(`
+    fs.writeFileSync("denied.env", "VALUE=1\\n", "utf8");
+    process.loadEnvFile = () => { const error = new Error("denied"); error.code = "EACCES"; throw error; };
+    loadOptionalEnvFile("denied.env");
+  `);
+  assert.notEqual(denied.status, 0);
+  assert.match(denied.stderr, /denied/);
+});
+
+test("manual audit guard starts without .env.local on a runner-like cwd", () => {
+  const temporaryDirectory = fs.mkdtempSync(path.join(process.env.TEMP || process.env.TMP || root, "gacha-manual-audit-"));
+  const guardPath = path.join(root, "scripts", "manual-market-audit-guard.mjs");
+  const result = spawnSync(process.execPath, [guardPath, "snapshot", `--output=${path.join(temporaryDirectory, "counts.json")}`], {
+    cwd: temporaryDirectory,
+    env: { ...process.env, NEXT_PUBLIC_SUPABASE_URL: "", SUPABASE_SERVICE_ROLE_KEY: "" },
+    encoding: "utf8",
+  });
+  assert.notEqual(result.status, 0);
+  assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, /ENOENT.*\.env\.local|open ['"]\.env\.local/i);
+  assert.match(`${result.stdout}\n${result.stderr}`, /NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required/i);
 });
 
 test("valid manual audit report passes", () => {
@@ -206,4 +267,18 @@ function validReport() {
 
 function counts() {
   return { market_listings: 856, market_listing_observations: 898, import_issues: 544, ingestion_runs: 207, review_required: 263 };
+}
+
+function runEnvLoaderCase(source) {
+  const loaderUrl = new URL("../scripts/load-optional-env.mjs", import.meta.url).href;
+  const temporaryDirectory = fs.mkdtempSync(path.join(process.env.TEMP || process.env.TMP || root, "gacha-env-loader-"));
+  return spawnSync(process.execPath, ["--input-type=module", "--eval", `
+    import fs from "node:fs";
+    import { loadOptionalEnvFile } from ${JSON.stringify(loaderUrl)};
+    ${source}
+  `], {
+    cwd: temporaryDirectory,
+    env: { ...process.env },
+    encoding: "utf8",
+  });
 }
