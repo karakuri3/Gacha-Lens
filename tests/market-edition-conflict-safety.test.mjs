@@ -562,3 +562,424 @@ for (const [index, suffix] of [
     assert.equal(explicitLabelMatchesVariant(`ピグレット${suffix}`, "ピグレット"), true);
   });
 }
+
+const STITCH_SERIES = {
+  id: "stitch-series",
+  slug: "stitch-series",
+  name: "肩ズンFig. リロ&スティッチ Part2",
+};
+const JUMBA = {
+  id: "jumba",
+  slug: "jumba",
+  series_id: STITCH_SERIES.id,
+  name: "ジャンバ",
+  variant_type: "normal",
+};
+const LILO = {
+  id: "lilo",
+  slug: "lilo",
+  series_id: STITCH_SERIES.id,
+  name: "リロ",
+  variant_type: "normal",
+};
+const STITCH = {
+  id: "stitch",
+  slug: "stitch",
+  series_id: STITCH_SERIES.id,
+  name: "スティッチ",
+  variant_type: "normal",
+};
+
+for (const [index, label] of [
+  "ネコポス不可",
+  " ネコポス 不可 ",
+  "ネコポス　　不可",
+  "ゆうパケット不可",
+  "メール便不可",
+  "宅配便不可",
+].entries()) {
+  test(`${84 + index} known unavailable shipping label ${label.trim()} is ignored`, () => {
+    const analysis = analyzeExplicitMarketLabels(
+      `対象シリーズ [1.勇者]【${label}】`,
+      [{ id: "hero", name: "勇者" }],
+      "hero",
+    );
+    assert.equal(analysis.explicitLabelPresent, true);
+    assert.equal(analysis.explicitLabelTargetMatch, true);
+    assert.equal(analysis.explicitLabelUnresolved, false);
+  });
+}
+
+for (const [index, label] of ["不可", "特別仕様"].entries()) {
+  test(`${90 + index} unknown label ${label} remains unresolved`, () => {
+    const analysis = analyzeExplicitMarketLabels(
+      `対象シリーズ [1.勇者]【${label}】`,
+      [{ id: "hero", name: "勇者" }],
+      "hero",
+    );
+    assert.equal(analysis.explicitLabelUnresolved, true);
+  });
+}
+
+test("92 Production おふろ candidate with unavailable shipping label is accepted", () => {
+  const series = { id: "george", slug: "george", name: "おさるのジョージ ジョージの一日フィギュア" };
+  const target = { id: "bath", slug: "bath", series_id: series.id, name: "おふろ", variant_type: "normal" };
+  const result = assess("おさるのジョージ ジョージの一日フィギュア [3.おふろ]【 ネコポス不可 】【C】", {
+    series,
+    target,
+    siblings: [],
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.reviewRequired, false);
+  assert.equal(result.reason, "variant_and_parent_evidence_confirmed");
+  assert.equal(result.listingType, "single");
+  assert.equal(result.confidence, 0.86);
+  assert.equal(result.auditChecks.explicitLabelTargetMatch, true);
+  assert.equal(result.auditChecks.explicitLabelUnresolved, false);
+});
+
+test("93 Production ジャンバ candidate ignores sibling names contained by the parent series", () => {
+  const result = assess("肩ズンFig. リロ&スティッチ Part2 [1.ジャンバ]【 ネコポス不可 】【C】", {
+    series: STITCH_SERIES,
+    target: JUMBA,
+    siblings: [LILO, STITCH],
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.reviewRequired, false);
+  assert.equal(result.reason, "variant_and_parent_evidence_confirmed");
+  assert.equal(result.listingType, "single");
+  assert.equal(result.confidence, 0.86);
+  assert.deepEqual(result.classification.details.matched_variant_ids, [JUMBA.id]);
+  assert.equal(result.auditChecks.multipleVariantCandidates, false);
+  assert.equal(result.auditChecks.explicitLabelTargetMatch, true);
+  assert.equal(result.auditChecks.explicitLabelOtherVariantMatch, false);
+  assert.equal(result.auditChecks.explicitLabelUnresolved, false);
+});
+
+test("94 sibling text outside the exact parent series remains a conflict", () => {
+  const result = assess("肩ズンFig. リロ&スティッチ Part2 リロ [1.ジャンバ]", {
+    series: STITCH_SERIES,
+    target: JUMBA,
+    siblings: [LILO, STITCH],
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.reason, "multiple_variant_candidates");
+});
+
+test("95 sibling text inside and outside the parent keeps the outside match", () => {
+  const result = assess("肩ズンFig. リロ&スティッチ Part2 [1.ジャンバ] / リロ", {
+    series: STITCH_SERIES,
+    target: JUMBA,
+    siblings: [LILO, STITCH],
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.reason, "multiple_variant_candidates");
+  assert.deepEqual(new Set(result.classification.details.matched_variant_ids), new Set([JUMBA.id, LILO.id]));
+});
+
+test("96 an explicit sibling label remains a conflict", () => {
+  const result = assess("肩ズンFig. リロ&スティッチ Part2 [1.ジャンバ]【リロ】", {
+    series: STITCH_SERIES,
+    target: JUMBA,
+    siblings: [LILO, STITCH],
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.reason, "explicit_variant_label_conflict");
+});
+
+test("97 a true multi-variant listing remains review-required", () => {
+  const result = assess("肩ズンFig. リロ&スティッチ Part2 ジャンバ / リロ", {
+    series: STITCH_SERIES,
+    target: JUMBA,
+    siblings: [LILO, STITCH],
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.reviewRequired, true);
+  assert.equal(result.reason, "multiple_variant_candidates");
+});
+
+test("98 a true set listing remains not_single_item", () => {
+  const result = assess("肩ズンFig. リロ&スティッチ Part2 ジャンバ リロ 2種セット", {
+    series: STITCH_SERIES,
+    target: JUMBA,
+    siblings: [LILO, STITCH],
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.reason, "not_single_item");
+});
+
+test("99 unavailable shipping labels are compared after NFKC normalization", () => {
+  const analysis = analyzeExplicitMarketLabels(
+    "対象シリーズ [1.勇者]【 ﾈｺﾎﾟｽ 不可 】",
+    [{ id: "hero", name: "勇者" }],
+    "hero",
+  );
+  assert.equal(analysis.explicitLabelTargetMatch, true);
+  assert.equal(analysis.explicitLabelUnresolved, false);
+});
+
+test("100 Production PICO PARK デザインA candidate remains accepted", () => {
+  const series = { id: "pico-park", slug: "pico-park", name: "PICO PARK キーボードチャーム" };
+  const target = { id: "design-a", slug: "design-a", series_id: series.id, name: "デザインA", variant_type: "normal" };
+  const result = assess("PICO PARK キーボードチャーム [1.デザインA]【ネコポス配送対応】【C】", {
+    series,
+    target,
+    siblings: [],
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.reason, "variant_and_parent_evidence_confirmed");
+  assert.equal(result.confidence, 0.86);
+});
+
+const ARTIFACT_POOH_SERIES = {
+  id: "gashapon-4549660608370000",
+  slug: "gashapon-4549660608370000",
+  name: "ならぶんです。 Winnie the Pooh",
+  franchise: "Winnie the Pooh",
+};
+const ARTIFACT_POOH_VARIANTS = [
+  "くまのプーさん",
+  "ティガー",
+  "イーヨー",
+  "ルー",
+  "ピグレット",
+].map((name) => ({
+  id: `${ARTIFACT_POOH_SERIES.id}-${name}`,
+  slug: `${ARTIFACT_POOH_SERIES.id}-${name}`,
+  series_id: ARTIFACT_POOH_SERIES.id,
+  name,
+  variant_type: "normal",
+}));
+const ARTIFACT_STITCH_SERIES = {
+  id: "tarts-y901362",
+  slug: "tarts-y901362",
+  name: "肩ズンFig. リロ&スティッチ Part2",
+};
+const ARTIFACT_STITCH_VARIANTS = [
+  ["tarts-y901362-ジャンバ", "ジャンバ"],
+  ["tarts-y901362-プリークリー", "プリークリー"],
+  ["tarts-y901362-リロ", "リロ"],
+  ["tarts-y901362-ディズニー-スティッチ", "ディズニー スティッチ"],
+  ["tarts-y901362-スクランプ", "スクランプ"],
+].map(([id, name]) => ({
+  id,
+  slug: id,
+  series_id: ARTIFACT_STITCH_SERIES.id,
+  name,
+  variant_type: "normal",
+}));
+const ARTIFACT_GEORGE_SERIES = {
+  id: "tarts-y901539",
+  slug: "tarts-y901539",
+  name: "おさるのジョージ ジョージの一日フィギュア",
+};
+const ARTIFACT_GEORGE_VARIANTS = [{
+  id: "tarts-y901539-おふろ",
+  slug: "tarts-y901539-おふろ",
+  series_id: ARTIFACT_GEORGE_SERIES.id,
+  name: "おふろ",
+  variant_type: "normal",
+}];
+
+const SOURCE_ARTIFACT_30655163177 = [
+  {
+    candidateKey: "0d255efb944230e5",
+    provider: "rakuten_ichiba",
+    listingId: "auc-treasuremarket:10051970",
+    publicUrl: "https://item.rakuten.co.jp/auc-treasuremarket/71575/",
+    title: "ティガー (ならぶんです。 Winnie the Pooh くまのプーさん ディズニー キャラクター Disney グッズ ガシャポン ガチャ バンダイ) 【即納 在庫品】【数量限定】【単品】",
+    series: ARTIFACT_POOH_SERIES,
+    variants: ARTIFACT_POOH_VARIANTS,
+    targetName: "くまのプーさん",
+    accepted: false,
+    reviewRequired: true,
+    reason: "explicit_variant_label_unresolved",
+  },
+  {
+    candidateKey: "25f5906df352c016",
+    provider: "rakuten_ichiba",
+    listingId: "auc-treasuremarket:10051967",
+    publicUrl: "https://item.rakuten.co.jp/auc-treasuremarket/71572/",
+    title: "イーヨー (ならぶんです。 Winnie the Pooh くまのプーさん ディズニー キャラクター Disney グッズ ガシャポン ガチャ バンダイ) 【即納 在庫品】【数量限定】【単品】",
+    series: ARTIFACT_POOH_SERIES,
+    variants: ARTIFACT_POOH_VARIANTS,
+    targetName: "くまのプーさん",
+    accepted: false,
+    reviewRequired: true,
+    reason: "explicit_variant_label_unresolved",
+  },
+  {
+    candidateKey: "5e08f193af49dbf9",
+    provider: "yahoo_shopping",
+    listingId: "ma-petite-mere_221001-bd-4549660772378-03",
+    publicUrl: "https://store.shopping.yahoo.co.jp/ma-petite-mere/221001-bd-4549660772378-03.html",
+    title: "バンダイ ガチャ ならぶんです。 Winnie the pooh 2 くまのプーさん クラシック 【イーヨー】",
+    series: ARTIFACT_POOH_SERIES,
+    variants: ARTIFACT_POOH_VARIANTS,
+    targetName: "くまのプーさん",
+    accepted: false,
+    reviewRequired: true,
+    reason: "explicit_variant_label_conflict",
+  },
+  {
+    candidateKey: "6d1aaac520172ae5",
+    provider: "rakuten_ichiba",
+    listingId: "auc-treasuremarket:10051969",
+    publicUrl: "https://item.rakuten.co.jp/auc-treasuremarket/71574/",
+    title: "ルー (ならぶんです。 Winnie the Pooh くまのプーさん ディズニー キャラクター Disney グッズ ガシャポン ガチャ バンダイ) 【即納 在庫品】【数量限定】【単品】",
+    series: ARTIFACT_POOH_SERIES,
+    variants: ARTIFACT_POOH_VARIANTS,
+    targetName: "くまのプーさん",
+    accepted: false,
+    reviewRequired: true,
+    reason: "explicit_variant_label_unresolved",
+  },
+  {
+    candidateKey: "739e69fd68b39a6f",
+    provider: "rakuten_ichiba",
+    listingId: "auc-toysanta:10378288",
+    publicUrl: "https://item.rakuten.co.jp/auc-toysanta/g-5l0w00186p-001/",
+    title: "肩ズンFig. リロ&スティッチ Part2 [1.ジャンバ]【 ネコポス不可 】【C】",
+    series: ARTIFACT_STITCH_SERIES,
+    variants: ARTIFACT_STITCH_VARIANTS,
+    targetName: "ジャンバ",
+    accepted: true,
+    reviewRequired: false,
+    reason: "variant_and_parent_evidence_confirmed",
+  },
+  {
+    candidateKey: "939a0ae56d23e979",
+    provider: "yahoo_shopping",
+    listingId: "ma-petite-mere_221001-bd-4549660772378-04",
+    publicUrl: "https://store.shopping.yahoo.co.jp/ma-petite-mere/221001-bd-4549660772378-04.html",
+    title: "バンダイ ガチャ ならぶんです。 Winnie the pooh 2 くまのプーさん クラシック 【ティガー】",
+    series: ARTIFACT_POOH_SERIES,
+    variants: ARTIFACT_POOH_VARIANTS,
+    targetName: "くまのプーさん",
+    accepted: false,
+    reviewRequired: true,
+    reason: "explicit_variant_label_conflict",
+  },
+  {
+    candidateKey: "c0a06ea538d0c6a6",
+    provider: "yahoo_shopping",
+    listingId: "ma-petite-mere_221001-bd-4549660772378-01",
+    publicUrl: "https://store.shopping.yahoo.co.jp/ma-petite-mere/221001-bd-4549660772378-01.html",
+    title: "バンダイ ガチャ ならぶんです。 Winnie the pooh 2 くまのプーさん クラシック 【くまのプーさんA】",
+    series: ARTIFACT_POOH_SERIES,
+    variants: ARTIFACT_POOH_VARIANTS,
+    targetName: "くまのプーさん",
+    accepted: false,
+    reviewRequired: true,
+    reason: "parent_series_edition_conflict",
+  },
+  {
+    candidateKey: "d8f6b383d1c838c5",
+    provider: "rakuten_ichiba",
+    listingId: "auc-toysanta:10381214",
+    publicUrl: "https://item.rakuten.co.jp/auc-toysanta/g-5l3l0018ik-003/",
+    title: "おさるのジョージ ジョージの一日フィギュア [3.おふろ]【 ネコポス不可 】【C】",
+    series: ARTIFACT_GEORGE_SERIES,
+    variants: ARTIFACT_GEORGE_VARIANTS,
+    targetName: "おふろ",
+    accepted: true,
+    reviewRequired: false,
+    reason: "variant_and_parent_evidence_confirmed",
+  },
+  {
+    candidateKey: "e724818ddc2066e4",
+    provider: "yahoo_shopping",
+    listingId: "ma-petite-mere_221001-bd-4549660772378-05",
+    publicUrl: "https://store.shopping.yahoo.co.jp/ma-petite-mere/221001-bd-4549660772378-05.html",
+    title: "バンダイ ガチャ ならぶんです。 Winnie the pooh 2 くまのプーさん クラシック 【くまのプーさんB】",
+    series: ARTIFACT_POOH_SERIES,
+    variants: ARTIFACT_POOH_VARIANTS,
+    targetName: "くまのプーさん",
+    accepted: false,
+    reviewRequired: true,
+    reason: "parent_series_edition_conflict",
+  },
+  {
+    candidateKey: "efef962964b26fbf",
+    provider: "yahoo_shopping",
+    listingId: "ma-petite-mere_221001-bd-4549660772378-06",
+    publicUrl: "https://store.shopping.yahoo.co.jp/ma-petite-mere/221001-bd-4549660772378-06.html",
+    title: "バンダイ ガチャ ならぶんです。 Winnie the pooh 2 くまのプーさん クラシック 【ピグレットB】",
+    series: ARTIFACT_POOH_SERIES,
+    variants: ARTIFACT_POOH_VARIANTS,
+    targetName: "くまのプーさん",
+    accepted: false,
+    reviewRequired: true,
+    reason: "explicit_variant_label_conflict",
+  },
+  {
+    candidateKey: "ff5baa7deca4ff32",
+    provider: "rakuten_ichiba",
+    listingId: "auc-treasuremarket:10051968",
+    publicUrl: "https://item.rakuten.co.jp/auc-treasuremarket/71573/",
+    title: "ピグレット (ならぶんです。 Winnie the Pooh くまのプーさん ディズニー キャラクター Disney グッズ ガシャポン ガチャ バンダイ) 【即納 在庫品】【数量限定】【単品】",
+    series: ARTIFACT_POOH_SERIES,
+    variants: ARTIFACT_POOH_VARIANTS,
+    targetName: "くまのプーさん",
+    accepted: false,
+    reviewRequired: true,
+    reason: "explicit_variant_label_unresolved",
+  },
+];
+
+test("101 source artifact 30655163177 keeps all eleven candidate decisions and keys", () => {
+  const evaluated = SOURCE_ARTIFACT_30655163177.map((fixture) => {
+    const target = fixture.variants.find((variant) => variant.name === fixture.targetName);
+    assert.ok(target, `missing target fixture for ${fixture.candidateKey}`);
+    const siblings = fixture.variants.filter((variant) => variant.id !== target.id);
+    const result = assess(fixture.title, {
+      series: fixture.series,
+      target,
+      siblings,
+      listingId: fixture.listingId,
+    });
+    assert.equal(buildMarketCandidateKey({
+      provider: fixture.provider,
+      listing_id: fixture.listingId,
+      public_url: fixture.publicUrl,
+    }), fixture.candidateKey);
+    assert.equal(result.accepted, fixture.accepted, fixture.candidateKey);
+    assert.equal(result.reviewRequired, fixture.reviewRequired, fixture.candidateKey);
+    assert.equal(result.reason, fixture.reason, fixture.candidateKey);
+    if (fixture.accepted) {
+      assert.equal(result.confidence, 0.86, fixture.candidateKey);
+      assert.equal(result.listingType, "single", fixture.candidateKey);
+      assert.equal(result.auditChecks.setSignalDetected, false, fixture.candidateKey);
+    } else {
+      assert.ok(result.confidence < 0.8, fixture.candidateKey);
+    }
+    return { key: fixture.candidateKey, result };
+  });
+
+  const acceptedKeys = evaluated
+    .filter(({ result }) => result.accepted)
+    .map(({ key }) => key)
+    .sort();
+  const reviewRequiredKeys = evaluated
+    .filter(({ result }) => result.reviewRequired)
+    .map(({ key }) => key)
+    .sort();
+  assert.equal(evaluated.length, 11);
+  assert.equal(acceptedKeys.length, 2);
+  assert.equal(reviewRequiredKeys.length, 9);
+  assert.deepEqual(acceptedKeys, [
+    "739e69fd68b39a6f",
+    "d8f6b383d1c838c5",
+  ]);
+  assert.deepEqual(reviewRequiredKeys, [
+    "0d255efb944230e5",
+    "25f5906df352c016",
+    "5e08f193af49dbf9",
+    "6d1aaac520172ae5",
+    "939a0ae56d23e979",
+    "c0a06ea538d0c6a6",
+    "e724818ddc2066e4",
+    "efef962964b26fbf",
+    "ff5baa7deca4ff32",
+  ]);
+});
