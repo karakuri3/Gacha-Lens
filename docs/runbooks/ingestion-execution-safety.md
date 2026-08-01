@@ -2,9 +2,13 @@
 
 Production ingestion remains disabled by default. Enabling the Production workflow does not authorize writes by itself.
 
+Automatic stage resolution is defined in `automatic-ingestion-rollout.md`. A missing rollout-stage variable remains `disabled`; Phase 6-C does not create or change rollout variables.
+
 ## Kill switch
 
 Scheduled writes require the repository variable `AUTOMATIC_INGESTION_WRITE_ENABLED` to be exactly `true`. Missing values and values such as `1`, `yes`, or `on` are disabled. This change does not create or modify that variable.
+
+The kill switch is necessary but not sufficient for `market-bounded`: the rollout stage and exact policy digest must also match. `market-shadow` may run with the write switch false because it is read-only. Official and stock automatic rollout remain blocked.
 
 The fixed schedule contract is:
 
@@ -41,6 +45,8 @@ Every Production mutation attempt creates `ingestion-run-report-<run-id>` with s
 `Gacha Ingestion Safety Check` is a `workflow_dispatch`-only workflow. It reads Production counts and safety state, creates `ingestion-safety-check-<run-id>`, and cannot call ingestion, cleanup, migrations, or write entry points. `INGESTION_WRITE_DISABLED` and `MARKET_BACKFILL_WRITE_DISABLED` stay true.
 
 Each safety check requires a separate explicit approval naming the merged main SHA and one task. It does not authorize enabling the Production workflow or any Production write.
+
+`Gacha Ingestion Rollout Simulation` is a separate dispatch-only workflow for shadow and bounded prediction. It fixes all write guards on, verifies all nine Production counts remain unchanged, and never invokes persistence.
 
 ## Block response
 

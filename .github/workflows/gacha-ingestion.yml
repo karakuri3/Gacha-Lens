@@ -21,7 +21,7 @@ on:
           - market
           - stock
       mode:
-        description: Market collection mode (scheduled runs always write)
+        description: Manual market mode (scheduled runs use the rollout policy)
         required: true
         default: dry-run
         type: choice
@@ -104,6 +104,9 @@ jobs:
       MARKET_QUERY_CURSOR_MINUTES: 30
       GACHA_DATA_SOURCE: supabase
       AUTOMATIC_INGESTION_WRITE_ENABLED: ${{ vars.AUTOMATIC_INGESTION_WRITE_ENABLED || 'false' }}
+      AUTOMATIC_INGESTION_ROLLOUT_STAGE: ${{ vars.AUTOMATIC_INGESTION_ROLLOUT_STAGE || 'disabled' }}
+      AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST: ${{ vars.AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST || '' }}
+      GH_READ_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout full history for canary write
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'canary-write' }}
@@ -140,16 +143,20 @@ jobs:
             *) task="${MANUAL_TASK:-all}" ;;
           esac
           if [ -n "$SCHEDULE" ]; then
-            mode=write
-            source_scope=all
+            mode=rollout
+            limit=5
+            priority=1
+            release=released
+            source_scope=planner-apis
             execute_sources=true
           else
             mode="${MANUAL_MODE:-dry-run}"
+            release="${MANUAL_RELEASE:-all}"
             source_scope="${MANUAL_SOURCE_SCOPE:-planner-apis}"
             execute_sources="${MANUAL_EXECUTE_SOURCES:-false}"
+            case "${MANUAL_LIMIT:-25}" in ''|*[!0-9]*) limit=25 ;; *) limit="$MANUAL_LIMIT" ;; esac
+            case "${MANUAL_PRIORITY:-all}" in all|1|2|3|4|5) priority="${MANUAL_PRIORITY:-all}" ;; *) priority=all ;; esac
           fi
-          case "${MANUAL_LIMIT:-25}" in ''|*[!0-9]*) limit=25 ;; *) limit="$MANUAL_LIMIT" ;; esac
-          case "${MANUAL_PRIORITY:-all}" in all|1|2|3|4|5) priority="${MANUAL_PRIORITY:-all}" ;; *) priority=all ;; esac
           case "$source_scope" in planner-apis|approved-feeds|all) ;; *) source_scope=planner-apis ;; esac
           if [ "$task" = "all" ] && [ "$mode" = "dry-run" ]; then
             echo "::error::The all task writes official and stock data. Select write explicitly, or run the default market dry-run."
@@ -193,7 +200,7 @@ jobs:
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "limit=$limit" >> "$GITHUB_OUTPUT"
           echo "priority=$priority" >> "$GITHUB_OUTPUT"
-          echo "release=${MANUAL_RELEASE:-all}" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
           echo "source_scope=$source_scope" >> "$GITHUB_OUTPUT"
           echo "execute_sources=$execute_sources" >> "$GITHUB_OUTPUT"
           echo "canary_audit_run_id=$CANARY_AUDIT_RUN_ID" >> "$GITHUB_OUTPUT"
@@ -202,12 +209,13 @@ jobs:
             dry-run) execution_type=manual_dry_run ;;
             canary-write) execution_type=manual_canary_write ;;
             write) if [ -n "$SCHEDULE" ]; then execution_type=scheduled_write; else execution_type=manual_full_write; fi ;;
+            rollout) execution_type=read_only ;;
             *) execution_type=read_only ;;
           esac
           echo "execution_type=$execution_type" >> "$GITHUB_OUTPUT"
-      - name: Verify exact main SHA for Production mutation
+      - name: Verify exact main SHA for Production mutation or rollout
         id: main_sha
-        if: ${{ steps.ingestion.outputs.mode == 'write' }}
+        if: ${{ steps.ingestion.outputs.mode == 'write' || steps.ingestion.outputs.mode == 'rollout' }}
         shell: bash
         run: |
           origin_main_sha=""
@@ -215,6 +223,21 @@ jobs:
             origin_main_sha="$(git rev-parse origin/main 2>/dev/null || true)"
           fi
           echo "origin_main_sha=$origin_main_sha" >> "$GITHUB_OUTPUT"
+      - name: Resolve rollout policy and throttle
+        id: rollout
+        if: ${{ steps.ingestion.outputs.mode == 'rollout' }}
+        run: >-
+          node scripts/automatic-ingestion-rollout.mjs preflight
+          --output-dir=${{ runner.temp }}/gacha-rollout-report
+          --stage=${{ env.AUTOMATIC_INGESTION_ROLLOUT_STAGE }}
+          --configured-policy-digest=${{ env.AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST }}
+          --task=${{ steps.ingestion.outputs.task }}
+          --schedule=${{ github.event.schedule }}
+          --event-name=${{ github.event_name }}
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
+          --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
+          --automatic-write-enabled=${{ env.AUTOMATIC_INGESTION_WRITE_ENABLED }}
       - name: Run execution preflight
         id: execution_preflight
         if: ${{ steps.ingestion.outputs.mode == 'write' }}
@@ -250,14 +273,14 @@ jobs:
           path: ${{ runner.temp }}/approved-market-audit
       - name: Run controlled market backfill
         id: market_backfill
-        if: ${{ github.event_name == 'workflow_dispatch' && steps.ingestion.outputs.task == 'market' && steps.ingestion.outputs.mode != 'write' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && steps.ingestion.outputs.task == 'market' && steps.ingestion.outputs.mode != 'write') || (steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.allowed == 'true') }}
         env:
-          BACKFILL_MODE: ${{ steps.ingestion.outputs.mode }}
-          BACKFILL_LIMIT: ${{ steps.ingestion.outputs.limit }}
-          BACKFILL_PRIORITY: ${{ steps.ingestion.outputs.priority }}
-          BACKFILL_RELEASE: ${{ steps.ingestion.outputs.release }}
-          BACKFILL_SOURCE_SCOPE: ${{ steps.ingestion.outputs.source_scope }}
-          BACKFILL_EXECUTE_SOURCES: ${{ steps.ingestion.outputs.execute_sources }}
+          BACKFILL_MODE: ${{ steps.ingestion.outputs.mode == 'rollout' && 'dry-run' || steps.ingestion.outputs.mode }}
+          BACKFILL_LIMIT: ${{ steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.limit || steps.ingestion.outputs.limit }}
+          BACKFILL_PRIORITY: ${{ steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.priority || steps.ingestion.outputs.priority }}
+          BACKFILL_RELEASE: ${{ steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.release || steps.ingestion.outputs.release }}
+          BACKFILL_SOURCE_SCOPE: ${{ steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.source_scope || steps.ingestion.outputs.source_scope }}
+          BACKFILL_EXECUTE_SOURCES: ${{ steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.execute_sources || steps.ingestion.outputs.execute_sources }}
           BACKFILL_TASK: ${{ steps.ingestion.outputs.task }}
           CANARY_AUDIT_RUN_ID: ${{ steps.ingestion.outputs.canary_audit_run_id }}
           CANARY_CANDIDATE_KEYS: ${{ steps.ingestion.outputs.canary_candidate_keys }}
@@ -272,7 +295,7 @@ jobs:
           fi
           npm run market:backfill -- "${args[@]}" 2>&1 | tee ingestion.log
       - name: Upload sanitized market candidate audit
-        if: ${{ always() && github.event_name == 'workflow_dispatch' && steps.ingestion.outputs.task == 'market' && steps.ingestion.outputs.mode == 'dry-run' && steps.ingestion.outputs.execute_sources == 'true' }}
+        if: ${{ always() && steps.ingestion.outputs.task == 'market' && ((github.event_name == 'workflow_dispatch' && steps.ingestion.outputs.mode == 'dry-run' && steps.ingestion.outputs.execute_sources == 'true') || (steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.allowed == 'true')) }}
         uses: actions/upload-artifact@v4
         with:
           name: market-candidate-audit-${{ github.run_id }}
@@ -281,6 +304,35 @@ jobs:
             ${{ runner.temp }}/gacha-market-audit/market-candidate-audit.md
           if-no-files-found: error
           retention-days: 7
+      - name: Generate rollout prediction plan
+        id: rollout_plan
+        if: ${{ steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.allowed == 'true' && steps.market_backfill.outcome == 'success' }}
+        run: >-
+          node scripts/automatic-ingestion-rollout.mjs plan
+          --output-dir=${{ runner.temp }}/gacha-rollout-report
+          --preflight=${{ runner.temp }}/gacha-rollout-report/ingestion-rollout-preflight.json
+          --audit=${{ runner.temp }}/gacha-market-audit/market-candidate-audit.json
+      - name: Scan rollout report
+        if: ${{ always() && steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.report_generated == 'true' }}
+        run: >-
+          node scripts/automatic-ingestion-rollout.mjs scan
+          --directories=${{ runner.temp }}/gacha-rollout-report,${{ runner.temp }}/gacha-market-audit
+      - name: Upload sanitized rollout report
+        if: ${{ always() && steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.report_generated == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingestion-shadow-report-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/gacha-rollout-report
+            ${{ runner.temp }}/gacha-market-audit/market-candidate-audit.json
+            ${{ runner.temp }}/gacha-market-audit/market-candidate-audit.md
+          if-no-files-found: error
+          retention-days: 14
+      - name: Enforce rollout result
+        if: ${{ always() && steps.ingestion.outputs.mode == 'rollout' && (steps.rollout.outputs.allowed != 'true' || steps.rollout_plan.outputs.plan_generated != 'true' || steps.rollout_plan.outputs.database_writes != '0') }}
+        run: |
+          echo "::error::Automatic rollout failed closed before persistence."
+          exit 1
       - name: Upload sanitized market canary result
         if: ${{ always() && inputs.mode == 'canary-write' }}
         uses: actions/upload-artifact@v4

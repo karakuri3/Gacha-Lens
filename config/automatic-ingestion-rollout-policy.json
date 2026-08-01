@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "default_stage": "disabled",
+  "stages": {
+    "disabled": {
+      "automatic_runs_allowed": false,
+      "production_writes_allowed": false
+    },
+    "market-shadow": {
+      "automatic_runs_allowed": true,
+      "production_writes_allowed": false,
+      "allowed_task": "market",
+      "allowed_schedule": "17,47 * * * *",
+      "mode": "dry-run",
+      "limit": 5,
+      "priority": "1",
+      "release": "released",
+      "source_scope": "planner-apis",
+      "execute_sources": true,
+      "minimum_interval_minutes": 720,
+      "max_runs_per_24_hours": 1
+    },
+    "market-bounded": {
+      "automatic_runs_allowed": true,
+      "production_writes_allowed": true,
+      "allowed_task": "market",
+      "allowed_schedule": "17,47 * * * *",
+      "mode": "bounded-write",
+      "limit": 5,
+      "priority": "1",
+      "release": "released",
+      "source_scope": "planner-apis",
+      "execute_sources": true,
+      "minimum_interval_minutes": 720,
+      "max_runs_per_24_hours": 1,
+      "max_selected_variants": 5,
+      "max_candidates": 20,
+      "max_accepted_candidates": 2,
+      "max_listing_writes": 2,
+      "max_observation_writes": 2,
+      "max_review_required_writes": 0
+    }
+  }
+}
