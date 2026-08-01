@@ -32,7 +32,6 @@ jobs:
       MARKET_BACKFILL_WRITE_DISABLED: "true"
       AUTOMATIC_INGESTION_WRITE_ENABLED: "false"
       BACKFILL_TASK: market
-      MARKET_AUDIT_OUTPUT_DIR: ${{ runner.temp }}/gacha-market-audit
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -66,6 +65,8 @@ jobs:
       - name: Run market shadow dry-run
         id: market_backfill
         if: ${{ steps.rollout.outputs.allowed == 'true' }}
+        env:
+          MARKET_AUDIT_OUTPUT_DIR: ${{ runner.temp }}/gacha-market-audit
         run: >-
           npm run market:backfill --
           --mode=dry-run

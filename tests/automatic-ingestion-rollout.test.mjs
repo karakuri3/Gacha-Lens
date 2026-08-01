@@ -231,6 +231,11 @@ test("simulation workflow has workflow_dispatch only", () => {
   assert.doesNotMatch(simulationWorkflow, /^\s+(schedule|push|pull_request|workflow_run|repository_dispatch):/m);
 });
 test("simulation task is fixed market", () => assert.match(simulationWorkflow, /BACKFILL_TASK:\s*market/));
+test("simulation uses runner temp only after the job starts", () => {
+  const jobEnv = simulationWorkflow.match(/jobs:[\s\S]*?\n\s+steps:/)?.[0] ?? "";
+  assert.doesNotMatch(jobEnv, /runner\.temp/);
+  assert.match(simulationWorkflow, /Run market shadow dry-run[\s\S]*MARKET_AUDIT_OUTPUT_DIR:\s*\$\{\{ runner\.temp \}\}/);
+});
 test("simulation exposes exactly two stage options", () => {
   const block = simulationWorkflow.match(/stage:[\s\S]*?jobs:/)?.[0] ?? "";
   assert.match(block, /market-shadow/);
