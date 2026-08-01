@@ -39,6 +39,9 @@ import { loadMarketCoverageData } from "./market-coverage-data.mjs";
 import { deleteRowsByIds, fetchRowCount, fetchRows, upsertRows } from "./supabase-rest.mjs";
 
 const options = parseOptions(process.argv.slice(2));
+if (process.env.MARKET_BACKFILL_WRITE_DISABLED === "true" && options.mode !== "dry-run") {
+  throw new Error("Market backfill writes are disabled for this execution context.");
+}
 if (options.mode === "canary-write") {
   await runCanaryWriteMode(options);
 } else if (options.mode === "write") {
