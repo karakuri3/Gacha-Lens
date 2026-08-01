@@ -200,66 +200,118 @@ async function plan() {
 async function preview() {
   const outputDir = outputDirectory();
   fs.mkdirSync(outputDir, { recursive: true });
-  const auditPath = required(options.audit, "--audit");
-  const auditBytes = fs.readFileSync(auditPath);
-  const audit = JSON.parse(auditBytes.toString("utf8"));
-  const planValue = readJson(required(options.plan, "--plan"));
-  const preflightReport = readJson(required(options.preflight, "--preflight"));
-  const { digest } = loadAutomaticIngestionRolloutPolicy(policyPath);
   const workflow = workflowIdentity();
-  validateMarketBoundedPlanIdentity({
-    audit_bytes: auditBytes,
-    audit,
-    plan: planValue,
-    workflow,
-    policy_digest: digest,
-    simulation: options.simulation === "true",
-  });
-  const rows = buildMarketBoundedRows({ audit, plan: planValue, workflow, observed_at: planValue.generated_at });
-  const [existingListings, existingObservations] = await Promise.all([
-    fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)),
-    fetchRowsByIds("market_listing_observations", rows.observationRows.map((row) => row.id)),
-  ]);
-  const operations = planMarketBoundedOperations({
-    listingRows: rows.listingRows,
-    observationRows: rows.observationRows,
-    existingListings,
-    existingObservations,
-  });
-  const after = await productionCounts();
-  assertCountsUnchanged(preflightReport.production_snapshot?.counts, after);
-  const result = buildMarketBoundedResult({
-    workflow,
-    plan: planValue,
-    rows,
-    operations,
-    status: rows.candidates.length ? "blocked" : "no-op",
-    reason_code: rows.candidates.length ? "bounded_persistence_not_enabled" : null,
-    bounded_persistence_enabled: false,
-    bounded_approval_valid: false,
-    database_writes: 0,
-  });
-  const previewValue = {
+  let planValue = null;
+  let rows = { candidates: [], listingRows: [], observationRows: [] };
+  let operations = { listings: [], observations: [] };
+  const checks = {
+    audit_digest_verified: false,
+    plan_digest_verified: false,
+    candidate_set_verified: false,
+    row_identity_verified: false,
+    idempotency_preflight_verified: false,
+  };
+  try {
+    const auditPath = required(options.audit, "--audit");
+    const auditBytes = fs.readFileSync(auditPath);
+    const audit = JSON.parse(auditBytes.toString("utf8"));
+    planValue = readJson(required(options.plan, "--plan"));
+    const preflightReport = readJson(required(options.preflight, "--preflight"));
+    const { digest } = loadAutomaticIngestionRolloutPolicy(policyPath);
+    validateMarketBoundedPlanIdentity({
+      audit_bytes: auditBytes,
+      audit,
+      plan: planValue,
+      workflow,
+      policy_digest: digest,
+      simulation: options.simulation === "true",
+    });
+    checks.audit_digest_verified = true;
+    checks.plan_digest_verified = true;
+    rows = buildMarketBoundedRows({ audit, plan: planValue, workflow, observed_at: planValue.generated_at });
+    checks.candidate_set_verified = true;
+    const [existingListings, existingObservations] = await Promise.all([
+      fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)),
+      fetchRowsByIds("market_listing_observations", rows.observationRows.map((row) => row.id)),
+    ]);
+    operations = planMarketBoundedOperations({
+      listingRows: rows.listingRows,
+      observationRows: rows.observationRows,
+      existingListings,
+      existingObservations,
+    });
+    checks.row_identity_verified = true;
+    checks.idempotency_preflight_verified = true;
+    const after = await productionCounts();
+    assertCountsUnchanged(preflightReport.production_snapshot?.counts, after);
+    const result = buildMarketBoundedResult({
+      workflow,
+      plan: planValue,
+      rows,
+      operations,
+      status: rows.candidates.length ? "blocked" : "no-op",
+      reason_code: rows.candidates.length ? "bounded_persistence_not_enabled" : null,
+      bounded_persistence_enabled: false,
+      bounded_approval_valid: false,
+      database_writes: 0,
+    });
+    writePreviewArtifacts(outputDir, buildPreviewValue({ workflow, rows, result, checks, previewGenerated: true }), result);
+    writeOutput("preview_report_generated", true);
+    writeOutput("preview_generated", true);
+    writeOutput("database_writes", 0);
+  } catch (error) {
+    const reasonCode = error?.reason_code || "bounded_verification_failed";
+    const errorCategory = error?.category || "unknown";
+    const result = buildMarketBoundedResult({
+      workflow,
+      plan: planValue,
+      rows,
+      operations,
+      status: "failed",
+      reason_code: reasonCode,
+      error_category: errorCategory,
+      error_message: reasonCode,
+      identity_diagnostic: error?.identity_diagnostic,
+      bounded_persistence_enabled: false,
+      bounded_approval_valid: false,
+      database_writes: 0,
+    });
+    writePreviewArtifacts(outputDir, buildPreviewValue({ workflow, rows, result, checks, previewGenerated: false }), result);
+    writeOutput("preview_report_generated", true);
+    writeOutput("preview_generated", false);
+    writeOutput("reason_code", result.result.reason_code);
+    writeOutput("error_category", result.result.error_category);
+    writeOutput("database_writes", 0);
+    console.error(`Bounded persistence preview failed closed: ${result.result.reason_code} (${result.result.error_category}).`);
+    process.exitCode = 1;
+  }
+}
+
+function buildPreviewValue({ workflow, rows, result, checks, previewGenerated }) {
+  return {
     schema_version: 1,
     workflow,
-    persistence_preview_generated: true,
+    preview_report_generated: true,
+    preview_generated: previewGenerated,
+    persistence_preview_generated: previewGenerated,
+    status: previewGenerated ? "complete" : "failed",
+    reason_code: result.result.reason_code,
+    error_category: result.result.error_category,
+    identity_diagnostic: result.identity_diagnostic,
     listing_rows_previewed: rows.listingRows.length,
     observation_rows_previewed: rows.observationRows.length,
     operations: result.operations,
-    audit_digest_verified: true,
-    plan_digest_verified: true,
-    candidate_set_verified: true,
-    row_identity_verified: true,
-    idempotency_preflight_verified: true,
+    ...checks,
     bounded_persistence_started: false,
     database_writes: 0,
   };
+}
+
+function writePreviewArtifacts(outputDir, previewValue, result) {
   writeJson(path.join(outputDir, "market-bounded-persistence-preview.json"), previewValue);
   fs.writeFileSync(path.join(outputDir, "market-bounded-persistence-preview.md"), renderPreviewMarkdown(previewValue), "utf8");
   writeJson(path.join(outputDir, "market-bounded-result.json"), result);
   fs.writeFileSync(path.join(outputDir, "market-bounded-result.md"), renderMarketBoundedResultMarkdown(result), "utf8");
-  writeOutput("preview_generated", true);
-  writeOutput("database_writes", 0);
 }
 
 function scan() {
@@ -361,6 +413,12 @@ function renderPreviewMarkdown(value) {
   return [
     "# Market bounded persistence preview",
     "",
+    `- Status: ${value.status}`,
+    `- Preview report generated: ${value.preview_report_generated}`,
+    `- Preview generated: ${value.preview_generated}`,
+    `- Reason code: ${value.reason_code ?? "none"}`,
+    `- Error category: ${value.error_category ?? "none"}`,
+    `- Identity conflict: ${value.identity_diagnostic?.conflict_field ?? "none"}`,
     `- Listing rows previewed: ${value.listing_rows_previewed}`,
     `- Observation rows previewed: ${value.observation_rows_previewed}`,
     `- Audit digest verified: ${value.audit_digest_verified}`,

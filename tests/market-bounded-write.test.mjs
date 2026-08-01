@@ -10,11 +10,14 @@ import {
   buildMarketBoundedRows,
   calculateMarketAuditDigest,
   calculateMarketBoundedPlanDigest,
+  canonicalizeBoundedMarketplaceUrl,
   canonicalJson,
   expectedMarketBoundedApproval,
   persistMarketBounded,
   planMarketBoundedOperations,
   renderMarketBoundedResultMarkdown,
+  resolveBoundedMarketplaceIdentity,
+  sanitizeBoundedIdentityDiagnostic,
   selectExactMarketBoundedCandidates,
   validateMarketBoundedArmingGate,
   validateMarketBoundedPlanIdentity,
@@ -26,10 +29,15 @@ const workflow = { run_id: "30709799096", run_attempt: "1", head_sha: headSha, e
 const productionWorkflow = fs.readFileSync(".github/workflows/gacha-ingestion.yml", "utf8");
 const simulationWorkflow = fs.readFileSync(".github/workflows/gacha-ingestion-rollout-simulation.yml", "utf8");
 const phase6cFixture = JSON.parse(fs.readFileSync("tests/fixtures/phase6c-simulation-30709799096.json", "utf8"));
+const phase6d1Fixture = JSON.parse(fs.readFileSync("tests/fixtures/phase6d1-url-identity-30711938430.json", "utf8"));
+const rolloutRunner = fs.readFileSync("scripts/automatic-ingestion-rollout.mjs", "utf8");
 
 test("Phase 6-C source fixture preserves reviewed counts", () => assert.deepEqual({ selected: phase6cFixture.selected_variant_count, candidates: phase6cFixture.candidate_count, eligible: phase6cFixture.auto_eligible_count, excluded: phase6cFixture.excluded_count }, { selected: 5, candidates: 11, eligible: 2, excluded: 9 }));
 test("Phase 6-C source fixture preserves two predicted operations", () => assert.deepEqual(phase6cFixture.eligible_candidates.map((entry) => [entry.candidate_key, entry.predicted_listing_operation, entry.predicted_observation_operation]), [["c1282dd4558639ec", "update", "insert"], ["c61bf253eb5fae1c", "insert", "insert"]]));
 test("Phase 6-C fixture is evidence, not a Production allowlist", () => { assert.equal(phase6cFixture.human_approved, false); assert.equal(phase6cFixture.bounded_persistence_authorized, false); assert.equal(phase6cFixture.database_writes, 0); });
+test("Phase 6-D.1 fixture preserves the sanitized failed preview evidence", () => { assert.equal(phase6d1Fixture.source_run_id, "30711938430"); assert.equal(phase6d1Fixture.failed_candidate.candidate_key, "c1282dd4558639ec"); assert.equal(phase6d1Fixture.database_writes, 0); assert.equal(phase6d1Fixture.production_write_authorized, false); });
+test("Phase 6-D.1 fixture preserves the expected two-candidate operation plan", () => assert.deepEqual(phase6d1Fixture.expected_operations_after_fix, { listing_updates: 1, listing_inserts: 1, observation_inserts: 2, database_writes: 0 }));
+test("Phase 6-D.1 fixture contains no tracking query or credential", () => assert.doesNotMatch(JSON.stringify(phase6d1Fixture), /\?|password|token|credential|affiliate/i));
 
 test("approval format binds policy digest and head SHA", () => assert.equal(expectedMarketBoundedApproval(digest, headSha), `APPROVE_MARKET_BOUNDED:${digest}:${headSha}`));
 test("complete arming gate passes", () => assert.equal(gate().ok, true));
@@ -102,6 +110,25 @@ test("bounded rows contain no credential fields", () => assert.doesNotMatch(JSON
 test("new rows plan inserts", () => { const rows = rowsFixture(); const ops = planMarketBoundedOperations({ listingRows: rows.listingRows, observationRows: rows.observationRows }); assert.equal(ops.listings.every((x) => x.operation === "insert"), true); });
 test("identical rows plan unchanged", () => { const rows = rowsFixture(); const ops = planMarketBoundedOperations({ listingRows: rows.listingRows, observationRows: rows.observationRows, existingListings: rows.listingRows, existingObservations: rows.observationRows }); assert.equal(ops.observations.every((x) => x.operation === "unchanged"), true); });
 test("same observation ID with changed content fails closed", () => { const rows = rowsFixture(); const existing = structuredClone(rows.observationRows); existing[0].price += 1; assert.throws(() => planMarketBoundedOperations({ listingRows: rows.listingRows, observationRows: rows.observationRows, existingObservations: existing })); });
+test("bounded URL identity removes query hash and non-root trailing slashes", () => assert.equal(canonicalizeBoundedMarketplaceUrl("https://ITEM.RAKUTEN.CO.JP/shop/item///?tracking=redacted#section"), "https://item.rakuten.co.jp/shop/item"));
+test("bounded URL identity preserves a root slash", () => assert.equal(canonicalizeBoundedMarketplaceUrl("https://item.rakuten.co.jp/?tracking=redacted"), "https://item.rakuten.co.jp/"));
+test("bounded URL identity preserves protocol semantics", () => assert.notEqual(canonicalizeBoundedMarketplaceUrl("http://item.rakuten.co.jp/shop/item"), canonicalizeBoundedMarketplaceUrl("https://item.rakuten.co.jp/shop/item")));
+test("bounded URL identity preserves hostname semantics", () => assert.notEqual(canonicalizeBoundedMarketplaceUrl("https://item.rakuten.co.jp/shop/item"), canonicalizeBoundedMarketplaceUrl("https://example.jp/shop/item")));
+test("bounded URL identity preserves path semantics", () => assert.notEqual(canonicalizeBoundedMarketplaceUrl("https://item.rakuten.co.jp/shop/item-a"), canonicalizeBoundedMarketplaceUrl("https://item.rakuten.co.jp/shop/item-b")));
+test("bounded URL identity does not collapse internal duplicate slashes", () => assert.equal(canonicalizeBoundedMarketplaceUrl("https://item.rakuten.co.jp/shop//item/"), "https://item.rakuten.co.jp/shop//item"));
+test("bounded URL identity does not decode percent encoding", () => assert.match(canonicalizeBoundedMarketplaceUrl("https://item.rakuten.co.jp/shop/%E3%82%AC%E3%83%81%E3%83%A3/"), /%E3%82%AC%E3%83%81%E3%83%A3/));
+test("bounded URL identity preserves path case", () => assert.notEqual(canonicalizeBoundedMarketplaceUrl("https://item.rakuten.co.jp/Shop/Item"), canonicalizeBoundedMarketplaceUrl("https://item.rakuten.co.jp/shop/item")));
+test("bounded URL identity rejects embedded credentials", () => assert.equal(canonicalizeBoundedMarketplaceUrl("https://user:secret@item.rakuten.co.jp/shop/item"), null));
+test("bounded resolver accepts query hash and trailing slash drift across raw history", () => { const row = structuredClone(rowsFixture().listingRows[0]); const canonical = row.source_url.replace(/\/+$/, ""); row.source_url = `${canonical}/?tracking=redacted#fragment`; row.raw = { ...row.raw, public_url: canonical, raw: { ...row.raw, source_url: `${canonical}///?other=redacted` } }; const identity = resolveBoundedMarketplaceIdentity(row); assert.equal(identity.complete, true); assert.equal(identity.publicUrl, canonical); });
+test("bounded resolver rejects provider conflict in nested raw", () => { const row = structuredClone(rowsFixture().listingRows[0]); const conflictingProvider = row.raw.provider === "yahoo_shopping" ? "rakuten_ichiba" : "yahoo_shopping"; row.raw.raw = { ...row.raw, provider: conflictingProvider }; assert.equal(resolveBoundedMarketplaceIdentity(row).complete, false); });
+test("bounded resolver rejects source listing conflict in nested raw", () => { const row = structuredClone(rowsFixture().listingRows[0]); row.raw.raw = { ...row.raw, source_listing_id: "other-listing" }; assert.equal(resolveBoundedMarketplaceIdentity(row).complete, false); });
+test("bounded resolver rejects cyclic raw", () => { const row = structuredClone(rowsFixture().listingRows[0]); row.raw.raw = row.raw; assert.equal(resolveBoundedMarketplaceIdentity(row).conflicts.raw_chain, true); });
+test("bounded resolver rejects depth 128 raw", () => { const row = structuredClone(rowsFixture().listingRows[0]); let cursor = row.raw; for (let index = 0; index < 128; index += 1) { cursor.raw = { ...row.raw }; cursor = cursor.raw; } assert.equal(resolveBoundedMarketplaceIdentity(row).conflicts.raw_chain, true); });
+test("bounded resolver rejects non-object raw tail", () => { const row = structuredClone(rowsFixture().listingRows[0]); row.raw.raw = "invalid"; assert.equal(resolveBoundedMarketplaceIdentity(row).conflicts.raw_chain, true); });
+test("bounded resolver rejects a credential-bearing URL anywhere in raw history", () => { const row = structuredClone(rowsFixture().listingRows[0]); row.raw.raw = { ...row.raw, public_url: "https://user:secret@item.rakuten.co.jp/shop/item" }; const identity = resolveBoundedMarketplaceIdentity(row); assert.equal(identity.complete, false); assert.equal(identity.conflicts.public_url, true); });
+test("bounded operation accepts equivalent tracked existing URL and plans only the content update", () => { const rows = rowsFixture(); const existing = structuredClone(rows.listingRows); existing[0].source_url = `${existing[0].source_url}?tracking=redacted`; existing[0].raw.public_url = `${existing[0].raw.public_url}/?other=redacted`; const operations = planMarketBoundedOperations({ listingRows: rows.listingRows, observationRows: rows.observationRows, existingListings: existing }); assert.equal(operations.listings[0].operation, "update"); });
+test("bounded identity failure exposes only an allowlisted diagnostic", () => { const rows = rowsFixture(); const existing = structuredClone(rows.listingRows); existing[0].source_url = "https://item.rakuten.co.jp/shop/other"; existing[0].raw.public_url = existing[0].source_url; let error; try { planMarketBoundedOperations({ listingRows: rows.listingRows, observationRows: rows.observationRows, existingListings: existing }); } catch (value) { error = value; } assert.ok(error); assert.deepEqual(Object.keys(error.identity_diagnostic), ["candidate_key", "conflict_field", "provider", "listing_id"]); assert.doesNotMatch(JSON.stringify(error.identity_diagnostic), /https:|tracking|raw|token/i); });
+test("bounded identity diagnostic sanitizes unknown fields", () => assert.deepEqual(sanitizeBoundedIdentityDiagnostic({ candidate_key: "c1282dd4558639ec", conflict_field: "public_url", provider: "rakuten_ichiba", listing_id: "safe-id", public_url: "https://private.example", token: "secret" }), { candidate_key: "c1282dd4558639ec", conflict_field: "public_url", provider: "rakuten_ichiba", listing_id: "safe-id" }));
 for (const [name, mutate] of [
   ["provider", (row) => { row.raw.provider = row.raw.provider === "yahoo_shopping" ? "rakuten_ichiba" : "yahoo_shopping"; }],
   ["source listing", (row) => { row.raw.source_listing_id = "other"; }],
@@ -136,6 +163,11 @@ test("Simulation fixes bounded gate off", () => assert.match(simulationWorkflow,
 test("Simulation fixes bounded approval empty", () => assert.match(simulationWorkflow, /AUTOMATIC_INGESTION_BOUNDED_APPROVAL:\s*""/));
 test("Simulation generates persistence preview", () => assert.match(simulationWorkflow, /Generate bounded persistence preview without writes/));
 test("Simulation never invokes persistence command", () => assert.doesNotMatch(simulationWorkflow, /market:bounded-persist|Run bounded market persistence/));
+test("preview runner writes all four artifacts on its guarded path", () => { for (const name of ["market-bounded-persistence-preview.json", "market-bounded-persistence-preview.md", "market-bounded-result.json", "market-bounded-result.md"]) assert.match(rolloutRunner, new RegExp(name.replaceAll(".", "\\."))); });
+test("preview failure records generated report and zero writes before exiting", () => assert.match(rolloutRunner, /preview_report_generated[\s\S]*preview_generated[\s\S]*database_writes[\s\S]*process\.exitCode = 1/));
+test("preview failure emits a sanitized one-line message", () => assert.match(rolloutRunner, /console\.error\(`Bounded persistence preview failed closed: \$\{result\.result\.reason_code\} \(\$\{result\.result\.error_category\}\)\.``?\)/));
+test("Production workflow uploads rollout artifacts even when preview fails", () => assert.match(productionWorkflow, /Upload sanitized rollout report[\s\S]*if: \$\{\{ always\(\)/));
+test("Production workflow enforcement still rejects a failed preview", () => assert.match(productionWorkflow, /persistence_preview\.outputs\.preview_generated != 'true'/));
 test("bounded reason codes are unique", () => assert.equal(new Set(MARKET_BOUNDED_REASON_CODES).size, MARKET_BOUNDED_REASON_CODES.length));
 
 function gate(overrides = {}) {
