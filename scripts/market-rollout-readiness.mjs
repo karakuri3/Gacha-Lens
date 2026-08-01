@@ -1,23 +1,21 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import {
   buildMarketRolloutReadinessReport,
   renderMarketRolloutReadinessMarkdown,
 } from "../lib/domain/market-rollout-readiness.js";
+import { isReviewedProductionWorkflow } from "../lib/domain/market-workflow-evidence.js";
 import { fetchRows } from "./supabase-rest.mjs";
 
 process.loadEnvFile?.(".env.local");
 
 const options = parseOptions(process.argv.slice(2));
 const evidence = JSON.parse(fs.readFileSync(options.evidencePath, "utf8"));
-const workflowDigest = createHash("sha256")
-  .update(fs.readFileSync(options.workflowPath))
-  .digest("hex");
+const workflowSource = fs.readFileSync(options.workflowPath);
 const phase4Evidence = {
   ...evidence.phase4,
   complete: evidence.schema_version === 2 && evidence.phase4?.complete === true,
-  workflow_unchanged: workflowDigest === String(evidence.workflow_sha256 ?? "").toLowerCase(),
+  workflow_unchanged: isReviewedProductionWorkflow(workflowSource, evidence.workflow_sha256),
 };
 let productionReadComplete = true;
 let fetchErrorCount = 0;

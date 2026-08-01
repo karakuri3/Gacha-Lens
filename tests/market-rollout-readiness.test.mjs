@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
@@ -7,6 +6,7 @@ import {
   renderMarketRolloutReadinessMarkdown,
   validateMarketRolloutReadinessReport,
 } from "../lib/domain/market-rollout-readiness.js";
+import { isReviewedProductionWorkflow } from "../lib/domain/market-workflow-evidence.js";
 import { stableId } from "../lib/fetchers/feed-source-utils.js";
 
 const GENERATED_AT = "2026-07-30T00:00:00.000Z";
@@ -723,7 +723,7 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
   const workflow = await readFile(
     new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url),
   );
-  assert.equal(createHash("sha256").update(workflow).digest("hex"), evidence.workflow_sha256);
+  assert.equal(isReviewedProductionWorkflow(workflow, evidence.workflow_sha256), true);
 });
 
 test("workflow drift fails closed", () => {

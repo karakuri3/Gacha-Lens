@@ -2,6 +2,15 @@ try {
   process.loadEnvFile(".env.local");
 } catch {}
 
+const executionType = String(process.env.INGESTION_EXECUTION_TYPE || "");
+const mutationExecution = ["scheduled_write", "manual_full_write"].includes(executionType);
+if (String(process.env.INGESTION_WRITE_DISABLED || "false").toLowerCase() === "true") {
+  throw new Error("Ingestion write entry point is disabled.");
+}
+if (mutationExecution && process.env.INGESTION_EXECUTION_AUTHORIZED !== "true") {
+  throw new Error("Production ingestion execution was not authorized by preflight.");
+}
+
 const { getIngestionTaskNames, runIngestionSequence } = await import("../lib/ingestion-runner.js");
 
 const taskNames = getRequestedTasks();

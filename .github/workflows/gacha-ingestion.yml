@@ -70,6 +70,11 @@ on:
         description: Comma-separated approved candidate keys, maximum 4
         required: false
         type: string
+      production_write_approval:
+        description: Exact approval for a manual Production write
+        required: false
+        default: ""
+        type: string
   schedule:
     - cron: "7 * * * *"
     - cron: "17,47 * * * *"
@@ -98,6 +103,7 @@ jobs:
       OFFICIAL_TARTS_MAX_PAGE: 80
       MARKET_QUERY_CURSOR_MINUTES: 30
       GACHA_DATA_SOURCE: supabase
+      AUTOMATIC_INGESTION_WRITE_ENABLED: ${{ vars.AUTOMATIC_INGESTION_WRITE_ENABLED || 'false' }}
     steps:
       - name: Checkout full history for canary write
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'canary-write' }}
@@ -192,6 +198,46 @@ jobs:
           echo "execute_sources=$execute_sources" >> "$GITHUB_OUTPUT"
           echo "canary_audit_run_id=$CANARY_AUDIT_RUN_ID" >> "$GITHUB_OUTPUT"
           echo "canary_candidate_keys=$CANARY_CANDIDATE_KEYS" >> "$GITHUB_OUTPUT"
+          case "$mode" in
+            dry-run) execution_type=manual_dry_run ;;
+            canary-write) execution_type=manual_canary_write ;;
+            write) if [ -n "$SCHEDULE" ]; then execution_type=scheduled_write; else execution_type=manual_full_write; fi ;;
+            *) execution_type=read_only ;;
+          esac
+          echo "execution_type=$execution_type" >> "$GITHUB_OUTPUT"
+      - name: Verify exact main SHA for Production mutation
+        id: main_sha
+        if: ${{ steps.ingestion.outputs.mode == 'write' }}
+        shell: bash
+        run: |
+          origin_main_sha=""
+          if git fetch --no-tags origin main --depth=1; then
+            origin_main_sha="$(git rev-parse origin/main 2>/dev/null || true)"
+          fi
+          echo "origin_main_sha=$origin_main_sha" >> "$GITHUB_OUTPUT"
+      - name: Run execution preflight
+        id: execution_preflight
+        if: ${{ steps.ingestion.outputs.mode == 'write' }}
+        run: >-
+          node scripts/ingestion-execution-guard.mjs preflight
+          --output-dir=${{ runner.temp }}/gacha-ingestion-run-report
+          --event-name=${{ github.event_name }}
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
+          --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
+          --task=${{ steps.ingestion.outputs.task }}
+          --mode=${{ steps.ingestion.outputs.mode }}
+          --schedule=${{ github.event.schedule }}
+          --source-scope=${{ steps.ingestion.outputs.source_scope }}
+          --execute-sources=${{ steps.ingestion.outputs.execute_sources }}
+          --automatic-write-enabled=${{ env.AUTOMATIC_INGESTION_WRITE_ENABLED }}
+          --event-path=${{ github.event_path }}
+      - name: Capture before snapshot
+        id: before_snapshot
+        if: ${{ steps.ingestion.outputs.mode == 'write' && steps.execution_preflight.outputs.allowed == 'true' }}
+        run: >-
+          node scripts/ingestion-execution-guard.mjs snapshot
+          --output=${{ runner.temp }}/gacha-ingestion-before.json
       - name: Download approved market candidate audit
         if: ${{ steps.ingestion.outputs.mode == 'canary-write' }}
         continue-on-error: true
@@ -204,7 +250,7 @@ jobs:
           path: ${{ runner.temp }}/approved-market-audit
       - name: Run controlled market backfill
         id: market_backfill
-        if: ${{ github.event_name == 'workflow_dispatch' && steps.ingestion.outputs.task == 'market' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && steps.ingestion.outputs.task == 'market' && steps.ingestion.outputs.mode != 'write' }}
         env:
           BACKFILL_MODE: ${{ steps.ingestion.outputs.mode }}
           BACKFILL_LIMIT: ${{ steps.ingestion.outputs.limit }}
@@ -246,25 +292,74 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Run ingestion
-        if: ${{ github.event_name != 'workflow_dispatch' || steps.ingestion.outputs.task != 'market' }}
+        id: production_ingestion
+        if: ${{ steps.ingestion.outputs.mode == 'write' && steps.execution_preflight.outputs.allowed == 'true' && steps.before_snapshot.outcome == 'success' }}
+        continue-on-error: true
         env:
           MARKET_COVERAGE_LIMIT: ${{ steps.ingestion.outputs.limit }}
           MARKET_COVERAGE_PRIORITY: ${{ steps.ingestion.outputs.priority }}
           MARKET_COVERAGE_RELEASE: ${{ steps.ingestion.outputs.release }}
           MARKET_COVERAGE_COOLDOWN_HOURS: 24
           MARKET_SOURCE_SCOPE: ${{ steps.ingestion.outputs.source_scope }}
+          INGESTION_WRITE_DISABLED: "false"
+          INGESTION_EXECUTION_AUTHORIZED: "true"
+          INGESTION_EXECUTION_TYPE: ${{ steps.ingestion.outputs.execution_type }}
+          INGESTION_MODE: ${{ steps.ingestion.outputs.mode }}
+          INGESTION_SCHEDULE: ${{ github.event.schedule }}
+          INGESTION_PREFLIGHT_REASON_CODE: ${{ steps.execution_preflight.outputs.reason_code }}
+          INGESTION_TRIGGER_SOURCE: ${{ github.event_name }}
         run: |
           set -o pipefail
           npm run db:upsert-all -- --task=${{ steps.ingestion.outputs.task }} 2>&1 | tee ingestion.log
       - name: Clean replaced provisional variants
-        if: ${{ steps.ingestion.outputs.task == 'official' || steps.ingestion.outputs.task == 'all' }}
+        id: cleanup_provisional
+        if: ${{ steps.execution_preflight.outputs.allowed == 'true' && steps.production_ingestion.outcome == 'success' && steps.ingestion.outputs.task == 'official' }}
+        continue-on-error: true
         run: npm run db:cleanup-provisional
       - name: Remove validation-only signal rows
-        if: ${{ steps.ingestion.outputs.mode == 'write' || github.event_name != 'workflow_dispatch' }}
+        id: cleanup_nonproduction
+        if: ${{ steps.execution_preflight.outputs.allowed == 'true' && steps.production_ingestion.outcome == 'success' && steps.ingestion.outputs.mode == 'write' }}
+        continue-on-error: true
         run: npm run db:cleanup-nonproduction
       - name: Remove irrelevant unlinked market rows
-        if: ${{ (steps.ingestion.outputs.task == 'market' || steps.ingestion.outputs.task == 'all') && (steps.ingestion.outputs.mode == 'write' || github.event_name != 'workflow_dispatch') }}
+        id: cleanup_market
+        if: ${{ steps.execution_preflight.outputs.allowed == 'true' && steps.production_ingestion.outcome == 'success' && steps.ingestion.outputs.task == 'market' && steps.ingestion.outputs.mode == 'write' }}
+        continue-on-error: true
         run: npm run db:cleanup-irrelevant-market
+      - name: Capture after snapshot
+        id: after_snapshot
+        if: ${{ always() && steps.ingestion.outputs.mode == 'write' && steps.execution_preflight.outputs.allowed == 'true' && steps.before_snapshot.outcome == 'success' }}
+        run: >-
+          node scripts/ingestion-execution-guard.mjs snapshot
+          --output=${{ runner.temp }}/gacha-ingestion-after.json
+      - name: Finalize ingestion run report
+        id: finalize_report
+        if: ${{ always() && steps.ingestion.outputs.mode == 'write' && steps.execution_preflight.outputs.report_generated == 'true' }}
+        run: >-
+          node scripts/ingestion-execution-guard.mjs finalize
+          --output-dir=${{ runner.temp }}/gacha-ingestion-run-report
+          --before=${{ runner.temp }}/gacha-ingestion-before.json
+          --after=${{ runner.temp }}/gacha-ingestion-after.json
+          --ingestion-started=${{ steps.production_ingestion.outcome != 'skipped' }}
+          --ingestion-outcome=${{ steps.production_ingestion.outcome }}
+          --cleanup-outcome=${{ steps.cleanup_provisional.outcome }}:${{ steps.cleanup_nonproduction.outcome }}:${{ steps.cleanup_market.outcome }}
+          --failed-step=production_ingestion
+      - name: Scan ingestion run report
+        if: ${{ always() && steps.ingestion.outputs.mode == 'write' && steps.execution_preflight.outputs.report_generated == 'true' }}
+        run: node scripts/ingestion-execution-guard.mjs scan --directory=${{ runner.temp }}/gacha-ingestion-run-report
+      - name: Upload sanitized ingestion run report
+        if: ${{ always() && steps.ingestion.outputs.mode == 'write' && steps.execution_preflight.outputs.report_generated == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingestion-run-report-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-ingestion-run-report
+          if-no-files-found: error
+          retention-days: 14
+      - name: Enforce Production ingestion result
+        if: ${{ always() && steps.ingestion.outputs.mode == 'write' && (steps.execution_preflight.outputs.allowed != 'true' || steps.finalize_report.outputs.final_ok != 'true') }}
+        run: |
+          echo "::error::Production ingestion was blocked or failed its final verification."
+          exit 1
       - name: Write summary
         if: always()
         run: |
@@ -293,7 +388,7 @@ jobs:
           echo "- Review queue: /review" >> "$GITHUB_STEP_SUMMARY"
           echo "- Next check: import_issues high/medium items" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload ingestion log
-        if: always()
+        if: ${{ always() && steps.ingestion.outputs.mode != 'write' }}
         uses: actions/upload-artifact@v4
         with:
           name: ingestion-log
