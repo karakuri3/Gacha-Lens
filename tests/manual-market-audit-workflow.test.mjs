@@ -159,6 +159,7 @@ test("artifact scan catches actual credentials without rejecting product wording
 test("workflow uses minimum read permissions and no automatic trigger", () => {
   assert.match(workflow, /permissions:\s*\r?\n\s+contents:\s*read\s*\r?\n\s+actions:\s*read/);
   assert.doesNotMatch(workflow, /contents:\s*write|actions:\s*write/);
+  assert.doesNotMatch(workflow.split("steps:")[0], /\$\{\{\s*runner\./);
 });
 
 function validOptions() {

@@ -40,7 +40,6 @@ jobs:
       YAHOO_SHOPPING_FETCH_ENABLED: ${{ secrets.YAHOO_SHOPPING_FETCH_ENABLED }}
       GACHA_DATA_SOURCE: supabase
       MARKET_BACKFILL_WRITE_DISABLED: "true"
-      MARKET_AUDIT_OUTPUT_DIR: ${{ runner.temp }}/gacha-market-manual-audit
       AUDIT_LIMIT: ${{ inputs.limit }}
     steps:
       - uses: actions/checkout@v6
@@ -78,6 +77,7 @@ jobs:
         id: market_backfill
         env:
           BACKFILL_TASK: market
+          MARKET_AUDIT_OUTPUT_DIR: ${{ runner.temp }}/gacha-market-manual-audit
         run: >-
           npm run market:backfill --
           --mode=dry-run
