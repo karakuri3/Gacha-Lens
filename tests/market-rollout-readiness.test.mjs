@@ -465,6 +465,7 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
       "30484636298",
       "30568203750",
       "30651440275",
+      "30695715591",
     ],
   );
   assert.deepEqual(
@@ -484,6 +485,8 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
       "806b7bdc9c03bf81",
       "aa2672a09667cec2",
       "7a8c4ec1b1a0d846",
+      "739e69fd68b39a6f",
+      "d8f6b383d1c838c5",
     ].sort(),
   );
   assert.deepEqual(
@@ -496,12 +499,13 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
       "30365904563",
       "30565886734",
       "30572554031",
+      "30695160539",
     ],
   );
   const audit = evidence.phase4.audits.at(-1);
   assert.deepEqual(audit, {
-    run_id: "30572554031",
-    head_sha: "8b2f0c95e44f40f3b3479a2a44f2e83752a2192e",
+    run_id: "30695160539",
+    head_sha: "38dfd4cbdac32a6ca20625af6b99e51fcd610794",
     mode: "dry-run",
     source_scope: "planner-apis",
     report_complete: true,
@@ -509,8 +513,8 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
     selected_variant_count: 5,
     query_count: 5,
     candidate_count: 11,
-    accepted_count: 1,
-    review_required_count: 10,
+    accepted_count: 2,
+    review_required_count: 9,
     no_result_variant_count: 2,
     database_writes: { listings: 0, observations: 0, ingestion_runs: 0 },
     candidates: [
@@ -539,7 +543,7 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
         review_required: true,
       },
       {
-        candidate_key: "7a8c4ec1b1a0d846",
+        candidate_key: "739e69fd68b39a6f",
         provider: "rakuten_ichiba",
         accepted: true,
         review_required: false,
@@ -559,8 +563,8 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
       {
         candidate_key: "d8f6b383d1c838c5",
         provider: "rakuten_ichiba",
-        accepted: false,
-        review_required: true,
+        accepted: true,
+        review_required: false,
       },
       {
         candidate_key: "e724818ddc2066e4",
@@ -583,31 +587,31 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
     ],
     provenance: {
       type: "github_actions_artifact",
-      artifact_id: "8771381977",
-      artifact_name: "market-candidate-audit-30572554031",
-      digest: "sha256:874b91e4d18024152f90b866ed7b7a0c15101f318bfe0450fda164ac8c619286",
-      commit_sha: "8b2f0c95e44f40f3b3479a2a44f2e83752a2192e",
+      artifact_id: "8816998490",
+      artifact_name: "market-candidate-audit-30695160539",
+      digest: "sha256:7a7d2d90bc46473d5b2a866a1bb7cc0d7930bb6a06e2f92170d3dd7bb28f2d8d",
+      commit_sha: "38dfd4cbdac32a6ca20625af6b99e51fcd610794",
       expired: false,
     },
   });
   const canary = evidence.phase4.canaries.at(-1);
   assert.deepEqual(canary, {
-    run_id: "30651440275",
-    source_audit_run_id: "30572554031",
-    head_sha: "8b2f0c95e44f40f3b3479a2a44f2e83752a2192e",
+    run_id: "30695715591",
+    source_audit_run_id: "30695160539",
+    head_sha: "38dfd4cbdac32a6ca20625af6b99e51fcd610794",
     outcome: "success",
     conclusion: "success",
     failed_stage: "",
     error_code: "",
     verification: true,
-    listing_writes: 1,
-    observation_writes: 1,
-    consumption_markers: 1,
-    candidate_keys: ["7a8c4ec1b1a0d846"],
-    providers: [{ provider: "rakuten_ichiba", candidate_count: 1 }],
+    listing_writes: 2,
+    observation_writes: 2,
+    consumption_markers: 2,
+    candidate_keys: ["739e69fd68b39a6f", "d8f6b383d1c838c5"],
+    providers: [{ provider: "rakuten_ichiba", candidate_count: 2 }],
     production_delta: {
       market_listings: 0,
-      market_listing_observations: 1,
+      market_listing_observations: 2,
       import_issues: 0,
       ingestion_runs: 0,
       review_required: 0,
@@ -618,10 +622,10 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
     rerun_count: 0,
     provenance: {
       type: "github_actions_artifact",
-      artifact_id: "8801545826",
-      artifact_name: "market-canary-result-30651440275",
-      digest: "sha256:e118734c0b46f4a4ef3b82aa94394f3e5b7585c59ea2a5ddbdacb59e047ddc58",
-      commit_sha: "8b2f0c95e44f40f3b3479a2a44f2e83752a2192e",
+      artifact_id: "8817178091",
+      artifact_name: "market-canary-result-30695715591",
+      digest: "sha256:dca90df3a0d36e7de71015b3a3f07a7002b73bc0419d88d8b53ef7acea54ed80",
+      commit_sha: "38dfd4cbdac32a6ca20625af6b99e51fcd610794",
       expired: false,
     },
   });
@@ -642,10 +646,10 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
     audit.candidates.filter((row) => row.review_required).every((row) => !row.accepted),
     true,
   );
-  assert.equal(audit.candidates.filter((row) => row.review_required).length, 10);
+  assert.equal(audit.candidates.filter((row) => row.review_required).length, 9);
   assert.deepEqual(
     audit.candidates.filter((row) => row.accepted).map((row) => row.candidate_key),
-    ["7a8c4ec1b1a0d846"],
+    ["739e69fd68b39a6f", "d8f6b383d1c838c5"],
   );
   assert.deepEqual(
     audit.candidates
@@ -673,12 +677,7 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
       ["ff5baa7deca4ff32", false, true],
     ],
   );
-  assert.deepEqual(
-    audit.candidates
-      .filter((row) => row.candidate_key === "d8f6b383d1c838c5")
-      .map((row) => [row.accepted, row.review_required]),
-    [[false, true]],
-  );
+  assert.equal(audit.candidates.some((row) => row.candidate_key === "739e2b8a22be18c8"), false);
   assert.equal(
     evidence.phase4.audits.filter((row) => row.run_id === "30572554031").length,
     1,
@@ -686,6 +685,34 @@ test("reviewed evidence manifest preserves all approved rollout audits and canar
   assert.equal(
     evidence.phase4.canaries.filter((row) => row.run_id === "30651440275").length,
     1,
+  );
+  assert.equal(
+    evidence.phase4.audits.filter((row) => row.run_id === "30695160539").length,
+    1,
+  );
+  assert.equal(
+    evidence.phase4.canaries.filter((row) => row.run_id === "30695715591").length,
+    1,
+  );
+  assert.equal(evidence.phase4.audits.some((row) => row.run_id === "30694540362"), false);
+  assert.equal(evidence.phase4.audits.some((row) => row.run_id === "30688709185"), false);
+  assert.equal(evidence.phase4.canaries.some((row) => row.run_id === "30694540362"), false);
+  assert.equal(evidence.phase4.canaries.some((row) => row.run_id === "30688709185"), false);
+  assert.equal(evidence.phase4.audits.length, 8);
+  assert.equal(evidence.phase4.canaries.filter((row) => row.outcome === "success").length, 6);
+  assert.equal(evidence.phase4.canaries.filter((row) => row.outcome === "failed_safe").length, 2);
+  assert.equal(evidence.phase4.canaries.filter((row) => row.outcome !== "success" && row.outcome !== "failed_safe").length, 0);
+  assert.equal(
+    evidence.phase4.canaries.filter((row) => row.outcome === "success").reduce((sum, row) => sum + row.listing_writes, 0),
+    13,
+  );
+  assert.equal(
+    evidence.phase4.canaries.filter((row) => row.outcome === "success").reduce((sum, row) => sum + row.observation_writes, 0),
+    13,
+  );
+  assert.equal(
+    evidence.phase4.canaries.filter((row) => row.outcome === "success").reduce((sum, row) => sum + row.consumption_markers, 0),
+    13,
   );
   assert.equal(new Set(evidence.phase4.audits.map((row) => row.run_id)).size, evidence.phase4.audits.length);
   assert.equal(new Set(evidence.phase4.canaries.map((row) => row.run_id)).size, evidence.phase4.canaries.length);
