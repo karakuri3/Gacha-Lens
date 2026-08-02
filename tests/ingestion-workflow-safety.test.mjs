@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { buildSanitizedIngestionRunReport } from "../lib/domain/ingestion-run-report.js";
 
 const production = fs.readFileSync(".github/workflows/gacha-ingestion.yml", "utf8");
 const safety = fs.readFileSync(".github/workflows/gacha-ingestion-safety-check.yml", "utf8");
@@ -8,6 +12,53 @@ const manual = fs.readFileSync(".github/workflows/gacha-market-manual-audit.yml"
 const guard = fs.readFileSync("scripts/ingestion-execution-guard.mjs", "utf8");
 const runner = fs.readFileSync("scripts/run-ingestion.mjs", "utf8");
 const ingestionRunner = fs.readFileSync("lib/ingestion-runner.js", "utf8");
+const root = process.cwd();
+const productionSnapshot = Object.freeze({
+  market_listings: 1,
+  market_listing_observations: 2,
+  import_issues: 3,
+  ingestion_runs: 4,
+  review_required: 5,
+  series: 6,
+  variants: 7,
+  stock_reports: 8,
+  restock_events: 9,
+});
+
+function runProductionFinalize(cleanupOutcome) {
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "gacha-production-finalize-"));
+  const outputDirectory = path.join(temporaryDirectory, "report");
+  const beforePath = path.join(temporaryDirectory, "before.json");
+  const afterPath = path.join(temporaryDirectory, "after.json");
+  fs.mkdirSync(outputDirectory, { recursive: true });
+  fs.writeFileSync(beforePath, `${JSON.stringify(productionSnapshot)}\n`, "utf8");
+  fs.writeFileSync(afterPath, `${JSON.stringify(productionSnapshot)}\n`, "utf8");
+  fs.writeFileSync(path.join(outputDirectory, "ingestion-run-report.json"), `${JSON.stringify(buildSanitizedIngestionRunReport({
+    workflow: { run_id: "1", run_attempt: "1", head_sha: "a".repeat(40), event_name: "schedule", ref: "refs/heads/main" },
+    execution: { task: "market", mode: "write", execution_type: "scheduled_write", source_scope: "planner-apis", execute_sources: true },
+    preflight: { ok: true, decision: "allowed", reason_code: null, main_sha_verified: true, concurrency: { available: true, state: "clear" }, circuit_breaker: { available: true, state: "closed" }, durable_run_store: { available: true }, production_snapshot: { available: true } },
+    database: { before: productionSnapshot },
+    result: { status: "allowed", started_ingestion: false, completed_ingestion: false, cleanup_started: false },
+    database_writes: 0,
+  }), null, 2)}\n`, "utf8");
+
+  try {
+    const processResult = spawnSync(process.execPath, [
+      path.join(root, "scripts", "ingestion-execution-guard.mjs"),
+      "finalize",
+      `--output-dir=${outputDirectory}`,
+      `--before=${beforePath}`,
+      `--after=${afterPath}`,
+      "--ingestion-outcome=success",
+      "--ingestion-started=true",
+      `--cleanup-outcome=${cleanupOutcome}`,
+    ], { cwd: root, encoding: "utf8" });
+    const report = JSON.parse(fs.readFileSync(path.join(outputDirectory, "ingestion-run-report.json"), "utf8"));
+    return { processResult, report };
+  } finally {
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+}
 test("production preflight precedes Production ingestion", () => assert.ok(production.indexOf("Run execution preflight") < production.indexOf("name: Run ingestion")));
 test("main verification reports drift through preflight instead of bypassing its artifact", () => {
   const step = production.slice(production.indexOf("Verify exact main SHA"), production.indexOf("Run execution preflight"));
@@ -62,7 +113,22 @@ test("read-only guard exposes sanitized final outputs", () => {
   assert.match(guard, /origin_main_sha: options\["origin-main-sha"\]/);
   assert.match(guard, /cleanup_started: false/);
   assert.match(guard, /cleanup_started: cleanupStarted/);
-  assert.match(guard, /didIngestionCleanupStart\(options\["cleanup-outcome"\]\)/);
+  assert.match(guard, /const cleanupOutcome = String\(options\["cleanup-outcome"\]/);
+  assert.match(guard, /const cleanupStarted = didIngestionCleanupStart\(cleanupOutcome\)/);
+});
+test("Production finalize command preserves skipped cleanup without a scope error", () => {
+  const { processResult, report } = runProductionFinalize("skipped:skipped:");
+  assert.equal(processResult.status, 0, processResult.stderr);
+  assert.equal(report.result.status, "succeeded");
+  assert.equal(report.result.cleanup_started, false);
+  assert.equal(report.database_writes, 0);
+  assert.doesNotMatch(`${processResult.stdout}\n${processResult.stderr}`, /ReferenceError|cleanupStarted is not defined/);
+});
+test("Production finalize command records started cleanup without a scope error", () => {
+  const { processResult, report } = runProductionFinalize("success:skipped:skipped");
+  assert.equal(processResult.status, 0, processResult.stderr);
+  assert.equal(report.result.cleanup_started, true);
+  assert.doesNotMatch(`${processResult.stdout}\n${processResult.stderr}`, /ReferenceError|cleanupStarted is not defined/);
 });
 test("safety workflow has no ingestion command", () => assert.doesNotMatch(safety, /db:upsert|run-ingestion\.mjs|market:backfill/));
 test("safety workflow has no cleanup command", () => assert.doesNotMatch(safety, /db:cleanup|cleanup-/));

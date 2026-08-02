@@ -103,10 +103,14 @@ async function finalize() {
   let status = "failed";
   let errorCategory = options["error-category"] || "verification";
   let failedStep = options["failed-step"] || "finalize";
+  const cleanupOutcome = String(options["cleanup-outcome"] || "");
+  const cleanupStarted = didIngestionCleanupStart(cleanupOutcome);
+  const cleanupFailed = cleanupOutcome
+    .split(":")
+    .map((cleanupStatus) => cleanupStatus.trim().toLowerCase())
+    .includes("failure");
   try {
     validation = validateTaskDeltas(existing.execution.task, before, after);
-    const cleanupFailed = String(options["cleanup-outcome"] || "").split(":").includes("failure");
-    const cleanupStarted = didIngestionCleanupStart(options["cleanup-outcome"]);
     if (options["ingestion-outcome"] === "success" && !cleanupFailed && validation.ok) {
       status = "succeeded";
       errorCategory = null;
@@ -122,7 +126,7 @@ async function finalize() {
     result: {
       status,
       started_ingestion: options["ingestion-started"] === "true",
-      completed_ingestion: options["ingestion-outcome"] === "success" && !String(options["cleanup-outcome"] || "").split(":").includes("failure"),
+      completed_ingestion: options["ingestion-outcome"] === "success" && !cleanupFailed,
       cleanup_started: cleanupStarted,
       failed_step: failedStep,
       error_category: errorCategory,
