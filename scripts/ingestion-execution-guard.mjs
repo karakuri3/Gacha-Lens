@@ -8,6 +8,7 @@ import {
 } from "../lib/domain/ingestion-execution-safety.js";
 import {
   buildSanitizedIngestionRunReport,
+  finalizeReadOnlyIngestionRunReport,
   findIngestionRunReportSecretLeaks,
   renderIngestionRunReportMarkdown,
 } from "../lib/domain/ingestion-run-report.js";
@@ -26,8 +27,9 @@ const options = parseOptions(process.argv.slice(3));
 if (command === "preflight") await preflight();
 else if (command === "snapshot") await snapshot();
 else if (command === "finalize") await finalize();
+else if (command === "finalize-read-only") await finalizeReadOnly();
 else if (command === "scan") scan();
-else throw new Error("Expected command: preflight, snapshot, finalize, or scan.");
+else throw new Error("Expected command: preflight, snapshot, finalize, finalize-read-only, or scan.");
 
 async function preflight() {
   const outputDir = required(options["output-dir"], "--output-dir");
@@ -133,6 +135,27 @@ async function finalize() {
   console.log(JSON.stringify({ ok: status === "succeeded", status, database_writes: report.database_writes }));
 }
 
+async function finalizeReadOnly() {
+  const outputDir = path.resolve(required(options["output-dir"], "--output-dir"));
+  const existing = readJson(path.join(outputDir, "ingestion-run-report.json"));
+  const after = options.after ? readJsonSafe(path.resolve(options.after)) : null;
+  const report = finalizeReadOnlyIngestionRunReport({
+    report: existing,
+    after_snapshot: after,
+    origin_main_sha: options["origin-main-sha"],
+  });
+  const finalOk = report.result.status === "succeeded";
+  const zeroDeltaVerified = finalOk
+    && Object.keys(report.database.deltas).length === 9
+    && Object.values(report.database.deltas).every((delta) => delta === 0);
+  writeReport(outputDir, report);
+  writeOutput("final_status", report.result.status);
+  writeOutput("final_ok", finalOk);
+  writeOutput("database_writes", report.database_writes);
+  writeOutput("zero_delta_verified", zeroDeltaVerified);
+  console.log(JSON.stringify({ ok: finalOk, status: report.result.status, database_writes: report.database_writes, zero_delta_verified: zeroDeltaVerified }));
+}
+
 function scan() {
   const directory = path.resolve(required(options.directory, "--directory"));
   const files = listFiles(directory).map((file) => ({ name: path.relative(directory, file), text: fs.readFileSync(file, "utf8") }));
@@ -155,11 +178,11 @@ async function productionCounts() {
 
 function buildReport(decision, database = {}) {
   return buildSanitizedIngestionRunReport({
-    workflow: { run_id: process.env.GITHUB_RUN_ID || options["run-id"] || "0", run_attempt: process.env.GITHUB_RUN_ATTEMPT || "1", head_sha: options["head-sha"], event_name: options["event-name"], ref: options.ref },
-    execution: { task: decision.task, mode: decision.mode, execution_type: decision.execution_type, schedule: options.schedule || null, automatic_write_enabled: decision.automatic_write_enabled, manual_approval_valid: decision.manual_approval_valid },
+    workflow: { run_id: process.env.GITHUB_RUN_ID || options["run-id"] || "0", run_attempt: process.env.GITHUB_RUN_ATTEMPT || "1", head_sha: options["head-sha"], origin_main_sha: options["origin-main-sha"], event_name: options["event-name"], ref: options.ref },
+    execution: { task: decision.task, mode: decision.mode, execution_type: decision.execution_type, source_scope: options["source-scope"] || null, execute_sources: options["execute-sources"] === "true", schedule: options.schedule || null, automatic_write_enabled: decision.automatic_write_enabled, manual_approval_valid: decision.manual_approval_valid },
     preflight: decision,
     database,
-    result: { status: decision.ok ? "allowed" : "blocked", started_ingestion: false, completed_ingestion: false, failed_step: decision.ok ? null : "preflight", error_category: decision.ok ? null : "safety_gate" },
+    result: { status: decision.ok ? "allowed" : "blocked", started_ingestion: false, completed_ingestion: false, cleanup_started: false, failed_step: decision.ok ? null : "preflight", error_category: decision.ok ? null : "safety_gate" },
     database_writes: 0,
   });
 }
