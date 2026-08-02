@@ -57,12 +57,40 @@ jobs:
           --source-scope=none
           --execute-sources=false
           --automatic-write-enabled=${{ env.AUTOMATIC_INGESTION_WRITE_ENABLED }}
+      - name: Capture read-only after snapshot
+        id: after_snapshot
+        continue-on-error: true
+        run: >-
+          node scripts/ingestion-execution-guard.mjs snapshot
+          --output=${{ runner.temp }}/gacha-ingestion-safety-check/after-snapshot.json
+      - name: Finalize read-only safety report
+        id: finalize
+        if: ${{ always() }}
+        run: >-
+          node scripts/ingestion-execution-guard.mjs finalize-read-only
+          --output-dir=${{ runner.temp }}/gacha-ingestion-safety-check
+          --after=${{ runner.temp }}/gacha-ingestion-safety-check/after-snapshot.json
+          --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
       - name: Scan safety report
+        id: scan
         run: node scripts/ingestion-execution-guard.mjs scan --directory=${{ runner.temp }}/gacha-ingestion-safety-check
       - name: Upload sanitized safety report
+        id: upload
+        if: ${{ steps.scan.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: ingestion-safety-check-${{ github.run_id }}
           path: ${{ runner.temp }}/gacha-ingestion-safety-check
           if-no-files-found: error
           retention-days: 14
+      - name: Enforce read-only safety result
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          if [[ "${{ steps.finalize.outputs.final_ok }}" != "true" \
+            || "${{ steps.finalize.outputs.zero_delta_verified }}" != "true" \
+            || "${{ steps.scan.outcome }}" != "success" \
+            || "${{ steps.upload.outcome }}" != "success" ]]; then
+            echo "::error::Read-only safety verification failed."
+            exit 1
+          fi
