@@ -61,6 +61,8 @@ test("read-only guard exposes sanitized final outputs", () => {
   assert.match(guard, /execute_sources: options\["execute-sources"\] === "true"/);
   assert.match(guard, /origin_main_sha: options\["origin-main-sha"\]/);
   assert.match(guard, /cleanup_started: false/);
+  assert.match(guard, /cleanup_started: cleanupStarted/);
+  assert.match(guard, /didIngestionCleanupStart\(options\["cleanup-outcome"\]\)/);
 });
 test("safety workflow has no ingestion command", () => assert.doesNotMatch(safety, /db:upsert|run-ingestion\.mjs|market:backfill/));
 test("safety workflow has no cleanup command", () => assert.doesNotMatch(safety, /db:cleanup|cleanup-/));

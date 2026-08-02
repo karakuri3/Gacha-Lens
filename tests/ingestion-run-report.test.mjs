@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildSanitizedIngestionRunReport, finalizeReadOnlyIngestionRunReport, findIngestionRunReportSecretLeaks, renderIngestionRunReportMarkdown, validateIngestionRunReport } from "../lib/domain/ingestion-run-report.js";
+import { buildSanitizedIngestionRunReport, didIngestionCleanupStart, finalizeReadOnlyIngestionRunReport, findIngestionRunReportSecretLeaks, renderIngestionRunReportMarkdown, validateIngestionRunReport } from "../lib/domain/ingestion-run-report.js";
 
 const sha = "a".repeat(40);
 const snapshot = Object.freeze({ market_listings: 1, market_listing_observations: 2, import_issues: 3, ingestion_runs: 4, review_required: 5, series: 6, variants: 7, stock_reports: 8, restock_events: 9 });
@@ -66,7 +66,8 @@ test("one nonzero read-only delta fails closed", () => {
   assert.equal(value.result.status, "failed");
   assert.equal(value.result.failed_step, "read_only_finalize");
   assert.equal(value.result.error_category, "verification");
-  assert.equal(value.database_writes, 0);
+  assert.equal(value.database.deltas.market_listings, 1);
+  assert.equal(value.database_writes, 1);
 });
 test("missing after snapshot fails read-only finalization", () => {
   const value = finalizeReadOnlyIngestionRunReport({ report: readOnlyReport(), after_snapshot: null, origin_main_sha: sha });
@@ -82,7 +83,10 @@ test("missing stored origin main SHA fails read-only finalization", () => {
   assert.equal(finalize(value).result.status, "failed");
 });
 test("head and origin SHA mismatch fails read-only finalization", () => {
-  assert.equal(finalize(readOnlyReport(), { origin_main_sha: "b".repeat(40) }).result.status, "failed");
+  const value = finalize(readOnlyReport(), { origin_main_sha: "b".repeat(40) });
+  assert.equal(value.result.status, "failed");
+  assert.equal(value.workflow.origin_main_sha, sha);
+  assert.notEqual(value.workflow.origin_main_sha, "b".repeat(40));
 });
 test("read-only source scope must be none", () => {
   assert.equal(finalize(readOnlyReport({ execution: { source_scope: "all" } })).result.status, "failed");
@@ -91,19 +95,42 @@ test("read-only execute sources must remain false", () => {
   assert.equal(finalize(readOnlyReport({ execution: { execute_sources: true } })).result.status, "failed");
 });
 test("read-only finalization rejects started ingestion", () => {
-  assert.equal(finalize(readOnlyReport({ result: { started_ingestion: true } })).result.status, "failed");
+  const value = finalize(readOnlyReport({ result: { started_ingestion: true } }));
+  assert.equal(value.result.status, "failed");
+  assert.equal(value.result.started_ingestion, true);
 });
 test("read-only finalization rejects started cleanup", () => {
-  assert.equal(finalize(readOnlyReport({ result: { cleanup_started: true } })).result.status, "failed");
+  const value = finalize(readOnlyReport({ result: { cleanup_started: true } }));
+  assert.equal(value.result.status, "failed");
+  assert.equal(value.result.cleanup_started, true);
+});
+test("read-only finalization rejects and preserves completed ingestion", () => {
+  const value = finalize(readOnlyReport({ result: { completed_ingestion: true } }));
+  assert.equal(value.result.status, "failed");
+  assert.equal(value.result.completed_ingestion, true);
 });
 test("missing cleanup marker fails read-only finalization", () => {
   const value = readOnlyReport();
   delete value.result.cleanup_started;
   assert.equal(finalize(value).result.status, "failed");
 });
-test("read-only finalization rejects prior database writes while reporting zero final writes", () => {
+test("read-only finalization rejects and preserves prior database writes", () => {
   const value = finalize(readOnlyReport({ database_writes: 1 }));
   assert.equal(value.result.status, "failed");
+  assert.equal(value.database_writes, 1);
+});
+test("positive deltas remain observable and contribute to database writes", () => {
+  const value = finalize(readOnlyReport(), { after_snapshot: { ...snapshot, market_listings: 3, variants: 10 } });
+  assert.equal(value.result.status, "failed");
+  assert.equal(value.database.deltas.market_listings, 2);
+  assert.equal(value.database.deltas.variants, 3);
+  assert.equal(value.database_writes, 5);
+});
+test("negative deltas remain observable in failure reports", () => {
+  const value = finalize(readOnlyReport(), { after_snapshot: { ...snapshot, variants: 6 } });
+  assert.equal(value.result.status, "failed");
+  assert.equal(value.database.deltas.variants, -1);
+  assert.deepEqual(value.database.negative_table_deltas, ["variants"]);
   assert.equal(value.database_writes, 0);
 });
 test("secret scanner accepts completed sanitized read-only report", () => {
@@ -114,4 +141,11 @@ test("secret scanner accepts completed sanitized read-only report", () => {
 test("unknown nested raw fields remain omitted from read-only report", () => {
   const value = buildSanitizedIngestionRunReport({ ...readOnlyReport(), workflow: { ...readOnlyReport().workflow, raw_response: "private" }, execution: { ...readOnlyReport().execution, environment: "private" } });
   assert.doesNotMatch(JSON.stringify(value), /private|raw_response|environment/);
+});
+test("Production cleanup outcomes record whether cleanup started", () => {
+  assert.equal(didIngestionCleanupStart("skipped:skipped:"), false);
+  assert.equal(didIngestionCleanupStart("::"), false);
+  assert.equal(didIngestionCleanupStart("success:skipped:skipped"), true);
+  assert.equal(didIngestionCleanupStart("skipped:failure:skipped"), true);
+  assert.equal(didIngestionCleanupStart("skipped:skipped:cancelled"), true);
 });

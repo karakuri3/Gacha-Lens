@@ -8,6 +8,7 @@ import {
 } from "../lib/domain/ingestion-execution-safety.js";
 import {
   buildSanitizedIngestionRunReport,
+  didIngestionCleanupStart,
   finalizeReadOnlyIngestionRunReport,
   findIngestionRunReportSecretLeaks,
   renderIngestionRunReportMarkdown,
@@ -105,6 +106,7 @@ async function finalize() {
   try {
     validation = validateTaskDeltas(existing.execution.task, before, after);
     const cleanupFailed = String(options["cleanup-outcome"] || "").split(":").includes("failure");
+    const cleanupStarted = didIngestionCleanupStart(options["cleanup-outcome"]);
     if (options["ingestion-outcome"] === "success" && !cleanupFailed && validation.ok) {
       status = "succeeded";
       errorCategory = null;
@@ -121,6 +123,7 @@ async function finalize() {
       status,
       started_ingestion: options["ingestion-started"] === "true",
       completed_ingestion: options["ingestion-outcome"] === "success" && !String(options["cleanup-outcome"] || "").split(":").includes("failure"),
+      cleanup_started: cleanupStarted,
       failed_step: failedStep,
       error_category: errorCategory,
       error_message: options["error-message"],
