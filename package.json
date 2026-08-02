@@ -42,7 +42,9 @@
     "market:rollout-plan": "node scripts/market-rollout-plan.mjs",
     "market:rollout-readiness": "node scripts/market-rollout-readiness.mjs",
     "market:bounded-persist": "node scripts/market-bounded-persistence.mjs",
-    "test:market-bounded-write": "node --test tests/market-bounded-write.test.mjs"
+    "market:bounded-manual": "node scripts/manual-market-bounded-persistence.mjs",
+    "test:market-bounded-write": "node --test tests/market-bounded-write.test.mjs",
+    "test:manual-market-bounded": "node --test tests/manual-market-bounded-execution.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
