@@ -12,11 +12,18 @@ import {
   buildMarketBoundedRows,
   canonicalJson,
   persistMarketBounded,
+  rollbackMarketBounded,
   renderMarketBoundedResultMarkdown,
   validateMarketBoundedPlanIdentity,
 } from "../lib/domain/market-bounded-write.js";
 import {
+  approvalNonceSha256,
+  buildManualApprovalClaim,
+  MANUAL_MARKET_BOUNDED_CLAIM_PREFIX,
+  validateManualActiveRuns,
+  validateManualApprovalClaimReuse,
   validateManualMarketBoundedArmingGate,
+  validateManualMarketBoundedExactDeltas,
   validateManualMarketBoundedOutcome,
 } from "../lib/domain/manual-market-bounded-execution.js";
 import { deleteRowsByIds, fetchRowCount, fetchRows, upsertRows } from "./supabase-rest.mjs";
@@ -29,29 +36,31 @@ const options = parseOptions(process.argv.slice(3));
 const policyPath = path.resolve(options.policy || "config/automatic-ingestion-rollout-policy.json");
 
 if (command === "preflight") await preflight();
+else if (command === "claim") await claim(false);
+else if (command === "claim-verify") await claim(true);
 else if (command === "persist") await persist();
 else if (command === "scan") scan();
 else if (command === "verify") verify();
-else throw new Error("Expected command: preflight, persist, scan, or verify.");
+else throw new Error("Expected command: preflight, claim, claim-verify, persist, scan, or verify.");
 
 async function preflight() {
   const outputDir = outputDirectory();
   fs.mkdirSync(outputDir, { recursive: true });
   const { policy, digest } = loadAutomaticIngestionRolloutPolicy(policyPath);
-  let runningRows = null;
-  let historyRows = null;
-  let counts = null;
-  try {
-    [runningRows, historyRows, counts] = await Promise.all([
-      fetchRows("ingestion_runs", { select: "id,task,status,started_at,finished_at,summary", pageSize: 1000, params: { task: "eq.market", status: "eq.running", order: "started_at.asc,id.asc" } }),
-      fetchRows("ingestion_runs", { select: "id,task,status,started_at,finished_at,summary", pageSize: 100, params: { task: "eq.market", status: "in.(succeeded,failed)", order: "finished_at.desc,id.desc" } }),
-      productionCounts(),
-    ]);
-  } catch {
-    runningRows = null;
-    historyRows = null;
-    counts = null;
+  const gate = validateManualGate(digest);
+  let safety = null;
+  let safetyError = null;
+  if (gate.ok) {
+    try {
+      safety = await loadSafetyState({ requireCurrentClaim: false });
+    } catch (error) {
+      safetyError = error;
+    }
   }
+  const runningRows = safety?.runningRows ?? null;
+  const historyRows = safety?.historyRows ?? null;
+  const counts = safety?.counts ?? null;
+  const githubRows = safety?.githubRows ?? null;
   const concurrency = evaluateIngestionConcurrency(runningRows, { task: "market" });
   const circuitBreaker = evaluateIngestionCircuitBreaker(historyRows);
   const throttle = evaluateAutomaticIngestionThrottle({
@@ -60,10 +69,9 @@ async function preflight() {
     policy: policy.stages["market-bounded"],
     history_rows: historyRows,
     running_rows: runningRows,
-    github_rows: [],
+    github_rows: githubRows,
   });
-  const gate = validateManualGate(digest);
-  const safetyAvailable = Array.isArray(runningRows) && Array.isArray(historyRows) && counts !== null;
+  const safetyAvailable = Array.isArray(runningRows) && Array.isArray(historyRows) && Array.isArray(githubRows) && counts !== null;
   const safetyClear = safetyAvailable && concurrency.state === "clear" && circuitBreaker.state === "closed" && throttle.ok === true;
   const allowed = gate.ok && safetyClear;
   const report = {
@@ -72,7 +80,7 @@ async function preflight() {
     workflow: workflowIdentity(),
     decision: allowed ? "allowed" : "blocked",
     action: allowed ? "bounded-plan" : "blocked",
-    reason_code: gate.reason_code ?? (!safetyAvailable ? "manual_bounded_safety_unavailable" : !safetyClear ? "manual_bounded_safety_blocked" : null),
+    reason_code: gate.reason_code ?? safetyError?.reason_code ?? (!safetyAvailable ? "manual_bounded_safety_unavailable" : !safetyClear ? "manual_bounded_safety_blocked" : null),
     stage: "market-bounded",
     task: "market",
     schedule: null,
@@ -84,6 +92,8 @@ async function preflight() {
     concurrency,
     circuit_breaker: circuitBreaker,
     throttle,
+    github_active_runs: safety?.activeCheck ?? { available: false, blocking_run_count: null, known_orphan_excluded: true },
+    approval_claim: safety?.claimCheck ?? { available: false, current_claim_count: null, prior_claim_count: null },
     durable_run_store: { available: Array.isArray(historyRows) },
     production_snapshot: { available: counts !== null, counts },
     ingestion_started: false,
@@ -100,6 +110,32 @@ async function preflight() {
   if (!allowed) throw new Error(`Manual bounded preflight failed closed: ${report.reason_code}`);
 }
 
+async function claim(requireCurrent) {
+  const outputDir = path.resolve(required(options["claim-dir"], "--claim-dir"));
+  fs.mkdirSync(outputDir, { recursive: true });
+  const { digest } = loadAutomaticIngestionRolloutPolicy(policyPath);
+  const gate = validateManualGate(digest);
+  if (!gate.ok) throw manualError(gate.reason_code);
+  const claimCheck = requireCurrent ? await waitForCurrentApprovalClaim() : await approvalClaimCheck({ requireCurrent: false });
+  if (requireCurrent) {
+    writeOutput("claim_verified", true);
+    writeOutput("approval_nonce_sha256", claimCheck.approval_nonce_sha256);
+    return;
+  }
+  const claimValue = buildManualApprovalClaim({
+    nonce: process.env.MANUAL_APPROVAL_NONCE,
+    workflow_run_id: workflowIdentity().run_id,
+    workflow_run_attempt: workflowIdentity().run_attempt,
+    head_sha: workflowIdentity().head_sha,
+    policy_digest: digest,
+  });
+  writeJson(path.join(outputDir, "manual-bounded-approval-claim.json"), claimValue);
+  fs.writeFileSync(path.join(outputDir, "manual-bounded-approval-claim.md"), renderClaim(claimValue), "utf8");
+  writeOutput("claim_name", `${MANUAL_MARKET_BOUNDED_CLAIM_PREFIX}${claimValue.approval_nonce_sha256}`);
+  writeOutput("approval_nonce_sha256", claimValue.approval_nonce_sha256);
+  writeOutput("claim_generated", true);
+}
+
 async function persist() {
   const outputDir = outputDirectory();
   fs.mkdirSync(outputDir, { recursive: true });
@@ -110,12 +146,15 @@ async function persist() {
   let outcome = null;
   let result = null;
   let afterCounts = null;
+  let rollbackContext = null;
   try {
     const { digest } = loadAutomaticIngestionRolloutPolicy(policyPath);
     const gate = validateManualGate(digest);
     if (!gate.ok || preflightReport.decision !== "allowed" || preflightReport.persistence_authorized !== true) {
       throw manualError(gate.reason_code || "manual_bounded_preflight_changed");
     }
+    const safety = await loadSafetyState({ requireCurrentClaim: true });
+    assertCountsEqual(preflightReport.production_snapshot?.counts, safety.counts);
     const auditPath = path.resolve(required(options.audit, "--audit"));
     const auditBytes = fs.readFileSync(auditPath);
     const audit = JSON.parse(auditBytes.toString("utf8"));
@@ -128,24 +167,38 @@ async function persist() {
     }
     validateMarketBoundedPlanIdentity({ audit_bytes: auditBytes, audit, plan, workflow, policy_digest: digest, simulation: true });
     rows = buildMarketBoundedRows({ audit, plan, workflow, observed_at: plan.generated_at });
-    const beforeCounts = await productionCounts();
-    assertCountsEqual(preflightReport.production_snapshot?.counts, beforeCounts);
+    const beforeCounts = safety.counts;
     const runId = stableId("market-bounded-manual-run", workflow.run_id, workflow.run_attempt, plan.plan_digest);
+    const store = createStore();
+    const [beforeListings, beforeObservations, beforeDurableRows] = await Promise.all([
+      store.fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)),
+      store.fetchRowsByIds("market_listing_observations", rows.observationRows.map((row) => row.id)),
+      store.fetchRowsByIds("ingestion_runs", [runId]),
+    ]);
+    rollbackContext = { store, listingRows: rows.listingRows, observationRows: rows.observationRows, durableRunRow: null, beforeListings, beforeObservations, beforeDurableRows, beforeCounts };
+    const nonceFingerprint = approvalNonceSha256(process.env.MANUAL_APPROVAL_NONCE);
     outcome = await persistMarketBounded({
       listingRows: rows.listingRows,
       observationRows: rows.observationRows,
       durableRunId: runId,
-      buildDurableRunRow: (operations) => durableRunRow({ id: runId, workflow, plan, rows, operations }),
-      store: createStore(),
+      buildDurableRunRow: (operations) => durableRunRow({ id: runId, workflow, plan, rows, operations, nonceFingerprint }),
+      store,
     });
+    rollbackContext.durableRunRow = durableRunRow({ id: runId, workflow, plan, rows, operations: outcome.operations, nonceFingerprint });
     validateManualMarketBoundedOutcome({ candidates: rows.candidates.length, operations: outcome.operations, database_writes: outcome.database_writes, deltas: outcome.database_deltas });
     afterCounts = await productionCounts();
+    const snapshotDelta = buildDelta(beforeCounts, afterCounts);
+    validateManualMarketBoundedExactDeltas({ operations: outcome.operations, persisted_deltas: outcome.database_deltas, snapshot_deltas: snapshotDelta.deltas });
     result = withDurableOperation(buildMarketBoundedResult({ workflow, plan, rows, ...outcome, status: rows.candidates.length ? "succeeded" : "no-op", schedule: "manual", automatic_write_enabled: true, bounded_persistence_enabled: true, bounded_approval_valid: true }), outcome.operations?.durable_run);
     writePersistenceArtifacts(outputDir, result, preflightReport.production_snapshot.counts, afterCounts);
     writeOutput("result_generated", true);
     writeOutput("status", result.result.status);
     writeOutput("database_writes", result.database_writes);
   } catch (error) {
+    if (outcome?.ok === true && rollbackContext) {
+      const rollback = await rollbackMarketBounded(rollbackContext);
+      outcome = { ...outcome, ok: false, verification: { rows_verified: false, deltas_verified: false }, rollback, database_deltas: {}, database_writes: 0 };
+    }
     outcome = error?.bounded_result ?? outcome ?? { operations: { listings: [], observations: [] }, verification: {}, rollback: emptyRollback(), database_deltas: {}, database_writes: 0 };
     afterCounts = await safeProductionCounts();
     const status = outcome.rollback?.attempted ? outcome.rollback.verified ? "rolled-back" : "rollback-failed" : "blocked";
@@ -197,6 +250,8 @@ function validateManualGate(digest) {
     ref: options.ref ?? process.env.GITHUB_REF,
     task: "market",
     stage: options.stage,
+    configured_stage: process.env.AUTOMATIC_INGESTION_ROLLOUT_STAGE,
+    run_attempt: workflowIdentity().run_attempt,
     expected_main_sha: process.env.MANUAL_EXPECTED_MAIN_SHA,
     head_sha: options["head-sha"] ?? process.env.GITHUB_SHA,
     origin_main_sha: options["origin-main-sha"],
@@ -230,7 +285,7 @@ async function productionCounts() {
 
 async function safeProductionCounts() { try { return await productionCounts(); } catch { return null; } }
 
-function durableRunRow({ id, workflow, plan, rows, operations }) {
+function durableRunRow({ id, workflow, plan, rows, operations, nonceFingerprint }) {
   const stableTime = plan.generated_at;
   return {
     id, task: "market", status: "succeeded", trigger_source: "workflow_dispatch",
@@ -239,6 +294,7 @@ function durableRunRow({ id, workflow, plan, rows, operations }) {
       execution_path: "manual-bounded", rollout_stage: "market-bounded",
       rollout_policy_digest: plan.policy_digest, bounded_persistence_enabled: true,
       bounded_approval_valid: true, audit_digest: plan.audit_digest, plan_digest: plan.plan_digest,
+      approval_nonce_sha256: nonceFingerprint,
       candidate_count: rows.candidates.length, auto_eligible_count: rows.candidates.length,
       listing_operations: operationSummary(operations.listings), observation_operations: operationSummary(operations.observations),
       bounded_result_status: "succeeded", rollback_state: "not_attempted",
@@ -268,6 +324,7 @@ function buildDelta(before, after) {
 }
 
 function renderPreflight(report) { return `# Manual market bounded preflight\n\n- Decision: ${report.decision}\n- Reason: ${report.reason_code ?? "none"}\n- Main SHA verified: ${report.main_sha_verified}\n- Policy digest: ${report.policy_digest}\n- Concurrency: ${report.concurrency.state}\n- Circuit breaker: ${report.circuit_breaker.state}\n- Throttle: ${report.throttle.state}\n- Durable run store: ${report.durable_run_store.available}\n- Bounded approval valid: ${report.bounded_approval_valid}\n- Persistence authorized: ${report.persistence_authorized}\n- Production writes: 0\n`; }
+function renderClaim(claimValue) { return `# Manual bounded approval claim\n\n- Schema: ${claimValue.schema_version}\n- Nonce fingerprint: ${claimValue.approval_nonce_sha256}\n- Run: ${claimValue.workflow_run_id}\n- Attempt: ${claimValue.workflow_run_attempt}\n- Head SHA: ${claimValue.head_sha}\n- Policy digest: ${claimValue.policy_digest}\n- Created at: ${claimValue.created_at}\n`; }
 function renderDelta(delta) { return `# Manual market bounded Production delta\n\n- Available: ${delta.available}\n- Allowed: ${delta.allowed}\n${Object.entries(delta.deltas).map(([key, value]) => `- ${key}: ${value}`).join("\n")}\n`; }
 function withDurableOperation(result, operation) { return { ...result, operations: { ...result.operations, durable_run: ["insert", "update", "unchanged"].includes(operation) ? operation : "unchanged" } }; }
 function operationSummary(entries = []) { return Object.fromEntries(["insert", "update", "unchanged"].map((name) => [name, entries.filter((entry) => entry.operation === name).length])); }
@@ -284,3 +341,73 @@ function writeJson(file, value) { fs.writeFileSync(file, `${JSON.stringify(value
 function writeOutput(key, value) { if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`, "utf8"); }
 function normalizedSha(value) { return String(value ?? "").trim().toLowerCase(); }
 function listFiles(directory) { return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => { const entryPath = path.join(directory, entry.name); return entry.isDirectory() ? listFiles(entryPath) : [entryPath]; }).sort((left, right) => left.localeCompare(right, "en")); }
+
+async function loadSafetyState({ requireCurrentClaim }) {
+  const [runningRows, historyRows, counts, githubRows, claimCheck] = await Promise.all([
+    fetchRows("ingestion_runs", { select: "id,task,status,started_at,finished_at,summary", pageSize: 1000, params: { task: "eq.market", status: "eq.running", order: "started_at.asc,id.asc" } }),
+    fetchRows("ingestion_runs", { select: "id,task,status,started_at,finished_at,summary", pageSize: 100, params: { task: "eq.market", status: "in.(succeeded,failed)", order: "finished_at.desc,id.desc" } }),
+    productionCounts(),
+    fetchGithubActiveRuns(),
+    approvalClaimCheck({ requireCurrent: requireCurrentClaim }),
+  ]);
+  const activeCheck = validateManualActiveRuns({ runs: githubRows, current_run_id: workflowIdentity().run_id });
+  const concurrency = evaluateIngestionConcurrency(runningRows, { task: "market" });
+  const circuitBreaker = evaluateIngestionCircuitBreaker(historyRows);
+  const { policy } = loadAutomaticIngestionRolloutPolicy(policyPath);
+  const throttle = evaluateAutomaticIngestionThrottle({ stage: "market-bounded", task: "market", policy: policy.stages["market-bounded"], history_rows: historyRows, running_rows: runningRows, github_rows: githubRows });
+  if (concurrency.state !== "clear" || circuitBreaker.state !== "closed" || throttle.ok !== true) throw manualError("manual_bounded_safety_blocked");
+  return { runningRows, historyRows, counts, githubRows, claimCheck: { available: true, ...claimCheck }, activeCheck: { available: true, ...activeCheck } };
+}
+
+async function approvalClaimCheck({ requireCurrent }) {
+  const fingerprint = approvalNonceSha256(process.env.MANUAL_APPROVAL_NONCE);
+  const artifacts = await fetchGithubArtifacts(`${MANUAL_MARKET_BOUNDED_CLAIM_PREFIX}${fingerprint}`);
+  const result = validateManualApprovalClaimReuse({ artifacts, approval_nonce_sha256: fingerprint, current_run_id: workflowIdentity().run_id, current_run_attempt: workflowIdentity().run_attempt, require_current: requireCurrent });
+  return { ...result, approval_nonce_sha256: fingerprint };
+}
+
+async function waitForCurrentApprovalClaim() {
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      return await approvalClaimCheck({ requireCurrent: true });
+    } catch (error) {
+      if (error?.reason_code !== "manual_bounded_approval_claim_missing" || attempt === 5) throw error;
+      await delay(2_000);
+    }
+  }
+  throw manualError("manual_bounded_approval_claim_missing");
+}
+
+async function fetchGithubActiveRuns() {
+  const rows = [];
+  for (const status of ["queued", "in_progress", "waiting", "pending", "requested"]) {
+    const payload = await fetchGithubPages(`/actions/runs?status=${status}&per_page=100`);
+    rows.push(...payload.flatMap((page) => page.workflow_runs ?? []).map((run) => ({ id: String(run.id), name: String(run.name ?? ""), status: String(run.status ?? status) })));
+  }
+  return [...new Map(rows.map((row) => [row.id, row])).values()].sort((left, right) => left.id.localeCompare(right.id, "en"));
+}
+
+async function fetchGithubArtifacts(name) {
+  const payload = await fetchGithubPages(`/actions/artifacts?per_page=100&name=${encodeURIComponent(name)}`);
+  return payload.flatMap((page) => page.artifacts ?? []).map((artifact) => ({ name: artifact.name, expired: artifact.expired === true, workflow_run: { id: String(artifact.workflow_run?.id ?? ""), run_attempt: String(artifact.workflow_run?.run_attempt ?? "1") } }));
+}
+
+async function fetchGithubPages(endpoint) {
+  const repository = process.env.GITHUB_REPOSITORY;
+  const token = process.env.GH_READ_TOKEN || process.env.GITHUB_TOKEN;
+  if (!repository || !token) throw manualError("manual_bounded_github_state_unavailable");
+  const pages = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const separator = endpoint.includes("?") ? "&" : "?";
+    const response = await fetch(`https://api.github.com/repos/${repository}${endpoint}${separator}page=${page}`, { headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28" } });
+    if (!response.ok) throw manualError("manual_bounded_github_state_unavailable");
+    const value = await response.json();
+    pages.push(value);
+    const count = Array.isArray(value.workflow_runs) ? value.workflow_runs.length : Array.isArray(value.artifacts) ? value.artifacts.length : 0;
+    if (count < 100) break;
+    if (page === 10) throw manualError("manual_bounded_github_state_unavailable");
+  }
+  return pages;
+}
+
+function delay(milliseconds) { return new Promise((resolve) => setTimeout(resolve, milliseconds)); }

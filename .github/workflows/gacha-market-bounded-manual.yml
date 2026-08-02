@@ -27,12 +27,13 @@ on:
 jobs:
   bounded-production:
     concurrency:
-      group: gacha-market-bounded-manual-production
+      group: gacha-ingestion
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      GH_READ_TOKEN: ${{ github.token }}
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       RAKUTEN_APPLICATION_ID: ${{ secrets.RAKUTEN_APPLICATION_ID }}
@@ -43,6 +44,7 @@ jobs:
       GACHA_DATA_SOURCE: supabase
       BACKFILL_TASK: market
       FIXED_ROLLOUT_STAGE: market-bounded
+      INGESTION_WRITE_DISABLED: "true"
       MARKET_BACKFILL_WRITE_DISABLED: "true"
       MANUAL_EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
       MANUAL_EXPECTED_POLICY_DIGEST: ${{ inputs.expected_policy_digest }}
@@ -77,6 +79,32 @@ jobs:
         run: >-
           node scripts/manual-market-bounded-persistence.mjs preflight
           --output-dir=${{ runner.temp }}/gacha-market-bounded-manual
+          --stage=market-bounded
+          --event-name=workflow_dispatch
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
+          --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
+      - name: Create one-run approval claim
+        id: claim
+        run: >-
+          npm run market:bounded-manual -- claim
+          --claim-dir=${{ runner.temp }}/gacha-market-bounded-manual/approval-claim
+          --stage=market-bounded
+          --event-name=workflow_dispatch
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
+          --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
+      - name: Upload one-run approval claim
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.claim.outputs.claim_name }}
+          path: ${{ runner.temp }}/gacha-market-bounded-manual/approval-claim
+          if-no-files-found: error
+          retention-days: 90
+      - name: Verify one-run approval claim
+        run: >-
+          npm run market:bounded-manual -- claim-verify
+          --claim-dir=${{ runner.temp }}/gacha-market-bounded-manual/approval-claim
           --stage=market-bounded
           --event-name=workflow_dispatch
           --ref=${{ github.ref }}
@@ -138,16 +166,8 @@ jobs:
           npm run market:bounded-manual -- scan
           --output-dir=${{ runner.temp }}/gacha-market-bounded-manual
           --directories=${{ runner.temp }}/gacha-market-bounded-manual
-      - name: Upload sanitized manual bounded artifact
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: market-bounded-manual-result-${{ github.run_id }}
-          path: ${{ runner.temp }}/gacha-market-bounded-manual
-          if-no-files-found: error
-          retention-days: 14
       - name: Enforce final manual bounded result
-        if: ${{ always() }}
+        if: ${{ always() && steps.scan.outcome == 'success' }}
         run: >-
           npm run market:bounded-manual -- verify
           --output-dir=${{ runner.temp }}/gacha-market-bounded-manual
@@ -156,3 +176,11 @@ jobs:
           --result=${{ runner.temp }}/gacha-market-bounded-manual/market-bounded-result.json
           --delta=${{ runner.temp }}/gacha-market-bounded-manual/manual-market-bounded-production-delta.json
           --scan=${{ runner.temp }}/gacha-market-bounded-manual/manual-market-bounded-secret-scan.json
+      - name: Upload sanitized manual bounded artifact
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-bounded-manual-result-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-market-bounded-manual
+          if-no-files-found: error
+          retention-days: 14
