@@ -1,0 +1,181 @@
+name: Gacha Market Bounded Manual Production
+
+permissions:
+  contents: read
+  actions: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_main_sha:
+        description: Exact approved main commit SHA
+        required: true
+        type: string
+      expected_policy_digest:
+        description: Exact approved rollout policy digest
+        required: true
+        type: string
+      confirmation:
+        description: Type APPROVE_ONE_MANUAL_MARKET_BOUNDED_RUN
+        required: true
+        type: string
+
+jobs:
+  bounded-production:
+    concurrency:
+      group: gacha-ingestion
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      GH_READ_TOKEN: ${{ github.token }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      RAKUTEN_APPLICATION_ID: ${{ secrets.RAKUTEN_APPLICATION_ID }}
+      RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+      RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+      YAHOO_SHOPPING_APP_ID: ${{ secrets.YAHOO_SHOPPING_APP_ID }}
+      YAHOO_SHOPPING_FETCH_ENABLED: ${{ secrets.YAHOO_SHOPPING_FETCH_ENABLED }}
+      GACHA_DATA_SOURCE: supabase
+      BACKFILL_TASK: market
+      FIXED_ROLLOUT_STAGE: market-bounded
+      INGESTION_WRITE_DISABLED: "true"
+      MARKET_BACKFILL_WRITE_DISABLED: "true"
+      MANUAL_EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+      MANUAL_EXPECTED_POLICY_DIGEST: ${{ inputs.expected_policy_digest }}
+      MANUAL_CONFIRMATION: ${{ inputs.confirmation }}
+      AUTOMATIC_INGESTION_WRITE_ENABLED: ${{ vars.AUTOMATIC_INGESTION_WRITE_ENABLED || 'false' }}
+      AUTOMATIC_INGESTION_ROLLOUT_STAGE: ${{ vars.AUTOMATIC_INGESTION_ROLLOUT_STAGE || 'disabled' }}
+      AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST: ${{ vars.AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST || '' }}
+      AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED: ${{ vars.AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED || 'false' }}
+      AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ${{ vars.AUTOMATIC_INGESTION_BOUNDED_APPROVAL || '' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify exact main SHA
+        id: main_sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$MANUAL_EXPECTED_MAIN_SHA"
+          git fetch --no-tags origin main --depth=1
+          origin_main_sha="$(git rev-parse origin/main)"
+          test "$GITHUB_SHA" = "$origin_main_sha"
+          echo "origin_main_sha=$origin_main_sha" >> "$GITHUB_OUTPUT"
+      - name: Run manual bounded preflight
+        id: preflight
+        run: >-
+          node scripts/manual-market-bounded-persistence.mjs preflight
+          --output-dir=${{ runner.temp }}/gacha-market-bounded-manual
+          --stage=market-bounded
+          --event-name=workflow_dispatch
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
+          --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
+      - name: Create one-run approval claim
+        id: claim
+        run: >-
+          npm run market:bounded-manual -- claim
+          --claim-dir=${{ runner.temp }}/gacha-market-bounded-manual/approval-claim
+          --stage=market-bounded
+          --event-name=workflow_dispatch
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
+          --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
+      - name: Upload one-run approval claim
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.claim.outputs.claim_name }}
+          path: ${{ runner.temp }}/gacha-market-bounded-manual/approval-claim
+          if-no-files-found: error
+          retention-days: 90
+      - name: Verify one-run approval claim
+        run: >-
+          npm run market:bounded-manual -- claim-verify
+          --claim-dir=${{ runner.temp }}/gacha-market-bounded-manual/approval-claim
+          --stage=market-bounded
+          --event-name=workflow_dispatch
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
+          --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
+      - name: Run fixed fresh market dry-run
+        id: market_backfill
+        if: ${{ steps.preflight.outputs.allowed == 'true' }}
+        env:
+          MARKET_AUDIT_OUTPUT_DIR: ${{ runner.temp }}/gacha-market-bounded-manual/audit
+        run: >-
+          npm run market:backfill --
+          --mode=dry-run
+          --limit=5
+          --priority=1
+          --release=released
+          --source-scope=planner-apis
+          --execute-sources
+      - name: Generate bounded plan
+        id: plan
+        if: ${{ steps.market_backfill.outcome == 'success' }}
+        run: >-
+          node scripts/automatic-ingestion-rollout.mjs plan
+          --output-dir=${{ runner.temp }}/gacha-market-bounded-manual
+          --preflight=${{ runner.temp }}/gacha-market-bounded-manual/manual-market-bounded-preflight.json
+          --audit=${{ runner.temp }}/gacha-market-bounded-manual/audit/market-candidate-audit.json
+      - name: Generate bounded persistence preview
+        id: preview
+        if: ${{ steps.plan.outputs.plan_generated == 'true' }}
+        run: >-
+          node scripts/automatic-ingestion-rollout.mjs preview
+          --output-dir=${{ runner.temp }}/gacha-market-bounded-manual
+          --preflight=${{ runner.temp }}/gacha-market-bounded-manual/manual-market-bounded-preflight.json
+          --audit=${{ runner.temp }}/gacha-market-bounded-manual/audit/market-candidate-audit.json
+          --plan=${{ runner.temp }}/gacha-market-bounded-manual/market-bounded-write-plan.json
+          --simulation=true
+          --event-name=workflow_dispatch
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
+      - name: Run manual bounded persistence
+        id: persistence
+        if: ${{ steps.preflight.outputs.persistence_authorized == 'true' && steps.preview.outputs.preview_generated == 'true' && steps.plan.outputs.budget_state == 'within_budget' }}
+        run: >-
+          npm run market:bounded-manual -- persist
+          --output-dir=${{ runner.temp }}/gacha-market-bounded-manual
+          --stage=market-bounded
+          --preflight=${{ runner.temp }}/gacha-market-bounded-manual/manual-market-bounded-preflight.json
+          --audit=${{ runner.temp }}/gacha-market-bounded-manual/audit/market-candidate-audit.json
+          --plan=${{ runner.temp }}/gacha-market-bounded-manual/market-bounded-write-plan.json
+          --preview=${{ runner.temp }}/gacha-market-bounded-manual/market-bounded-persistence-preview.json
+          --event-name=workflow_dispatch
+          --ref=${{ github.ref }}
+          --head-sha=${{ github.sha }}
+          --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
+      - name: Scan sanitized manual bounded artifact
+        id: scan
+        if: ${{ always() }}
+        run: >-
+          npm run market:bounded-manual -- scan
+          --output-dir=${{ runner.temp }}/gacha-market-bounded-manual
+          --directories=${{ runner.temp }}/gacha-market-bounded-manual
+      - name: Enforce final manual bounded result
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        run: >-
+          npm run market:bounded-manual -- verify
+          --output-dir=${{ runner.temp }}/gacha-market-bounded-manual
+          --preflight=${{ runner.temp }}/gacha-market-bounded-manual/manual-market-bounded-preflight.json
+          --preview=${{ runner.temp }}/gacha-market-bounded-manual/market-bounded-persistence-preview.json
+          --result=${{ runner.temp }}/gacha-market-bounded-manual/market-bounded-result.json
+          --delta=${{ runner.temp }}/gacha-market-bounded-manual/manual-market-bounded-production-delta.json
+          --scan=${{ runner.temp }}/gacha-market-bounded-manual/manual-market-bounded-secret-scan.json
+      - name: Upload sanitized manual bounded artifact
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-bounded-manual-result-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-market-bounded-manual
+          if-no-files-found: error
+          retention-days: 14
