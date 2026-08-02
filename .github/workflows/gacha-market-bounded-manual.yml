@@ -15,10 +15,6 @@ on:
         description: Exact approved rollout policy digest
         required: true
         type: string
-      approval_nonce:
-        description: One-run lowercase hexadecimal nonce (32-64 characters)
-        required: true
-        type: string
       confirmation:
         description: Type APPROVE_ONE_MANUAL_MARKET_BOUNDED_RUN
         required: true
@@ -48,7 +44,6 @@ jobs:
       MARKET_BACKFILL_WRITE_DISABLED: "true"
       MANUAL_EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
       MANUAL_EXPECTED_POLICY_DIGEST: ${{ inputs.expected_policy_digest }}
-      MANUAL_APPROVAL_NONCE: ${{ inputs.approval_nonce }}
       MANUAL_CONFIRMATION: ${{ inputs.confirmation }}
       AUTOMATIC_INGESTION_WRITE_ENABLED: ${{ vars.AUTOMATIC_INGESTION_WRITE_ENABLED || 'false' }}
       AUTOMATIC_INGESTION_ROLLOUT_STAGE: ${{ vars.AUTOMATIC_INGESTION_ROLLOUT_STAGE || 'disabled' }}

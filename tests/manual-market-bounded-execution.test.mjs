@@ -4,9 +4,11 @@ import test from "node:test";
 import {
   approvalNonceSha256,
   buildManualApprovalClaim,
+  buildManualApprovalAttemptRows,
   expectedManualMarketBoundedApproval,
   KNOWN_ORPHANED_RUN_ID,
   MANUAL_MARKET_BOUNDED_CONFIRMATION,
+  parseManualMarketBoundedApproval,
   validateManualActiveRuns,
   validateManualApprovalClaimReuse,
   validateManualApprovalClaimShape,
@@ -23,15 +25,21 @@ const sha = "a".repeat(40);
 const nonce = "b".repeat(32);
 
 function gate(overrides = {}) {
-  return validateManualMarketBoundedArmingGate({
+  const nonceOverride = Object.hasOwn(overrides, "approval_nonce") ? overrides.approval_nonce : nonce;
+  const boundedApproval = Object.hasOwn(overrides, "bounded_approval")
+    ? overrides.bounded_approval
+    : expectedManualMarketBoundedApproval(digest, sha, nonceOverride);
+  const input = {
     event_name: "workflow_dispatch", ref: "refs/heads/main", task: "market", stage: "market-bounded", configured_stage: "market-bounded", run_attempt: "1",
     expected_main_sha: sha, head_sha: sha, origin_main_sha: sha, main_sha_verified: true,
     expected_policy_digest: digest, policy_digest: digest, configured_policy_digest: digest,
-    approval_nonce: nonce, confirmation: MANUAL_MARKET_BOUNDED_CONFIRMATION,
+    confirmation: MANUAL_MARKET_BOUNDED_CONFIRMATION,
     automatic_write_enabled: "true", bounded_persistence_enabled: "true",
-    bounded_approval: expectedManualMarketBoundedApproval(digest, sha, nonce),
+    bounded_approval: boundedApproval,
     ...overrides,
-  });
+  };
+  delete input.approval_nonce;
+  return validateManualMarketBoundedArmingGate(input);
 }
 
 test("complete manual approval passes", () => assert.equal(gate().ok, true));
@@ -41,11 +49,11 @@ test("non-main ref fails", () => assert.equal(gate({ ref: "refs/heads/feature" }
 test("main SHA mismatch fails", () => assert.equal(gate({ origin_main_sha: "c".repeat(40) }).ok, false));
 test("policy digest mismatch fails", () => assert.equal(gate({ configured_policy_digest: "c".repeat(64) }).ok, false));
 test("confirmation mismatch fails", () => assert.equal(gate({ confirmation: "yes" }).ok, false));
-for (const value of ["", "A".repeat(32), "a".repeat(31), "a".repeat(65), "g".repeat(32)]) {
-  test(`invalid nonce ${value.length} fails`, () => assert.equal(gate({ approval_nonce: value }).ok, false));
+for (const value of ["", "A".repeat(32), "a".repeat(31), "a".repeat(65), "g".repeat(32), ` ${nonce}`, `${nonce} `, `${nonce}\n`]) {
+  test(`invalid nonce ${JSON.stringify(value)} has the nonce reason`, () => assert.equal(gate({ approval_nonce: value }).reason_code, "manual_bounded_nonce_invalid"));
 }
 test("missing approval fails", () => assert.equal(gate({ bounded_approval: "" }).ok, false));
-test("approval nonce mismatch fails", () => assert.equal(gate({ bounded_approval: expectedManualMarketBoundedApproval(digest, sha, "c".repeat(32)) }).ok, false));
+test("approval with an extra colon fails", () => assert.equal(gate({ bounded_approval: `${expectedManualMarketBoundedApproval(digest, sha, nonce)}:extra` }).reason_code, "manual_bounded_approval_mismatch"));
 test("automatic write false fails", () => assert.equal(gate({ automatic_write_enabled: "false" }).ok, false));
 test("bounded persistence false fails", () => assert.equal(gate({ bounded_persistence_enabled: "false" }).ok, false));
 test("wrong rollout stage fails", () => assert.equal(gate({ stage: "market-shadow" }).ok, false));
@@ -54,17 +62,39 @@ test("configured rollout stage disabled fails", () => assert.equal(gate({ config
 test("configured rollout stage missing fails", () => assert.equal(gate({ configured_stage: "" }).ok, false));
 test("configured rollout stage mismatch fails even when fixed stage is correct", () => assert.equal(gate({ stage: "market-bounded", configured_stage: "market-shadow" }).ok, false));
 test("configured rollout stage trims surrounding whitespace", () => assert.equal(gate({ configured_stage: " market-bounded " }).ok, true));
-test("run attempt two fails", () => assert.equal(gate({ run_attempt: "2" }).ok, false));
+for (const value of ["MARKET-BOUNDED", "Market-Bounded", "market-Bounded"]) {
+  test(`configured stage ${value} is case-sensitive`, () => assert.equal(gate({ configured_stage: value }).reason_code, "manual_bounded_contract_invalid"));
+}
+test("run attempt two fails with the dedicated reason", () => assert.equal(gate({ run_attempt: "2" }).reason_code, "manual_bounded_run_attempt_invalid"));
 test("schedule approval cannot authorize manual gate", () => assert.equal(gate({ bounded_approval: `APPROVE_MARKET_BOUNDED:${digest}:${sha}` }).ok, false));
 test("gate result never stores approval or nonce", () => assert.doesNotMatch(JSON.stringify(gate()), /APPROVE|bbbbbbbb/));
+test("strict approval parser returns only policy head and nonce", () => {
+  assert.deepEqual(parseManualMarketBoundedApproval(expectedManualMarketBoundedApproval(digest, sha, nonce)), { policy_digest: digest, head_sha: sha, approval_nonce: nonce });
+});
+test("strict approval parser rejects surrounding whitespace and a final newline", () => {
+  const approval = expectedManualMarketBoundedApproval(digest, sha, nonce);
+  assert.throws(() => parseManualMarketBoundedApproval(` ${approval}`));
+  assert.throws(() => parseManualMarketBoundedApproval(`${approval}\n`));
+});
+test("nonce fingerprinting never trims or lowercases", () => {
+  assert.throws(() => approvalNonceSha256(` ${nonce}`));
+  assert.throws(() => approvalNonceSha256(nonce.toUpperCase()));
+});
 
 test("workflow_dispatch is the only trigger", () => {
   assert.match(workflow, /^on:\s*\r?\n\s+workflow_dispatch:/m);
   assert.doesNotMatch(workflow, /^\s+(schedule|push|pull_request|workflow_run|repository_dispatch):/m);
 });
 test("workflow has only required approval inputs", () => {
-  for (const name of ["expected_main_sha", "expected_policy_digest", "approval_nonce", "confirmation"]) assert.match(workflow, new RegExp(`^\\s{6}${name}:`, "m"));
+  for (const name of ["expected_main_sha", "expected_policy_digest", "confirmation"]) assert.match(workflow, new RegExp(`^\\s{6}${name}:`, "m"));
+  assert.equal((workflow.match(/^\s{6}[a-z_]+:\s*$/gm) ?? []).length, 3);
+  assert.doesNotMatch(workflow, /approval_nonce:|MANUAL_APPROVAL_NONCE|inputs\.approval_nonce|github\.event\.inputs\.approval_nonce/);
   assert.doesNotMatch(workflow, /^\s{6}(task|stage|limit|priority|release|source_scope|execute_sources|mode):/m);
+});
+test("approval comes only from the bounded approval Repository Variable", () => {
+  assert.match(workflow, /AUTOMATIC_INGESTION_BOUNDED_APPROVAL: \$\{\{ vars\.AUTOMATIC_INGESTION_BOUNDED_APPROVAL/);
+  assert.doesNotMatch(workflow, /--(?:approval|nonce)=/);
+  assert.match(workflow, /name: \$\{\{ steps\.claim\.outputs\.claim_name \}\}/);
 });
 test("workflow fixes the market contract", () => {
   assert.match(workflow, /--mode=dry-run[\s\S]*--limit=5[\s\S]*--priority=1[\s\S]*--release=released[\s\S]*--source-scope=planner-apis[\s\S]*--execute-sources/);
@@ -141,9 +171,21 @@ test("previously claimed nonce fails closed", () => {
   const fingerprint = approvalNonceSha256(nonce);
   assert.throws(() => validateManualApprovalClaimReuse({ artifacts: [{ name: `manual-bounded-approval-claim-${fingerprint}`, expired: false, workflow_run: { id: "99", run_attempt: "1" } }], approval_nonce_sha256: fingerprint, current_run_id: "100", current_run_attempt: "1" }), /already been consumed/);
 });
+test("expired prior claim also fails closed with the reuse reason", () => {
+  const fingerprint = approvalNonceSha256(nonce);
+  assert.throws(
+    () => validateManualApprovalClaimReuse({ artifacts: [{ name: `manual-bounded-approval-claim-${fingerprint}`, expired: true, workflow_run: { id: "99", run_attempt: "1" } }], approval_nonce_sha256: fingerprint, current_run_id: "100", current_run_attempt: "1" }),
+    (error) => error.reason_code === "manual_bounded_approval_already_consumed",
+  );
+});
 test("current one-run claim verifies exactly once", () => {
   const fingerprint = approvalNonceSha256(nonce);
   assert.equal(validateManualApprovalClaimReuse({ artifacts: [{ name: `manual-bounded-approval-claim-${fingerprint}`, expired: false, workflow_run: { id: "100", run_attempt: "1" } }], approval_nonce_sha256: fingerprint, current_run_id: "100", current_run_attempt: "1", require_current: true }).current_claim_count, 1);
+});
+test("two current Run claims fail closed", () => {
+  const fingerprint = approvalNonceSha256(nonce);
+  const claim = { name: `manual-bounded-approval-claim-${fingerprint}`, expired: false, workflow_run: { id: "100", run_attempt: "1" } };
+  assert.throws(() => validateManualApprovalClaimReuse({ artifacts: [claim, { ...claim, expired: true }], approval_nonce_sha256: fingerprint, current_run_id: "100", current_run_attempt: "1", require_current: true }));
 });
 test("claim contains fingerprint but no raw nonce or approval", () => {
   const claim = buildManualApprovalClaim({ nonce, workflow_run_id: "100", workflow_run_attempt: "1", head_sha: sha, policy_digest: digest, created_at: "2026-08-02T00:00:00.000Z" });
@@ -162,6 +204,16 @@ test("current Run and known orphan are excluded without operation", () => {
   assert.equal(result.blocking_run_count, 0);
   assert.equal(result.known_orphan_excluded, true);
 });
+test("claim artifacts become deduplicated throttle history including expired claims", () => {
+  const rows = buildManualApprovalAttemptRows({ artifacts: [
+    { name: "manual-bounded-approval-claim-a", expired: true, created_at: "2026-08-01T01:00:00Z", workflow_run: { id: "10" } },
+    { name: "manual-bounded-approval-claim-b", expired: false, created_at: "2026-08-01T01:05:00Z", workflow_run: { id: "10" } },
+    { name: "manual-bounded-approval-claim-c", expired: false, created_at: "2026-08-01T02:00:00Z", workflow_run: { id: "11" } },
+    { name: "unrelated", expired: false, created_at: "", workflow_run: {} },
+  ], current_run_id: "11" });
+  assert.deepEqual(rows, [{ id: "10", task: "market", status: "succeeded", finished_at: "2026-08-01T01:00:00.000Z", summary: { rollout_stage: "market-bounded" } }]);
+});
+test("incomplete claim attempt metadata fails closed", () => assert.throws(() => buildManualApprovalAttemptRows({ artifacts: [{ name: "manual-bounded-approval-claim-a", workflow_run: {} }], current_run_id: "11" })));
 test("three candidates fail instead of truncating", () => assert.throws(() => validateManualMarketBoundedOutcome({ candidates: 3, database_writes: 0 })));
 test("more than two listing operations fail", () => assert.throws(() => validateManualMarketBoundedOutcome({ candidates: 2, operations: { listings: Array.from({ length: 3 }, () => ({ operation: "insert" })) }, database_writes: 3 })));
 test("more than two observation operations fail", () => assert.throws(() => validateManualMarketBoundedOutcome({ candidates: 2, operations: { observations: Array.from({ length: 3 }, () => ({ operation: "insert" })) }, database_writes: 3 })));
@@ -174,11 +226,26 @@ test("runner reuses bounded identity idempotency and rollback", () => {
   assert.match(runner, /buildMarketBoundedRows/);
   assert.match(runner, /persistMarketBounded/);
 });
-test("runner secret scan includes approval and nonce environment values", () => assert.match(runner, /APPROVAL\|NONCE/));
+test("runner secret scan includes approval environment values", () => assert.match(runner, /APPROVAL\|NONCE/));
 test("runner never writes the approval or nonce into reports", () => assert.doesNotMatch(runner, /writeJson\([^\n]*(approval_nonce|bounded_approval)/));
+test("runner derives the nonce only from the strict bounded approval parser", () => {
+  assert.match(runner, /parseManualMarketBoundedApproval\(process\.env\.AUTOMATIC_INGESTION_BOUNDED_APPROVAL\)/);
+  assert.doesNotMatch(runner, /MANUAL_APPROVAL_NONCE/);
+});
 test("runner fetches GitHub active rows instead of hardcoding an empty array", () => {
   assert.match(runner, /fetchGithubActiveRuns/);
   assert.doesNotMatch(runner, /github_rows:\s*\[\]/);
 });
 test("runner rechecks safety before persistence", () => assert.ok((runner.match(/loadSafetyState\(/g) ?? []).length >= 3));
+test("runner separates active rows from claim attempt throttle rows", () => {
+  assert.match(runner, /githubActiveRows[\s\S]*githubAttemptRows/);
+  assert.match(runner, /validateManualActiveRuns\(\{ runs: githubActiveRows/);
+  assert.match(runner, /github_rows: githubAttemptRows/);
+});
+test("runner fails closed on unavailable or incomplete GitHub pagination", () => {
+  assert.match(runner, /if \(!response\.ok\) throw manualError\("manual_bounded_github_state_unavailable"\)/);
+  assert.match(runner, /expectedTotal[\s\S]*rows\.length === expectedTotal[\s\S]*manual_bounded_github_state_unavailable/);
+  assert.match(runner, /typeof artifact\?\.expired !== "boolean"[\s\S]*manual_bounded_github_state_unavailable/);
+});
+test("final verification repeats exact three-way delta validation", () => assert.ok((runner.match(/validateManualMarketBoundedExactDeltas\(/g) ?? []).length >= 2));
 test("runner rolls back an exact-delta failure", () => assert.match(runner, /validateManualMarketBoundedExactDeltas[\s\S]*rollbackMarketBounded/));

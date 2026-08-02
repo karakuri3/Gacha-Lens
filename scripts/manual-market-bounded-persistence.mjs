@@ -19,7 +19,9 @@ import {
 import {
   approvalNonceSha256,
   buildManualApprovalClaim,
+  buildManualApprovalAttemptRows,
   MANUAL_MARKET_BOUNDED_CLAIM_PREFIX,
+  parseManualMarketBoundedApproval,
   validateManualActiveRuns,
   validateManualApprovalClaimReuse,
   validateManualMarketBoundedArmingGate,
@@ -60,7 +62,8 @@ async function preflight() {
   const runningRows = safety?.runningRows ?? null;
   const historyRows = safety?.historyRows ?? null;
   const counts = safety?.counts ?? null;
-  const githubRows = safety?.githubRows ?? null;
+  const githubActiveRows = safety?.githubActiveRows ?? null;
+  const githubAttemptRows = safety?.githubAttemptRows ?? null;
   const concurrency = evaluateIngestionConcurrency(runningRows, { task: "market" });
   const circuitBreaker = evaluateIngestionCircuitBreaker(historyRows);
   const throttle = evaluateAutomaticIngestionThrottle({
@@ -69,9 +72,10 @@ async function preflight() {
     policy: policy.stages["market-bounded"],
     history_rows: historyRows,
     running_rows: runningRows,
-    github_rows: githubRows,
+    github_rows: githubAttemptRows,
   });
-  const safetyAvailable = Array.isArray(runningRows) && Array.isArray(historyRows) && Array.isArray(githubRows) && counts !== null;
+  const safetyAvailable = Array.isArray(runningRows) && Array.isArray(historyRows)
+    && Array.isArray(githubActiveRows) && Array.isArray(githubAttemptRows) && counts !== null;
   const safetyClear = safetyAvailable && concurrency.state === "clear" && circuitBreaker.state === "closed" && throttle.ok === true;
   const allowed = gate.ok && safetyClear;
   const report = {
@@ -93,6 +97,7 @@ async function preflight() {
     circuit_breaker: circuitBreaker,
     throttle,
     github_active_runs: safety?.activeCheck ?? { available: false, blocking_run_count: null, known_orphan_excluded: true },
+    github_attempt_history: { available: Array.isArray(githubAttemptRows), attempt_count: githubAttemptRows?.length ?? null },
     approval_claim: safety?.claimCheck ?? { available: false, current_claim_count: null, prior_claim_count: null },
     durable_run_store: { available: Array.isArray(historyRows) },
     production_snapshot: { available: counts !== null, counts },
@@ -123,7 +128,7 @@ async function claim(requireCurrent) {
     return;
   }
   const claimValue = buildManualApprovalClaim({
-    nonce: process.env.MANUAL_APPROVAL_NONCE,
+    nonce: manualApproval().approval_nonce,
     workflow_run_id: workflowIdentity().run_id,
     workflow_run_attempt: workflowIdentity().run_attempt,
     head_sha: workflowIdentity().head_sha,
@@ -176,7 +181,7 @@ async function persist() {
       store.fetchRowsByIds("ingestion_runs", [runId]),
     ]);
     rollbackContext = { store, listingRows: rows.listingRows, observationRows: rows.observationRows, durableRunRow: null, beforeListings, beforeObservations, beforeDurableRows, beforeCounts };
-    const nonceFingerprint = approvalNonceSha256(process.env.MANUAL_APPROVAL_NONCE);
+    const nonceFingerprint = approvalNonceSha256(manualApproval().approval_nonce);
     outcome = await persistMarketBounded({
       listingRows: rows.listingRows,
       observationRows: rows.observationRows,
@@ -235,6 +240,7 @@ function verify() {
   const scanReport = readJson(required(options.scan, "--scan"));
   const allowedStatus = ["succeeded", "no-op"].includes(result.result?.status);
   validateManualMarketBoundedOutcome({ candidates: result.candidates?.length ?? 0, operations: result.operations, database_writes: result.database_writes, deltas: result.database_deltas });
+  validateManualMarketBoundedExactDeltas({ operations: result.operations, persisted_deltas: result.database_deltas, snapshot_deltas: delta.deltas });
   if (preflightReport.persistence_authorized !== true || preflightReport.bounded_approval_valid !== true
     || preview.preview_generated !== true || preview.row_identity_verified !== true || preview.idempotency_preflight_verified !== true
     || !allowedStatus || result.verification?.rows_verified !== true || result.verification?.deltas_verified !== true
@@ -260,7 +266,6 @@ function validateManualGate(digest) {
     expected_policy_digest: process.env.MANUAL_EXPECTED_POLICY_DIGEST,
     policy_digest: digest,
     configured_policy_digest: process.env.AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST,
-    approval_nonce: process.env.MANUAL_APPROVAL_NONCE,
     confirmation: process.env.MANUAL_CONFIRMATION,
     automatic_write_enabled: process.env.AUTOMATIC_INGESTION_WRITE_ENABLED,
     bounded_persistence_enabled: process.env.AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED,
@@ -343,24 +348,26 @@ function normalizedSha(value) { return String(value ?? "").trim().toLowerCase();
 function listFiles(directory) { return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => { const entryPath = path.join(directory, entry.name); return entry.isDirectory() ? listFiles(entryPath) : [entryPath]; }).sort((left, right) => left.localeCompare(right, "en")); }
 
 async function loadSafetyState({ requireCurrentClaim }) {
-  const [runningRows, historyRows, counts, githubRows, claimCheck] = await Promise.all([
+  const [runningRows, historyRows, counts, githubActiveRows, githubArtifacts, claimCheck] = await Promise.all([
     fetchRows("ingestion_runs", { select: "id,task,status,started_at,finished_at,summary", pageSize: 1000, params: { task: "eq.market", status: "eq.running", order: "started_at.asc,id.asc" } }),
     fetchRows("ingestion_runs", { select: "id,task,status,started_at,finished_at,summary", pageSize: 100, params: { task: "eq.market", status: "in.(succeeded,failed)", order: "finished_at.desc,id.desc" } }),
     productionCounts(),
     fetchGithubActiveRuns(),
+    fetchGithubArtifacts(),
     approvalClaimCheck({ requireCurrent: requireCurrentClaim }),
   ]);
-  const activeCheck = validateManualActiveRuns({ runs: githubRows, current_run_id: workflowIdentity().run_id });
+  const activeCheck = validateManualActiveRuns({ runs: githubActiveRows, current_run_id: workflowIdentity().run_id });
+  const githubAttemptRows = buildManualApprovalAttemptRows({ artifacts: githubArtifacts, current_run_id: workflowIdentity().run_id });
   const concurrency = evaluateIngestionConcurrency(runningRows, { task: "market" });
   const circuitBreaker = evaluateIngestionCircuitBreaker(historyRows);
   const { policy } = loadAutomaticIngestionRolloutPolicy(policyPath);
-  const throttle = evaluateAutomaticIngestionThrottle({ stage: "market-bounded", task: "market", policy: policy.stages["market-bounded"], history_rows: historyRows, running_rows: runningRows, github_rows: githubRows });
+  const throttle = evaluateAutomaticIngestionThrottle({ stage: "market-bounded", task: "market", policy: policy.stages["market-bounded"], history_rows: historyRows, running_rows: runningRows, github_rows: githubAttemptRows });
   if (concurrency.state !== "clear" || circuitBreaker.state !== "closed" || throttle.ok !== true) throw manualError("manual_bounded_safety_blocked");
-  return { runningRows, historyRows, counts, githubRows, claimCheck: { available: true, ...claimCheck }, activeCheck: { available: true, ...activeCheck } };
+  return { runningRows, historyRows, counts, githubActiveRows, githubAttemptRows, claimCheck: { available: true, ...claimCheck }, activeCheck: { available: true, ...activeCheck } };
 }
 
 async function approvalClaimCheck({ requireCurrent }) {
-  const fingerprint = approvalNonceSha256(process.env.MANUAL_APPROVAL_NONCE);
+  const fingerprint = approvalNonceSha256(manualApproval().approval_nonce);
   const artifacts = await fetchGithubArtifacts(`${MANUAL_MARKET_BOUNDED_CLAIM_PREFIX}${fingerprint}`);
   const result = validateManualApprovalClaimReuse({ artifacts, approval_nonce_sha256: fingerprint, current_run_id: workflowIdentity().run_id, current_run_attempt: workflowIdentity().run_attempt, require_current: requireCurrent });
   return { ...result, approval_nonce_sha256: fingerprint };
@@ -381,33 +388,59 @@ async function waitForCurrentApprovalClaim() {
 async function fetchGithubActiveRuns() {
   const rows = [];
   for (const status of ["queued", "in_progress", "waiting", "pending", "requested"]) {
-    const payload = await fetchGithubPages(`/actions/runs?status=${status}&per_page=100`);
-    rows.push(...payload.flatMap((page) => page.workflow_runs ?? []).map((run) => ({ id: String(run.id), name: String(run.name ?? ""), status: String(run.status ?? status) })));
+    const runs = await fetchGithubCollection(`/actions/runs?status=${status}&per_page=100`, "workflow_runs");
+    rows.push(...runs.map((run) => ({ id: String(run.id), name: String(run.name ?? ""), status: String(run.status ?? status) })));
   }
   return [...new Map(rows.map((row) => [row.id, row])).values()].sort((left, right) => left.id.localeCompare(right.id, "en"));
 }
 
-async function fetchGithubArtifacts(name) {
-  const payload = await fetchGithubPages(`/actions/artifacts?per_page=100&name=${encodeURIComponent(name)}`);
-  return payload.flatMap((page) => page.artifacts ?? []).map((artifact) => ({ name: artifact.name, expired: artifact.expired === true, workflow_run: { id: String(artifact.workflow_run?.id ?? ""), run_attempt: String(artifact.workflow_run?.run_attempt ?? "1") } }));
+async function fetchGithubArtifacts(name = null) {
+  const suffix = name ? `&name=${encodeURIComponent(name)}` : "";
+  const artifacts = await fetchGithubCollection(`/actions/artifacts?per_page=100${suffix}`, "artifacts");
+  return artifacts.map((artifact) => {
+    const artifactName = String(artifact?.name ?? "");
+    const createdAt = String(artifact?.created_at ?? "");
+    const runId = String(artifact?.workflow_run?.id ?? "");
+    if (!artifactName || typeof artifact?.expired !== "boolean" || !runId || Number.isNaN(new Date(createdAt).getTime())) {
+      throw manualError("manual_bounded_github_state_unavailable");
+    }
+    return {
+      name: artifactName,
+      expired: artifact.expired,
+      created_at: new Date(createdAt).toISOString(),
+      workflow_run: {
+        id: runId,
+        run_attempt: String(artifact?.workflow_run?.run_attempt ?? "1"),
+      },
+    };
+  });
 }
 
-async function fetchGithubPages(endpoint) {
+async function fetchGithubCollection(endpoint, collectionKey) {
   const repository = process.env.GITHUB_REPOSITORY;
   const token = process.env.GH_READ_TOKEN || process.env.GITHUB_TOKEN;
   if (!repository || !token) throw manualError("manual_bounded_github_state_unavailable");
-  const pages = [];
-  for (let page = 1; page <= 10; page += 1) {
+  const rows = [];
+  let expectedTotal = null;
+  for (let page = 1; page <= 1000; page += 1) {
     const separator = endpoint.includes("?") ? "&" : "?";
     const response = await fetch(`https://api.github.com/repos/${repository}${endpoint}${separator}page=${page}`, { headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28" } });
     if (!response.ok) throw manualError("manual_bounded_github_state_unavailable");
     const value = await response.json();
-    pages.push(value);
-    const count = Array.isArray(value.workflow_runs) ? value.workflow_runs.length : Array.isArray(value.artifacts) ? value.artifacts.length : 0;
-    if (count < 100) break;
-    if (page === 10) throw manualError("manual_bounded_github_state_unavailable");
+    const total = Number(value?.total_count);
+    const pageRows = value?.[collectionKey];
+    if (!Number.isInteger(total) || total < 0 || !Array.isArray(pageRows)
+      || (expectedTotal !== null && total !== expectedTotal)) {
+      throw manualError("manual_bounded_github_state_unavailable");
+    }
+    expectedTotal ??= total;
+    rows.push(...pageRows);
+    if (rows.length === expectedTotal) return rows;
+    if (!pageRows.length || rows.length > expectedTotal) throw manualError("manual_bounded_github_state_unavailable");
   }
-  return pages;
+  throw manualError("manual_bounded_github_state_unavailable");
 }
+
+function manualApproval() { return parseManualMarketBoundedApproval(process.env.AUTOMATIC_INGESTION_BOUNDED_APPROVAL); }
 
 function delay(milliseconds) { return new Promise((resolve) => setTimeout(resolve, milliseconds)); }
