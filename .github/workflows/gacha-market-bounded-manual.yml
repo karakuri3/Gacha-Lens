@@ -49,7 +49,6 @@ jobs:
       AUTOMATIC_INGESTION_ROLLOUT_STAGE: ${{ vars.AUTOMATIC_INGESTION_ROLLOUT_STAGE || 'disabled' }}
       AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST: ${{ vars.AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST || '' }}
       AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED: ${{ vars.AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED || 'false' }}
-      AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ${{ vars.AUTOMATIC_INGESTION_BOUNDED_APPROVAL || '' }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -69,8 +68,18 @@ jobs:
           origin_main_sha="$(git rev-parse origin/main)"
           test "$GITHUB_SHA" = "$origin_main_sha"
           echo "origin_main_sha=$origin_main_sha" >> "$GITHUB_OUTPUT"
+      - name: Verify manual approval secret
+        shell: bash
+        env:
+          AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ${{ secrets.AUTOMATIC_INGESTION_BOUNDED_APPROVAL }}
+        run: |
+          set -euo pipefail
+          test -n "$AUTOMATIC_INGESTION_BOUNDED_APPROVAL"
+          echo "::add-mask::$AUTOMATIC_INGESTION_BOUNDED_APPROVAL"
       - name: Run manual bounded preflight
         id: preflight
+        env:
+          AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ${{ secrets.AUTOMATIC_INGESTION_BOUNDED_APPROVAL }}
         run: >-
           node scripts/manual-market-bounded-persistence.mjs preflight
           --output-dir=${{ runner.temp }}/gacha-market-bounded-manual
@@ -81,6 +90,8 @@ jobs:
           --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
       - name: Create one-run approval claim
         id: claim
+        env:
+          AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ${{ secrets.AUTOMATIC_INGESTION_BOUNDED_APPROVAL }}
         run: >-
           npm run market:bounded-manual -- claim
           --claim-dir=${{ runner.temp }}/gacha-market-bounded-manual/approval-claim
@@ -97,6 +108,8 @@ jobs:
           if-no-files-found: error
           retention-days: 90
       - name: Verify one-run approval claim
+        env:
+          AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ${{ secrets.AUTOMATIC_INGESTION_BOUNDED_APPROVAL }}
         run: >-
           npm run market:bounded-manual -- claim-verify
           --claim-dir=${{ runner.temp }}/gacha-market-bounded-manual/approval-claim
@@ -142,6 +155,8 @@ jobs:
       - name: Run manual bounded persistence
         id: persistence
         if: ${{ steps.preflight.outputs.persistence_authorized == 'true' && steps.preview.outputs.preview_generated == 'true' && steps.plan.outputs.budget_state == 'within_budget' }}
+        env:
+          AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ${{ secrets.AUTOMATIC_INGESTION_BOUNDED_APPROVAL }}
         run: >-
           npm run market:bounded-manual -- persist
           --output-dir=${{ runner.temp }}/gacha-market-bounded-manual
@@ -157,6 +172,8 @@ jobs:
       - name: Scan sanitized manual bounded artifact
         id: scan
         if: ${{ always() }}
+        env:
+          AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ${{ secrets.AUTOMATIC_INGESTION_BOUNDED_APPROVAL }}
         run: >-
           npm run market:bounded-manual -- scan
           --output-dir=${{ runner.temp }}/gacha-market-bounded-manual
