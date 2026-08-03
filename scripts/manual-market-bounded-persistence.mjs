@@ -7,6 +7,7 @@ import {
   loadAutomaticIngestionRolloutPolicy,
 } from "../lib/domain/automatic-ingestion-rollout.js";
 import { evaluateIngestionCircuitBreaker, evaluateIngestionConcurrency } from "../lib/domain/ingestion-execution-safety.js";
+import { buildManualMarketBoundedFailureDiagnostic } from "../lib/domain/manual-market-bounded-diagnostics.js";
 import {
   buildMarketBoundedResult,
   buildMarketBoundedRows,
@@ -152,36 +153,51 @@ async function persist() {
   let result = null;
   let afterCounts = null;
   let rollbackContext = null;
+  let checkpoint = "policy_load";
+  let gate = null;
+  let persistenceInvoked = false;
   try {
+    checkpoint = "policy_load";
     const { digest } = loadAutomaticIngestionRolloutPolicy(policyPath);
-    const gate = validateManualGate(digest);
+    checkpoint = "arming_gate_revalidation";
+    gate = validateManualGate(digest);
     if (!gate.ok || preflightReport.decision !== "allowed" || preflightReport.persistence_authorized !== true) {
       throw manualError(gate.reason_code || "manual_bounded_preflight_changed");
     }
+    checkpoint = "safety_state_revalidation";
     const safety = await loadSafetyState({ requireCurrentClaim: true });
+    checkpoint = "production_snapshot_revalidation";
     assertCountsEqual(preflightReport.production_snapshot?.counts, safety.counts);
+    checkpoint = "audit_load";
     const auditPath = path.resolve(required(options.audit, "--audit"));
     const auditBytes = fs.readFileSync(auditPath);
     const audit = JSON.parse(auditBytes.toString("utf8"));
     plan = readJson(required(options.plan, "--plan"));
+    checkpoint = "preview_revalidation";
     const preview = readJson(required(options.preview, "--preview"));
     if (preview.preview_generated !== true || preview.audit_digest_verified !== true || preview.plan_digest_verified !== true
       || preview.candidate_set_verified !== true || preview.row_identity_verified !== true
       || preview.idempotency_preflight_verified !== true || Number(preview.database_writes) !== 0) {
       throw manualError("manual_bounded_preview_invalid");
     }
+    checkpoint = "plan_identity_revalidation";
     validateMarketBoundedPlanIdentity({ audit_bytes: auditBytes, audit, plan, workflow, policy_digest: digest, simulation: true });
+    checkpoint = "bounded_rows_build";
     rows = buildMarketBoundedRows({ audit, plan, workflow, observed_at: plan.generated_at });
     const beforeCounts = safety.counts;
     const runId = stableId("market-bounded-manual-run", workflow.run_id, workflow.run_attempt, plan.plan_digest);
     const store = createStore();
+    checkpoint = "existing_rows_snapshot";
     const [beforeListings, beforeObservations, beforeDurableRows] = await Promise.all([
       store.fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)),
       store.fetchRowsByIds("market_listing_observations", rows.observationRows.map((row) => row.id)),
       store.fetchRowsByIds("ingestion_runs", [runId]),
     ]);
     rollbackContext = { store, listingRows: rows.listingRows, observationRows: rows.observationRows, durableRunRow: null, beforeListings, beforeObservations, beforeDurableRows, beforeCounts };
+    checkpoint = "approval_fingerprint";
     const nonceFingerprint = approvalNonceSha256(manualApproval().approval_nonce);
+    checkpoint = "bounded_persistence";
+    persistenceInvoked = true;
     outcome = await persistMarketBounded({
       listingRows: rows.listingRows,
       observationRows: rows.observationRows,
@@ -190,24 +206,39 @@ async function persist() {
       store,
     });
     rollbackContext.durableRunRow = durableRunRow({ id: runId, workflow, plan, rows, operations: outcome.operations, nonceFingerprint });
+    checkpoint = "bounded_outcome_validation";
     validateManualMarketBoundedOutcome({ candidates: rows.candidates.length, operations: outcome.operations, database_writes: outcome.database_writes, deltas: outcome.database_deltas });
+    checkpoint = "production_after_snapshot";
     afterCounts = await productionCounts();
     const snapshotDelta = buildDelta(beforeCounts, afterCounts);
+    checkpoint = "exact_delta_validation";
     validateManualMarketBoundedExactDeltas({ operations: outcome.operations, persisted_deltas: outcome.database_deltas, snapshot_deltas: snapshotDelta.deltas });
-    result = withDurableOperation(buildMarketBoundedResult({ workflow, plan, rows, ...outcome, status: rows.candidates.length ? "succeeded" : "no-op", schedule: "manual", automatic_write_enabled: true, bounded_persistence_enabled: true, bounded_approval_valid: true }), outcome.operations?.durable_run);
+    checkpoint = "result_build";
+    result = withDurableOperation(buildMarketBoundedResult({ workflow, plan, rows, ...outcome, status: rows.candidates.length ? "succeeded" : "no-op", schedule: "manual", automatic_write_enabled: true, bounded_persistence_enabled: true, bounded_approval_valid: true, failure_diagnostic: null }), outcome.operations?.durable_run);
     writePersistenceArtifacts(outputDir, result, preflightReport.production_snapshot.counts, afterCounts);
     writeOutput("result_generated", true);
     writeOutput("status", result.result.status);
     writeOutput("database_writes", result.database_writes);
   } catch (error) {
+    const failureCheckpoint = checkpoint;
     if (outcome?.ok === true && rollbackContext) {
+      checkpoint = "rollback";
       const rollback = await rollbackMarketBounded(rollbackContext);
       outcome = { ...outcome, ok: false, verification: { rows_verified: false, deltas_verified: false }, rollback, database_deltas: {}, database_writes: 0 };
     }
     outcome = error?.bounded_result ?? outcome ?? { operations: { listings: [], observations: [] }, verification: {}, rollback: emptyRollback(), database_deltas: {}, database_writes: 0 };
     afterCounts = await safeProductionCounts();
     const status = outcome.rollback?.attempted ? outcome.rollback.verified ? "rolled-back" : "rollback-failed" : "blocked";
-    result = withDurableOperation(buildMarketBoundedResult({ workflow, plan, rows, ...outcome, status, reason_code: error?.reason_code || "bounded_verification_failed", error_category: error?.category || "safety_gate", error_message: "Manual bounded persistence failed closed.", schedule: "manual", automatic_write_enabled: true, bounded_persistence_enabled: true, bounded_approval_valid: false, database_writes: 0 }), outcome.operations?.durable_run);
+    const diagnosticCheckpoint = outcome.rollback?.attempted && !outcome.rollback?.verified ? "rollback" : failureCheckpoint;
+    const failureDiagnostic = buildManualMarketBoundedFailureDiagnostic({
+      checkpoint: diagnosticCheckpoint,
+      upstream_reason_code: error?.reason_code,
+      error_category: error?.category,
+      persistence_invoked: persistenceInvoked,
+      rollback_attempted: outcome.rollback?.attempted,
+      rollback_verified: outcome.rollback?.verified,
+    });
+    result = withDurableOperation(buildMarketBoundedResult({ workflow, plan, rows, ...outcome, status, reason_code: error?.reason_code || "bounded_verification_failed", error_category: error?.category || "safety_gate", error_message: "Manual bounded persistence failed closed.", schedule: "manual", automatic_write_enabled: true, bounded_persistence_enabled: true, bounded_approval_valid: gate?.bounded_approval_valid === true, failure_diagnostic: failureDiagnostic, database_writes: 0 }), outcome.operations?.durable_run);
     writePersistenceArtifacts(outputDir, result, preflightReport.production_snapshot?.counts, afterCounts);
     writeOutput("result_generated", true);
     writeOutput("status", result.result.status);

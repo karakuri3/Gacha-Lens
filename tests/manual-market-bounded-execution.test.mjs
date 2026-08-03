@@ -91,8 +91,9 @@ test("workflow has only required approval inputs", () => {
   assert.doesNotMatch(workflow, /approval_nonce:|MANUAL_APPROVAL_NONCE|inputs\.approval_nonce|github\.event\.inputs\.approval_nonce/);
   assert.doesNotMatch(workflow, /^\s{6}(task|stage|limit|priority|release|source_scope|execute_sources|mode):/m);
 });
-test("approval comes only from the bounded approval Repository Variable", () => {
-  assert.match(workflow, /AUTOMATIC_INGESTION_BOUNDED_APPROVAL: \$\{\{ vars\.AUTOMATIC_INGESTION_BOUNDED_APPROVAL/);
+test("approval comes only from the bounded approval Actions Secret", () => {
+  assert.doesNotMatch(workflow, /vars\.AUTOMATIC_INGESTION_BOUNDED_APPROVAL/);
+  assert.match(workflow, /AUTOMATIC_INGESTION_BOUNDED_APPROVAL: \$\{\{ secrets\.AUTOMATIC_INGESTION_BOUNDED_APPROVAL \}\}/);
   assert.doesNotMatch(workflow, /--(?:approval|nonce)=/);
   assert.match(workflow, /name: \$\{\{ steps\.claim\.outputs\.claim_name \}\}/);
 });
