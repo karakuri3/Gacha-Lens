@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { stableId } from "../lib/fetchers/feed-source-utils.js";
 import {
   evaluateAutomaticIngestionThrottle,
   findAutomaticIngestionRolloutSecretLeaks,
@@ -21,6 +20,7 @@ import {
   approvalNonceSha256,
   buildManualApprovalClaim,
   buildManualApprovalAttemptRows,
+  buildManualMarketBoundedDurableRunId,
   MANUAL_MARKET_BOUNDED_CLAIM_PREFIX,
   parseManualMarketBoundedApproval,
   validateManualActiveRuns,
@@ -185,14 +185,24 @@ async function persist() {
     checkpoint = "bounded_rows_build";
     rows = buildMarketBoundedRows({ audit, plan, workflow, observed_at: plan.generated_at });
     const beforeCounts = safety.counts;
-    const runId = stableId("market-bounded-manual-run", workflow.run_id, workflow.run_attempt, plan.plan_digest);
+    const runId = buildManualMarketBoundedDurableRunId({
+      workflow_run_id: workflow.run_id,
+      workflow_run_attempt: workflow.run_attempt,
+      plan_digest: plan.plan_digest,
+    });
     const store = createStore();
-    checkpoint = "existing_rows_snapshot";
-    const [beforeListings, beforeObservations, beforeDurableRows] = await Promise.all([
-      store.fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)),
-      store.fetchRowsByIds("market_listing_observations", rows.observationRows.map((row) => row.id)),
-      store.fetchRowsByIds("ingestion_runs", [runId]),
-    ]);
+    checkpoint = "existing_listings_snapshot";
+    const beforeListings = await store.fetchRowsByIds(
+      "market_listings",
+      rows.listingRows.map((row) => row.id),
+    );
+    checkpoint = "existing_observations_snapshot";
+    const beforeObservations = await store.fetchRowsByIds(
+      "market_listing_observations",
+      rows.observationRows.map((row) => row.id),
+    );
+    checkpoint = "existing_durable_run_snapshot";
+    const beforeDurableRows = await store.fetchRowsByIds("ingestion_runs", [runId]);
     rollbackContext = { store, listingRows: rows.listingRows, observationRows: rows.observationRows, durableRunRow: null, beforeListings, beforeObservations, beforeDurableRows, beforeCounts };
     checkpoint = "approval_fingerprint";
     const nonceFingerprint = approvalNonceSha256(manualApproval().approval_nonce);

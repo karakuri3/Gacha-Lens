@@ -67,6 +67,19 @@ test("all allowlisted checkpoints are accepted with stable reason codes", () => 
   }
 });
 
+test("snapshot diagnostics distinguish listings observations and durable run reads", () => {
+  for (const checkpoint of [
+    "existing_listings_snapshot",
+    "existing_observations_snapshot",
+    "existing_durable_run_snapshot",
+  ]) {
+    const diagnostic = buildManualMarketBoundedFailureDiagnostic({ checkpoint, error_category: "database" });
+    assert.equal(diagnostic.checkpoint, checkpoint);
+    assert.equal(diagnostic.checkpoint_reason_code, `manual_bounded_${checkpoint}_failed`);
+    assert.doesNotMatch(JSON.stringify(diagnostic), /Authorization|https?:|stack|message|approval|nonce/i);
+  }
+});
+
 test("unknown checkpoints and error categories fail closed", () => {
   const diagnostic = buildManualMarketBoundedFailureDiagnostic({ checkpoint: "raw_database_call", error_category: "http" });
   assert.equal(diagnostic.checkpoint, "unknown");
@@ -117,7 +130,9 @@ test("persist checkpoints precede their guarded operations", () => {
     "preview_revalidation",
     "plan_identity_revalidation",
     "bounded_rows_build",
-    "existing_rows_snapshot",
+    "existing_listings_snapshot",
+    "existing_observations_snapshot",
+    "existing_durable_run_snapshot",
     "approval_fingerprint",
     "bounded_persistence",
     "bounded_outcome_validation",
@@ -137,7 +152,9 @@ test("persist checkpoints precede their guarded operations", () => {
     "const preview = readJson",
     "validateMarketBoundedPlanIdentity",
     "buildMarketBoundedRows",
-    "store.fetchRowsByIds",
+    'store.fetchRowsByIds(\n      "market_listings"',
+    'store.fetchRowsByIds(\n      "market_listing_observations"',
+    'store.fetchRowsByIds("ingestion_runs", [runId])',
     "approvalNonceSha256",
     "persistMarketBounded",
   ];
