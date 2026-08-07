@@ -5,6 +5,7 @@ import {
   approvalNonceSha256,
   buildManualApprovalClaim,
   buildManualApprovalAttemptRows,
+  buildManualMarketBoundedDurableRunId,
   expectedManualMarketBoundedApproval,
   KNOWN_ORPHANED_RUN_ID,
   MANUAL_MARKET_BOUNDED_CONFIRMATION,
@@ -16,6 +17,7 @@ import {
   validateManualMarketBoundedExactDeltas,
   validateManualMarketBoundedOutcome,
 } from "../lib/domain/manual-market-bounded-execution.js";
+import { stableId } from "../lib/fetchers/feed-source-utils.js";
 
 const workflow = fs.readFileSync(".github/workflows/gacha-market-bounded-manual.yml", "utf8");
 const productionWorkflow = fs.readFileSync(".github/workflows/gacha-ingestion.yml", "utf8");
@@ -23,6 +25,38 @@ const runner = fs.readFileSync("scripts/manual-market-bounded-persistence.mjs", 
 const digest = "d".repeat(64);
 const sha = "a".repeat(40);
 const nonce = "b".repeat(32);
+const UUID_V8 = /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+test("legacy manual bounded durable ID is not a UUID", () => {
+  const legacy = stableId("market-bounded-manual-run", "31174863521", "1", digest);
+  assert.doesNotMatch(legacy, UUID_V8);
+});
+
+test("manual bounded durable ID is a deterministic UUIDv8", () => {
+  const input = { workflow_run_id: "31174863521", workflow_run_attempt: "1", plan_digest: digest };
+  const first = buildManualMarketBoundedDurableRunId(input);
+  const second = buildManualMarketBoundedDurableRunId(input);
+  assert.match(first, UUID_V8);
+  assert.equal(first, second);
+});
+
+test("manual bounded durable ID changes with every identity component", () => {
+  const input = { workflow_run_id: "31174863521", workflow_run_attempt: "1", plan_digest: digest };
+  const baseline = buildManualMarketBoundedDurableRunId(input);
+  assert.notEqual(buildManualMarketBoundedDurableRunId({ ...input, workflow_run_id: "31174863522" }), baseline);
+  assert.notEqual(buildManualMarketBoundedDurableRunId({ ...input, workflow_run_attempt: "2" }), baseline);
+  assert.notEqual(buildManualMarketBoundedDurableRunId({ ...input, plan_digest: "e".repeat(64) }), baseline);
+});
+
+for (const [name, input] of [
+  ["missing workflow run ID", { workflow_run_attempt: "1", plan_digest: digest }],
+  ["missing workflow run attempt", { workflow_run_id: "31174863521", plan_digest: digest }],
+  ["invalid plan digest", { workflow_run_id: "31174863521", workflow_run_attempt: "1", plan_digest: "invalid" }],
+]) {
+  test(`${name} fails durable UUID generation closed`, () => {
+    assert.throws(() => buildManualMarketBoundedDurableRunId(input), /identity is invalid/);
+  });
+}
 
 function gate(overrides = {}) {
   const nonceOverride = Object.hasOwn(overrides, "approval_nonce") ? overrides.approval_nonce : nonce;
@@ -222,6 +256,11 @@ test("forbidden table delta fails", () => assert.throws(() => validateManualMark
 test("negative allowed-table delta fails closed", () => assert.throws(() => validateManualMarketBoundedOutcome({ candidates: 0, database_writes: 0, deltas: { market_listings: -1 } })));
 test("runner persists a workflow_dispatch durable row", () => assert.match(runner, /trigger_source:\s*"workflow_dispatch"[\s\S]*execution_path:\s*"manual-bounded"/));
 test("runner preserves durable operation for final write-budget verification", () => assert.match(runner, /withDurableOperation\([\s\S]*outcome\.operations\?\.durable_run/));
+test("runner reuses one durable UUID for snapshot and durable row", () => {
+  assert.doesNotMatch(runner, /stableId\("market-bounded-manual-run"/);
+  assert.equal((runner.match(/buildManualMarketBoundedDurableRunId\(/g) ?? []).length, 1);
+  assert.match(runner, /const runId = buildManualMarketBoundedDurableRunId\([\s\S]*store\.fetchRowsByIds\("ingestion_runs", \[runId\]\)[\s\S]*durableRunRow\(\{ id: runId,/);
+});
 test("runner reuses bounded identity idempotency and rollback", () => {
   assert.match(runner, /validateMarketBoundedPlanIdentity/);
   assert.match(runner, /buildMarketBoundedRows/);
