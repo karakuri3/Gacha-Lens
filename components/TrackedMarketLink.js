@@ -16,7 +16,14 @@ export default function TrackedMarketLink({ link, variantId, className = "market
   }
 
   return (
-    <a className={className} href={link.href} target="_blank" rel="noopener noreferrer" onClick={track}>
+    <a
+      className={className}
+      href={link.href}
+      target="_blank"
+      rel={link.isAffiliate ? "sponsored noopener noreferrer" : "noopener noreferrer"}
+      data-market-provider={link.id}
+      onClick={track}
+    >
       {children}
     </a>
   );

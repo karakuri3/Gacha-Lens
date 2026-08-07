@@ -9,6 +9,7 @@ import {
   parseCatalogQuery,
   recordMatchesCatalogQuery,
 } from "@/lib/domain/catalog-query";
+import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -34,10 +35,14 @@ export async function generateMetadata({ searchParams }) {
     category: query.category,
     month: query.month,
   });
-  return {
+  const metadata = buildPageMetadata({
     title: query.q ? `「${query.q}」の検索結果 | Gacha Lens` : "ガチャ一覧 | Gacha Lens",
     description: "商品名・作品名・シリーズ名・カテゴリ・発売月から、公開中のガチャを探せます。",
-    alternates: { canonical },
+    path: canonical,
+    noIndex: Boolean(query.q),
+  });
+  return {
+    ...metadata,
     robots: query.q ? { index: false, follow: true } : { index: true, follow: true },
   };
 }

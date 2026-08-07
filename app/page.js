@@ -4,6 +4,7 @@ import PriceTrendChart from "@/components/PriceTrendChart";
 import { Search } from "lucide-react";
 import { getRankingSeries } from "@/lib/series";
 import { variantHref } from "@/lib/variant-url";
+import { buildPageMetadata } from "@/lib/site-metadata";
 import {
   customerTags,
   formatSchedule,
@@ -21,6 +22,11 @@ import {
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const metadata = buildPageMetadata({
+  title: "Gacha Lens | ガチャの新作・価格・在庫情報",
+  description: "発売中の価格動向、いま注目のガチャ、発売予定、在庫・再入荷情報をまとめて確認できます。",
+  path: "/",
+});
 
 export default async function Home() {
   const [releasedSeries, upcomingSeries] = await Promise.all([

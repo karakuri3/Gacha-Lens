@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 
+export const metadata = { robots: { index: false, follow: false } };
+
 const supabase = null;
 
 export default async function SupabaseSeriesPage() {

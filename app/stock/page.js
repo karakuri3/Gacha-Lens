@@ -2,11 +2,13 @@ import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import { getRankingSeries } from "@/lib/series";
 import { variantHref } from "@/lib/variant-url";
+import { buildPageMetadata } from "@/lib/site-metadata";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "在庫目撃情報 | Gacha Lens",
   description: "店舗や地域ごとに確認されたガチャの在庫目撃情報を探せます。",
-};
+  path: "/stock",
+});
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

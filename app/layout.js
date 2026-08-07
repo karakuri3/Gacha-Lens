@@ -2,33 +2,89 @@ import "./globals.css";
 import Header from "@/components/Header";
 import AppSidebar from "@/components/AppSidebar";
 import Footer from "@/components/Footer";
+import StructuredData from "@/components/StructuredData";
+import {
+  DEFAULT_OG_IMAGE,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  absoluteSiteUrl,
+  getSiteUrl,
+  metadataOther,
+  metadataVerification,
+} from "@/lib/site-metadata";
 
 export const metadata = {
-  title: "Gacha Lens",
-  description: "新作、話題の単品、価格の動き、在庫情報が分かるガチャトレンドガイドです。",
-  metadataBase: getMetadataBase(),
+  title: `${SITE_NAME} | ガチャの新作・価格・在庫情報`,
+  description: SITE_DESCRIPTION,
+  metadataBase: getSiteUrl(),
+  applicationName: SITE_NAME,
+  authors: [{ name: `${SITE_NAME} 運営事務局` }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: "ガチャ・カプセルトイ",
+  keywords: ["ガチャ", "カプセルトイ", "ガチャガチャ", "発売予定", "相場", "在庫", "再入荷"],
+  alternates: { canonical: "/" },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 },
+  },
   icons: {
-    icon: "/brand/gacha-lens-logo.png",
-    apple: "/brand/gacha-lens-logo.png",
+    icon: DEFAULT_OG_IMAGE,
+    apple: DEFAULT_OG_IMAGE,
   },
   openGraph: {
-    title: "Gacha Lens",
-    description: "ガチャの相場・発売予定・在庫の動きを単品ごとに確認できます。",
-    images: ["/brand/gacha-lens-logo.png"],
+    title: `${SITE_NAME} | ガチャの新作・価格・在庫情報`,
+    description: SITE_DESCRIPTION,
+    url: "/",
+    siteName: SITE_NAME,
+    images: [{ url: DEFAULT_OG_IMAGE, alt: SITE_NAME }],
     locale: "ja_JP",
     type: "website",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} | ガチャの新作・価格・在庫情報`,
+    description: SITE_DESCRIPTION,
+    images: [DEFAULT_OG_IMAGE],
+  },
+  verification: metadataVerification(),
+  other: metadataOther(),
 };
 
-function getMetadataBase() {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || "http://localhost:3000";
-  return new URL(configured.startsWith("http") ? configured : `https://${configured}`);
-}
-
 export default function RootLayout({ children }) {
+  const homeUrl = absoluteSiteUrl("/");
+  const websiteJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${homeUrl}#organization`,
+        name: SITE_NAME,
+        url: homeUrl,
+        logo: absoluteSiteUrl(DEFAULT_OG_IMAGE),
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${homeUrl}#website`,
+        name: SITE_NAME,
+        url: homeUrl,
+        description: SITE_DESCRIPTION,
+        inLanguage: "ja-JP",
+        publisher: { "@id": `${homeUrl}#organization` },
+        potentialAction: {
+          "@type": "SearchAction",
+          target: `${absoluteSiteUrl("/series")}?q={search_term_string}`,
+          "query-input": "required name=search_term_string",
+        },
+      },
+    ],
+  };
+
   return (
     <html lang="ja">
       <body>
+        <StructuredData value={websiteJsonLd} />
         <Header />
         <div className="app-frame">
           <AppSidebar />

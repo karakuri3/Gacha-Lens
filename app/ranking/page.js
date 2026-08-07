@@ -2,6 +2,7 @@
 import ProductImage from "@/components/ProductImage";
 import { getRankingSeries } from "@/lib/series";
 import { seriesHref, variantHref } from "@/lib/variant-url";
+import { buildPageMetadata } from "@/lib/site-metadata";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
@@ -11,10 +12,23 @@ import {
   releasedPriorityScore,
 } from "@/lib/domain/public-display-clean";
 
-export const metadata = {
-  title: "相場ランキング | Gacha Lens",
-  description: "発売中と発売予定を分けて、いま話題のガチャ単品をランキングします。",
-};
+export async function generateMetadata({ searchParams }) {
+  const params = await searchParams;
+  const tab = params?.tab === "upcoming" ? "upcoming" : "released";
+  const scope = params?.scope === "series" ? "series" : "variant";
+  const title = `${tab === "upcoming" ? "発売予定" : "発売中"}の${scope === "series" ? "シリーズ" : "単品"}ランキング | Gacha Lens`;
+  const query = new URLSearchParams();
+  if (scope !== "variant") query.set("scope", scope);
+  if (tab !== "released") query.set("tab", tab);
+  const path = query.size ? `/ranking?${query.toString()}` : "/ranking";
+  return buildPageMetadata({
+    title,
+    description: tab === "released"
+      ? "発売中のガチャを、確認できた価格・流通・在庫の動きからランキングします。"
+      : "発売予定のガチャを、注目度・入手難度・ラインナップの期待からランキングします。",
+    path,
+  });
+}
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
