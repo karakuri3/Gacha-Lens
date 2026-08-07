@@ -280,12 +280,14 @@ select {
 }
 
 .site-footer { border-top: 1px solid var(--line); background: #ffffff; }
-.site-footer__inner { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 22px 48px; padding: 34px 0; }
+.site-footer__inner { display: grid; grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr); gap: 22px 48px; padding: 34px 0; }
 .site-footer strong { font-size: 18px; }
 .site-footer p { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
 .site-footer nav { display: flex; align-items: start; gap: 18px; }
 .site-footer nav a { font-size: 12px; font-weight: 850; text-decoration: none; }
 .site-footer small { grid-column: 1 / -1; color: var(--muted); font-size: 10px; }
+.site-footer__links { display: grid; gap: 13px; }
+.site-footer__links nav { flex-wrap: wrap; justify-content: flex-end; }
 
 .site-header {
   position: sticky;
@@ -1408,6 +1410,12 @@ button.button-link {
   gap: 8px;
 }
 
+.marketplace-panel { display: grid; gap: 8px; min-width: 0; }
+.marketplace-panel__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.marketplace-panel__head strong { font-size: 13px; }
+.marketplace-panel__head span,
+.marketplace-panel__disclosure { color: var(--muted); font-size: 10px; }
+
 .market-action {
   min-height: 44px;
   display: flex;
@@ -2450,11 +2458,39 @@ button.button-link {
   .detail-panel > .tag-row { margin-top: 0 !important; }
   .detail-panel > .tag-row .tag:nth-child(n + 3) { display: none; }
   .detail-actions { grid-column: 1 / -1; margin-top: 8px; }
-  .detail-actions .market-actions { display: none; }
+  .detail-actions .marketplace-panel { width: 100%; }
+  .detail-actions .market-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .marketplace-panel__head { align-items: start; flex-direction: column; gap: 2px; }
+  .market-action { min-height: 40px; padding: 8px; font-size: 11px; }
   .favorite-button { width: 100%; min-height: 36px; }
   .detail-section-nav { top: 104px; }
   .detail-section-nav a { min-width: 96px; padding: 9px; }
   .favorites-grid { grid-template-columns: 1fr; }
+}
+
+.legal-shell { max-width: 920px; }
+.legal-hero { border-bottom: 1px solid var(--line); }
+.legal-updated { margin: 15px 0 0; color: var(--muted); font-size: 11px; }
+.legal-document { padding: 8px 0 28px; }
+.legal-document section { padding: 24px 0; border-bottom: 1px solid var(--line); }
+.legal-document section:last-child { border-bottom: 0; }
+.legal-document h2 { margin: 0 0 12px; font-size: 18px; }
+.legal-document p,
+.legal-document li { color: #465166; font-size: 14px; line-height: 1.9; }
+.legal-document p { margin: 8px 0; }
+.legal-document ul { margin: 8px 0; padding-left: 22px; }
+.legal-facts { margin: 0; }
+.legal-facts div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 20px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.legal-facts dt { color: var(--muted); font-size: 12px; font-weight: 800; }
+.legal-facts dd { margin: 0; font-size: 14px; font-weight: 750; }
+
+@media (max-width: 640px) {
+  .site-footer__links nav { justify-content: flex-start; gap: 10px 16px; }
+  .legal-document section { padding: 19px 0; }
+  .legal-document h2 { font-size: 16px; }
+  .legal-document p,
+  .legal-document li { font-size: 13px; }
+  .legal-facts div { grid-template-columns: 1fr; gap: 4px; }
 }
 
 /* Gacha Lens market UI */

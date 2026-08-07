@@ -3,11 +3,13 @@ import ProductImage from "@/components/ProductImage";
 import { getRankingSeries } from "@/lib/series";
 import { formatYen } from "@/lib/domain/public-display-clean";
 import { variantHref } from "@/lib/variant-url";
+import { buildPageMetadata } from "@/lib/site-metadata";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "再販・再入荷情報 | Gacha Lens",
   description: "確認できたガチャの再販・再入荷情報を商品ごとに掲載します。",
-};
+  path: "/restocks",
+});
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

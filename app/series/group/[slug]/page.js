@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import ProductImage from "@/components/ProductImage";
 import FavoriteButton from "@/components/FavoriteButton";
+import StructuredData from "@/components/StructuredData";
 import { getParentSeriesBySlug } from "@/lib/series";
-import { variantHref } from "@/lib/variant-url";
+import { seriesHref, variantHref } from "@/lib/variant-url";
+import { absoluteSiteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import {
   formatSchedule,
   formatScore,
@@ -21,10 +23,12 @@ export async function generateMetadata({ params }) {
   const { slug } = await params;
   const item = await getParentSeriesBySlug(slug);
   if (!item) notFound();
-  return {
+  return buildPageMetadata({
     title: `${item.name} シリーズ | Gacha Lens`,
-    description: item.summary ?? "ガチャシリーズのラインナップ、発売情報、セット相場を確認できます。",
-  };
+    description: item.summary ?? `${item.name}のラインナップ、定価、発売情報を確認できます。`,
+    path: seriesHref(item),
+    image: item.image_url,
+  });
 }
 
 export default async function ParentSeriesDetailPage({ params }) {
@@ -35,9 +39,28 @@ export default async function ParentSeriesDetailPage({ params }) {
   const released = Boolean(item.is_released);
   const variants = item.variants ?? [];
   const market = item.market_summary ?? {};
+  const detailUrl = absoluteSiteUrl(seriesHref(item));
+  const seriesJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ProductGroup",
+    "@id": `${detailUrl}#product-group`,
+    name: item.name,
+    description: item.summary || `${item.name}のガチャシリーズです。`,
+    url: detailUrl,
+    image: item.image_url ? [absoluteSiteUrl(item.image_url)] : undefined,
+    productGroupID: item.series_id || undefined,
+    brand: item.brand ? { "@type": "Brand", name: item.brand } : undefined,
+    hasVariant: variants.slice(0, 50).map((variant) => ({
+      "@type": "Product",
+      name: variant.name,
+      url: absoluteSiteUrl(variantHref(variant)),
+      sku: variant.id || undefined,
+    })),
+  };
 
   return (
     <main className="site-main">
+      <StructuredData value={seriesJsonLd} />
       <div className="site-shell">
         <nav className="detail-breadcrumbs" aria-label="パンくずリスト">
           <Link href="/">ホーム</Link><span>/</span><Link href="/series?scope=series">シリーズ一覧</Link><span>/</span><strong>{item.name}</strong>

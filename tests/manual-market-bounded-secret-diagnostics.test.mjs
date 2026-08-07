@@ -13,7 +13,7 @@ import {
 } from "../lib/domain/market-bounded-write.js";
 
 const workflow = fs.readFileSync(".github/workflows/gacha-market-bounded-manual.yml", "utf8");
-const runner = fs.readFileSync("scripts/manual-market-bounded-persistence.mjs", "utf8");
+const runner = fs.readFileSync("scripts/manual-market-bounded-persistence.mjs", "utf8").replace(/\r\n/g, "\n");
 const diagnosticSource = fs.readFileSync("lib/domain/manual-market-bounded-diagnostics.js", "utf8");
 const secretReference = "AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ${{ secrets.AUTOMATIC_INGESTION_BOUNDED_APPROVAL }}";
 

@@ -13,6 +13,7 @@ import {
   customerTags,
   opportunityScore,
 } from "@/lib/domain/public-display-clean";
+import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -28,11 +29,11 @@ const scheduleMetricLabels = [
 
 export async function generateMetadata({ searchParams }) {
   const month = normalizeCatalogMonth((await searchParams)?.month);
-  return {
+  return buildPageMetadata({
     title: month ? `${formatCatalogMonth(month)}の発売予定 | Gacha Lens` : "発売スケジュール | Gacha Lens",
     description: "発売予定のガチャ単品を月と週から確認できます。",
-    alternates: { canonical: month ? `/schedule?month=${month}` : "/schedule" },
-  };
+    path: month ? `/schedule?month=${month}` : "/schedule",
+  });
 }
 
 export default async function SchedulePage({ searchParams }) {

@@ -2,11 +2,13 @@ import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import { getCategoryCatalog } from "@/lib/series";
 import { buildCatalogHref } from "@/lib/domain/catalog-query";
+import { buildPageMetadata } from "@/lib/site-metadata";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "カテゴリ一覧 | Gacha Lens",
   description: "登録済みのガチャをカテゴリ別に探せます。",
-};
+  path: "/categories",
+});
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
