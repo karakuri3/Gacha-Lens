@@ -25,6 +25,10 @@ export default function PrivacyPage() {
       </LegalSection>
       <LegalSection title="3. 外部サービスとCookie等">
         <p>当サイトは、ホスティング、データベース、アクセス解析、広告、アフィリエイト等の外部サービスを利用する場合があります。各サービスがCookieその他の技術を利用する場合、その取り扱いは各事業者の規約・ポリシーにも従います。</p>
+        <p>Google AdSense等の第三者広告サービスを将来有効化した場合、Googleを含む第三者広告ベンダーが、広告配信のためにCookie、web beacon、IPアドレスその他の識別技術を使用する場合があります。Googleは過去のアクセス情報等を利用し、パーソナライズド広告を配信する場合があります。</p>
+        <p>利用者は、<a href="https://myadcenter.google.com/" target="_blank" rel="noopener noreferrer">Google広告設定</a>から広告のパーソナライズを管理・無効化できます。Googleによるパートナーサイト利用時のデータ利用は、<a href="https://policies.google.com/technologies/partner-sites?hl=ja" target="_blank" rel="noopener noreferrer">Googleの説明</a>で確認できます。</p>
+        <p>現時点でGoogle AdSenseや第三者広告コードを導入していない場合、上記の広告配信技術が当サイトで常時動作していることを示すものではありません。導入時には対象地域の同意要件と本ポリシーを改めて確認します。</p>
+        <p>EEA、英国、スイス向けにGoogle広告を有効化する場合は、Googleの最新要件を確認し、必要な地域ではGoogle認定CMPを通じて同意の取得・撤回手段と広告技術プロバイダの情報を提供します。</p>
       </LegalSection>
       <LegalSection title="4. 保存・安全管理">
         <p>取得した情報は利用目的に必要な範囲で保存し、アクセス制限、権限分離、ログ監査等の合理的な安全管理措置を講じます。</p>

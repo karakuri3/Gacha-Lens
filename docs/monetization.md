@@ -65,3 +65,12 @@ The following environment variables are code-side integration points. Do not com
 5. Apply to each affiliate program and add only approved identifiers after reviewing that provider's link requirements.
 6. Apply to AdSense only after the public catalog, legal pages, contact route and original editorial content are stable.
 7. Review outbound-click totals by provider and product without adding affiliate commission to ranking logic.
+
+## AdSense activation gate
+
+- This PR does not load Google AdSense or any other advertising code.
+- A consent management platform (CMP) is not implemented in this PR.
+- EEA・英国・スイス向けにGoogle広告を有効化する前に、Googleの最新要件を再確認する。
+- 必要な地域ではGoogle認定CMPを導入する。
+- Verify consent capture, a usable consent-withdrawal path, and disclosure of advertising technology providers.
+- Keep AdSense activation disabled in Production until these checks and the public privacy disclosure are complete.
