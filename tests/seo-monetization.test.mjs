@@ -112,7 +112,7 @@ test("parent without a slug is excluded", () => {
 
 test("public sitemap source fetches only catalog identity columns in deterministic pages", () => {
   const text = source("lib/data/public-sitemap-identifiers.js");
-  assert.match(text, /id,slug,series_id,name,variant_type,parent:series!inner\(id,slug\)/);
+  assert.match(text, /id,slug,series_id,name,variant_type,parent:series!inner\(id,slug,franchise,brand\)/);
   assert.match(text, /DEFAULT_PAGE_SIZE = 1000/);
   assert.match(text, /\.order\("id", \{ ascending: true \}\)/);
   assert.match(text, /\.range\(from, from \+ pageSize - 1\)/);

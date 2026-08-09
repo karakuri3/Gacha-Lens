@@ -84,6 +84,13 @@ export default async function SeriesPage({ searchParams }) {
           <p className="page-lead">商品名、作品名、キャラクター名、カテゴリ、発売月から探せます。</p>
         </section>
 
+        <nav className="catalog-discovery-links" aria-label="別の探し方">
+          <span>別の探し方</span>
+          <Link href="/franchises">作品別</Link>
+          <Link href="/brands">メーカー別</Link>
+          <Link href="/categories">カテゴリ別</Link>
+        </nav>
+
         <nav className="entity-scope-tabs" aria-label="検索単位">
           <Link href={buildCatalogHref(query, { scope: "variant" })} className={query.scope === "variant" ? "is-active" : ""} aria-current={query.scope === "variant" ? "page" : undefined}>
             <strong>単品から探す</strong><span>キャラクター・レア・シークレット</span>

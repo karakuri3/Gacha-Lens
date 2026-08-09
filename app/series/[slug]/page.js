@@ -1,13 +1,14 @@
 ﻿import Link from "next/link";
 import { notFound } from "next/navigation";
 import ProductImage from "@/components/ProductImage";
-import { getRelatedSeries, getSeriesBySlug } from "@/lib/series";
+import { getPublicDiscoveryFacets, getRelatedSeries, getSeriesBySlug } from "@/lib/series";
 import SeriesCard from "@/components/SeriesCard";
 import MarketplaceLinks from "@/components/MarketplaceLinks";
 import CommunityReportForm from "@/components/CommunityReportForm";
 import PriceTrendChart from "@/components/PriceTrendChart";
 import FavoriteButton from "@/components/FavoriteButton";
 import StructuredData from "@/components/StructuredData";
+import { DiscoveryFacetLink } from "@/components/DiscoveryFacetPages";
 import { variantHref } from "@/lib/variant-url";
 import { absoluteSiteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import {
@@ -49,7 +50,11 @@ export default async function VariantDetailPage({ params }) {
   if (!item) notFound();
 
   const isReleased = Boolean(item.is_released);
-  const related = (await getRelatedSeries(item.slug, 8))
+  const [relatedRecords, discoveryFacets] = await Promise.all([
+    getRelatedSeries(item.slug, 8),
+    getPublicDiscoveryFacets(),
+  ]);
+  const related = relatedRecords
     .filter((entry) => Boolean(entry.is_released) === isReleased)
     .slice(0, 3);
   const tags = customerTags(item, isReleased);
@@ -99,7 +104,8 @@ export default async function VariantDetailPage({ params }) {
             <p className="page-lead" style={{ marginTop: 12 }}>{item.series_name}</p>
 
             <dl className="detail-facts">
-              <div><dt>メーカー</dt><dd>{item.brand || "未登録"}</dd></div>
+              <div><dt>メーカー</dt><dd><DiscoveryFacetLink type="brand" value={item.brand} facets={discoveryFacets.brands} /></dd></div>
+              <div><dt>作品</dt><dd><DiscoveryFacetLink type="franchise" value={item.parent_series?.franchise || item.character} facets={discoveryFacets.franchises} /></dd></div>
               <div><dt>カテゴリ</dt><dd>{item.category || "未登録"}</dd></div>
               <div><dt>発売</dt><dd>{formatSchedule(item)}</dd></div>
               <div><dt>定価</dt><dd>{formatYen(item.price)}</dd></div>

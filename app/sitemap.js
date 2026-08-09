@@ -9,6 +9,8 @@ export default async function sitemap() {
     { path: "/ranking", frequency: "daily", priority: 0.9 },
     { path: "/schedule", frequency: "daily", priority: 0.9 },
     { path: "/series", frequency: "daily", priority: 0.9 },
+    { path: "/franchises", frequency: "weekly", priority: 0.8 },
+    { path: "/brands", frequency: "weekly", priority: 0.8 },
     { path: "/categories", frequency: "weekly", priority: 0.8 },
     { path: "/restocks", frequency: "daily", priority: 0.8 },
     { path: "/stock", frequency: "daily", priority: 0.8 },
@@ -19,7 +21,7 @@ export default async function sitemap() {
     { path: "/operator", frequency: "yearly", priority: 0.3 },
     { path: "/contact", frequency: "yearly", priority: 0.3 },
   ];
-  const { variantSlugs, parentSeriesSlugs } = await getPublicSitemapIdentifiers();
+  const { variantSlugs, parentSeriesSlugs, franchises, brands } = await getPublicSitemapIdentifiers();
 
   const entries = [
     ...staticPages.map((page) => ({
@@ -36,6 +38,16 @@ export default async function sitemap() {
       url: absoluteSiteUrl(`/series/group/${encodeURIComponent(slug)}`),
       changeFrequency: "daily",
       priority: 0.8,
+    })),
+    ...franchises.map((facet) => ({
+      url: absoluteSiteUrl(`/franchises/${encodeURIComponent(facet.name)}`),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    })),
+    ...brands.map((facet) => ({
+      url: absoluteSiteUrl(`/brands/${encodeURIComponent(facet.name)}`),
+      changeFrequency: "weekly",
+      priority: 0.7,
     })),
   ];
 
