@@ -10,6 +10,7 @@ import {
   findPublicCategoryFacet,
   paginatePublicCategoryVariants,
 } from "../lib/domain/category-discovery.js";
+import { discoveryFacetHref } from "../lib/domain/discovery-facets.js";
 
 const ROOT = process.cwd();
 const source = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
@@ -33,8 +34,32 @@ test("category facets require two distinct public parent series and retain exact
     row("v3", "s2", "Figures"),
     row("v4", "s3", "Plush"),
   ]);
-  assert.deepEqual(facets, [{ name: "Figures", series_count: 2, variant_count: 3 }]);
+  assert.deepEqual(facets, [{ name: "Figures", filter_value: "Figures", series_count: 2, variant_count: 3 }]);
   assert.deepEqual(findPublicCategoryFacet(facets, " figures "), facets[0]);
+});
+
+test("category facets keep one raw database value while publishing its normalized display name", () => {
+  const facets = collectPublicCategoryFacets([
+    row("v1", "s1", " Figures "),
+    row("v2", "s2", " Figures "),
+  ]);
+  assert.deepEqual(facets, [{ name: "Figures", filter_value: " Figures ", series_count: 2, variant_count: 2 }]);
+});
+
+test("NFKC display normalization never changes the exact category filter value", () => {
+  const raw = "\uFF26\uFF49\uFF47\uFF55\uFF52\uFF45\uFF53";
+  const facets = collectPublicCategoryFacets([row("v1", "s1", raw), row("v2", "s2", raw)]);
+  assert.equal(facets[0].name, "Figures");
+  assert.equal(facets[0].filter_value, raw);
+});
+
+test("normalized category collisions fail closed instead of choosing one raw filter value", () => {
+  const facets = collectPublicCategoryFacets([
+    row("v1", "s1", "Figures"),
+    row("v2", "s2", "Figures"),
+    row("v3", "s3", "figures"),
+  ]);
+  assert.deepEqual(facets, []);
 });
 
 test("category facets exclude provisional, incomplete, unknown, and generic category rows", () => {
@@ -48,6 +73,12 @@ test("category facets exclude provisional, incomplete, unknown, and generic cate
     row("generic-b", "s7", "all"),
   ]);
   assert.deepEqual(facets, []);
+});
+
+test("category-only generic exclusions do not change franchise or brand facet rules", async () => {
+  const { isMeaningfulDiscoveryFacetName } = await import("../lib/domain/discovery-facets.js");
+  assert.equal(isMeaningfulDiscoveryFacetName("all"), true);
+  assert.equal(isMeaningfulDiscoveryFacetName("category"), true);
 });
 
 test("multiple variants from the same series do not inflate category series counts", () => {
@@ -78,6 +109,7 @@ test("category route helpers preserve Japanese, literal percent signs, spaces, a
   }
   assert.equal(categoryDiscoveryPageHref("Figures"), "/categories/Figures");
   assert.equal(categoryDiscoveryPageHref("Figures", 2), "/categories/Figures?page=2");
+  assert.equal(discoveryFacetHref("category", "\u30df\u30cb\u30c1\u30e5\u30a2"), "/categories/%E3%83%9F%E3%83%8B%E3%83%81%E3%83%A5%E3%82%A2");
 });
 
 test("category pages use public catalog filtering, canonical metadata, and noindex pagination", () => {
@@ -95,9 +127,17 @@ test("category discovery uses public identity rows and exact category filters wi
   const text = source("lib/series.js");
   assert.match(text, /getPublicCategoryCatalogPage/);
   assert.match(text, /getPublicSitemapIdentifiers\(\)/);
-  assert.match(text, /getSeriesCatalogPage\(\{ category: facet\.name/);
+  assert.match(text, /getSeriesCatalogPage\(\{ category: facet\.filter_value/);
   assert.match(text, /result\.total !== facet\.variant_count/);
   assert.doesNotMatch(source("lib/domain/category-discovery.js"), /affiliate|commission|ranking|forecast|market|stock|reaction/i);
+});
+
+test("category database filtering remains exact while URL names remain normalized", () => {
+  const repository = source("lib/data/supabase-gacha-repository.js");
+  const categorySource = source("lib/domain/category-discovery.js");
+  assert.match(repository, /query\.eq\("parent\.category", options\.category\)/);
+  assert.match(categorySource, /filter_value: \[\.\.\.group\.rawValues\]\[0\]/);
+  assert.match(categorySource, /rawValues\.size === 1/);
 });
 
 test("categories index links only indexable facets while filtered catalog URLs are noindex", () => {
