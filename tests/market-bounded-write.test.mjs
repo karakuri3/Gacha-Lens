@@ -18,10 +18,12 @@ import {
   renderMarketBoundedResultMarkdown,
   resolveBoundedMarketplaceIdentity,
   sanitizeBoundedIdentityDiagnostic,
+  sanitizeBoundedVerificationDiagnostic,
   selectExactMarketBoundedCandidates,
   validateMarketBoundedArmingGate,
   validateMarketBoundedPlanIdentity,
 } from "../lib/domain/market-bounded-write.js";
+import { buildManualMarketBoundedDurableRunId } from "../lib/domain/manual-market-bounded-execution.js";
 
 const { policy, digest } = loadAutomaticIngestionRolloutPolicy("config/automatic-ingestion-rollout-policy.json");
 const headSha = "a".repeat(40);
@@ -139,6 +141,128 @@ for (const [name, mutate] of [
 
 test("persistence writes listings before observations with batch size two", async () => { const store = fakeStore(); const rows = rowsFixture(); const result = await persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, store }); assert.equal(result.ok, true); assert.deepEqual(store.calls.slice(0, 2).map((x) => x.table), ["market_listings", "market_listing_observations"]); assert.equal(store.calls.every((x) => x.options.batchSize <= 2 && x.options.allowSchemaFallback === false), true); });
 test("durable run row is built from the final operation plan", async () => { const store = fakeStore(); const rows = rowsFixture(); const id = "bounded-run-final-operations"; await persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, durableRunId: id, buildDurableRunRow: (operations) => ({ id, task: "market", summary: { listing_inserts: operations.listings.filter((entry) => entry.operation === "insert").length, observation_inserts: operations.observations.filter((entry) => entry.operation === "insert").length } }), store }); assert.deepEqual(store.getRow("ingestion_runs", id).summary, { listing_inserts: 2, observation_inserts: 2 }); });
+test("equivalent PostgREST timestamp representations pass E.9-sized verification", async () => {
+  const rows = rowsFixture();
+  const existingListing = { ...structuredClone(rows.listingRows[0]), status: "sold" };
+  const durable = durableRunFixture();
+  const store = fakeStore({
+    initialRows: { market_listings: [existingListing] },
+    postgrestTimestampSerialization: true,
+  });
+  const result = await persistMarketBounded({
+    listingRows: rows.listingRows,
+    observationRows: rows.observationRows,
+    durableRunId: durable.id,
+    buildDurableRunRow: () => durable,
+    store,
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.operations.listings.map((entry) => entry.operation), ["update", "insert"]);
+  assert.deepEqual(result.operations.observations.map((entry) => entry.operation), ["insert", "insert"]);
+  assert.equal(result.operations.durable_run, "insert");
+  assert.equal(result.database_writes, 5);
+  assert.equal(result.verification.rows_verified, true);
+  assert.match(durable.id, /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.ok(store.reads.filter((entry) => entry.table === "ingestion_runs").length >= 2);
+  assert.equal(store.calls.filter((entry) => entry.table === "ingestion_runs").length, 1);
+});
+test("genuinely different observation timestamps fail closed and roll back", async () => {
+  const error = await verificationFailure((table, row, state) => {
+    if (table === "market_listing_observations" && state.hasWrites) row.observed_at = "2026-08-02T00:00:01.000Z";
+    return row;
+  });
+  assert.deepEqual(error.bounded_result.verification_diagnostic, { table: "market_listing_observations", field: "observed_at", mismatch_reason: "field_mismatch" });
+  assert.equal(error.bounded_result.rollback.verified, true);
+});
+test("invalid observation timestamp representations fail closed", async () => {
+  const error = await verificationFailure((table, row, state) => {
+    if (table === "market_listing_observations" && state.hasWrites) row.observed_at = "not-a-timestamp";
+    return row;
+  });
+  assert.equal(error.bounded_result.verification_diagnostic.field, "observed_at");
+  assert.equal(error.bounded_result.rollback.verified, true);
+});
+test("genuinely different durable timestamps fail closed", async () => {
+  const rows = rowsFixture();
+  const durable = durableRunFixture();
+  const store = fakeStore({
+    readTransform(table, row, state) {
+      if (table === "ingestion_runs" && state.hasWrites) row.finished_at = "2026-08-02T00:00:01.000Z";
+      return row;
+    },
+  });
+  const error = await rejected(() => persistMarketBounded({
+    listingRows: rows.listingRows,
+    observationRows: rows.observationRows,
+    durableRunId: durable.id,
+    buildDurableRunRow: () => durable,
+    store,
+  }));
+  assert.deepEqual(error.bounded_result.verification_diagnostic, { table: "ingestion_runs", field: "finished_at", mismatch_reason: "field_mismatch" });
+  assert.equal(error.bounded_result.rollback.verified, true);
+});
+test("timestamp-like strings inside durable summary remain strict", async () => {
+  const rows = rowsFixture();
+  const durable = durableRunFixture();
+  const store = fakeStore({
+    readTransform(table, row, state) {
+      if (table === "ingestion_runs" && state.hasWrites) row.summary.timestamp_like_text = "2026-08-02T00:00:00+00:00";
+      return row;
+    },
+  });
+  const error = await rejected(() => persistMarketBounded({
+    listingRows: rows.listingRows,
+    observationRows: rows.observationRows,
+    durableRunId: durable.id,
+    buildDurableRunRow: () => durable,
+    store,
+  }));
+  assert.deepEqual(error.bounded_result.verification_diagnostic, { table: "ingestion_runs", field: "summary", mismatch_reason: "field_mismatch" });
+  assert.equal(error.bounded_result.rollback.verified, true);
+});
+test("timestamp-like strings inside raw JSON remain strict", async () => {
+  const error = await verificationFailure((table, row, state) => {
+    if (table === "market_listing_observations" && state.hasWrites) row.raw = { ...row.raw, observed_at: "2026-08-02T00:00:00+00:00" };
+    return row;
+  });
+  assert.deepEqual(error.bounded_result.verification_diagnostic, { table: "market_listing_observations", field: "raw", mismatch_reason: "field_mismatch" });
+});
+test("non-timestamp field mismatches remain strict", async () => {
+  const error = await verificationFailure((table, row, state) => {
+    if (table === "market_listing_observations" && state.hasWrites) row.status = "sold";
+    return row;
+  });
+  assert.deepEqual(error.bounded_result.verification_diagnostic, { table: "market_listing_observations", field: "status", mismatch_reason: "field_mismatch" });
+});
+test("missing post-write rows fail closed with an allowlisted diagnostic", async () => {
+  const rows = rowsFixture();
+  const store = fakeStore({ omitAfterWriteTable: "market_listing_observations" });
+  const error = await rejected(() => persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, store }));
+  assert.deepEqual(error.bounded_result.verification_diagnostic, { table: "market_listing_observations", field: "id", mismatch_reason: "missing_row" });
+  assert.equal(error.bounded_result.rollback.verified, true);
+});
+test("count delta mismatch reports only the affected count key", async () => {
+  const rows = rowsFixture();
+  const error = await rejected(() => persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, store: fakeStore({ unexpectedDelta: true }) }));
+  assert.deepEqual(error.bounded_result.verification_diagnostic, { table: "counts", field: "import_issues", mismatch_reason: "count_delta_mismatch" });
+  assert.equal(error.bounded_result.rollback.attempted, true);
+});
+test("verification diagnostic keeps only allowlisted fields and values", () => {
+  assert.deepEqual(sanitizeBoundedVerificationDiagnostic({ table: "ingestion_runs", field: "started_at", mismatch_reason: "field_mismatch", actual: "https://private.invalid", expected: "secret", raw: {}, approval: "nonce" }), { table: "ingestion_runs", field: "started_at", mismatch_reason: "field_mismatch" });
+  assert.equal(sanitizeBoundedVerificationDiagnostic({ table: "private_table", field: "token", mismatch_reason: "field_mismatch" }), null);
+});
+test("sanitized result and Markdown never expose verification values or secrets", () => {
+  const secret = "APPROVE_MARKET_BOUNDED_MANUAL:secret-nonce";
+  const result = buildMarketBoundedResult({
+    status: "rolled-back",
+    reason_code: "bounded_verification_failed",
+    error_category: "rollback",
+    verification_diagnostic: { table: "ingestion_runs", field: "finished_at", mismatch_reason: "field_mismatch", actual: secret, url: "https://private.invalid" },
+  });
+  const output = `${JSON.stringify(result)}\n${renderMarketBoundedResultMarkdown(result)}`;
+  assert.deepEqual(result.verification_diagnostic, { table: "ingestion_runs", field: "finished_at", mismatch_reason: "field_mismatch" });
+  assert.doesNotMatch(output, /private\.invalid|secret-nonce|actual|expected|raw row/i);
+});
 test("second identical persistence performs zero writes", async () => { const store = fakeStore(); const rows = rowsFixture(); await persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, store }); store.calls.length = 0; const result = await persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, store }); assert.equal(result.database_writes, 0); assert.equal(store.calls.length, 0); });
 test("listing failure never starts observation write", async () => { const store = fakeStore({ failTable: "market_listings" }); const rows = rowsFixture(); await assert.rejects(() => persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, store })); assert.equal(store.calls.some((x) => x.table === "market_listing_observations"), false); });
 test("observation failure triggers verified rollback", async () => { const store = fakeStore({ failTableOnce: "market_listing_observations" }); const rows = rowsFixture(); const error = await rejected(() => persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, store })); assert.equal(error.bounded_result.rollback.attempted, true); assert.equal(error.bounded_result.rollback.verified, true); });
@@ -200,19 +324,61 @@ function rebind(plan) { const value = structuredClone(plan); value.plan_digest =
 function validateIdentity(name, mutate) { let value = fixture(); if (mutate) { const changed = mutate(value); if (Buffer.isBuffer(changed)) value.auditBytes = changed; else if (changed?.schema_version && changed?.workflow) value.audit = changed; else if (changed?.plan_digest) value.plan = changed; } return validateMarketBoundedPlanIdentity({ audit_bytes: value.auditBytes, audit: value.audit, plan: value.plan, workflow, policy_digest: digest, simulation: false, now: "2026-08-02T00:05:00.000Z" }); }
 function rowsFixture() { const value = fixture(); return buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow, observed_at: value.plan.generated_at }); }
 
+function durableRunFixture() {
+  const id = buildManualMarketBoundedDurableRunId({ workflow_run_id: "31322475822", workflow_run_attempt: "1", plan_digest: "f".repeat(64) });
+  return {
+    id,
+    task: "market",
+    status: "succeeded",
+    trigger_source: "manual_bounded",
+    started_at: "2026-08-02T00:00:00.000Z",
+    finished_at: "2026-08-02T00:00:00.000Z",
+    duration_ms: 0,
+    summary: { timestamp_like_text: "2026-08-02T00:00:00.000Z", listing_inserts: 1, listing_updates: 1, observation_inserts: 2 },
+    error_message: null,
+  };
+}
+
+async function verificationFailure(readTransform) {
+  const rows = rowsFixture();
+  const store = fakeStore({ readTransform });
+  return rejected(() => persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, store }));
+}
+
 function fakeStore(options = {}) {
   const tables = { market_listings: new Map(), market_listing_observations: new Map(), ingestion_runs: new Map() };
+  for (const [table, rows] of Object.entries(options.initialRows ?? {})) {
+    for (const row of rows) tables[table].set(row.id, structuredClone(row));
+  }
   let failedOnce = false;
   const store = {
     calls: [],
+    reads: [],
     getRow(table, id) { return structuredClone(tables[table]?.get(id)); },
-    async fetchRowsByIds(table, ids) { return ids.filter((id) => tables[table]?.has(id)).map((id) => structuredClone(tables[table].get(id))); },
+    async fetchRowsByIds(table, ids) {
+      store.reads.push({ table, ids: [...ids] });
+      if (options.omitAfterWriteTable === table && store.calls.some((entry) => entry.table === table)) return [];
+      return ids.filter((id) => tables[table]?.has(id)).map((id) => serializeReadRow(table, tables[table].get(id), options, store));
+    },
     async fetchCounts() { return { market_listings: tables.market_listings.size, market_listing_observations: tables.market_listing_observations.size, import_issues: options.unexpectedDelta && store.calls.length ? 1 : 0, ingestion_runs: tables.ingestion_runs.size, review_required: 0, series: 10, variants: 20, stock_reports: 0, restock_events: 0 }; },
     async upsertRows(table, rows, writeOptions) { store.calls.push({ table, rows: structuredClone(rows), options: writeOptions }); if (options.failTable === table || (options.failTableOnce === table && !failedOnce)) { failedOnce = true; throw new Error("injected failure"); } for (const row of rows) tables[table].set(row.id, structuredClone(row)); },
     async deleteRowsByIds(table, ids) { for (const id of ids) tables[table].delete(id); return ids.length; },
     async fetchObservationsByListingIds(ids) { return options.externalReference ? [{ id: "external", listing_id: ids[0] }] : [...tables.market_listing_observations.values()].filter((row) => ids.includes(row.listing_id)); },
   };
   return store;
+}
+
+function serializeReadRow(table, stored, options, store) {
+  const row = structuredClone(stored);
+  if (options.postgrestTimestampSerialization) {
+    const fields = table === "market_listing_observations"
+      ? ["observed_at"]
+      : table === "ingestion_runs" ? ["started_at", "finished_at"] : [];
+    for (const field of fields) {
+      if (typeof row[field] === "string" && row[field].endsWith(".000Z")) row[field] = row[field].replace(/\.000Z$/, "+00:00");
+    }
+  }
+  return options.readTransform?.(table, row, { hasWrites: store.calls.some((entry) => entry.table === table) }) ?? row;
 }
 
 async function rejected(fn) { try { await fn(); assert.fail("Expected rejection"); } catch (error) { return error; } }
