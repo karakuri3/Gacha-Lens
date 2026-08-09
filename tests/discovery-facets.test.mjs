@@ -3,11 +3,14 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import {
+  collectPublicDiscoveryFacetCatalogs,
   collectPublicDiscoveryFacets,
   decodeDiscoveryFacetParam,
   discoveryFacetHref,
+  discoveryFacetPageHref,
   findPublicDiscoveryFacet,
   isMeaningfulDiscoveryFacetName,
+  paginatePublicDiscoveryFacetSeries,
 } from "../lib/domain/discovery-facets.js";
 
 const ROOT = process.cwd();
@@ -63,7 +66,54 @@ test("facet lookup and URL encoding are deterministic", () => {
   const facets = [{ name: "機動戦士ガンダム", series_count: 2, variant_count: 7 }];
   assert.deepEqual(findPublicDiscoveryFacet(facets, "機動戦士ガンダム"), facets[0]);
   assert.equal(discoveryFacetHref("franchise", facets[0].name), `/franchises/${encodeURIComponent(facets[0].name)}`);
-  assert.equal(decodeDiscoveryFacetParam(encodeURIComponent(facets[0].name)), facets[0].name);
+  assert.equal(decodeDiscoveryFacetParam(decodeURIComponent(encodeURIComponent(facets[0].name))), facets[0].name);
+  assert.equal(discoveryFacetPageHref("franchise", facets[0].name), discoveryFacetHref("franchise", facets[0].name));
+  assert.equal(discoveryFacetPageHref("franchise", facets[0].name, 2), `${discoveryFacetHref("franchise", facets[0].name)}?page=2`);
+});
+
+test("decoded facet params preserve literal percent signs, spaces, ampersands, plus signs, and slashes", () => {
+  for (const name of ["Title A", "100% & +", "Title/Feature"]) {
+    const segment = discoveryFacetHref("brand", name).split("/").at(-1);
+    assert.equal(decodeDiscoveryFacetParam(decodeURIComponent(segment)), name);
+  }
+});
+
+test("facet catalogs use only public parent series and retain exact counts", () => {
+  const rows = [
+    row("v1", "s1", "Franchise", "Brand"),
+    row("v2", "s1", "Franchise", "Brand"),
+    row("v3", "s2", "Franchise", "Brand"),
+    row("hidden", "s3", "Franchise", "Brand", { variant_type: "provisional" }),
+  ];
+  const catalog = collectPublicDiscoveryFacetCatalogs(rows).franchises[0];
+  assert.equal(catalog.series_count, 2);
+  assert.equal(catalog.variant_count, 3);
+  assert.deepEqual(catalog.parent_series.map((item) => item.id), ["s1", "s2"]);
+  assert.equal(collectPublicDiscoveryFacets(rows).franchises[0].series_count, catalog.parent_series.length);
+});
+
+test("public facet pagination covers 61 and 121 parent series without overlap", () => {
+  for (const total of [61, 121]) {
+    const parents = Array.from({ length: total }, (_, index) => ({ id: `s${index + 1}`, slug: `series-${String(index + 1).padStart(3, "0")}` }));
+    const pages = Array.from({ length: Math.ceil(total / 60) }, (_, index) => paginatePublicDiscoveryFacetSeries(parents, { page: index + 1, pageSize: 60 }));
+    assert.equal(pages[0].total, total);
+    assert.equal(pages.at(-1).items.length, total % 60 || 60);
+    assert.equal(new Set(pages.flatMap((page) => page.items.map((item) => item.id))).size, total);
+  }
+});
+
+test("public facet pagination excludes provisional rows before it assigns pages", () => {
+  const rows = [
+    ...Array.from({ length: 61 }, (_, index) => row(`public-${index}`, `s${index}`, "Franchise", "Brand")),
+    ...Array.from({ length: 10 }, (_, index) => row(`provisional-${index}`, `p${index}`, "Franchise", "Brand", { variant_type: "provisional" })),
+  ];
+  const facet = collectPublicDiscoveryFacetCatalogs(rows).franchises[0];
+  const first = paginatePublicDiscoveryFacetSeries(facet.parent_series, { page: 1, pageSize: 60 });
+  const second = paginatePublicDiscoveryFacetSeries(facet.parent_series, { page: 2, pageSize: 60 });
+  assert.equal(facet.series_count, 61);
+  assert.equal(first.items.length, 60);
+  assert.equal(second.items.length, 1);
+  assert.match(second.items[0].id, /^s\d+$/);
 });
 
 test("public sitemap fetch remains identity-only, paged, and deterministic", () => {
@@ -84,12 +134,22 @@ test("parent catalog applies exact franchise and brand filters", () => {
 test("discovery routes publish canonical metadata and reject non-indexable facets", () => {
   for (const file of ["app/franchises/[name]/page.js", "app/brands/[name]/page.js"]) {
     const text = source(file);
-    assert.match(text, /findPublicDiscoveryFacet/);
-    assert.match(text, /if \(!facet\) notFound\(\)/);
+    assert.match(text, /getPublicDiscoveryFacetSeriesPage/);
+    assert.match(text, /if \(!result\) notFound\(\)/);
     assert.match(text, /pageSize: 60/);
+    assert.match(text, /noIndex: page > 1/);
+    assert.match(text, /discoveryFacetPageHref/);
     assert.match(text, /buildPageMetadata/);
     assert.doesNotMatch(text, /offers|aggregateRating|review:/);
   }
+});
+
+test("landing pages hydrate only the cached public parent population", () => {
+  const text = source("lib/series.js");
+  assert.match(text, /getPublicDiscoveryFacetSeriesPage/);
+  assert.match(text, /getPublicSitemapIdentifiers\(\)/);
+  assert.match(text, /fetchSupabaseParentSeriesByIds/);
+  assert.match(text, /items\.length !== requestedIds\.length/);
 });
 
 test("sitemap includes indexable discovery routes and preserves the global cap", () => {

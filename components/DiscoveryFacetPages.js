@@ -1,6 +1,6 @@
 import Link from "next/link";
 import SeriesCard from "@/components/SeriesCard";
-import { discoveryFacetHref, findPublicDiscoveryFacet } from "@/lib/domain/discovery-facets";
+import { discoveryFacetHref, discoveryFacetPageHref, findPublicDiscoveryFacet } from "@/lib/domain/discovery-facets";
 
 export function DiscoveryFacetIndex({ type, eyebrow, title, lead, facets }) {
   return (
@@ -33,7 +33,7 @@ export function DiscoveryFacetIndex({ type, eyebrow, title, lead, facets }) {
   );
 }
 
-export function DiscoveryFacetLanding({ type, facet, items }) {
+export function DiscoveryFacetLanding({ type, facet, items, page }) {
   const indexHref = type === "brand" ? "/brands" : "/franchises";
   const indexLabel = type === "brand" ? "メーカーから探す" : "作品から探す";
   return (
@@ -59,9 +59,31 @@ export function DiscoveryFacetLanding({ type, facet, items }) {
         <section className="grid grid--cards">
           {items.map((item, index) => <SeriesCard key={item.slug} series={item} scope="series" priority={index < 6} />)}
         </section>
+        {page?.totalPages > 1 ? <DiscoveryFacetPagination type={type} facet={facet} page={page.page} totalPages={page.totalPages} /> : null}
       </div>
     </main>
   );
+}
+
+function DiscoveryFacetPagination({ type, facet, page, totalPages }) {
+  const pages = buildPageWindow(page, totalPages);
+  return (
+    <nav className="pagination" aria-label="シリーズ一覧のページ">
+      <Link className={`pill-link ${page <= 1 ? "is-disabled" : ""}`} href={discoveryFacetPageHref(type, facet.name, Math.max(1, page - 1))} aria-disabled={page <= 1}>前へ</Link>
+      <div className="pagination__pages">
+        {pages.map((value) => (
+          <Link key={value} className={`pill-link ${value === page ? "is-active" : ""}`} href={discoveryFacetPageHref(type, facet.name, value)} aria-current={value === page ? "page" : undefined}>{value.toLocaleString("ja-JP")}</Link>
+        ))}
+      </div>
+      <Link className={`pill-link ${page >= totalPages ? "is-disabled" : ""}`} href={discoveryFacetPageHref(type, facet.name, Math.min(totalPages, page + 1))} aria-disabled={page >= totalPages}>次へ</Link>
+    </nav>
+  );
+}
+
+function buildPageWindow(page, totalPages) {
+  const start = Math.max(1, Math.min(page - 2, totalPages - 4));
+  const end = Math.min(totalPages, start + 4);
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
 }
 
 export function DiscoveryFacetLink({ type, value, facets, fallback = "未登録" }) {
