@@ -94,7 +94,7 @@ test("35 home search submits to series query", () => {
 });
 test("36 zero result message is present", () => assert.match(seriesPage, /条件に一致する商品が見つかりませんでした/));
 test("37 clear filter action is present", () => assert.match(seriesPage, /条件をすべてクリア/));
-test("38 free search pages are noindex", () => assert.match(seriesPage, /query\.q \? \{ index: false, follow: true \}/));
+test("38 free search and filtered category pages are noindex", () => assert.match(seriesPage, /query\.q \|\| query\.category \? \{ index: false, follow: true \}/));
 test("39 category link uses encoded URL builder", () => assert.match(categoriesPage, /buildCatalogHref\(\{\}, \{ category: category\.name \}\)/));
 test("40 mobile filter has bounded columns", () => {
   assert.match(css, /\.catalog-filter-grid \{ grid-template-columns: 1fr 1fr; \}/);

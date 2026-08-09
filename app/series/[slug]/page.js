@@ -106,7 +106,7 @@ export default async function VariantDetailPage({ params }) {
             <dl className="detail-facts">
               <div><dt>メーカー</dt><dd><DiscoveryFacetLink type="brand" value={item.brand} facets={discoveryFacets.brands} /></dd></div>
               <div><dt>作品</dt><dd><DiscoveryFacetLink type="franchise" value={item.parent_series?.franchise || item.character} facets={discoveryFacets.franchises} /></dd></div>
-              <div><dt>カテゴリ</dt><dd>{item.category || "未登録"}</dd></div>
+              <div><dt>カテゴリ</dt><dd><DiscoveryFacetLink type="category" value={item.category} facets={discoveryFacets.categories} /></dd></div>
               <div><dt>発売</dt><dd>{formatSchedule(item)}</dd></div>
               <div><dt>定価</dt><dd>{formatYen(item.price)}</dd></div>
             </dl>

@@ -39,11 +39,11 @@ export async function generateMetadata({ searchParams }) {
     title: query.q ? `「${query.q}」の検索結果 | Gacha Lens` : "ガチャ一覧 | Gacha Lens",
     description: "商品名・作品名・シリーズ名・カテゴリ・発売月から、公開中のガチャを探せます。",
     path: canonical,
-    noIndex: Boolean(query.q),
+    noIndex: Boolean(query.q || query.category),
   });
   return {
     ...metadata,
-    robots: query.q ? { index: false, follow: true } : { index: true, follow: true },
+    robots: query.q || query.category ? { index: false, follow: true } : { index: true, follow: true },
   };
 }
 

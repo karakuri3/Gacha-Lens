@@ -1,7 +1,8 @@
 import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
-import { getCategoryCatalog } from "@/lib/series";
+import { getCategoryCatalog, getPublicDiscoveryFacets } from "@/lib/series";
 import { buildCatalogHref } from "@/lib/domain/catalog-query";
+import { categoryDiscoveryHref, findPublicCategoryFacet } from "@/lib/domain/category-discovery";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata = buildPageMetadata({
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function CategoriesPage() {
-  const categories = await getCategoryCatalog();
+  const [categories, discoveryFacets] = await Promise.all([getCategoryCatalog(), getPublicDiscoveryFacets()]);
 
   return (
     <main className="site-main">
@@ -27,10 +28,11 @@ export default async function CategoriesPage() {
 
         {categories.length ? (
           <section className="category-grid">
-            {categories.map((category, index) => (
-              <Link
+            {categories.map((category, index) => {
+              const facet = findPublicCategoryFacet(discoveryFacets.categories, category.name);
+              return <Link
                 key={category.name}
-                href={buildCatalogHref({}, { category: category.name })}
+                href={facet ? categoryDiscoveryHref(facet.name) : buildCatalogHref({}, { category: category.name })}
                 className="category-card"
               >
                 <div className="category-card__image">
@@ -42,8 +44,8 @@ export default async function CategoriesPage() {
                   {category.upcoming_count > 0 ? <small>発売予定 {category.upcoming_count.toLocaleString("ja-JP")}件</small> : null}
                 </div>
                 <span aria-hidden="true">→</span>
-              </Link>
-            ))}
+              </Link>;
+            })}
           </section>
         ) : (
           <div className="card empty">
