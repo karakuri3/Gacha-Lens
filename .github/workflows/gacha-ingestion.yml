@@ -275,7 +275,7 @@ jobs:
           --bounded-persistence-enabled=${{ env.AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED }}
       - name: Generate blocked bounded result before source fetch
         id: bounded_blocked_result
-        if: ${{ always() && steps.ingestion.outputs.mode == 'rollout' && env.AUTOMATIC_INGESTION_ROLLOUT_STAGE == 'market-bounded' && steps.rollout.outputs.allowed != 'true' }}
+        if: ${{ always() && steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.expected_noop != 'true' && env.AUTOMATIC_INGESTION_ROLLOUT_STAGE == 'market-bounded' && steps.rollout.outputs.allowed != 'true' }}
         run: >-
           npm run market:bounded-persist -- blocked
           --output-dir=${{ runner.temp }}/gacha-rollout-report
@@ -283,6 +283,31 @@ jobs:
           --event-name=${{ github.event_name }}
           --ref=${{ github.ref }}
           --head-sha=${{ github.sha }}
+      - name: Report expected rollout no-op
+        if: ${{ steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.expected_noop == 'true' }}
+        run: |
+          echo "## Expected automatic rollout no-op" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Reason: ${{ steps.rollout.outputs.expected_noop_reason }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Source fetch: skipped" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Bounded persistence: skipped" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Database writes: 0" >> "$GITHUB_STEP_SUMMARY"
+      - name: Write market-shadow throttle marker
+        if: ${{ github.event_name == 'schedule' && steps.ingestion.outputs.task == 'market' && steps.rollout.outputs.stage == 'market-shadow' && steps.rollout.outputs.allowed == 'true' }}
+        run: |
+          marker_dir="${{ runner.temp }}/gacha-rollout-throttle-marker"
+          mkdir -p "$marker_dir"
+          cat > "$marker_dir/marker.json" <<'EOF'
+          {"schema_version":1,"event":"schedule","stage":"market-shadow","task":"market","rollout_preflight_allowed":true,"run_id":"${{ github.run_id }}"}
+          EOF
+      - name: Upload market-shadow throttle marker
+        if: ${{ github.event_name == 'schedule' && steps.ingestion.outputs.task == 'market' && steps.rollout.outputs.stage == 'market-shadow' && steps.rollout.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingestion-rollout-throttle-market-shadow-market-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-rollout-throttle-marker/marker.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Run execution preflight
         id: execution_preflight
         if: ${{ steps.ingestion.outputs.mode == 'write' }}
@@ -404,7 +429,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Enforce rollout result
-        if: ${{ always() && steps.ingestion.outputs.mode == 'rollout' && (steps.rollout.outputs.allowed != 'true' || steps.rollout_plan.outputs.plan_generated != 'true' || (steps.rollout.outputs.stage == 'market-bounded' && (steps.persistence_preview.outputs.preview_generated != 'true' || (steps.rollout.outputs.persistence_authorized == 'true' && steps.bounded_persistence.outputs.result_generated != 'true')))) }}
+        if: ${{ always() && steps.ingestion.outputs.mode == 'rollout' && steps.rollout.outputs.expected_noop != 'true' && (steps.rollout.outputs.allowed != 'true' || steps.rollout_plan.outputs.plan_generated != 'true' || (steps.rollout.outputs.stage == 'market-bounded' && (steps.persistence_preview.outputs.preview_generated != 'true' || (steps.rollout.outputs.persistence_authorized == 'true' && steps.bounded_persistence.outputs.result_generated != 'true')))) }}
         run: |
           echo "::error::Automatic rollout failed closed before persistence."
           exit 1

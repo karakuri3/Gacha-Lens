@@ -7,7 +7,8 @@ import {
   REVIEWED_PRODUCTION_WORKFLOW_DIGESTS,
 } from "../lib/domain/market-workflow-evidence.js";
 
-const PHASE_6_F_2_DIGEST = "11f35c5bba9c4dbd7559d06d5273da15bae939e0134b7c5419e82939212d183e";
+const PHASE_6_F_2_DIGEST = "3a1f4c194e724afd68853491ce6642573020358f6aae8d1eb81a4530ec9165af";
+const INTERMEDIATE_PHASE_6_F_2_DIGEST = "11f35c5bba9c4dbd7559d06d5273da15bae939e0134b7c5419e82939212d183e";
 const STALE_DIGEST = "f18afcb0ec0bbec8e1bf69a12c95d00c2914759f1fa801f44db11550668208f8";
 const WINDOWS_RAW_DIGEST = "031e7133203c2cd6866f1b82c4e7721a6ba76ef95b6e517df7509a17f4b63877";
 
@@ -36,6 +37,7 @@ test("the committed Production workflow resolves to the reviewed Phase 6-F.2 dig
 
 test("the allowlist contains the reviewed Phase 6-F.2 digest once", () => {
   assert.equal(REVIEWED_PRODUCTION_WORKFLOW_DIGESTS.filter((digest) => digest === PHASE_6_F_2_DIGEST).length, 1);
+  assert.equal(REVIEWED_PRODUCTION_WORKFLOW_DIGESTS.includes(INTERMEDIATE_PHASE_6_F_2_DIGEST), false);
   assert.equal(REVIEWED_PRODUCTION_WORKFLOW_DIGESTS.includes(STALE_DIGEST), false);
   assert.equal(REVIEWED_PRODUCTION_WORKFLOW_DIGESTS.includes(WINDOWS_RAW_DIGEST), false);
 });
