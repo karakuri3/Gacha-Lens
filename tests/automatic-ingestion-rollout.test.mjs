@@ -276,6 +276,37 @@ test("scheduled no-ops skip setup and all mutation-adjacent paths", () => {
     assert.doesNotMatch(block, /scheduled-noop/);
   }
 });
+test("scheduled no-ops cannot satisfy rollout, persistence, ingestion, or cleanup conditions", () => {
+  const step = (name) => {
+    const start = productionWorkflow.indexOf(`- name: ${name}`);
+    const end = productionWorkflow.indexOf("\n      - name:", start + 1);
+    return productionWorkflow.slice(start, end === -1 ? undefined : end);
+  };
+
+  assert.match(step("Verify exact main SHA for Production mutation or rollout"), /mode == 'write' \|\| steps\.ingestion\.outputs\.mode == 'rollout'/);
+  for (const name of [
+    "Resolve rollout policy and throttle",
+    "Generate blocked bounded result before source fetch",
+    "Generate rollout prediction plan",
+    "Generate bounded persistence preview",
+    "Scan rollout report",
+    "Upload sanitized rollout report",
+    "Enforce rollout result",
+  ]) assert.match(step(name), /mode == 'rollout'/);
+  assert.match(step("Run controlled market backfill"), /github\.event_name == 'workflow_dispatch'[\s\S]*task == 'market'[\s\S]*mode != 'write'[\s\S]*\|\|[\s\S]*mode == 'rollout'/);
+  assert.match(step("Run bounded market persistence"), /github\.event_name == 'schedule'[\s\S]*17,47 \* \* \* \*[\s\S]*task == 'market'[\s\S]*mode == 'rollout'/);
+  for (const name of [
+    "Run execution preflight",
+    "Capture before snapshot",
+    "Run ingestion",
+    "Clean replaced provisional variants",
+    "Remove validation-only signal rows",
+    "Remove irrelevant unlinked market rows",
+    "Capture after snapshot",
+    "Finalize ingestion run report",
+    "Enforce Production ingestion result",
+  ]) assert.match(step(name), /mode == 'write'|production_ingestion\.outcome == 'success'/);
+});
 test("manual dispatch keeps scheduled no-op disabled", () => {
   assert.match(productionWorkflow, /scheduled_noop=false[\s\S]*if \[ -n "\$SCHEDULE" \]; then[\s\S]*else[\s\S]*mode="\$\{MANUAL_MODE:-dry-run\}"/);
   assert.match(productionWorkflow, /canary-write[\s\S]*Canary write cannot run on a schedule/);
