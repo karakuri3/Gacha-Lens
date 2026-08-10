@@ -149,7 +149,7 @@ test("workflow fixes the market contract", () => {
   assert.match(workflow, /stage:\s*"?market-bounded|--stage=market-bounded|stage: market-bounded/);
 });
 test("manual and Production workflows share non-cancelling concurrency", () => {
-  assert.match(workflow, /group: gacha-ingestion\s+cancel-in-progress: false/);
+  assert.match(workflow, /group: gacha-market-bounded-v2\s+cancel-in-progress: false/);
   assert.match(productionWorkflow, /group: gacha-ingestion\s+cancel-in-progress: false/);
 });
 test("workflow has minimal permissions", () => assert.match(workflow, /permissions:\s+contents: read\s+actions: read/));
