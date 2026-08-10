@@ -6,6 +6,7 @@ import { buildMarketCandidateKey } from "../lib/domain/market-candidate-key.js";
 import {
   MARKET_BOUNDED_REASON_CODES,
   bindMarketBoundedPlanIdentity,
+  buildMarketBoundedDurableRunId,
   buildMarketBoundedResult,
   buildMarketBoundedRows,
   calculateMarketAuditDigest,
@@ -33,6 +34,36 @@ const simulationWorkflow = fs.readFileSync(".github/workflows/gacha-ingestion-ro
 const phase6cFixture = JSON.parse(fs.readFileSync("tests/fixtures/phase6c-simulation-30709799096.json", "utf8"));
 const phase6d1Fixture = JSON.parse(fs.readFileSync("tests/fixtures/phase6d1-url-identity-30711938430.json", "utf8"));
 const rolloutRunner = fs.readFileSync("scripts/automatic-ingestion-rollout.mjs", "utf8");
+const scheduledRunner = fs.readFileSync("scripts/market-bounded-persistence.mjs", "utf8");
+const UUID_V8 = /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+test("shared bounded durable ID is a deterministic RFC UUIDv8", () => {
+  const input = { execution_path: "scheduled", workflow_run_id: "30709799096", workflow_run_attempt: "1", plan_digest: "d".repeat(64) };
+  const first = buildMarketBoundedDurableRunId(input);
+  assert.match(first, UUID_V8);
+  assert.equal(first, buildMarketBoundedDurableRunId(input));
+});
+
+test("shared bounded durable ID changes with identity inputs and namespace", () => {
+  const input = { execution_path: "scheduled", workflow_run_id: "30709799096", workflow_run_attempt: "1", plan_digest: "d".repeat(64) };
+  const baseline = buildMarketBoundedDurableRunId(input);
+  assert.notEqual(buildMarketBoundedDurableRunId({ ...input, workflow_run_id: "30709799097" }), baseline);
+  assert.notEqual(buildMarketBoundedDurableRunId({ ...input, workflow_run_attempt: "2" }), baseline);
+  assert.notEqual(buildMarketBoundedDurableRunId({ ...input, plan_digest: "e".repeat(64) }), baseline);
+  assert.notEqual(buildMarketBoundedDurableRunId({ ...input, execution_path: "manual" }), baseline);
+});
+
+for (const [name, input] of [
+  ["unknown namespace", { execution_path: "unknown", workflow_run_id: "30709799096", workflow_run_attempt: "1", plan_digest: "d".repeat(64) }],
+  ["missing run ID", { execution_path: "scheduled", workflow_run_attempt: "1", plan_digest: "d".repeat(64) }],
+  ["invalid digest", { execution_path: "scheduled", workflow_run_id: "30709799096", workflow_run_attempt: "1", plan_digest: "invalid" }],
+]) test(`shared bounded durable ID fails closed for ${name}`, () => assert.throws(() => buildMarketBoundedDurableRunId(input), /identity is invalid/));
+
+test("scheduled persistence shares one UUID across snapshot, persistence, and durable row", () => {
+  assert.doesNotMatch(scheduledRunner, /stableId\("market-bounded-run"/);
+  assert.match(scheduledRunner, /const durableRunId = buildMarketBoundedDurableRunId\([\s\S]*durableRunId,[\s\S]*durableRunRow\(\{ id: durableRunId,/);
+  assert.match(scheduledRunner, /trigger_source:\s*"schedule"/);
+});
 
 test("Phase 6-C source fixture preserves reviewed counts", () => assert.deepEqual({ selected: phase6cFixture.selected_variant_count, candidates: phase6cFixture.candidate_count, eligible: phase6cFixture.auto_eligible_count, excluded: phase6cFixture.excluded_count }, { selected: 5, candidates: 11, eligible: 2, excluded: 9 }));
 test("Phase 6-C source fixture preserves two predicted operations", () => assert.deepEqual(phase6cFixture.eligible_candidates.map((entry) => [entry.candidate_key, entry.predicted_listing_operation, entry.predicted_observation_operation]), [["c1282dd4558639ec", "update", "insert"], ["c61bf253eb5fae1c", "insert", "insert"]]));
@@ -140,7 +171,7 @@ for (const [name, mutate] of [
 ]) test(`existing listing ${name} conflict fails closed`, () => { const rows = rowsFixture(); const existing = structuredClone(rows.listingRows); mutate(existing[0]); assert.throws(() => planMarketBoundedOperations({ listingRows: rows.listingRows, observationRows: rows.observationRows, existingListings: existing })); });
 
 test("persistence writes listings before observations with batch size two", async () => { const store = fakeStore(); const rows = rowsFixture(); const result = await persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, store }); assert.equal(result.ok, true); assert.deepEqual(store.calls.slice(0, 2).map((x) => x.table), ["market_listings", "market_listing_observations"]); assert.equal(store.calls.every((x) => x.options.batchSize <= 2 && x.options.allowSchemaFallback === false), true); });
-test("durable run row is built from the final operation plan", async () => { const store = fakeStore(); const rows = rowsFixture(); const id = "bounded-run-final-operations"; await persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, durableRunId: id, buildDurableRunRow: (operations) => ({ id, task: "market", summary: { listing_inserts: operations.listings.filter((entry) => entry.operation === "insert").length, observation_inserts: operations.observations.filter((entry) => entry.operation === "insert").length } }), store }); assert.deepEqual(store.getRow("ingestion_runs", id).summary, { listing_inserts: 2, observation_inserts: 2 }); });
+test("durable run row is built from the final operation plan", async () => { const store = fakeStore(); const rows = rowsFixture(); const id = buildMarketBoundedDurableRunId({ execution_path: "scheduled", workflow_run_id: "30709799096", workflow_run_attempt: "1", plan_digest: "f".repeat(64) }); await persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, durableRunId: id, buildDurableRunRow: (operations) => ({ id, task: "market", summary: { listing_inserts: operations.listings.filter((entry) => entry.operation === "insert").length, observation_inserts: operations.observations.filter((entry) => entry.operation === "insert").length } }), store }); assert.equal(store.getRow("ingestion_runs", id).id, id); assert.deepEqual(store.getRow("ingestion_runs", id).summary, { listing_inserts: 2, observation_inserts: 2 }); });
 test("equivalent PostgREST timestamp representations pass E.9-sized verification", async () => {
   const rows = rowsFixture();
   const existingListing = { ...structuredClone(rows.listingRows[0]), status: "sold" };
