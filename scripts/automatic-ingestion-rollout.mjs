@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   buildAutomaticMarketRolloutPlan,
+  buildGithubThrottleHistoryRows,
   buildSanitizedRolloutReport,
   evaluateAutomaticIngestionRollout,
   findAutomaticIngestionRolloutSecretLeaks,
@@ -93,7 +94,16 @@ async function preflight() {
     simulation,
     prediction_only: simulation,
   });
-  if (!mainVerified) decision = { ...decision, ok: false, decision: "blocked", action: "blocked", reason_code: "rollout_plan_incomplete", persistence_authorized: false };
+  if (!mainVerified) decision = {
+    ...decision,
+    ok: false,
+    decision: "blocked",
+    action: "blocked",
+    reason_code: "rollout_plan_incomplete",
+    persistence_authorized: false,
+    expected_noop: false,
+    expected_noop_reason: null,
+  };
   const report = {
     schema_version: 1,
     generated_at: new Date().toISOString(),
@@ -117,6 +127,8 @@ async function preflight() {
     bounded_persistence_enabled: decision.bounded_persistence_enabled === true,
     bounded_approval_valid: decision.bounded_approval_valid === true,
     persistence_authorized: decision.persistence_authorized === true,
+    expected_noop: decision.expected_noop === true,
+    expected_noop_reason: decision.expected_noop_reason ?? null,
     ingestion_started: false,
     cleanup_started: false,
     database_writes: 0,
@@ -138,6 +150,8 @@ async function preflight() {
   writeOutput("bounded_persistence_enabled", decision.bounded_persistence_enabled === true);
   writeOutput("bounded_approval_valid", decision.bounded_approval_valid === true);
   writeOutput("persistence_authorized", decision.persistence_authorized === true);
+  writeOutput("expected_noop", decision.expected_noop === true);
+  writeOutput("expected_noop_reason", decision.expected_noop_reason ?? "none");
   writeOutput("report_generated", true);
   console.log(JSON.stringify({ ok: decision.ok, stage: decision.stage, action: decision.action, reason_code: decision.reason_code, database_writes: 0 }));
 }
@@ -346,6 +360,8 @@ async function fetchRowsByIds(table, ids) {
 }
 
 async function fetchGithubRolloutRows(stage, task) {
+  if (stage === "market-bounded" && task === "market") return [];
+  if (stage !== "market-shadow" || task !== "market") return [];
   const token = process.env.GH_READ_TOKEN;
   const repository = process.env.GITHUB_REPOSITORY;
   if (!token || !repository) return null;
@@ -355,15 +371,7 @@ async function fetchGithubRolloutRows(stage, task) {
     });
     if (!response.ok) throw new Error("GitHub artifact metadata unavailable.");
     const payload = await response.json();
-    return (payload.artifacts ?? [])
-      .filter((artifact) => !artifact.expired && String(artifact.name).startsWith("ingestion-shadow-report-"))
-      .map((artifact) => ({
-        id: String(artifact.workflow_run?.id ?? artifact.id),
-        task,
-        status: "succeeded",
-        finished_at: artifact.created_at,
-        summary: { rollout_stage: stage },
-      }));
+    return buildGithubThrottleHistoryRows(payload.artifacts ?? [], { stage, task });
   } catch {
     return null;
   }
@@ -402,6 +410,8 @@ function renderPreflightMarkdown(report) {
     `- Reason code: ${report.reason_code ?? "none"}`,
     `- Main SHA verified: ${report.main_sha_verified}`,
     `- Throttle: ${report.throttle?.state ?? "unavailable"}`,
+    `- Expected no-op: ${report.expected_noop === true}`,
+    `- Expected no-op reason: ${report.expected_noop_reason ?? "none"}`,
     "- Ingestion started: false",
     "- Cleanup started: false",
     "- Production writes: 0",

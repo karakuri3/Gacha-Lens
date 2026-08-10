@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   AUTOMATIC_INGESTION_ROLLOUT_REASON_CODES,
   buildAutomaticMarketRolloutPlan,
+  buildGithubThrottleHistoryRows,
   buildSanitizedRolloutReport,
   calculateAutomaticIngestionRolloutPolicyDigest,
   evaluateAutomaticIngestionRollout,
@@ -21,6 +22,7 @@ const policyPath = "config/automatic-ingestion-rollout-policy.json";
 const policySource = fs.readFileSync(policyPath);
 const { policy, digest } = loadAutomaticIngestionRolloutPolicy(policyPath);
 const productionWorkflow = fs.readFileSync(".github/workflows/gacha-ingestion.yml", "utf8");
+const rolloutScript = fs.readFileSync("scripts/automatic-ingestion-rollout.mjs", "utf8");
 const simulationWorkflow = fs.readFileSync(".github/workflows/gacha-ingestion-rollout-simulation.yml", "utf8");
 const manualWorkflow = fs.readFileSync(".github/workflows/gacha-market-manual-audit.yml", "utf8");
 const safetyWorkflow = fs.readFileSync(".github/workflows/gacha-ingestion-safety-check.yml", "utf8");
@@ -111,7 +113,42 @@ test("active same-task run blocks", () => assert.equal(throttle({ running_rows: 
 test("stale same-task run blocks", () => assert.equal(throttle({ running_rows: [running(31)] }).state, "stale"));
 test("other task history is excluded", () => assert.equal(throttle({ history_rows: [{ ...completed(5), task: "official" }] }).ok, true));
 test("other stage history is excluded", () => assert.equal(throttle({ history_rows: [{ ...completed(5), summary: { rollout_stage: "market-bounded" } }] }).ok, true));
-test("github shadow artifact history is counted", () => assert.equal(throttle({ github_rows: [completed(5)] }).reason_code, "rollout_throttled"));
+test("market-shadow throttle counts only the dedicated allowed-attempt marker", () => {
+  const rows = buildGithubThrottleHistoryRows([
+    { id: 1, name: "ingestion-shadow-report-1", created_at: "2026-08-01T23:55:00.000Z", expired: false },
+    { id: 2, name: "ingestion-rollout-throttle-market-shadow-market-2", created_at: "2026-08-01T23:55:00.000Z", expired: false },
+    { id: 3, name: "ingestion-rollout-throttle-market-shadow-market-3", created_at: "2026-08-01T23:55:00.000Z", expired: true },
+    { id: 4, name: "ingestion-rollout-throttle-market-shadow-market-x", created_at: "2026-08-01T23:55:00.000Z", expired: false },
+  ], { stage: "market-shadow", task: "market" });
+  assert.deepEqual(rows.map((row) => row.id), ["2"]);
+  assert.equal(throttle({ github_rows: rows }).reason_code, "rollout_throttled");
+});
+test("market-bounded ignores GitHub artifacts and uses durable history only", () => {
+  const artifacts = [{ id: 1, name: "ingestion-shadow-report-1", created_at: "2026-08-01T23:55:00.000Z", expired: false }];
+  assert.deepEqual(buildGithubThrottleHistoryRows(artifacts, { stage: "market-bounded", task: "market" }), []);
+  assert.equal(throttle({ stage: "market-bounded", github_rows: [], history_rows: [completedFor("market-bounded", 30)] }).reason_code, "rollout_throttled");
+  assert.equal(throttle({ stage: "market-bounded", github_rows: [], history_rows: [completedFor("market-bounded", 800)] }).reason_code, "rollout_daily_budget_exhausted");
+  assert.equal(throttle({ stage: "market-bounded", github_rows: [], history_rows: [completedFor("market-bounded", 1441)] }).ok, true);
+});
+test("generic blocked diagnostics cannot perpetually reset the bounded throttle", () => {
+  const blockedArtifacts = [30, 60, 90].map((minutesAgo, index) => ({
+    id: index + 1,
+    name: `ingestion-shadow-report-${index + 1}`,
+    created_at: new Date(new Date("2026-08-02T00:00:00.000Z") - minutesAgo * 60_000).toISOString(),
+    expired: false,
+  }));
+  const githubRows = buildGithubThrottleHistoryRows(blockedArtifacts, { stage: "market-bounded", task: "market" });
+  assert.deepEqual(githubRows, []);
+  assert.equal(evaluateAutomaticIngestionThrottle({
+    stage: "market-bounded",
+    task: "market",
+    policy: policy.stages["market-bounded"],
+    history_rows: [completedFor("market-bounded", 1441)],
+    running_rows: [],
+    github_rows: githubRows,
+    now: new Date("2026-08-02T00:00:00.000Z"),
+  }).ok, true);
+});
 test("history fetch failure fails closed", () => assert.equal(throttle({ history_rows: null }).reason_code, "rollout_throttled"));
 test("github metadata failure fails closed", () => assert.equal(throttle({ github_rows: null }).reason_code, "rollout_throttled"));
 test("running fetch failure fails closed", () => assert.equal(throttle({ running_rows: null }).reason_code, "rollout_throttled"));
@@ -257,6 +294,95 @@ test("simulation runs fixed market dry-run", () => assert.match(simulationWorkfl
 
 test("Production schedules remain unchanged", () => {
   for (const cron of ["7 * * * *", "17,47 * * * *", "37 * * * *"]) assert.match(productionWorkflow, new RegExp(cron.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.equal((productionWorkflow.match(/^\s+- cron:/gm) ?? []).length, 3);
+});
+test("scheduled throttle blocks are successful expected no-ops", () => {
+  for (const [history, reason] of [
+    [[completed(10)], "rollout_throttled"],
+    [[completed(800)], "rollout_daily_budget_exhausted"],
+  ]) {
+    const result = rollout({ history_rows: history });
+    assert.equal(result.reason_code, reason);
+    assert.equal(result.expected_noop, true);
+    assert.equal(result.expected_noop_reason, reason);
+    assert.equal(result.production_writes_allowed, false);
+  }
+});
+test("real automatic safety failures are not classified as expected no-ops", () => {
+  for (const result of [
+    rollout({ stage: "market-bounded", configured_policy_digest: "f".repeat(64), automatic_write_enabled: "true" }),
+    rollout({ concurrency: { available: true, active_count: 1, stale_count: 0 } }),
+    rollout({ schedule: "37 * * * *" }),
+    rollout({ github_rows: null }),
+  ]) assert.equal(result.expected_noop, false);
+});
+test("scheduled task selection precedes checkout and routes inactive tasks to explicit no-ops", () => {
+  assert.ok(productionWorkflow.indexOf("Select ingestion task") < productionWorkflow.indexOf("Checkout full history for canary write"));
+  assert.match(productionWorkflow, /"7 \* \* \* \*"\|"37 \* \* \* \*"\)[\s\S]*mode=scheduled-noop[\s\S]*scheduled_noop=true[\s\S]*scheduled_noop_reason=rollout_not_enabled_for_task/);
+  assert.match(productionWorkflow, /"17,47 \* \* \* \*"\)[\s\S]*task=market[\s\S]*mode=rollout[\s\S]*execute_sources=true/);
+  assert.match(productionWorkflow, /\*\)[\s\S]*Unsupported scheduled ingestion cron: \$SCHEDULE[\s\S]*exit 1/);
+});
+test("scheduled no-ops skip setup and all mutation-adjacent paths", () => {
+  assert.match(productionWorkflow, /Report inactive scheduled ingestion task[\s\S]*Mode: scheduled-noop[\s\S]*Database writes: 0/);
+  assert.match(productionWorkflow, /Checkout shallow history[\s\S]*scheduled_noop != 'true'/);
+  assert.match(productionWorkflow, /actions\/setup-node@v6[\s\S]*scheduled_noop != 'true'/);
+  assert.match(productionWorkflow, /- run: npm ci[\s\S]*scheduled_noop != 'true'/);
+  assert.match(productionWorkflow, /Upload ingestion log[\s\S]*scheduled_noop != 'true'/);
+  for (const name of ["Resolve rollout policy and throttle", "Run controlled market backfill", "Run bounded market persistence", "Run ingestion"]) {
+    const block = productionWorkflow.slice(productionWorkflow.indexOf(`- name: ${name}`), productionWorkflow.indexOf("\n      - name:", productionWorkflow.indexOf(`- name: ${name}`) + 1));
+    assert.doesNotMatch(block, /scheduled-noop/);
+  }
+});
+test("scheduled no-ops cannot satisfy rollout, persistence, ingestion, or cleanup conditions", () => {
+  const step = (name) => {
+    const start = productionWorkflow.indexOf(`- name: ${name}`);
+    const end = productionWorkflow.indexOf("\n      - name:", start + 1);
+    return productionWorkflow.slice(start, end === -1 ? undefined : end);
+  };
+
+  assert.match(step("Verify exact main SHA for Production mutation or rollout"), /mode == 'write' \|\| steps\.ingestion\.outputs\.mode == 'rollout'/);
+  for (const name of [
+    "Resolve rollout policy and throttle",
+    "Generate blocked bounded result before source fetch",
+    "Generate rollout prediction plan",
+    "Generate bounded persistence preview",
+    "Scan rollout report",
+    "Upload sanitized rollout report",
+    "Enforce rollout result",
+  ]) assert.match(step(name), /mode == 'rollout'/);
+  assert.match(step("Run controlled market backfill"), /github\.event_name == 'workflow_dispatch'[\s\S]*task == 'market'[\s\S]*mode != 'write'[\s\S]*\|\|[\s\S]*mode == 'rollout'/);
+  assert.match(step("Run bounded market persistence"), /github\.event_name == 'schedule'[\s\S]*17,47 \* \* \* \*[\s\S]*task == 'market'[\s\S]*mode == 'rollout'/);
+  for (const name of [
+    "Run execution preflight",
+    "Capture before snapshot",
+    "Run ingestion",
+    "Clean replaced provisional variants",
+    "Remove validation-only signal rows",
+    "Remove irrelevant unlinked market rows",
+    "Capture after snapshot",
+    "Finalize ingestion run report",
+    "Enforce Production ingestion result",
+  ]) assert.match(step(name), /mode == 'write'|production_ingestion\.outcome == 'success'/);
+});
+test("expected throttle no-ops skip persistence and do not fail the workflow", () => {
+  const blocked = productionWorkflow.slice(productionWorkflow.indexOf("Generate blocked bounded result before source fetch"), productionWorkflow.indexOf("Run execution preflight"));
+  assert.match(blocked, /expected_noop != 'true'/);
+  const enforce = productionWorkflow.slice(productionWorkflow.indexOf("Enforce rollout result"), productionWorkflow.indexOf("Upload sanitized market canary result"));
+  assert.match(enforce, /expected_noop != 'true'/);
+  assert.match(productionWorkflow, /Report expected rollout no-op[\s\S]*Source fetch: skipped[\s\S]*Bounded persistence: skipped[\s\S]*Database writes: 0/);
+});
+test("main SHA validation cannot be downgraded to an expected no-op", () => {
+  assert.match(rolloutScript, /if \(!mainVerified\) decision = \{[\s\S]*expected_noop: false,[\s\S]*expected_noop_reason: null,/);
+});
+test("market-shadow marker is generated only by an allowed scheduled preflight", () => {
+  const marker = productionWorkflow.slice(productionWorkflow.indexOf("Write market-shadow throttle marker"), productionWorkflow.indexOf("Run controlled market backfill"));
+  assert.match(marker, /github\.event_name == 'schedule'[\s\S]*task == 'market'[\s\S]*stage == 'market-shadow'[\s\S]*allowed == 'true'/);
+  assert.match(marker, /ingestion-rollout-throttle-market-shadow-market-\$\{\{ github\.run_id \}\}/);
+  assert.match(marker, /rollout_preflight_allowed/);
+});
+test("manual dispatch keeps scheduled no-op disabled", () => {
+  assert.match(productionWorkflow, /scheduled_noop=false[\s\S]*if \[ -n "\$SCHEDULE" \]; then[\s\S]*else[\s\S]*mode="\$\{MANUAL_MODE:-dry-run\}"/);
+  assert.match(productionWorkflow, /canary-write[\s\S]*Canary write cannot run on a schedule/);
 });
 test("Production workflow defaults rollout stage disabled", () => assert.match(productionWorkflow, /AUTOMATIC_INGESTION_ROLLOUT_STAGE:[^\n]*disabled/));
 test("Production workflow defaults policy digest empty", () => assert.match(productionWorkflow, /AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST:/));
@@ -287,6 +413,7 @@ function rollout(overrides = {}) {
     history_rows: [],
     running_rows: [],
     github_rows: [],
+    now: new Date("2026-08-02T00:00:00.000Z"),
     concurrency: { available: true, state: "clear", active_count: 0, stale_count: 0 },
     circuit_breaker: { available: true, state: "closed" },
     durable_run_store_available: true,
@@ -311,7 +438,11 @@ function throttle(overrides = {}) {
 }
 
 function completed(minutesAgo) {
-  return { id: `run-${minutesAgo}`, task: "market", status: "succeeded", finished_at: new Date(new Date("2026-08-02T00:00:00.000Z") - minutesAgo * 60_000).toISOString(), summary: { rollout_stage: "market-shadow" } };
+  return completedFor("market-shadow", minutesAgo);
+}
+
+function completedFor(stage, minutesAgo) {
+  return { id: `run-${stage}-${minutesAgo}`, task: "market", status: "succeeded", finished_at: new Date(new Date("2026-08-02T00:00:00.000Z") - minutesAgo * 60_000).toISOString(), summary: { rollout_stage: stage } };
 }
 
 function running(minutesAgo) {
