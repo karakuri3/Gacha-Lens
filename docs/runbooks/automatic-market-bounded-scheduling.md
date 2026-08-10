@@ -12,8 +12,15 @@ job is then skipped before a runner is assigned: checkout, dependency install,
 source fetches, Supabase access, snapshots, persistence, and database writes
 are all zero.
 
-Merging this workflow does not authorize or activate it. Every activation is a
-separate, explicitly approved Production operation.
+Merging this workflow installs the `17,47 * * * *` schedule trigger on the
+default branch. Therefore, Ready/merge requires separate explicit approval for
+installing the automatic schedule trigger. The master gate remains disabled,
+so merge alone performs no Production ingestion or database writes.
+
+Actual automatic Production ingestion requires a later, separate explicit
+Production activation approval. That approval must cover fresh main/policy
+verification, read-back of the five arming Variables, and finally setting
+`AUTOMATIC_MARKET_BOUNDED_AUTO_ENABLED=true` as the last step.
 
 ## Arming order
 
