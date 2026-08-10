@@ -23,7 +23,7 @@ on:
 jobs:
   bounded-production:
     concurrency:
-      group: gacha-ingestion
+      group: gacha-market-bounded-v2
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 25
