@@ -21,7 +21,7 @@ export default async function sitemap() {
     { path: "/operator", frequency: "yearly", priority: 0.3 },
     { path: "/contact", frequency: "yearly", priority: 0.3 },
   ];
-  const { variantSlugs, parentSeriesSlugs, franchises, brands } = await getPublicSitemapIdentifiers();
+  const { variantSlugs, parentSeriesSlugs, franchises, brands, categories } = await getPublicSitemapIdentifiers();
 
   const entries = [
     ...staticPages.map((page) => ({
@@ -46,6 +46,11 @@ export default async function sitemap() {
     })),
     ...brands.map((facet) => ({
       url: absoluteSiteUrl(`/brands/${encodeURIComponent(facet.name)}`),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    })),
+    ...categories.map((facet) => ({
+      url: absoluteSiteUrl(`/categories/${encodeURIComponent(facet.name)}`),
       changeFrequency: "weekly",
       priority: 0.7,
     })),

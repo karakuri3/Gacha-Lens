@@ -1,6 +1,7 @@
 import Link from "next/link";
 import SeriesCard from "@/components/SeriesCard";
 import { discoveryFacetHref, discoveryFacetPageHref, findPublicDiscoveryFacet } from "@/lib/domain/discovery-facets";
+import { categoryDiscoveryPageHref } from "@/lib/domain/category-discovery";
 
 export function DiscoveryFacetIndex({ type, eyebrow, title, lead, facets }) {
   return (
@@ -90,4 +91,47 @@ export function DiscoveryFacetLink({ type, value, facets, fallback = "未登録"
   const facet = findPublicDiscoveryFacet(facets, value);
   if (!facet) return value || fallback;
   return <Link href={discoveryFacetHref(type, facet.name)} className="detail-facet-link">{facet.name}</Link>;
+}
+
+export function CategoryDiscoveryLanding({ facet, items, page }) {
+  return (
+    <main className="site-main">
+      <div className="site-shell">
+        <nav className="detail-breadcrumbs" aria-label="パンくずリスト">
+          <Link href="/">ホーム</Link><span>/</span><Link href="/categories">カテゴリから探す</Link><span>/</span><strong>{facet.name}</strong>
+        </nav>
+        <section className="page-hero discovery-landing-hero">
+          <p className="eyebrow">CATEGORY</p>
+          <h1 className="page-title">{facet.name}のガチャ</h1>
+          <p className="page-lead">公開中の{facet.series_count.toLocaleString("ja-JP")}シリーズ、{facet.variant_count.toLocaleString("ja-JP")}件の単品をカテゴリ別に確認できます。</p>
+        </section>
+        <div className="section-head catalog-results-head">
+          <div>
+            <h2 className="section-title">単品一覧</h2>
+            <p className="section-sub">発売中・発売予定の公開単品だけを表示しています。</p>
+          </div>
+          <Link href="/categories" className="text-link">カテゴリへ</Link>
+        </div>
+        <section className="grid grid--cards">
+          {items.map((item, index) => <SeriesCard key={item.slug} series={item} priority={index < 6} />)}
+        </section>
+        {page?.totalPages > 1 ? <CategoryDiscoveryPagination facet={facet} page={page.page} totalPages={page.totalPages} /> : null}
+      </div>
+    </main>
+  );
+}
+
+function CategoryDiscoveryPagination({ facet, page, totalPages }) {
+  const pages = buildPageWindow(page, totalPages);
+  return (
+    <nav className="pagination" aria-label="カテゴリ単品一覧のページ">
+      <Link className={`pill-link ${page <= 1 ? "is-disabled" : ""}`} href={categoryDiscoveryPageHref(facet.name, Math.max(1, page - 1))} aria-disabled={page <= 1}>前へ</Link>
+      <div className="pagination__pages">
+        {pages.map((value) => (
+          <Link key={value} className={`pill-link ${value === page ? "is-active" : ""}`} href={categoryDiscoveryPageHref(facet.name, value)} aria-current={value === page ? "page" : undefined}>{value.toLocaleString("ja-JP")}</Link>
+        ))}
+      </div>
+      <Link className={`pill-link ${page >= totalPages ? "is-disabled" : ""}`} href={categoryDiscoveryPageHref(facet.name, Math.min(totalPages, page + 1))} aria-disabled={page >= totalPages}>次へ</Link>
+    </nav>
+  );
 }

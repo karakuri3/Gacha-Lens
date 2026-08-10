@@ -118,7 +118,7 @@ test("public facet pagination excludes provisional rows before it assigns pages"
 
 test("public sitemap fetch remains identity-only, paged, and deterministic", () => {
   const text = source("lib/data/public-sitemap-identifiers.js");
-  assert.match(text, /parent:series!inner\(id,slug,franchise,brand\)/);
+  assert.match(text, /parent:series!inner\(id,slug,franchise,brand,category\)/);
   assert.match(text, /DEFAULT_PAGE_SIZE = 1000/);
   assert.match(text, /\.order\("id", \{ ascending: true \}\)/);
   assert.match(text, /\.range\(from, from \+ pageSize - 1\)/);
