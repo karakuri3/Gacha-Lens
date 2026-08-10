@@ -257,6 +257,28 @@ test("simulation runs fixed market dry-run", () => assert.match(simulationWorkfl
 
 test("Production schedules remain unchanged", () => {
   for (const cron of ["7 * * * *", "17,47 * * * *", "37 * * * *"]) assert.match(productionWorkflow, new RegExp(cron.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.equal((productionWorkflow.match(/^\s+- cron:/gm) ?? []).length, 3);
+});
+test("scheduled task selection precedes checkout and routes inactive tasks to explicit no-ops", () => {
+  assert.ok(productionWorkflow.indexOf("Select ingestion task") < productionWorkflow.indexOf("Checkout full history for canary write"));
+  assert.match(productionWorkflow, /"7 \* \* \* \*"\|"37 \* \* \* \*"\)[\s\S]*mode=scheduled-noop[\s\S]*scheduled_noop=true[\s\S]*scheduled_noop_reason=rollout_not_enabled_for_task/);
+  assert.match(productionWorkflow, /"17,47 \* \* \* \*"\)[\s\S]*task=market[\s\S]*mode=rollout[\s\S]*execute_sources=true/);
+  assert.match(productionWorkflow, /\*\)[\s\S]*Unsupported scheduled ingestion cron: \$SCHEDULE[\s\S]*exit 1/);
+});
+test("scheduled no-ops skip setup and all mutation-adjacent paths", () => {
+  assert.match(productionWorkflow, /Report inactive scheduled ingestion task[\s\S]*Mode: scheduled-noop[\s\S]*Database writes: 0/);
+  assert.match(productionWorkflow, /Checkout shallow history[\s\S]*scheduled_noop != 'true'/);
+  assert.match(productionWorkflow, /actions\/setup-node@v6[\s\S]*scheduled_noop != 'true'/);
+  assert.match(productionWorkflow, /- run: npm ci[\s\S]*scheduled_noop != 'true'/);
+  assert.match(productionWorkflow, /Upload ingestion log[\s\S]*scheduled_noop != 'true'/);
+  for (const name of ["Resolve rollout policy and throttle", "Run controlled market backfill", "Run bounded market persistence", "Run ingestion"]) {
+    const block = productionWorkflow.slice(productionWorkflow.indexOf(`- name: ${name}`), productionWorkflow.indexOf("\n      - name:", productionWorkflow.indexOf(`- name: ${name}`) + 1));
+    assert.doesNotMatch(block, /scheduled-noop/);
+  }
+});
+test("manual dispatch keeps scheduled no-op disabled", () => {
+  assert.match(productionWorkflow, /scheduled_noop=false[\s\S]*if \[ -n "\$SCHEDULE" \]; then[\s\S]*else[\s\S]*mode="\$\{MANUAL_MODE:-dry-run\}"/);
+  assert.match(productionWorkflow, /canary-write[\s\S]*Canary write cannot run on a schedule/);
 });
 test("Production workflow defaults rollout stage disabled", () => assert.match(productionWorkflow, /AUTOMATIC_INGESTION_ROLLOUT_STAGE:[^\n]*disabled/));
 test("Production workflow defaults policy digest empty", () => assert.match(productionWorkflow, /AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST:/));

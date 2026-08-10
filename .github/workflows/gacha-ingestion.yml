@@ -110,19 +110,6 @@ jobs:
       AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ${{ vars.AUTOMATIC_INGESTION_BOUNDED_APPROVAL || '' }}
       GH_READ_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout full history for canary write
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'canary-write' }}
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Checkout shallow history
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode != 'canary-write' }}
-        uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
       - name: Select ingestion task
         id: ingestion
         shell: bash
@@ -138,20 +125,35 @@ jobs:
           CANARY_CANDIDATE_KEYS: ${{ inputs.canary_candidate_keys }}
           SCHEDULE: ${{ github.event.schedule }}
         run: |
-          case "$SCHEDULE" in
-            "7 * * * *") task=official ;;
-            "17,47 * * * *") task=market ;;
-            "37 * * * *") task=stock ;;
-            *) task="${MANUAL_TASK:-all}" ;;
-          esac
+          scheduled_noop=false
+          scheduled_noop_reason=""
+          scheduled_noop_task=""
           if [ -n "$SCHEDULE" ]; then
-            mode=rollout
             limit=5
             priority=1
             release=released
             source_scope=planner-apis
-            execute_sources=true
+            case "$SCHEDULE" in
+              "17,47 * * * *")
+                task=market
+                mode=rollout
+                execute_sources=true
+                ;;
+              "7 * * * *"|"37 * * * *")
+                if [ "$SCHEDULE" = "7 * * * *" ]; then task=official; else task=stock; fi
+                mode=scheduled-noop
+                execute_sources=false
+                scheduled_noop=true
+                scheduled_noop_reason=rollout_not_enabled_for_task
+                scheduled_noop_task="$task"
+                ;;
+              *)
+                echo "::error::Unsupported scheduled ingestion cron: $SCHEDULE"
+                exit 1
+                ;;
+            esac
           else
+            task="${MANUAL_TASK:-all}"
             mode="${MANUAL_MODE:-dry-run}"
             release="${MANUAL_RELEASE:-all}"
             source_scope="${MANUAL_SOURCE_SCOPE:-planner-apis}"
@@ -207,14 +209,44 @@ jobs:
           echo "execute_sources=$execute_sources" >> "$GITHUB_OUTPUT"
           echo "canary_audit_run_id=$CANARY_AUDIT_RUN_ID" >> "$GITHUB_OUTPUT"
           echo "canary_candidate_keys=$CANARY_CANDIDATE_KEYS" >> "$GITHUB_OUTPUT"
+          echo "scheduled_noop=$scheduled_noop" >> "$GITHUB_OUTPUT"
+          echo "scheduled_noop_reason=$scheduled_noop_reason" >> "$GITHUB_OUTPUT"
+          echo "scheduled_noop_task=$scheduled_noop_task" >> "$GITHUB_OUTPUT"
           case "$mode" in
             dry-run) execution_type=manual_dry_run ;;
             canary-write) execution_type=manual_canary_write ;;
             write) if [ -n "$SCHEDULE" ]; then execution_type=scheduled_write; else execution_type=manual_full_write; fi ;;
             rollout) execution_type=read_only ;;
+            scheduled-noop) execution_type=scheduled_noop ;;
             *) execution_type=read_only ;;
           esac
           echo "execution_type=$execution_type" >> "$GITHUB_OUTPUT"
+      - name: Report inactive scheduled ingestion task
+        if: ${{ steps.ingestion.outputs.scheduled_noop == 'true' }}
+        run: |
+          echo "## Scheduled ingestion no-op" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Task: ${{ steps.ingestion.outputs.scheduled_noop_task }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Schedule: ${{ github.event.schedule }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: scheduled-noop" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Reason: ${{ steps.ingestion.outputs.scheduled_noop_reason }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Database writes: 0" >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice::Scheduled task is inactive and completed as a read-only no-op."
+      - name: Checkout full history for canary write
+        if: ${{ steps.ingestion.outputs.scheduled_noop != 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'canary-write' }}
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Checkout shallow history
+        if: ${{ steps.ingestion.outputs.scheduled_noop != 'true' && (github.event_name != 'workflow_dispatch' || inputs.mode != 'canary-write') }}
+        uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        if: ${{ steps.ingestion.outputs.scheduled_noop != 'true' }}
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        if: ${{ steps.ingestion.outputs.scheduled_noop != 'true' }}
       - name: Verify exact main SHA for Production mutation or rollout
         id: main_sha
         if: ${{ steps.ingestion.outputs.mode == 'write' || steps.ingestion.outputs.mode == 'rollout' }}
@@ -483,7 +515,7 @@ jobs:
           echo "- Review queue: /review" >> "$GITHUB_STEP_SUMMARY"
           echo "- Next check: import_issues high/medium items" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload ingestion log
-        if: ${{ always() && steps.ingestion.outputs.mode != 'write' }}
+        if: ${{ always() && steps.ingestion.outputs.scheduled_noop != 'true' && steps.ingestion.outputs.mode != 'write' }}
         uses: actions/upload-artifact@v4
         with:
           name: ingestion-log

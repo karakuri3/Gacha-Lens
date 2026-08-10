@@ -466,7 +466,7 @@ test("manual workflow defaults to dry-run without changing schedule frequency", 
   const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
   assert.match(workflow, /default: dry-run/);
   assert.match(workflow, /concurrency:/);
-  assert.equal((workflow.match(/cron:/g) ?? []).length, 3);
+  assert.equal((workflow.match(/^\s+- cron:/gm) ?? []).length, 3);
   assert.match(workflow, /"17,47 \* \* \* \*"/);
 });
 
@@ -641,9 +641,9 @@ test("upsert path enforces safety and creates review issues", async () => {
 test("scheduled and manual ingestion share one non-cancelling concurrency group", async () => {
   const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
   assert.match(workflow, /group: gacha-ingestion\s+cancel-in-progress: false/);
-  assert.equal((workflow.match(/cron:/g) ?? []).length, 3);
+  assert.equal((workflow.match(/^\s+- cron:/gm) ?? []).length, 3);
   assert.match(workflow, /default: dry-run/);
-  assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then\s+mode=rollout/);
+  assert.match(workflow, /"17,47 \* \* \* \*"\)[\s\S]*mode=rollout/);
 });
 
 test("market source scope normalizes invalid input to the requested safe default", () => {
@@ -757,15 +757,15 @@ test("all source fetch invokes both source families", async () => {
   assert.equal(result.configuredSources, 3);
 });
 
-test("manual workflow defaults to planner APIs while scheduled ingestion uses the rollout contract", async () => {
+test("manual workflow defaults to planner APIs while scheduled market uses the rollout contract", async () => {
   const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
   assert.match(workflow, /source_scope:[\s\S]*default: planner-apis/);
   assert.match(workflow, /execute_sources:[\s\S]*default: false/);
-  assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then[\s\S]*mode=rollout/);
+  assert.match(workflow, /"17,47 \* \* \* \*"\)[\s\S]*mode=rollout/);
   assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then[\s\S]*source_scope=planner-apis/);
-  assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then[\s\S]*execute_sources=true/);
+  assert.match(workflow, /"17,47 \* \* \* \*"\)[\s\S]*execute_sources=true/);
   assert.match(workflow, /MARKET_SOURCE_SCOPE: \$\{\{ steps\.ingestion\.outputs\.source_scope \}\}/);
-  assert.equal((workflow.match(/cron:/g) ?? []).length, 3);
+  assert.equal((workflow.match(/^\s+- cron:/gm) ?? []).length, 3);
 });
 
 test("manual write guard runs before the ingestion process is spawned", async () => {
@@ -2929,17 +2929,17 @@ test("workflow keeps canary separate from normal ingestion and cleanup", async (
   assert.match(workflow, /Remove validation-only signal rows[\s\S]*mode == 'write'/);
   assert.doesNotMatch(workflow, /mode == 'canary-write'[\s\S]{0,160}cleanup/i);
 });
-test("workflow checkout is full only for manual canary writes", async () => {
+test("workflow checkout is full only for manual canary writes and skipped for inactive schedules", async () => {
   const source = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
   const assertCheckoutPolicy = (value) => {
     const workflow = normalizeSourceLineEndings(value);
     const full = workflow.match(/      - name: Checkout full history for canary write\n[\s\S]*?(?=\n      - name: Checkout shallow history)/)?.[0] ?? "";
     const shallow = workflow.match(/      - name: Checkout shallow history\n[\s\S]*?(?=\n      - uses: actions\/setup-node@v6)/)?.[0] ?? "";
 
-    assert.match(full, /if: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.mode == 'canary-write' \}\}/);
+    assert.match(full, /if: \$\{\{ steps\.ingestion\.outputs\.scheduled_noop != 'true' && github\.event_name == 'workflow_dispatch' && inputs\.mode == 'canary-write' \}\}/);
     assert.match(full, /uses: actions\/checkout@v6/);
     assert.match(full, /fetch-depth: 0/);
-    assert.match(shallow, /if: \$\{\{ github\.event_name != 'workflow_dispatch' \|\| inputs\.mode != 'canary-write' \}\}/);
+    assert.match(shallow, /if: \$\{\{ steps\.ingestion\.outputs\.scheduled_noop != 'true' && \(github\.event_name != 'workflow_dispatch' \|\| inputs\.mode != 'canary-write'\) \}\}/);
     assert.match(shallow, /uses: actions\/checkout@v6/);
     assert.doesNotMatch(shallow, /fetch-depth:/);
     assert.equal(workflow.match(/uses: actions\/checkout@v6/g)?.length, 2);
@@ -2952,18 +2952,19 @@ test("workflow checkout is full only for manual canary writes", async () => {
 });
 test("workflow checkout conditions are mutually exclusive", () => {
   const cases = [
-    { event: "workflow_dispatch", mode: "canary-write", full: true, shallow: false },
-    { event: "workflow_dispatch", mode: "dry-run", full: false, shallow: true },
-    { event: "workflow_dispatch", mode: "write", full: false, shallow: true },
-    { event: "schedule", mode: "", full: false, shallow: true },
+    { event: "workflow_dispatch", mode: "canary-write", scheduledNoop: false, full: true, shallow: false },
+    { event: "workflow_dispatch", mode: "dry-run", scheduledNoop: false, full: false, shallow: true },
+    { event: "workflow_dispatch", mode: "write", scheduledNoop: false, full: false, shallow: true },
+    { event: "schedule", mode: "rollout", scheduledNoop: false, full: false, shallow: true },
+    { event: "schedule", mode: "scheduled-noop", scheduledNoop: true, full: false, shallow: false },
   ];
 
   for (const item of cases) {
-    const full = item.event === "workflow_dispatch" && item.mode === "canary-write";
-    const shallow = item.event !== "workflow_dispatch" || item.mode !== "canary-write";
+    const full = !item.scheduledNoop && item.event === "workflow_dispatch" && item.mode === "canary-write";
+    const shallow = !item.scheduledNoop && (item.event !== "workflow_dispatch" || item.mode !== "canary-write");
     assert.equal(full, item.full);
     assert.equal(shallow, item.shallow);
-    assert.notEqual(full, shallow);
+    if (!item.scheduledNoop) assert.notEqual(full, shallow);
   }
 });
 test("canary source normalization supports LF and CRLF checkouts", () => {
