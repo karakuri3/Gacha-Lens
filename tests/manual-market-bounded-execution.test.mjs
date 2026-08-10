@@ -17,6 +17,7 @@ import {
   validateManualMarketBoundedExactDeltas,
   validateManualMarketBoundedOutcome,
 } from "../lib/domain/manual-market-bounded-execution.js";
+import { buildMarketBoundedDurableRunId } from "../lib/domain/market-bounded-write.js";
 import { stableId } from "../lib/fetchers/feed-source-utils.js";
 
 const workflow = fs.readFileSync(".github/workflows/gacha-market-bounded-manual.yml", "utf8");
@@ -38,6 +39,18 @@ test("manual bounded durable ID is a deterministic UUIDv8", () => {
   const second = buildManualMarketBoundedDurableRunId(input);
   assert.match(first, UUID_V8);
   assert.equal(first, second);
+});
+
+test("manual bounded durable ID preserves the manual namespace", () => {
+  const input = { workflow_run_id: "31174863521", workflow_run_attempt: "1", plan_digest: digest };
+  assert.equal(
+    buildManualMarketBoundedDurableRunId(input),
+    buildMarketBoundedDurableRunId({ execution_path: "manual", ...input }),
+  );
+  assert.notEqual(
+    buildManualMarketBoundedDurableRunId(input),
+    buildMarketBoundedDurableRunId({ execution_path: "scheduled", ...input }),
+  );
 });
 
 test("manual bounded durable ID changes with every identity component", () => {

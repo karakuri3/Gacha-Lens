@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { stableId } from "../lib/fetchers/feed-source-utils.js";
 import {
+  buildMarketBoundedDurableRunId,
   buildMarketBoundedResult,
   buildMarketBoundedRows,
   persistMarketBounded,
@@ -81,13 +81,18 @@ async function persist() {
       return;
     }
 
-    const runId = stableId("market-bounded-run", workflow.run_id, workflow.run_attempt, plan?.plan_digest);
+    const durableRunId = buildMarketBoundedDurableRunId({
+      execution_path: "scheduled",
+      workflow_run_id: workflow.run_id,
+      workflow_run_attempt: workflow.run_attempt,
+      plan_digest: plan.plan_digest,
+    });
     const store = createStore();
     outcome = await persistMarketBounded({
       listingRows: rows.listingRows,
       observationRows: rows.observationRows,
-      durableRunId: runId,
-      buildDurableRunRow: (operations) => durableRunRow({ workflow, plan, rows, outcome: { operations }, status: "succeeded" }),
+      durableRunId,
+      buildDurableRunRow: (operations) => durableRunRow({ id: durableRunId, workflow, plan, rows, outcome: { operations }, status: "succeeded" }),
       store,
     });
     const result = buildMarketBoundedResult({
@@ -137,10 +142,10 @@ async function productionCounts() {
   return Object.fromEntries([...tables, "review_required"].map((key, index) => [key, values[index]]));
 }
 
-function durableRunRow({ workflow, plan, rows, outcome, status, reasonCode = null }) {
+function durableRunRow({ id, workflow, plan, rows, outcome, status, reasonCode = null }) {
   const stableTime = plan?.generated_at ?? new Date(0).toISOString();
   return {
-    id: stableId("market-bounded-run", workflow.run_id, workflow.run_attempt, plan?.plan_digest),
+    id,
     task: "market",
     status,
     trigger_source: "schedule",
