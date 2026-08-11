@@ -14,6 +14,7 @@ const EXPECTED_GUIDES = Object.freeze([
 ]);
 const SENSITIVE_ENV_NAMES = Object.freeze([
   "GOOGLE_SITE_VERIFICATION",
+  "NEXT_PUBLIC_CONTACT_EMAIL",
   "NEXT_PUBLIC_GOOGLE_ADSENSE_ACCOUNT",
   "AMAZON_ASSOCIATE_TAG",
   "RAKUTEN_AFFILIATE_ID",
@@ -68,6 +69,20 @@ function hasEvery(sourceText, fragments) {
   return fragments.every((fragment) => sourceText.includes(fragment));
 }
 
+export function isSitemapSourceReady(sourceText) {
+  return hasEvery(sourceText, [
+    '{ path: "/",',
+    '{ path: "/series",',
+    '{ path: "/ranking",',
+    '{ path: "/schedule",',
+    '{ path: "/guides",',
+    "getEditorialGuideSlugs",
+    "`/guides/${encodeURIComponent(slug)}`",
+    "MAX_SITEMAP_URLS = 50000",
+    "entries.length > MAX_SITEMAP_URLS",
+  ]);
+}
+
 function buildStaticChecks(root) {
   const robots = source(root, "app/robots.js");
   const sitemap = source(root, "app/sitemap.js");
@@ -101,7 +116,7 @@ function buildStaticChecks(root) {
     ),
     check(
       "sitemap",
-      hasEvery(sitemap, ["MAX_SITEMAP_URLS = 50000", 'path: "/guides"', "getEditorialGuideSlugs", "entries.length > MAX_SITEMAP_URLS"]) ? "pass" : "fail",
+      isSitemapSourceReady(sitemap) ? "pass" : "fail",
       true,
       "Sitemap must publish core public routes, guides, and retain the 50,000 URL cap."
     ),

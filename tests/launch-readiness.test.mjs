@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   auditLaunchReadiness,
   formatLaunchReadiness,
+  isSitemapSourceReady,
   parseLaunchReadinessArgs,
 } from "../scripts/launch-readiness.mjs";
 
@@ -93,6 +94,25 @@ test("robots and sitemap checks pass", () => {
   assert.equal(check(result, "sitemap").status, "pass");
 });
 
+test("sitemap readiness requires all core routes, guide mapping, and cap", () => {
+  const source = fs.readFileSync(path.join(ROOT, "app/sitemap.js"), "utf8");
+  assert.equal(isSitemapSourceReady(source), true);
+
+  for (const fragment of [
+    '{ path: "/",',
+    '{ path: "/series",',
+    '{ path: "/ranking",',
+    '{ path: "/schedule",',
+    '{ path: "/guides",',
+    "getEditorialGuideSlugs",
+    "`/guides/${encodeURIComponent(slug)}`",
+    "MAX_SITEMAP_URLS = 50000",
+    "entries.length > MAX_SITEMAP_URLS",
+  ]) {
+    assert.equal(isSitemapSourceReady(source.replaceAll(fragment, "")), false, fragment);
+  }
+});
+
 test("affiliate and ranking safety check passes", () => {
   assert.equal(check(audit(), "affiliate_ranking_safety").status, "pass");
 });
@@ -144,4 +164,10 @@ test("human output retains check IDs without configuration values", () => {
   const output = formatLaunchReadiness(audit());
   assert.match(output, /canonical_production_url/);
   assert.equal(output.includes(validEnv.NEXT_PUBLIC_CONTACT_EMAIL), false);
+});
+
+test("configured contact address is redacted by the output guard", () => {
+  const result = audit({ NEXT_PUBLIC_CONTACT_EMAIL: "launch-contact@example.jp" });
+  assert.equal(JSON.stringify(result).includes("launch-contact@example.jp"), false);
+  assert.doesNotThrow(() => formatLaunchReadiness(result));
 });
