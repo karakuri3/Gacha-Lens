@@ -16,6 +16,7 @@ export default function Footer() {
             <Link href="/ranking">ランキング</Link>
             <Link href="/schedule">発売予定</Link>
             <Link href="/series">ガチャ一覧</Link>
+            <Link href="/guides">ガイド</Link>
             <Link href="/categories">カテゴリ</Link>
             <Link href="/restocks">再販・再入荷</Link>
             <Link href="/stock">在庫情報</Link>
