@@ -35,6 +35,7 @@ jobs:
       AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST: ${{ vars.AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST || '' }}
       AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED: ${{ vars.AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED || 'false' }}
       AUTOMATIC_INGESTION_BOUNDED_APPROVAL: ${{ vars.AUTOMATIC_INGESTION_BOUNDED_APPROVAL || '' }}
+      AUTOMATIC_INGESTION_SCHEDULE: ${{ github.event.schedule }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -61,7 +62,7 @@ jobs:
           --stage=market-bounded
           --configured-policy-digest=${{ env.AUTOMATIC_INGESTION_ROLLOUT_POLICY_DIGEST }}
           --task=market
-          --schedule=${{ github.event.schedule }}
+          --schedule="$AUTOMATIC_INGESTION_SCHEDULE"
           --event-name=${{ github.event_name }}
           --ref=${{ github.ref }}
           --head-sha=${{ github.sha }}
@@ -132,7 +133,7 @@ jobs:
           --head-sha=${{ github.sha }}
           --main-sha-verified=${{ steps.rollout.outputs.main_sha_verified }}
           --task=market
-          --schedule=${{ github.event.schedule }}
+          --schedule="$AUTOMATIC_INGESTION_SCHEDULE"
           --stage=market-bounded
           --automatic-write-enabled=${{ env.AUTOMATIC_INGESTION_WRITE_ENABLED }}
           --bounded-persistence-enabled=${{ env.AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED }}

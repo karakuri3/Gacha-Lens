@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import test from "node:test";
 import {
@@ -11,7 +12,7 @@ import {
 const legacyWorkflow = fs.readFileSync(".github/workflows/gacha-ingestion.yml", "utf8");
 const autoWorkflow = fs.readFileSync(".github/workflows/gacha-market-bounded-auto.yml", "utf8");
 const manualWorkflow = fs.readFileSync(".github/workflows/gacha-market-bounded-manual.yml", "utf8");
-const autoDigest = "e1cd4fd287bac48e32230fbdf9a9f11ce74f641bd6daeead4730e0cc047ec832";
+const autoDigest = "5801f3e2958b35cc4b27d48f1e5f820bf1c3bd9f8381790b27ad5098f9c2b29f";
 const legacyDigest = "3a1f4c194e724afd68853491ce6642573020358f6aae8d1eb81a4530ec9165af";
 const orphanRuns = ["30688709185", "30761206126", "31174863521", "31191456665", "31322475822", "31411326808", "31412968526"];
 
@@ -31,7 +32,9 @@ test("master gate skips the entire job before runner work", () => {
   assert.doesNotMatch(autoWorkflow, /AUTOMATIC_MARKET_BOUNDED_AUTO_ENABLED \|\| 'true'/);
 });
 test("automatic workflow has the fixed scheduled market contract", () => {
-  assert.match(autoWorkflow, /--stage=market-bounded[\s\S]*--task=market[\s\S]*--schedule=\$\{\{ github\.event\.schedule \}\}/);
+  assert.match(autoWorkflow, /AUTOMATIC_INGESTION_SCHEDULE: \$\{\{ github\.event\.schedule \}\}/);
+  assert.match(autoWorkflow, /--stage=market-bounded[\s\S]*--task=market[\s\S]*--schedule="\$AUTOMATIC_INGESTION_SCHEDULE"/);
+  assert.doesNotMatch(autoWorkflow, /--schedule=\$\{\{ github\.event\.schedule \}\}/);
   assert.match(autoWorkflow, /--mode=dry-run[\s\S]*--limit=\$\{\{ steps\.rollout\.outputs\.limit \}\}[\s\S]*--priority=\$\{\{ steps\.rollout\.outputs\.priority \}\}[\s\S]*--release=\$\{\{ steps\.rollout\.outputs\.release \}\}[\s\S]*--source-scope=\$\{\{ steps\.rollout\.outputs\.source_scope \}\}[\s\S]*--execute-sources/);
   assert.doesNotMatch(autoWorkflow, /BACKFILL_TASK: official|BACKFILL_TASK: stock|task=all|canary-write|db:upsert-all|cleanup/);
   assert.match(autoWorkflow, /INGESTION_WRITE_DISABLED: "true"/);
@@ -68,13 +71,22 @@ test("expected throttle no-ops skip source fetch and persistence while other fai
 test("bounded persistence keeps the reviewed schedule-only safety gates", () => {
   const persist = autoWorkflow.slice(autoWorkflow.indexOf("Run bounded market persistence"), autoWorkflow.indexOf("Scan sanitized bounded artifact"));
   for (const condition of ["persistence_authorized", "bounded_persistence_enabled", "bounded_approval_valid", "budget_state == 'within_budget'", "preview_generated == 'true'"]) assert.match(persist, new RegExp(condition.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.match(persist, /market:bounded-persist -- persist[\s\S]*--event-name=\$\{\{ github\.event_name \}\}[\s\S]*--schedule=\$\{\{ github\.event\.schedule \}\}[\s\S]*--stage=market-bounded/);
+  assert.match(persist, /market:bounded-persist -- persist[\s\S]*--event-name=\$\{\{ github\.event_name \}\}[\s\S]*--schedule="\$AUTOMATIC_INGESTION_SCHEDULE"[\s\S]*--stage=market-bounded/);
   assert.match(autoWorkflow, /Scan sanitized bounded artifact[\s\S]*automatic-ingestion-rollout\.mjs scan/);
   assert.match(autoWorkflow, /market-bounded-auto-result-\$\{\{ github\.run_id \}\}/);
+});
+test("cron expressions stay a single argv value when passed through the quoted schedule binding", () => {
+  const schedule = "17,47 * * * *";
+  const script = "process.stdout.write(JSON.stringify(process.argv.slice(1)))";
+  const result = spawnSync(process.execPath, ["-e", script, "--", `--schedule=${schedule}`], { encoding: "utf8" });
+  assert.equal(result.status, 0);
+  assert.deepEqual(JSON.parse(result.stdout), [`--schedule=${schedule}`]);
+  assert.match(autoWorkflow, /--schedule="\$AUTOMATIC_INGESTION_SCHEDULE"/);
 });
 test("reviewed automatic workflow digest is exact and detects content drift", () => {
   assert.equal(automaticMarketBoundedWorkflowDigest(autoWorkflow), autoDigest);
   assert.equal(isReviewedAutomaticMarketBoundedWorkflow(autoWorkflow), true);
   assert.equal(REVIEWED_AUTOMATIC_MARKET_BOUNDED_WORKFLOW_DIGESTS.filter((digest) => digest === autoDigest).length, 1);
+  assert.equal(REVIEWED_AUTOMATIC_MARKET_BOUNDED_WORKFLOW_DIGESTS.includes("e1cd4fd287bac48e32230fbdf9a9f11ce74f641bd6daeead4730e0cc047ec832"), true);
   assert.equal(isReviewedAutomaticMarketBoundedWorkflow(`${autoWorkflow}\n# drift`), false);
 });
