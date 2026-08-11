@@ -89,6 +89,7 @@ export default async function SeriesPage({ searchParams }) {
           <Link href="/franchises">作品別</Link>
           <Link href="/brands">メーカー別</Link>
           <Link href="/categories">カテゴリ別</Link>
+          <Link href="/guides">データの見方</Link>
         </nav>
 
         <nav className="entity-scope-tabs" aria-label="検索単位">

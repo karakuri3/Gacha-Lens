@@ -27,6 +27,7 @@ export default async function RestocksPage() {
           <p className="eyebrow">RESTOCK</p>
           <h1 className="page-title">再販・再入荷情報</h1>
           <p className="page-lead">確認できた再販・補充の動きを、新しい情報から掲載しています。</p>
+          <Link className="context-guide-link" href="/guides/stock-restock">在庫・再入荷情報の見方</Link>
         </section>
 
         {rows.length ? (

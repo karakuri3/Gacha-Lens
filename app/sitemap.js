@@ -1,4 +1,5 @@
 import { getPublicSitemapIdentifiers } from "@/lib/series";
+import { getEditorialGuideSlugs } from "@/lib/domain/editorial-guides";
 import { absoluteSiteUrl } from "@/lib/site-metadata";
 
 const MAX_SITEMAP_URLS = 50000;
@@ -9,6 +10,7 @@ export default async function sitemap() {
     { path: "/ranking", frequency: "daily", priority: 0.9 },
     { path: "/schedule", frequency: "daily", priority: 0.9 },
     { path: "/series", frequency: "daily", priority: 0.9 },
+    { path: "/guides", frequency: "weekly", priority: 0.7 },
     { path: "/franchises", frequency: "weekly", priority: 0.8 },
     { path: "/brands", frequency: "weekly", priority: 0.8 },
     { path: "/categories", frequency: "weekly", priority: 0.8 },
@@ -22,12 +24,18 @@ export default async function sitemap() {
     { path: "/contact", frequency: "yearly", priority: 0.3 },
   ];
   const { variantSlugs, parentSeriesSlugs, franchises, brands, categories } = await getPublicSitemapIdentifiers();
+  const guideSlugs = getEditorialGuideSlugs();
 
   const entries = [
     ...staticPages.map((page) => ({
       url: absoluteSiteUrl(page.path),
       changeFrequency: page.frequency,
       priority: page.priority,
+    })),
+    ...guideSlugs.map((slug) => ({
+      url: absoluteSiteUrl(`/guides/${encodeURIComponent(slug)}`),
+      changeFrequency: "monthly",
+      priority: 0.6,
     })),
     ...variantSlugs.map((slug) => ({
       url: absoluteSiteUrl(`/series/${encodeURIComponent(slug)}`),

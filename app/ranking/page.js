@@ -69,6 +69,7 @@ export default async function RankingPage({ searchParams }) {
           <p className="eyebrow">RANKING</p>
           <h1 className="page-title">相場ランキング</h1>
           <p className="page-lead">{scope === "variant" ? "キャラクターやレア種ごとの動きを順位で確認できます。" : "親シリーズ全体の流通、コンプ需要、発売前の注目度を順位で確認できます。"}</p>
+          <Link className="context-guide-link" href="/guides/forecast-ranking">ランキングの見方</Link>
         </section>
 
         <nav className="entity-scope-tabs" aria-label="ランキング単位">

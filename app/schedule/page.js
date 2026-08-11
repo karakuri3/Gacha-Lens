@@ -72,6 +72,7 @@ export default async function SchedulePage({ searchParams }) {
           <p className="eyebrow">SCHEDULE</p>
           <h1 className="page-title">新作・発売予定</h1>
           <p className="page-lead">月と週を切り替えて、正式公開された単品の発売情報を確認できます。</p>
+          <Link className="context-guide-link" href="/guides/forecast-ranking">発売予定と予測スコアの見方</Link>
         </section>
 
         <nav className="schedule-month-nav" aria-label="発売月を移動">
