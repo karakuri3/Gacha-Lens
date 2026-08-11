@@ -88,6 +88,10 @@ function buildStaticChecks(root) {
   const sitemap = source(root, "app/sitemap.js");
   const affiliateProviders = source(root, "lib/domain/affiliate-providers.js");
   const marketLinks = source(root, "lib/domain/market-links.js");
+  const rakutenFetcher = source(root, "lib/fetchers/rakuten-market-fetcher.js");
+  const rakutenLink = source(root, "lib/domain/rakuten-affiliate-link.js");
+  const publicRepository = source(root, "lib/data/supabase-gacha-repository.js");
+  const footer = source(root, "components/Footer.js");
   const ranking = source(root, "app/ranking/page.js");
   const forecast = source(root, "lib/domain/forecast-score.js");
   const guideSlugs = getEditorialGuideSlugs();
@@ -148,6 +152,27 @@ function buildStaticChecks(root) {
         : "fail",
       true,
       "Affiliate configuration must stay separate from ranking and forecast calculations."
+    ),
+    check(
+      "rakuten_affiliate_code_readiness",
+      hasEvery(rakutenFetcher, [
+        "IchibaItem/Search/20260701",
+        'DEFAULT_REQUEST_ORIGIN = "https://gachalens.com"',
+        'url.searchParams.set("affiliateId", params.affiliateId)',
+        'affiliate_url_source: affiliateUrl ? "rakuten_api" : ""',
+      ])
+        && hasEvery(rakutenLink, [
+          "selectRakutenAffiliateListing",
+          'listing.raw?.affiliate_url_source !== "rakuten_api"',
+          "sourceUrl.toString() === affiliateUrl.toString()",
+        ])
+        && hasEvery(marketLinks, ["getRakutenAffiliateDestination", "isAffiliate: true", "isAffiliate: false"])
+        && publicRepository.includes("review_required,raw,created_at")
+        && footer.includes("Supported by Rakuten Developers")
+        ? "pass"
+        : "fail",
+      true,
+      "Rakuten integration must use API-issued affiliate URLs, canonical request headers, safe public provenance, and the required Developers credit."
     ),
   ];
 }

@@ -286,6 +286,7 @@ select {
 .site-footer nav { display: flex; align-items: start; gap: 18px; }
 .site-footer nav a { font-size: 12px; font-weight: 850; text-decoration: none; }
 .site-footer small { grid-column: 1 / -1; color: var(--muted); font-size: 10px; }
+.site-footer__provider-credit a { color: inherit; text-underline-offset: 2px; }
 .site-footer__links { display: grid; gap: 13px; }
 .site-footer__links nav { flex-wrap: wrap; justify-content: flex-end; }
 .context-guide-link { display: inline-flex; width: fit-content; margin-top: 8px; color: var(--muted); font-size: 12px; font-weight: 800; text-decoration: none; }
