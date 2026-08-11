@@ -58,6 +58,10 @@ The following environment variables are code-side integration points. Do not com
 
 ## External launch checklist
 
+Run `npm run launch:check -- --strict --json` before treating the site as ready
+for external launch. The audit checks code-side readiness and reports missing
+configuration without contacting external services or changing Production.
+
 1. Point the production domain at the deployed Vercel project and set `NEXT_PUBLIC_SITE_URL` to the canonical HTTPS origin.
 2. Publish a monitored contact address through `NEXT_PUBLIC_CONTACT_EMAIL`.
 3. Add the site to Google Search Console, set `GOOGLE_SITE_VERIFICATION`, deploy, then submit `/sitemap.xml`.
@@ -65,6 +69,9 @@ The following environment variables are code-side integration points. Do not com
 5. Apply to each affiliate program and add only approved identifiers after reviewing that provider's link requirements.
 6. Apply to AdSense only after the public catalog, legal pages, contact route and original editorial content are stable.
 7. Review outbound-click totals by provider and product without adding affiliate commission to ranking logic.
+
+See [Production Launch Readiness](./launch-readiness.md) for the complete
+code-ready versus human-operated checklist.
 
 ## AdSense activation gate
 

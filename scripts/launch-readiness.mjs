@@ -1,0 +1,244 @@
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+import { getEditorialGuideSlugs } from "../lib/domain/editorial-guides.js";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const CONTACT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EXPECTED_GUIDES = Object.freeze([
+  "market-price",
+  "price-history",
+  "stock-restock",
+  "forecast-ranking",
+]);
+const SENSITIVE_ENV_NAMES = Object.freeze([
+  "GOOGLE_SITE_VERIFICATION",
+  "NEXT_PUBLIC_GOOGLE_ADSENSE_ACCOUNT",
+  "AMAZON_ASSOCIATE_TAG",
+  "RAKUTEN_AFFILIATE_ID",
+  "YAHOO_AFFILIATE_TRACKING_ID",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "CRON_SHARED_SECRET",
+  "GITHUB_TOKEN",
+]);
+
+function text(value) {
+  return String(value ?? "").trim();
+}
+
+function source(root, relativePath) {
+  return fs.readFileSync(path.join(root, relativePath), "utf8");
+}
+
+function exists(root, relativePath) {
+  return fs.existsSync(path.join(root, relativePath));
+}
+
+function check(id, status, required, description) {
+  return { id, status, required, description };
+}
+
+function invalidSiteUrlReason(value) {
+  if (!value) return "Canonical production URL is not configured.";
+
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return "Canonical production URL is not a valid absolute URL.";
+  }
+
+  if (url.protocol !== "https:") return "Canonical production URL must use HTTPS.";
+  if (url.username || url.password || url.search || url.hash) return "Canonical production URL must be a clean origin.";
+  if (url.pathname !== "/") return "Canonical production URL must not include a path.";
+  if (url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1") {
+    return "Canonical production URL must not point to a local host.";
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  const previewLikeVercelHost = hostname.endsWith(".vercel.app")
+    && (hostname.includes("-git-") || /-[a-z0-9]{8,}$/i.test(hostname.split(".")[0]));
+  if (previewLikeVercelHost) return "Canonical production URL must not use an obvious preview hostname.";
+
+  return null;
+}
+
+function hasEvery(sourceText, fragments) {
+  return fragments.every((fragment) => sourceText.includes(fragment));
+}
+
+function buildStaticChecks(root) {
+  const robots = source(root, "app/robots.js");
+  const sitemap = source(root, "app/sitemap.js");
+  const affiliateProviders = source(root, "lib/domain/affiliate-providers.js");
+  const marketLinks = source(root, "lib/domain/market-links.js");
+  const ranking = source(root, "app/ranking/page.js");
+  const forecast = source(root, "lib/domain/forecast-score.js");
+  const guideSlugs = getEditorialGuideSlugs();
+
+  const publicCatalogRoutes = [
+    "app/series/page.js",
+    "app/categories/page.js",
+    "app/brands/page.js",
+    "app/franchises/page.js",
+  ];
+  const legalRoutes = [
+    "app/privacy/page.js",
+    "app/terms/page.js",
+    "app/disclaimer/page.js",
+    "app/affiliate-disclosure/page.js",
+    "app/operator/page.js",
+    "app/contact/page.js",
+  ];
+
+  return [
+    check(
+      "robots",
+      hasEvery(robots, ["absoluteSiteUrl(\"/sitemap.xml\")", 'disallow: ["/api/", "/review/", "/supabase-series"]']) ? "pass" : "fail",
+      true,
+      "Robots rules must publish the canonical sitemap and protect non-public routes."
+    ),
+    check(
+      "sitemap",
+      hasEvery(sitemap, ["MAX_SITEMAP_URLS = 50000", 'path: "/guides"', "getEditorialGuideSlugs", "entries.length > MAX_SITEMAP_URLS"]) ? "pass" : "fail",
+      true,
+      "Sitemap must publish core public routes, guides, and retain the 50,000 URL cap."
+    ),
+    check(
+      "public_catalog_routes",
+      publicCatalogRoutes.every((route) => exists(root, route)) ? "pass" : "fail",
+      true,
+      "The public catalog and category, brand, and franchise discovery routes must exist."
+    ),
+    check(
+      "legal_routes",
+      legalRoutes.every((route) => exists(root, route)) ? "pass" : "fail",
+      true,
+      "Privacy, terms, disclaimer, advertising disclosure, operator, and contact routes must exist."
+    ),
+    check(
+      "editorial_content",
+      guideSlugs.length >= 4 && EXPECTED_GUIDES.every((slug) => guideSlugs.includes(slug)) ? "pass" : "fail",
+      true,
+      "At least the four published evergreen guides must remain available."
+    ),
+    check(
+      "affiliate_ranking_safety",
+      hasEvery(affiliateProviders, ["active: false", "sanitizeAmazonTag"])
+        && hasEvery(marketLinks, ["isAffiliate", "amazonParams.set(\"tag\", amazonTag)"])
+        && !/affiliate|commission/i.test(ranking)
+        && !/affiliate|commission/i.test(forecast)
+        ? "pass"
+        : "fail",
+      true,
+      "Affiliate configuration must stay separate from ranking and forecast calculations."
+    ),
+  ];
+}
+
+function ensureSecretSafe(result, env) {
+  const serialized = JSON.stringify(result);
+  const leaked = SENSITIVE_ENV_NAMES.some((name) => {
+    const value = text(env[name]);
+    return value.length >= 4 && serialized.includes(value);
+  });
+  if (leaked) throw new Error("Launch readiness output included a sensitive environment value.");
+}
+
+export function auditLaunchReadiness({ env = process.env, root = ROOT } = {}) {
+  const siteUrl = text(env.NEXT_PUBLIC_SITE_URL);
+  const contactEmail = text(env.NEXT_PUBLIC_CONTACT_EMAIL);
+  const googleVerification = text(env.GOOGLE_SITE_VERIFICATION);
+  const adsenseAccount = text(env.NEXT_PUBLIC_GOOGLE_ADSENSE_ACCOUNT);
+  const siteUrlError = invalidSiteUrlReason(siteUrl);
+
+  const checks = [
+    check(
+      "canonical_production_url",
+      siteUrlError ? "fail" : "pass",
+      true,
+      siteUrlError || "A canonical HTTPS production origin is configured."
+    ),
+    check(
+      "public_contact",
+      CONTACT_EMAIL.test(contactEmail) ? "pass" : "fail",
+      true,
+      CONTACT_EMAIL.test(contactEmail)
+        ? "A public contact address is configured."
+        : "A valid public contact address is required before launch."
+    ),
+    check(
+      "search_console_verification",
+      googleVerification ? "pass" : "warn",
+      false,
+      googleVerification
+        ? "Google Search Console verification is configured."
+        : "Google Search Console verification is not configured yet."
+    ),
+    check(
+      "adsense_inactive",
+      adsenseAccount ? "warn" : "pass",
+      false,
+      adsenseAccount
+        ? "AdSense configuration needs a separate approval and CMP review."
+        : "AdSense remains inactive for this launch readiness audit."
+    ),
+    ...buildStaticChecks(root),
+  ];
+
+  const requiredPass = checks.filter((item) => item.required && item.status === "pass").length;
+  const requiredFail = checks.filter((item) => item.required && item.status !== "pass").length;
+  const warnings = checks.filter((item) => item.status === "warn").length;
+  const result = {
+    schema_version: 1,
+    checks,
+    summary: {
+      ready: requiredFail === 0,
+      required_pass: requiredPass,
+      required_fail: requiredFail,
+      warnings,
+    },
+  };
+
+  ensureSecretSafe(result, env);
+  return result;
+}
+
+export function formatLaunchReadiness(result) {
+  const lines = [
+    `Launch readiness: ${result.summary.ready ? "ready" : "not ready"}`,
+    `Required checks: ${result.summary.required_pass} passed, ${result.summary.required_fail} failed`,
+    `Warnings: ${result.summary.warnings}`,
+  ];
+  for (const item of result.checks) {
+    lines.push(`${item.status.toUpperCase()} ${item.required ? "required" : "review"} ${item.id}: ${item.description}`);
+  }
+  return lines.join("\n");
+}
+
+export function parseLaunchReadinessArgs(argv = []) {
+  const options = { strict: false, json: false };
+  for (const argument of argv) {
+    if (argument === "--strict") options.strict = true;
+    else if (argument === "--json") options.json = true;
+    else throw new Error(`Unknown launch readiness option: ${argument}`);
+  }
+  return options;
+}
+
+function isDirectExecution() {
+  return process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+}
+
+if (isDirectExecution()) {
+  try {
+    const options = parseLaunchReadinessArgs(process.argv.slice(2));
+    const result = auditLaunchReadiness();
+    process.stdout.write(`${options.json ? JSON.stringify(result, null, 2) : formatLaunchReadiness(result)}\n`);
+    if (options.strict && !result.summary.ready) process.exitCode = 1;
+  } catch (error) {
+    process.stderr.write(`Launch readiness audit failed: ${error instanceof Error ? error.message : "unknown error"}\n`);
+    process.exitCode = 2;
+  }
+}
