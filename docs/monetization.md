@@ -10,6 +10,8 @@ The public product remains a capsule-toy trend and discovery guide. Monetization
 - Amazon affiliate links use `rel="sponsored noopener noreferrer"`.
 - Rakuten API discovery omits `affiliateId` and keeps its ordinary `itemUrl` and `itemCode` as listing and candidate identity. When `RAKUTEN_AFFILIATE_ID` is configured, a bounded second request enriches the discovery result by exact `itemCode`; only the official affiliate-enabled `itemUrl === affiliateUrl` contract is preserved as separate sanitized provenance. Automatic bounded persistence carries that provenance without changing the durable listing ID. A released variant uses it only when the current listing is linked, active, non-review-required, single-item data from the Rakuten API.
 - When no verified API-derived Rakuten affiliate URL exists, the public CTA remains an ordinary, non-affiliate Rakuten search link. An ID alone never rewrites a generic URL.
+- Yahoo Shopping discovery likewise keeps the ordinary Item Search v3 `url` and exact item `code` as stable identity. When `YAHOO_AFFILIATE_TRACKING_ID` is configured, one same-query enrichment request may return a ValueCommerce destination; it is joined only by exact item code and stored as separate `yahoo_api` provenance.
+- A Yahoo direct sponsored CTA is used only for a released, linked, active, non-review-required single item whose API destination targets the same ordinary Yahoo Shopping item URL. Missing, failed, conflicting, manual, or unsafe provenance falls back to a non-affiliate Yahoo Shopping search.
 - The public footer always links to the privacy policy, terms, disclaimer, advertising disclosure, operator information, and contact page.
 - Rankings and forecast scores never receive an affiliate-provider or commission input.
 
@@ -58,7 +60,8 @@ The following environment variables are code-side integration points. Do not com
 | `RAKUTEN_ACCESS_KEY` | Rakuten Web Service access key required with the application identifier |
 | `RAKUTEN_AFFILIATE_ID` | Optional Rakuten Affiliate identifier sent to the API; only the API-returned affiliate URL is published as sponsored |
 | `RAKUTEN_REQUEST_ORIGIN` | Optional request Origin/Referer override; defaults through `NEXT_PUBLIC_SITE_URL` to `https://gachalens.com` |
-| `YAHOO_AFFILIATE_TRACKING_ID` | Reserved for a reviewed Yahoo affiliate integration |
+| `YAHOO_AFFILIATE_TRACKING_ID` | Optional server-side ValueCommerce referral prefix through `&vc_url=`, stored exactly once URL-encoded as Yahoo documents and used only for Yahoo Item Search v3 enrichment |
+| `YAHOO_SHOPPING_REQUEST_DELAY_MS` | Yahoo HTTP-attempt spacing; values below the official 1000ms minimum are clamped to 1000ms |
 
 ## External launch checklist
 
@@ -81,6 +84,15 @@ configuration without contacting external services or changing Production.
 - Keep the Web Service Application ID, Access Key, and Affiliate ID as three separate credentials.
 - After deployment, observe a natural ingestion run and verify that a real API-derived Rakuten URL is used on one released variant. Do not use a manual ingestion dispatch for activation verification.
 - The footer keeps the Rakuten Developers credit visible without implying that Rakuten operates or endorses Gacha Lens.
+
+## Yahoo / ValueCommerce activation boundary
+
+- Code readiness does not activate Yahoo Shopping affiliate links in Production.
+- After ValueCommerce account and program review, create the official free-text link, take its referral URL through `&vc_url=`, URL-encode that complete prefix exactly once as Yahoo documents, and store that already encoded value in `YAHOO_AFFILIATE_TRACKING_ID`. Do not store the unencoded URL and do not encode the resulting setting again; invalid or ambiguous representations stop the Yahoo fetcher before any request.
+- Yahoo Item Search requests are globally paced within each fetch run at a minimum of 1000ms between actual HTTP attempts. This includes discovery, affiliate enrichment, the next discovery, and retries even when a lower environment value is configured.
+- Never place the real tracking value in source, test fixtures, PR comments, diagnostics, audit artifacts, or database raw fields. The persisted provider destination may contain provider-issued tracking, but no separate Affiliate ID, Application ID, header, cookie, or API response is stored.
+- Automatic bounded workflow Secret wiring, Production environment configuration, and live verification require separate approval after this code PR is reviewed and merged.
+- Verify activation through a natural scheduled run: ordinary item identity must stay unchanged and only a genuine API-issued destination may become sponsored.
 
 See [Production Launch Readiness](./launch-readiness.md) for the complete
 code-ready versus human-operated checklist.

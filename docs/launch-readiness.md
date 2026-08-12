@@ -23,6 +23,7 @@ activation conditions.
 - The sitemap keeps its 50,000 URL cap and contains the public guides.
 - Public catalog, discovery, legal, contact, and editorial guide routes are present.
 - Affiliate configuration stays independent from ranking and forecast logic.
+- Rakuten and Yahoo affiliate code checks require stable ordinary item identity, API-issued destination provenance, bounded persistence, and safe public fallback behavior.
 - AdSense remains inactive unless a later, separately reviewed activation is planned.
 
 The audit reports only whether sensitive settings are configured. It never prints

@@ -90,6 +90,8 @@ function buildStaticChecks(root) {
   const marketLinks = source(root, "lib/domain/market-links.js");
   const rakutenFetcher = source(root, "lib/fetchers/rakuten-market-fetcher.js");
   const rakutenLink = source(root, "lib/domain/rakuten-affiliate-link.js");
+  const yahooFetcher = source(root, "lib/fetchers/yahoo-shopping-fetcher.js");
+  const yahooLink = source(root, "lib/domain/yahoo-affiliate-link.js");
   const marketCandidateAudit = source(root, "lib/domain/market-candidate-audit.js");
   const marketBoundedWrite = source(root, "lib/domain/market-bounded-write.js");
   const publicRepository = source(root, "lib/data/supabase-gacha-repository.js");
@@ -184,6 +186,36 @@ function buildStaticChecks(root) {
         : "fail",
       true,
       "Rakuten integration must use API-issued affiliate URLs, canonical request headers, safe public provenance, and the required Developers credit."
+    ),
+    check(
+      "yahoo_affiliate_code_readiness",
+      hasEvery(yahooFetcher, [
+        "ShoppingWebService/V3/itemSearch",
+        'requestKind: "discovery"',
+        "normalizeYahooAffiliateTrackingId",
+        "appendYahooAffiliateParameters",
+        "MIN_REQUEST_SPACING_MS = 1000",
+        "createYahooRequestPacer",
+        "buildAffiliateDestinationsByCode",
+        'affiliate_url_source: affiliateUrl ? "yahoo_api" : ""',
+        'affiliate_url_contract: affiliateUrl ? AFFILIATE_PROVENANCE_CONTRACT : ""',
+        'affiliate_url_documentation: affiliateUrl ? AFFILIATE_DOCUMENTATION : ""',
+      ])
+        && hasEvery(yahooLink, [
+          "selectYahooAffiliateListing",
+          "sanitizeYahooAffiliateProvenance",
+          "YAHOO_AFFILIATE_PROVENANCE_CONTRACT",
+          "YAHOO_AFFILIATE_DOCUMENTATION",
+          'destinationUrl.searchParams.get("vc_url")',
+        ])
+        && marketCandidateAudit.includes("sanitizeMarketplaceAffiliateProvenance")
+        && hasEvery(marketBoundedWrite, ["sanitizeMarketplaceAffiliateProvenance", "affiliate_url: affiliateProvenance.url", "public_url: sourceUrl"])
+        && hasEvery(marketLinks, ["getYahooAffiliateDestination", "yahooAffiliate.href", "isAffiliate: true", "isAffiliate: false"])
+        && publicRepository.includes("review_required,raw,created_at")
+        ? "pass"
+        : "fail",
+      true,
+      "Yahoo integration must preserve ordinary item identity and publish only exact-code, API-issued ValueCommerce destinations."
     ),
   ];
 }
