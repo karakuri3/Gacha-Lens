@@ -115,7 +115,8 @@ Input:
 - `MARKET_RAW_FEED_SOURCES_JSON`: source config for approved CSV/JSON exports, feeds, or APIs.
 - `YAHOO_SHOPPING_APP_ID`: Yahoo Developer Network Client ID.
 - `YAHOO_SHOPPING_FETCH_ENABLED`: enables the Yahoo Shopping official API source.
-- `YAHOO_AFFILIATE_TRACKING_ID`: optional server-side ValueCommerce tracking value. It is not wired into the automatic Production workflow by this code-only phase.
+- `YAHOO_AFFILIATE_TRACKING_ID`: optional server-side ValueCommerce referral prefix ending in `&vc_url=`, stored in the exact once-URL-encoded representation documented by Yahoo. Unencoded, double-encoded, malformed, or noncanonical values fail closed before any request. It is not wired into the automatic Production workflow by this code-only phase.
+- `YAHOO_SHOPPING_REQUEST_DELAY_MS`: spacing between all Yahoo HTTP attempts. Defaults to `1000`; lower values are clamped to the official one-query-per-second minimum, including retries and discovery/enrichment transitions.
 - `RAKUTEN_APPLICATION_ID`: Rakuten Web Service application ID.
 - `RAKUTEN_ACCESS_KEY`: Rakuten Web Service access key required by the current Ichiba Item Search API.
 - `RAKUTEN_AFFILIATE_ID`: optional Rakuten affiliate ID.
@@ -137,7 +138,7 @@ Market automatic scraping is not enabled as a primary path. Search terms are gen
 
 Rakuten Ichiba can be used as an approved API source. `fetch:market` converts Rakuten Item Search results into `marketListingsRaw` records with `source: "rakuten"`, then the normal classifier links them to official variants when possible. If `RAKUTEN_APPLICATION_ID` is present but `RAKUTEN_ACCESS_KEY` is missing, the fetcher writes a review issue instead of failing the whole ingestion run.
 
-Yahoo Shopping can be used through the official Item Search API v3. The first request never sends affiliate parameters and preserves the ordinary item `url` plus exact `code` as stable identity. When `YAHOO_AFFILIATE_TRACKING_ID` is configured, at most one second request for the same query sends `affiliate_type=vc` and the reviewed tracking value. Only exact-code matches are carried forward as separate `yahoo_api` provenance; failed, missing, conflicting, or mismatched enrichment leaves ordinary records unchanged. Results are stored with `source: "yahoo_shopping"`. Both providers expose active asking prices, not proof of completed resale transactions, so confidence remains limited until an approved sold-listing feed is connected.
+Yahoo Shopping can be used through the official Item Search API v3. The first request never sends affiliate parameters and preserves the ordinary item `url` plus exact `code` as stable identity. When `YAHOO_AFFILIATE_TRACKING_ID` is configured, at most one second request for the same query sends `affiliate_type=vc` and the already encoded `affiliate_id` value without passing it through another encoding layer. Only exact-code matches are carried forward as separate `yahoo_api` provenance; failed, missing, conflicting, or mismatched enrichment leaves ordinary records unchanged. Every actual Yahoo HTTP attempt, including retries, is paced at least 1000ms after the previous attempt. Results are stored with `source: "yahoo_shopping"`. Both providers expose active asking prices, not proof of completed resale transactions, so confidence remains limited until an approved sold-listing feed is connected.
 
 Recommended source config shape:
 

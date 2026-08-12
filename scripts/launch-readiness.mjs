@@ -192,8 +192,10 @@ function buildStaticChecks(root) {
       hasEvery(yahooFetcher, [
         "ShoppingWebService/V3/itemSearch",
         'requestKind: "discovery"',
-        'url.searchParams.set("affiliate_type", AFFILIATE_TYPE)',
-        'url.searchParams.set("affiliate_id", affiliateTrackingId)',
+        "normalizeYahooAffiliateTrackingId",
+        "appendYahooAffiliateParameters",
+        "MIN_REQUEST_SPACING_MS = 1000",
+        "createYahooRequestPacer",
         "buildAffiliateDestinationsByCode",
         'affiliate_url_source: affiliateUrl ? "yahoo_api" : ""',
         'affiliate_url_contract: affiliateUrl ? AFFILIATE_PROVENANCE_CONTRACT : ""',

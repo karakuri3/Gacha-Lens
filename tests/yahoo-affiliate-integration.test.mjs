@@ -6,10 +6,15 @@ import { buildMarketBoundedRows } from "../lib/domain/market-bounded-write.js";
 import { buildSanitizedMarketCandidateAudit } from "../lib/domain/market-candidate-audit.js";
 import { buildMarketCandidateKey } from "../lib/domain/market-candidate-key.js";
 import { buildMarketplaceLinks } from "../lib/domain/market-links.js";
-import { fetchYahooShoppingListingsRaw } from "../lib/fetchers/yahoo-shopping-fetcher.js";
+import {
+  fetchYahooShoppingListingsRaw,
+  normalizeYahooAffiliateTrackingId,
+} from "../lib/fetchers/yahoo-shopping-fetcher.js";
 
 const ROOT = process.cwd();
 const itemUrl = "https://store.shopping.yahoo.co.jp/example/item-1.html";
+const affiliateReferralPrefix = "https://ck.jp.ap.valuecommerce.com/servlet/referral?sid=111&pid=222&vc_url=";
+const encodedAffiliateTrackingId = encodeURIComponent(affiliateReferralPrefix);
 const query = Object.freeze({
   query: "Example Series Hero ガチャ",
   variant_id: "variant-hero",
@@ -34,7 +39,7 @@ test("Yahoo discovery omits affiliate parameters when tracking is not configured
 });
 
 test("Yahoo uses one ordinary discovery request and one same-query ValueCommerce enrichment", async () => {
-  const trackingId = "https%3A%2F%2Fck.jp.ap.valuecommerce.com%2Fservlet%2Freferral%3Fsid%3D111%26pid%3D222%26vc_url%3D";
+  const trackingId = encodedAffiliateTrackingId;
   const appId = "fake-yahoo-app-id";
   const calls = [];
   const result = await fetchOne({
@@ -52,7 +57,7 @@ test("Yahoo uses one ordinary discovery request and one same-query ValueCommerce
   assert.equal(calls[0].searchParams.has("affiliate_type"), false);
   assert.equal(calls[0].searchParams.has("affiliate_id"), false);
   assert.equal(calls[1].searchParams.get("affiliate_type"), "vc");
-  assert.equal(calls[1].searchParams.get("affiliate_id"), trackingId);
+  assert.equal(calls[1].searchParams.get("affiliate_id"), affiliateReferralPrefix);
   assert.equal(calls[0].searchParams.get("query"), calls[1].searchParams.get("query"));
   assert.equal(result.records[0].source_url, itemUrl);
   assert.equal(result.records[0].raw.affiliate_url, yahooAffiliateUrl(itemUrl));
@@ -64,11 +69,58 @@ test("Yahoo uses one ordinary discovery request and one same-query ValueCommerce
   assert.equal(diagnostics.includes(appId), false);
 });
 
+test("Yahoo serializes the documented encoded affiliate_id exactly once", async () => {
+  const calls = [];
+  await fetchOne({
+    affiliateTrackingId: encodedAffiliateTrackingId,
+    fetchImpl: async (url) => {
+      const rawRequest = String(url);
+      calls.push(rawRequest);
+      return response(rawRequest.includes("affiliate_id=")
+        ? yahooBody({ url: yahooAffiliateUrl(itemUrl) })
+        : yahooBody());
+    },
+  });
+
+  assert.equal(calls.length, 2);
+  assert.doesNotMatch(calls[0], /affiliate_(?:type|id)=/u);
+  const rawAffiliateParameter = calls[1].split("affiliate_id=")[1];
+  assert.ok(rawAffiliateParameter);
+  assert.match(rawAffiliateParameter, /^https%3A%2F%2Fck\.jp\.ap\.valuecommerce\.com/u);
+  assert.doesNotMatch(rawAffiliateParameter, /%253A|%252F|%253F|%253D/iu);
+  assert.equal(new URL(calls[1]).searchParams.get("affiliate_id"), affiliateReferralPrefix);
+});
+
+test("Yahoo rejects unencoded, double-encoded, and ambiguous affiliate configuration before requests", async () => {
+  const malformedValues = [
+    affiliateReferralPrefix,
+    encodeURIComponent(encodedAffiliateTrackingId),
+    encodedAffiliateTrackingId.replace("%3A", "%3a"),
+    "https%3A%2F%2Fck.jp.ap.valuecommerce.com%2Fservlet%2Freferral%3Fsid%3D111%26pid%3D222%26vc_url%ZZ",
+    "https%3A%2F%2Fck.jp.ap.valuecommerce.com%2Fservlet%2Freferral%3Fsid%3D111%26pid%3D222%26vc_url%3D%25ZZ",
+  ];
+  for (const affiliateTrackingId of malformedValues) {
+    let calls = 0;
+    const result = await fetchOne({
+      affiliateTrackingId,
+      fetchImpl: async () => {
+        calls += 1;
+        return response(yahooBody());
+      },
+    });
+    assert.equal(normalizeYahooAffiliateTrackingId(affiliateTrackingId), null);
+    assert.equal(calls, 0);
+    assert.equal(result.count, 0);
+    assert.equal(result.issues.length, 1);
+    assert.equal(JSON.stringify(result).includes(affiliateTrackingId), false);
+  }
+});
+
 test("Yahoo affiliate activation preserves record, candidate, item-code, and ordinary URL identity", async () => {
   const ordinary = await fetchOne();
   let calls = 0;
   const affiliate = await fetchOne({
-    affiliateTrackingId: "fake-encoded-tracking-value",
+    affiliateTrackingId: encodedAffiliateTrackingId,
     fetchImpl: async () => response(calls++ === 0 ? yahooBody() : yahooBody({ url: yahooAffiliateUrl(itemUrl) })),
   });
   assert.equal(ordinary.records[0].id, affiliate.records[0].id);
@@ -78,7 +130,7 @@ test("Yahoo affiliate activation preserves record, candidate, item-code, and ord
 });
 
 test("Yahoo bounded end-to-end uses only an API-issued affiliate destination", async () => {
-  const trackingId = "fake-encoded-tracking-value";
+  const trackingId = encodedAffiliateTrackingId;
   const affiliateUrl = yahooAffiliateUrl(itemUrl);
   let calls = 0;
   const fetched = await fetchOne({
@@ -126,7 +178,7 @@ test("Yahoo missing, failed, mismatched, and conflicting enrichment preserve ord
   for (const enrichmentResponse of cases) {
     let calls = 0;
     const result = await fetchOne({
-      affiliateTrackingId: "fake-encoded-tracking-value",
+      affiliateTrackingId: encodedAffiliateTrackingId,
       maxAttempts: 1,
       fetchImpl: async () => calls++ === 0 ? response(yahooBody()) : enrichmentResponse(),
     });
@@ -168,7 +220,7 @@ test("Yahoo requests are bounded to one discovery and one enrichment per query",
   const queries = [query, { ...query, query: "Second Series Mage ガチャ", variant_id: "variant-mage", series_id: "series-second" }];
   await fetchOne({
     queries,
-    affiliateTrackingId: "fake-encoded-tracking-value",
+    affiliateTrackingId: encodedAffiliateTrackingId,
     fetchImpl: async (url) => {
       const requestUrl = new URL(url);
       calls.push(requestUrl);
@@ -180,6 +232,75 @@ test("Yahoo requests are bounded to one discovery and one enrichment per query",
   });
   assert.equal(calls.length, 4);
   assert.deepEqual(calls.map((url) => url.searchParams.has("affiliate_id")), [false, true, false, true]);
+});
+
+test("Yahoo clamps discovery and enrichment request starts to at least one second apart", async () => {
+  let now = 0;
+  const starts = [];
+  const sleeps = [];
+  const queries = [query, { ...query, query: "Second Series Mage gacha", variant_id: "variant-mage", series_id: "series-second" }];
+  await fetchOne({
+    queries,
+    affiliateTrackingId: encodedAffiliateTrackingId,
+    delayMs: 350,
+    clock: () => now,
+    sleep: async (ms) => {
+      sleeps.push(ms);
+      now += ms;
+    },
+    fetchImpl: async (url) => {
+      starts.push(now);
+      const requestUrl = new URL(url);
+      const second = requestUrl.searchParams.get("query").startsWith("Second");
+      const ordinary = second ? "https://store.shopping.yahoo.co.jp/example/item-2.html" : itemUrl;
+      const code = second ? "store:item-2" : "store:item-1";
+      return response(yahooBody({
+        name: requestUrl.searchParams.get("query"),
+        code,
+        url: requestUrl.searchParams.has("affiliate_id") ? yahooAffiliateUrl(ordinary) : ordinary,
+      }));
+    },
+  });
+  assert.deepEqual(starts, [0, 1000, 2000, 3000]);
+  assert.deepEqual(sleeps, [1000, 1000, 1000]);
+});
+
+test("Yahoo paces discovery to the next discovery when enrichment is absent", async () => {
+  let now = 0;
+  const starts = [];
+  await fetchOne({
+    queries: [query, { ...query, query: "Second Series Mage gacha", variant_id: "variant-mage", series_id: "series-second" }],
+    delayMs: 0,
+    clock: () => now,
+    sleep: async (ms) => { now += ms; },
+    fetchImpl: async () => {
+      starts.push(now);
+      return response(yahooBody());
+    },
+  });
+  assert.deepEqual(starts, [0, 1000]);
+});
+
+test("Yahoo retries remain inside the same one-query-per-second pacer", async () => {
+  let now = 0;
+  const starts = [];
+  const statuses = [429, 200, 200];
+  await fetchOne({
+    affiliateTrackingId: encodedAffiliateTrackingId,
+    delayMs: 1,
+    clock: () => now,
+    random: () => 0,
+    sleep: async (ms) => { now += ms; },
+    fetchImpl: async (url) => {
+      starts.push(now);
+      const status = statuses.shift();
+      if (status === 429) return failingResponse(429, "0");
+      return response(new URL(url).searchParams.has("affiliate_id")
+        ? yahooBody({ url: yahooAffiliateUrl(itemUrl) })
+        : yahooBody());
+    },
+  });
+  assert.deepEqual(starts, [0, 1000, 2000]);
 });
 
 test("Yahoo affiliate integration remains independent from ranking and forecast scoring", () => {
@@ -229,8 +350,8 @@ function response(data) {
   return { ok: true, status: 200, headers: { get: () => null }, json: async () => data };
 }
 
-function failingResponse(status) {
-  return { ok: false, status, headers: { get: () => null }, json: async () => ({}) };
+function failingResponse(status, retryAfter = null) {
+  return { ok: false, status, headers: { get: (name) => name === "retry-after" ? retryAfter : null }, json: async () => ({}) };
 }
 
 function safeListing(overrides = {}) {

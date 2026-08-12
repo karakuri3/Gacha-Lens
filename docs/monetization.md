@@ -60,7 +60,8 @@ The following environment variables are code-side integration points. Do not com
 | `RAKUTEN_ACCESS_KEY` | Rakuten Web Service access key required with the application identifier |
 | `RAKUTEN_AFFILIATE_ID` | Optional Rakuten Affiliate identifier sent to the API; only the API-returned affiliate URL is published as sponsored |
 | `RAKUTEN_REQUEST_ORIGIN` | Optional request Origin/Referer override; defaults through `NEXT_PUBLIC_SITE_URL` to `https://gachalens.com` |
-| `YAHOO_AFFILIATE_TRACKING_ID` | Optional server-side ValueCommerce tracking value used only for Yahoo Item Search v3 enrichment |
+| `YAHOO_AFFILIATE_TRACKING_ID` | Optional server-side ValueCommerce referral prefix through `&vc_url=`, stored exactly once URL-encoded as Yahoo documents and used only for Yahoo Item Search v3 enrichment |
+| `YAHOO_SHOPPING_REQUEST_DELAY_MS` | Yahoo HTTP-attempt spacing; values below the official 1000ms minimum are clamped to 1000ms |
 
 ## External launch checklist
 
@@ -87,7 +88,8 @@ configuration without contacting external services or changing Production.
 ## Yahoo / ValueCommerce activation boundary
 
 - Code readiness does not activate Yahoo Shopping affiliate links in Production.
-- After ValueCommerce account and program review, create the official free-text link, take its referral URL through `&vc_url=`, URL-encode that value exactly as Yahoo documents, and store only that encoded value in `YAHOO_AFFILIATE_TRACKING_ID`.
+- After ValueCommerce account and program review, create the official free-text link, take its referral URL through `&vc_url=`, URL-encode that complete prefix exactly once as Yahoo documents, and store that already encoded value in `YAHOO_AFFILIATE_TRACKING_ID`. Do not store the unencoded URL and do not encode the resulting setting again; invalid or ambiguous representations stop the Yahoo fetcher before any request.
+- Yahoo Item Search requests are globally paced within each fetch run at a minimum of 1000ms between actual HTTP attempts. This includes discovery, affiliate enrichment, the next discovery, and retries even when a lower environment value is configured.
 - Never place the real tracking value in source, test fixtures, PR comments, diagnostics, audit artifacts, or database raw fields. The persisted provider destination may contain provider-issued tracking, but no separate Affiliate ID, Application ID, header, cookie, or API response is stored.
 - Automatic bounded workflow Secret wiring, Production environment configuration, and live verification require separate approval after this code PR is reviewed and merged.
 - Verify activation through a natural scheduled run: ordinary item identity must stay unchanged and only a genuine API-issued destination may become sponsored.
