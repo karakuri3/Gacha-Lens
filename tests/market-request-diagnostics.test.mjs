@@ -33,7 +33,11 @@ test("Phase 6-A live no-retry fixture fixes the observed aggregate without inven
     for (let index = 0; index < 5; index += 1) feeds.push(success({ source: provider, query_index: index, query: `phase6a series ${index + 1} variant gacha single` }));
   }
   const diagnostics = buildSanitizedMarketRequestDiagnostics(feeds, 0);
-  assert.deepEqual(diagnostics.aggregate, fixture.expected_aggregate);
+  for (const [field, expected] of Object.entries(fixture.expected_aggregate)) {
+    assert.equal(diagnostics.aggregate[field], expected);
+  }
+  assert.equal(diagnostics.aggregate.queries_executed, 10);
+  assert.equal(diagnostics.aggregate.zero_result_queries, 10);
   for (const [provider, expected] of Object.entries(fixture.expected_providers)) {
     assert.equal(diagnostics.providers[provider].requests_attempted, expected.requests_attempted);
     assert.equal(diagnostics.providers[provider].requests_succeeded, expected.requests_succeeded);
