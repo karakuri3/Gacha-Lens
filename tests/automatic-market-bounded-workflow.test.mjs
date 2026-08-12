@@ -12,7 +12,9 @@ import {
 const legacyWorkflow = fs.readFileSync(".github/workflows/gacha-ingestion.yml", "utf8");
 const autoWorkflow = fs.readFileSync(".github/workflows/gacha-market-bounded-auto.yml", "utf8");
 const manualWorkflow = fs.readFileSync(".github/workflows/gacha-market-bounded-manual.yml", "utf8");
-const autoDigest = "5801f3e2958b35cc4b27d48f1e5f820bf1c3bd9f8381790b27ad5098f9c2b29f";
+const yahooFetcher = fs.readFileSync("lib/fetchers/yahoo-shopping-fetcher.js", "utf8");
+const autoDigest = "d8dc4bf3cc7613f6eff0dcecc948539c0a02d46c5aa1d5076487b9b9b97e49e9";
+const previousAutoDigest = "5801f3e2958b35cc4b27d48f1e5f820bf1c3bd9f8381790b27ad5098f9c2b29f";
 const legacyDigest = "3a1f4c194e724afd68853491ce6642573020358f6aae8d1eb81a4530ec9165af";
 const orphanRuns = ["30688709185", "30761206126", "31174863521", "31191456665", "31322475822", "31411326808", "31412968526"];
 
@@ -39,6 +41,15 @@ test("automatic workflow has the fixed scheduled market contract", () => {
   assert.doesNotMatch(autoWorkflow, /BACKFILL_TASK: official|BACKFILL_TASK: stock|task=all|canary-write|db:upsert-all|cleanup/);
   assert.match(autoWorkflow, /INGESTION_WRITE_DISABLED: "true"/);
   assert.match(autoWorkflow, /MARKET_BACKFILL_WRITE_DISABLED: "true"/);
+});
+test("automatic workflow wires the optional Yahoo affiliate Secret exactly once", () => {
+  const binding = "YAHOO_AFFILIATE_TRACKING_ID: ${{ secrets.YAHOO_AFFILIATE_TRACKING_ID }}";
+  assert.equal(autoWorkflow.split(binding).length - 1, 1);
+  assert.match(yahooFetcher, /process\.env\.YAHOO_AFFILIATE_TRACKING_ID/);
+  assert.doesNotMatch(autoWorkflow.slice(autoWorkflow.indexOf("steps:")), /YAHOO_AFFILIATE_TRACKING_ID/);
+});
+test("Rakuten affiliate wiring is unchanged", () => {
+  assert.equal(autoWorkflow.split("RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}").length - 1, 1);
 });
 test("all automatic arming gates retain fail-closed defaults", () => {
   for (const variable of [
@@ -88,5 +99,6 @@ test("reviewed automatic workflow digest is exact and detects content drift", ()
   assert.equal(isReviewedAutomaticMarketBoundedWorkflow(autoWorkflow), true);
   assert.equal(REVIEWED_AUTOMATIC_MARKET_BOUNDED_WORKFLOW_DIGESTS.filter((digest) => digest === autoDigest).length, 1);
   assert.equal(REVIEWED_AUTOMATIC_MARKET_BOUNDED_WORKFLOW_DIGESTS.includes("e1cd4fd287bac48e32230fbdf9a9f11ce74f641bd6daeead4730e0cc047ec832"), true);
+  assert.equal(REVIEWED_AUTOMATIC_MARKET_BOUNDED_WORKFLOW_DIGESTS.includes(previousAutoDigest), true);
   assert.equal(isReviewedAutomaticMarketBoundedWorkflow(`${autoWorkflow}\n# drift`), false);
 });

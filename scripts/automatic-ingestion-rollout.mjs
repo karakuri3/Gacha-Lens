@@ -4,6 +4,7 @@ import {
   buildAutomaticMarketRolloutPlan,
   buildGithubThrottleHistoryRows,
   buildSanitizedRolloutReport,
+  collectAutomaticIngestionSecretValues,
   evaluateAutomaticIngestionRollout,
   findAutomaticIngestionRolloutSecretLeaks,
   loadAutomaticIngestionRolloutPolicy,
@@ -332,10 +333,7 @@ function scan() {
   const directories = required(options.directories, "--directories").split(",").map((entry) => path.resolve(entry));
   const files = directories.flatMap(listFiles).map((file) => ({ name: path.basename(file), text: fs.readFileSync(file, "utf8") }));
   if (!files.length) throw new Error("Rollout report files are missing.");
-  const secretValues = Object.entries(process.env)
-    .filter(([name]) => /(?:KEY|TOKEN|SECRET|PASSWORD|APPLICATION_ID|AFFILIATE_ID)$/i.test(name))
-    .map(([, value]) => value)
-    .filter(Boolean);
+  const secretValues = collectAutomaticIngestionSecretValues(process.env);
   const findings = findAutomaticIngestionRolloutSecretLeaks(files, secretValues);
   if (findings.length) throw new Error(`Rollout report secret scan failed for ${findings.length} file(s).`);
   console.log(JSON.stringify({ ok: true, files_scanned: files.length, secret_findings: 0 }));
