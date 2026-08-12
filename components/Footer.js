@@ -35,7 +35,7 @@ export default function Footer() {
           {affiliateEnabled && affiliateConfig.amazon.active ? " Amazonのアソシエイトとして、Gacha Lensは適格販売により収入を得ています。" : ""}
         </small>
         <small className="site-footer__provider-credit">
-          <a href="https://developers.rakuten.com/" target="_blank" rel="noopener noreferrer">Supported by Rakuten Developers</a>
+          <a href="https://developers.rakuten.com/" target="_blank">Supported by Rakuten Developers</a>
         </small>
       </div>
     </footer>

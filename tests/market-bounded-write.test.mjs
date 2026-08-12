@@ -138,7 +138,35 @@ test("listing rows force safe classification", () => { const row = rowsFixture()
 test("bounded observation uses dedicated deterministic ID", () => { const a = rowsFixture(); const b = rowsFixture(); assert.equal(a.observationRows[0].id, b.observationRows[0].id); assert.match(a.observationRows[0].id, /^market-bounded-observation-/); });
 test("bounded rows do not reuse canary markers", () => assert.doesNotMatch(JSON.stringify(rowsFixture()), /canary_audit_run_id|canary_candidate_key/));
 test("bounded rows do not contain approval text", () => assert.doesNotMatch(JSON.stringify(rowsFixture()), /APPROVE_MARKET_BOUNDED/));
-test("bounded rows contain no credential fields", () => assert.doesNotMatch(JSON.stringify(rowsFixture()), /authorization|cookie|api_key|token/i));
+test("bounded rows contain no credential fields", () => assert.doesNotMatch(JSON.stringify(rowsFixture()), /authorization|cookie|api.?key|application.?id|access.?key|affiliate.?id|headers?|token/i));
+test("bounded rows preserve allowlisted Rakuten affiliate provenance separately from identity", () => {
+  const value = fixture(1);
+  const candidate = value.audit.candidates[0];
+  const originalKey = candidate.candidate_key;
+  candidate.source.affiliate_destination = {
+    url: "https://hb.afl.rakuten.co.jp/hgc/provider-issued",
+    source: "rakuten_api",
+    documentation: "https://webservice.rakuten.co.jp/documentation/ichiba-item-search",
+  };
+  const rows = buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow, observed_at: value.plan.generated_at });
+  assert.equal(candidate.candidate_key, originalKey);
+  assert.equal(rows.listingRows[0].source_url, candidate.source.public_url);
+  assert.equal(rows.listingRows[0].raw.public_url, candidate.source.public_url);
+  assert.equal(rows.listingRows[0].raw.affiliate_url, candidate.source.affiliate_destination.url);
+  assert.equal(rows.listingRows[0].raw.affiliate_url_source, "rakuten_api");
+});
+test("bounded rows reject fabricated Rakuten affiliate provenance before persistence", () => {
+  const value = fixture(1);
+  value.audit.candidates[0].source.affiliate_destination = {
+    url: "https://hb.afl.rakuten.co.jp/hgc/fabricated",
+    source: "manual",
+    documentation: "https://webservice.rakuten.co.jp/documentation/ichiba-item-search",
+  };
+  assert.throws(
+    () => buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow, observed_at: value.plan.generated_at }),
+    (error) => error.reason_code === "bounded_candidate_identity_mismatch"
+  );
+});
 
 test("new rows plan inserts", () => { const rows = rowsFixture(); const ops = planMarketBoundedOperations({ listingRows: rows.listingRows, observationRows: rows.observationRows }); assert.equal(ops.listings.every((x) => x.operation === "insert"), true); });
 test("identical rows plan unchanged", () => { const rows = rowsFixture(); const ops = planMarketBoundedOperations({ listingRows: rows.listingRows, observationRows: rows.observationRows, existingListings: rows.listingRows, existingObservations: rows.observationRows }); assert.equal(ops.observations.every((x) => x.operation === "unchanged"), true); });

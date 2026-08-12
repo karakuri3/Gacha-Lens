@@ -130,6 +130,8 @@ Output:
 
 - `data/generated/market-raw.json`
 
+Rakuten `itemUrl` remains the stable `source_url` identity. A provider-issued `affiliateUrl`, when present, is kept separately with `rakuten_api` provenance for guarded persistence and public sponsored links.
+
 Market automatic scraping is not enabled as a primary path. Search terms are generated automatically from the official Supabase master and sent to the Yahoo Shopping and Rakuten official APIs. Approved CSV/JSON feeds remain supported. Mixed listings continue to support `unknown` and human review.
 
 Rakuten Ichiba can be used as an approved API source. `fetch:market` converts Rakuten Item Search results into `marketListingsRaw` records with `source: "rakuten"`, then the normal classifier links them to official variants when possible. If `RAKUTEN_APPLICATION_ID` is present but `RAKUTEN_ACCESS_KEY` is missing, the fetcher writes a review issue instead of failing the whole ingestion run.
