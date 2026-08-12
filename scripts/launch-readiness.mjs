@@ -160,17 +160,23 @@ function buildStaticChecks(root) {
       hasEvery(rakutenFetcher, [
         "IchibaItem/Search/20260701",
         'DEFAULT_REQUEST_ORIGIN = "https://gachalens.com"',
+        "DISCOVERY_ELEMENTS",
+        "AFFILIATE_ENRICHMENT_ELEMENTS",
         'url.searchParams.set("affiliateId", params.affiliateId)',
         "const sourceUrl = publicItemUrl",
+        "buildAffiliateDestinationsByItemCode",
+        'responseItemUrl !== affiliateUrl',
         'affiliate_url_source: affiliateUrl ? "rakuten_api" : ""',
+        'affiliate_url_contract: affiliateUrl ? "item_search_20260701_item_code_join" : ""',
       ])
         && hasEvery(rakutenLink, [
           "selectRakutenAffiliateListing",
           "sanitizeRakutenAffiliateProvenance",
+          "RAKUTEN_AFFILIATE_PROVENANCE_CONTRACT",
           "affiliateUrl: listing.raw?.affiliate_url",
         ])
         && marketCandidateAudit.includes("affiliate_destination: affiliateDestination")
-        && hasEvery(marketBoundedWrite, ["affiliate_url: affiliateProvenance.url", "public_url: sourceUrl"])
+        && hasEvery(marketBoundedWrite, ["affiliate_url: affiliateProvenance.url", "affiliate_url_contract: affiliateProvenance.contract", "public_url: sourceUrl"])
         && hasEvery(marketLinks, ["getRakutenAffiliateDestination", "isAffiliate: true", "isAffiliate: false"])
         && publicRepository.includes("review_required,raw,created_at")
         && footer.includes('<a href="https://developers.rakuten.com/" target="_blank">Supported by Rakuten Developers</a>')

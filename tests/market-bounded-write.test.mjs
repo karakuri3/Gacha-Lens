@@ -146,6 +146,7 @@ test("bounded rows preserve allowlisted Rakuten affiliate provenance separately 
   candidate.source.affiliate_destination = {
     url: "https://hb.afl.rakuten.co.jp/hgc/provider-issued",
     source: "rakuten_api",
+    contract: "item_search_20260701_item_code_join",
     documentation: "https://webservice.rakuten.co.jp/documentation/ichiba-item-search",
   };
   const rows = buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow, observed_at: value.plan.generated_at });
@@ -154,12 +155,14 @@ test("bounded rows preserve allowlisted Rakuten affiliate provenance separately 
   assert.equal(rows.listingRows[0].raw.public_url, candidate.source.public_url);
   assert.equal(rows.listingRows[0].raw.affiliate_url, candidate.source.affiliate_destination.url);
   assert.equal(rows.listingRows[0].raw.affiliate_url_source, "rakuten_api");
+  assert.equal(rows.listingRows[0].raw.affiliate_url_contract, "item_search_20260701_item_code_join");
 });
 test("bounded rows reject fabricated Rakuten affiliate provenance before persistence", () => {
   const value = fixture(1);
   value.audit.candidates[0].source.affiliate_destination = {
     url: "https://hb.afl.rakuten.co.jp/hgc/fabricated",
     source: "manual",
+    contract: "item_search_20260701_item_code_join",
     documentation: "https://webservice.rakuten.co.jp/documentation/ichiba-item-search",
   };
   assert.throws(

@@ -130,7 +130,7 @@ Output:
 
 - `data/generated/market-raw.json`
 
-Rakuten `itemUrl` remains the stable `source_url` identity. A provider-issued `affiliateUrl`, when present, is kept separately with `rakuten_api` provenance for guarded persistence and public sponsored links.
+Rakuten discovery requests never include `affiliateId`, so their ordinary `itemUrl` and `itemCode` remain the stable `source_url` and listing identity. When Affiliate is configured, each discovery query may make at most one additional enrichment request. Only an enrichment row with the same `itemCode` and the official `itemUrl === affiliateUrl` response contract is joined back as separate `rakuten_api` provenance. Missing, failed, conflicting, or mismatched enrichment leaves the ordinary market record intact and disables the direct sponsored CTA.
 
 Market automatic scraping is not enabled as a primary path. Search terms are generated automatically from the official Supabase master and sent to the Yahoo Shopping and Rakuten official APIs. Approved CSV/JSON feeds remain supported. Mixed listings continue to support `unknown` and human review.
 

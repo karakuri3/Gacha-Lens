@@ -73,38 +73,51 @@ test("Rakuten omits affiliateId when it is not configured", async () => {
   assert.equal(requestUrl.searchParams.has("affiliateId"), false);
 });
 
-test("Rakuten sends the exact configured affiliateId without exposing credentials in diagnostics", async () => {
+test("Rakuten discovery omits affiliateId and bounded enrichment sends it without exposing credentials", async () => {
   const affiliateId = "fake-affiliate-id-for-test";
   const applicationId = "fake-application-id-for-test";
   const accessKey = "fake-access-key-for-test";
-  let requestUrl;
+  const requestUrls = [];
   const result = await fetchOne({
     affiliateId,
     applicationId,
     accessKey,
     fetchImpl: async (url) => {
-      requestUrl = new URL(url);
-      return response(rakutenBody({ affiliateUrl: "https://hb.afl.rakuten.co.jp/hgc/test-link" }));
+      const requestUrl = new URL(url);
+      requestUrls.push(requestUrl);
+      return response(requestUrl.searchParams.has("affiliateId")
+        ? rakutenAffiliateBody()
+        : rakutenBody());
     },
   });
-  assert.equal(requestUrl.searchParams.get("affiliateId"), affiliateId);
-  assert.equal(requestUrl.searchParams.get("applicationId"), applicationId);
-  assert.equal(requestUrl.searchParams.get("accessKey"), accessKey);
+  assert.equal(requestUrls.length, 2);
+  assert.equal(requestUrls[0].searchParams.has("affiliateId"), false);
+  assert.equal(requestUrls[0].searchParams.get("elements").includes("affiliateUrl"), false);
+  assert.equal(requestUrls[1].searchParams.get("affiliateId"), affiliateId);
+  assert.equal(requestUrls[1].searchParams.get("elements"), "itemCode,itemUrl,affiliateUrl");
+  assert.equal(requestUrls[1].searchParams.get("keyword"), requestUrls[0].searchParams.get("keyword"));
+  assert.equal(requestUrls[1].searchParams.get("applicationId"), applicationId);
+  assert.equal(requestUrls[1].searchParams.get("accessKey"), accessKey);
   const diagnostics = JSON.stringify({ feedResults: result.feedResults, issues: result.issues });
   for (const secret of [affiliateId, applicationId, accessKey]) assert.equal(diagnostics.includes(secret), false);
 });
 
-test("Rakuten preserves and prefers the official API affiliate URL", async () => {
+test("Rakuten joins a real-contract affiliate response to the ordinary result by itemCode", async () => {
   const itemUrl = "https://item.rakuten.co.jp/shop/item-1";
   const affiliateUrl = "https://hb.afl.rakuten.co.jp/hgc/test-link";
+  let calls = 0;
   const result = await fetchOne({
     affiliateId: "fake-affiliate-id",
-    fetchImpl: async () => response(rakutenBody({ itemUrl, affiliateUrl })),
+    fetchImpl: async () => response(calls++ === 0
+      ? rakutenBody({ itemUrl })
+      : rakutenAffiliateBody({ affiliateUrl })),
   });
+  assert.equal(calls, 2);
   assert.equal(result.records[0].source_url, itemUrl);
   assert.equal(result.records[0].raw.public_item_url, itemUrl);
   assert.equal(result.records[0].raw.affiliate_url, affiliateUrl);
   assert.equal(result.records[0].raw.affiliate_url_source, "rakuten_api");
+  assert.equal(result.records[0].raw.affiliate_url_contract, "item_search_20260701_item_code_join");
   assert.equal(compactMarketRawPayload(result.records[0]).affiliate_url, affiliateUrl);
 });
 
@@ -116,15 +129,32 @@ test("Rakuten keeps the ordinary item URL when no affiliate URL is returned", as
   assert.equal(result.records[0].raw.affiliate_url_source, "");
 });
 
+test("discovery never trusts affiliate fields when affiliateId was omitted", async () => {
+  const result = await fetchOne({
+    affiliateId: "",
+    fetchImpl: async () => response(rakutenBody({
+      affiliateUrl: "https://hb.afl.rakuten.co.jp/hgc/unrequested",
+    })),
+  });
+  assert.equal(result.records[0].source_url, "https://item.rakuten.co.jp/shop/item-1");
+  assert.equal(result.records[0].raw.affiliate_url, "");
+  assert.equal(result.records[0].raw.affiliate_url_source, "");
+});
+
 test("affiliate activation does not change Rakuten listing or candidate identity", async () => {
   const itemUrl = "https://item.rakuten.co.jp/shop/item-1";
   const ordinary = await fetchOne({ fetchImpl: async () => response(rakutenBody({ itemUrl })) });
+  let calls = 0;
   const affiliate = await fetchOne({
     affiliateId: "fake-affiliate-id",
-    fetchImpl: async () => response(rakutenBody({ itemUrl, affiliateUrl: "https://hb.afl.rakuten.co.jp/hgc/test-link" })),
+    fetchImpl: async () => response(calls++ === 0
+      ? rakutenBody({ itemUrl })
+      : rakutenAffiliateBody()),
   });
   assert.equal(ordinary.records[0].id, affiliate.records[0].id);
   assert.equal(buildMarketCandidateKey(ordinary.records[0]), buildMarketCandidateKey(affiliate.records[0]));
+  assert.equal(ordinary.records[0].raw.itemCode, affiliate.records[0].raw.itemCode);
+  assert.equal(ordinary.records[0].source_url, affiliate.records[0].source_url);
 });
 
 test("public marketplace links use a current safe API-derived Rakuten affiliate URL", () => {
@@ -166,15 +196,18 @@ test("unsafe or review-required Rakuten rows fall back to a non-affiliate search
   }
 });
 
-test("Rakuten affiliate provenance survives sanitized audit and automatic bounded persistence", async () => {
+test("real Rakuten response contract survives audit, bounded persistence, and public CTA end to end", async () => {
   const itemUrl = "https://item.rakuten.co.jp/shop/item-1";
   const affiliateUrl = "https://hb.afl.rakuten.co.jp/hgc/provider-issued-link";
   const credentials = ["fake-affiliate-id", "fake-application-id", "fake-access-key"];
+  let calls = 0;
   const withAffiliate = await fetchOne({
     affiliateId: credentials[0],
     applicationId: credentials[1],
     accessKey: credentials[2],
-    fetchImpl: async () => response(rakutenBody({ itemUrl, affiliateUrl })),
+    fetchImpl: async () => response(calls++ === 0
+      ? rakutenBody({ itemUrl })
+      : rakutenAffiliateBody({ affiliateUrl })),
   });
   const withoutAffiliate = await fetchOne({
     affiliateId: "",
@@ -194,6 +227,7 @@ test("Rakuten affiliate provenance survives sanitized audit and automatic bounde
   assert.equal(affiliateListing.raw.public_url, itemUrl);
   assert.equal(affiliateListing.raw.affiliate_url, affiliateUrl);
   assert.equal(affiliateListing.raw.affiliate_url_source, "rakuten_api");
+  assert.equal(affiliateListing.raw.affiliate_url_contract, "item_search_20260701_item_code_join");
   assert.equal(ordinaryListing.raw.affiliate_url, undefined);
 
   const direct = rakutenLink(affiliateListing, "configured-for-test");
@@ -204,14 +238,90 @@ test("Rakuten affiliate provenance survives sanitized audit and automatic bounde
 
   const output = JSON.stringify({ audit: affiliateAudit, rows: affiliateRows });
   for (const credential of credentials) assert.equal(output.includes(credential), false);
+  for (const forbidden of ["applicationId", "accessKey", "affiliateId", "headers", "cookie", "token", "raw_response"]) {
+    assert.equal(output.includes(forbidden), false);
+  }
+});
+
+test("missing, failed, or mismatched affiliate enrichment preserves market data and uses search fallback", async () => {
+  const cases = [
+    async () => response({ items: [] }),
+    async () => failingResponse(503),
+    async () => response(rakutenAffiliateBody({ itemCode: "other-shop:other-item" })),
+  ];
+  for (const enrichmentResponse of cases) {
+    let calls = 0;
+    const result = await fetchOne({
+      affiliateId: "fake-affiliate-id",
+      maxAttempts: 1,
+      fetchImpl: async () => calls++ === 0 ? response(rakutenBody()) : enrichmentResponse(),
+    });
+    assert.equal(calls, 2);
+    assert.equal(result.ok, true);
+    assert.equal(result.records.length, 1);
+    assert.equal(result.records[0].source_url, "https://item.rakuten.co.jp/shop/item-1");
+    assert.equal(result.records[0].raw.affiliate_url, "");
+    const link = rakutenLink(automaticRows(automaticAudit(result.records[0])).listingRows[0], "configured-for-test");
+    assert.match(link.href, /^https:\/\/search\.rakuten\.co\.jp\/search\/mall\//);
+    assert.equal(link.isAffiliate, false);
+  }
+});
+
+test("affiliate enrichment rejects a response that violates itemUrl equals affiliateUrl", async () => {
+  let calls = 0;
+  const result = await fetchOne({
+    affiliateId: "fake-affiliate-id",
+    fetchImpl: async () => response(calls++ === 0
+      ? rakutenBody()
+      : rakutenAffiliateBody({ itemUrl: "https://item.rakuten.co.jp/shop/item-1" })),
+  });
+  assert.equal(result.records[0].raw.affiliate_url, "");
+  assert.equal(rakutenLink(automaticRows(automaticAudit(result.records[0])).listingRows[0], "configured-for-test").isAffiliate, false);
+});
+
+test("conflicting enrichment rows for one itemCode fail closed", async () => {
+  const first = "https://hb.afl.rakuten.co.jp/hgc/first";
+  const second = "https://hb.afl.rakuten.co.jp/hgc/second";
+  let calls = 0;
+  const result = await fetchOne({
+    affiliateId: "fake-affiliate-id",
+    fetchImpl: async () => response(calls++ === 0
+      ? rakutenBody()
+      : { items: [
+        rakutenAffiliateBody({ affiliateUrl: first }).items[0],
+        rakutenAffiliateBody({ affiliateUrl: second }).items[0],
+      ] }),
+  });
+  assert.equal(result.records[0].raw.affiliate_url, "");
+});
+
+test("Rakuten requests stay bounded to one discovery and at most one enrichment per query", async () => {
+  const calls = [];
+  const secondQuery = { ...query, query: "Second Series Mage 繧ｬ繝√Ε", variant_id: "variant-mage", series_id: "series-second" };
+  await fetchOne({
+    affiliateId: "fake-affiliate-id",
+    queries: [query, secondQuery],
+    fetchImpl: async (url) => {
+      const requestUrl = new URL(url);
+      calls.push(requestUrl);
+      const keyword = requestUrl.searchParams.get("keyword");
+      return response(requestUrl.searchParams.has("affiliateId")
+        ? rakutenAffiliateBody({ itemCode: `shop:item-${calls.length}`, affiliateUrl: `https://hb.afl.rakuten.co.jp/hgc/item-${calls.length}` })
+        : rakutenBody({ itemName: keyword, itemCode: `shop:item-${calls.length}` }));
+    },
+  });
+  assert.equal(calls.length, 4);
+  assert.deepEqual(calls.map((url) => url.searchParams.has("affiliateId")), [false, true, false, true]);
 });
 
 test("bounded affiliate provenance fails back for fabricated and unsafe listings", () => {
   const legitimate = safeListing();
   const fabricated = safeListing({ raw: { ...legitimate.raw, affiliate_url_source: "manual" } });
+  const legacyMarker = safeListing({ raw: { ...legitimate.raw, affiliate_url_contract: undefined } });
   const reviewRequired = safeListing({ review_required: true });
   const setListing = safeListing({ listing_type: "partial_set" });
-  for (const listing of [fabricated, reviewRequired, setListing]) {
+  const fullSetListing = safeListing({ listing_type: "full_set" });
+  for (const listing of [fabricated, legacyMarker, reviewRequired, setListing, fullSetListing]) {
     const link = rakutenLink(listing, "configured-for-test");
     assert.match(link.href, /^https:\/\/search\.rakuten\.co\.jp\/search\/mall\//);
     assert.equal(link.isAffiliate, false);
@@ -264,12 +374,32 @@ function rakutenBody(overrides = {}) {
   };
 }
 
+function rakutenAffiliateBody(overrides = {}) {
+  const affiliateUrl = overrides.affiliateUrl ?? "https://hb.afl.rakuten.co.jp/hgc/provider-issued-link";
+  return {
+    items: [{
+      itemCode: overrides.itemCode ?? "shop:item-1",
+      itemUrl: overrides.itemUrl ?? affiliateUrl,
+      affiliateUrl,
+    }],
+  };
+}
+
 function response(data) {
   return {
     ok: true,
     status: 200,
     headers: { get: () => null },
     json: async () => data,
+  };
+}
+
+function failingResponse(status) {
+  return {
+    ok: false,
+    status,
+    headers: { get: () => null },
+    json: async () => ({}),
   };
 }
 
@@ -296,6 +426,7 @@ function safeRaw(affiliateUrl) {
     public_url: "https://item.rakuten.co.jp/shop/item-1",
     source_documentation: "https://webservice.rakuten.co.jp/documentation/ichiba-item-search",
     affiliate_url_source: "rakuten_api",
+    affiliate_url_contract: "item_search_20260701_item_code_join",
     affiliate_url: affiliateUrl,
   };
 }
