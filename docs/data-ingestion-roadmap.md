@@ -11,6 +11,7 @@ The automatic Production scope remains market-only, released, priority 1, and li
 ### Phase 8-A: market retrieval effectiveness
 
 - Use one stable approval query per variant with a bounded internal search sequence: official series plus variant, normalized official terms, and a variant-focused fallback when the variant name is informative.
+- Enforce one reviewed request-capacity contract before network access: at most 30 Rakuten roots and 50 Yahoo roots, three discovery attempts and one affiliate enrichment per root, 320 diagnostic entries, and 960 retry-inclusive HTTP attempts. No diagnostic entry is truncated.
 - Preserve candidate keys, provider listing identity, ordinary public URLs, and affiliate-independent selection.
 - Record sanitized provider result counts, zero-result searches, pre-match rejection reasons, review counts, and accepted candidate keys.
 - Verify the next natural run. Success requires either an accepted candidate or nonzero provider results with explicit safe rejection reasons.

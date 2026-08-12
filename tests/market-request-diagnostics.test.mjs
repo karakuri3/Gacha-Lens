@@ -6,6 +6,7 @@ import {
   sanitizeMarketRequestDiagnostics,
   validateMarketRequestDiagnostics,
 } from "../lib/domain/market-request-diagnostics.js";
+import { MARKET_MAX_DIAGNOSTIC_ENTRIES } from "../lib/fetchers/market-request-budget.js";
 import {
   buildSanitizedMarketCandidateAudit,
   renderMarketCandidateAuditMarkdown,
@@ -196,7 +197,10 @@ test("market backfill exposes all aggregate diagnostics as GitHub outputs", asyn
 });
 
 test("query and attempt bounds fail closed", () => {
-  assert.throws(() => buildSanitizedMarketRequestDiagnostics(Array.from({ length: 101 }, (_, index) => success({ query_index: index }))), /query limit/);
+  assert.throws(() => buildSanitizedMarketRequestDiagnostics(Array.from(
+    { length: MARKET_MAX_DIAGNOSTIC_ENTRIES + 1 },
+    (_, index) => success({ query_index: index }),
+  )), /query limit/);
   assert.throws(() => buildSanitizedMarketRequestDiagnostics([success({ duration_ms: -1 })]), /duration_ms/);
   assert.throws(() => buildSanitizedMarketRequestDiagnostics([success({ final_status: 999 })]), /HTTP status/);
 });

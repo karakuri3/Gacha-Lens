@@ -34,6 +34,7 @@
     "test:market-evidence": "node --test tests/market-evidence.test.mjs",
     "test:market-observation-history": "node --test tests/market-observation-history.test.mjs",
     "test:market-retrieval": "node --test tests/market-retrieval-effectiveness.test.mjs",
+    "test:market-request-budget": "node --test tests/market-request-budget.test.mjs",
     "test:manual-market-audit-workflow": "node --test tests/manual-market-audit-workflow.test.mjs",
     "test:ingestion-safety": "node --test tests/ingestion-execution-safety.test.mjs tests/ingestion-run-report.test.mjs tests/ingestion-workflow-safety.test.mjs",
     "test:rollout-policy": "node --test tests/automatic-ingestion-rollout.test.mjs",
