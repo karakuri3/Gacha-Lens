@@ -92,6 +92,7 @@ function buildStaticChecks(root) {
   const rakutenLink = source(root, "lib/domain/rakuten-affiliate-link.js");
   const yahooFetcher = source(root, "lib/fetchers/yahoo-shopping-fetcher.js");
   const yahooLink = source(root, "lib/domain/yahoo-affiliate-link.js");
+  const automaticWorkflow = source(root, ".github/workflows/gacha-market-bounded-auto.yml");
   const marketCandidateAudit = source(root, "lib/domain/market-candidate-audit.js");
   const marketBoundedWrite = source(root, "lib/domain/market-bounded-write.js");
   const publicRepository = source(root, "lib/data/supabase-gacha-repository.js");
@@ -211,6 +212,7 @@ function buildStaticChecks(root) {
         && marketCandidateAudit.includes("sanitizeMarketplaceAffiliateProvenance")
         && hasEvery(marketBoundedWrite, ["sanitizeMarketplaceAffiliateProvenance", "affiliate_url: affiliateProvenance.url", "public_url: sourceUrl"])
         && hasEvery(marketLinks, ["getYahooAffiliateDestination", "yahooAffiliate.href", "isAffiliate: true", "isAffiliate: false"])
+        && automaticWorkflow.includes("YAHOO_AFFILIATE_TRACKING_ID: ${{ secrets.YAHOO_AFFILIATE_TRACKING_ID }}")
         && publicRepository.includes("review_required,raw,created_at")
         ? "pass"
         : "fail",

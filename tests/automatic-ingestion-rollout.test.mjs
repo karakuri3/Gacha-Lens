@@ -7,6 +7,7 @@ import {
   buildGithubThrottleHistoryRows,
   buildSanitizedRolloutReport,
   calculateAutomaticIngestionRolloutPolicyDigest,
+  collectAutomaticIngestionSecretValues,
   evaluateAutomaticIngestionRollout,
   evaluateAutomaticIngestionThrottle,
   evaluateAutomaticMarketCandidate,
@@ -261,6 +262,15 @@ test("shadow report omits titles and URLs", () => {
 });
 test("shadow markdown says would-write is not approval", () => assert.match(renderAutomaticIngestionShadowReportMarkdown(buildReport()), /predictions, not approvals/));
 test("secret scan catches actual secret", () => assert.deepEqual(findAutomaticIngestionRolloutSecretLeaks([{ name: "x", text: "private-value-123" }], ["private-value-123"]), ["x"]));
+test("secret scan collects Yahoo affiliate tracking configuration", () => {
+  const value = "fake-once-encoded-valuecommerce-prefix";
+  const values = collectAutomaticIngestionSecretValues({
+    YAHOO_AFFILIATE_TRACKING_ID: value,
+    ORDINARY_SETTING: "not-sensitive",
+  });
+  assert.deepEqual(values, [value]);
+  assert.deepEqual(findAutomaticIngestionRolloutSecretLeaks([{ name: "artifact.json", text: value }], values), ["artifact.json"]);
+});
 test("secret scan allows ordinary product wording", () => assert.deepEqual(findAutomaticIngestionRolloutSecretLeaks([{ name: "x", text: "Secret character" }]), []));
 
 test("simulation workflow has workflow_dispatch only", () => {

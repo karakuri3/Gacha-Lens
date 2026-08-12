@@ -115,7 +115,7 @@ Input:
 - `MARKET_RAW_FEED_SOURCES_JSON`: source config for approved CSV/JSON exports, feeds, or APIs.
 - `YAHOO_SHOPPING_APP_ID`: Yahoo Developer Network Client ID.
 - `YAHOO_SHOPPING_FETCH_ENABLED`: enables the Yahoo Shopping official API source.
-- `YAHOO_AFFILIATE_TRACKING_ID`: optional server-side ValueCommerce referral prefix ending in `&vc_url=`, stored in the exact once-URL-encoded representation documented by Yahoo. Unencoded, double-encoded, malformed, or noncanonical values fail closed before any request. It is not wired into the automatic Production workflow by this code-only phase.
+- `YAHOO_AFFILIATE_TRACKING_ID`: optional server-side ValueCommerce referral prefix ending in `&vc_url=`, stored in the exact once-URL-encoded representation documented by Yahoo. Unencoded, double-encoded, malformed, or noncanonical values fail closed before any request. The automatic Production workflow reads the identically named Actions Secret; an absent or empty Secret keeps ordinary Yahoo discovery active without affiliate enrichment.
 - `YAHOO_SHOPPING_REQUEST_DELAY_MS`: spacing between all Yahoo HTTP attempts. Defaults to `1000`; lower values are clamped to the official one-query-per-second minimum, including retries and discovery/enrichment transitions.
 - `RAKUTEN_APPLICATION_ID`: Rakuten Web Service application ID.
 - `RAKUTEN_ACCESS_KEY`: Rakuten Web Service access key required by the current Ichiba Item Search API.

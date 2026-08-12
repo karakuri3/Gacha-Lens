@@ -6,12 +6,14 @@ import { buildMarketBoundedRows } from "../lib/domain/market-bounded-write.js";
 import { buildSanitizedMarketCandidateAudit } from "../lib/domain/market-candidate-audit.js";
 import { buildMarketCandidateKey } from "../lib/domain/market-candidate-key.js";
 import { buildMarketplaceLinks } from "../lib/domain/market-links.js";
+import { findAutomaticIngestionRolloutSecretLeaks } from "../lib/domain/automatic-ingestion-rollout.js";
 import {
   fetchYahooShoppingListingsRaw,
   normalizeYahooAffiliateTrackingId,
 } from "../lib/fetchers/yahoo-shopping-fetcher.js";
 
 const ROOT = process.cwd();
+const automaticWorkflow = fs.readFileSync(".github/workflows/gacha-market-bounded-auto.yml", "utf8");
 const itemUrl = "https://store.shopping.yahoo.co.jp/example/item-1.html";
 const affiliateReferralPrefix = "https://ck.jp.ap.valuecommerce.com/servlet/referral?sid=111&pid=222&vc_url=";
 const encodedAffiliateTrackingId = encodeURIComponent(affiliateReferralPrefix);
@@ -36,6 +38,41 @@ test("Yahoo discovery omits affiliate parameters when tracking is not configured
   assert.equal(calls[0].searchParams.has("affiliate_type"), false);
   assert.equal(calls[0].searchParams.has("affiliate_id"), false);
   assert.equal(result.records[0].raw.affiliate_url, "");
+});
+
+test("Yahoo absent Production Secret preserves ordinary discovery and persistence identity", async (t) => {
+  const previous = process.env.YAHOO_AFFILIATE_TRACKING_ID;
+  delete process.env.YAHOO_AFFILIATE_TRACKING_ID;
+  t.after(() => {
+    if (previous === undefined) delete process.env.YAHOO_AFFILIATE_TRACKING_ID;
+    else process.env.YAHOO_AFFILIATE_TRACKING_ID = previous;
+  });
+
+  const calls = [];
+  const absent = await fetchOne({
+    affiliateTrackingId: undefined,
+    fetchImpl: async (url) => {
+      calls.push(new URL(url));
+      return response(yahooBody());
+    },
+  });
+  const explicitEmpty = await fetchOne({ affiliateTrackingId: "" });
+  const absentAudit = automaticAudit(absent.records[0]);
+  const emptyAudit = automaticAudit(explicitEmpty.records[0]);
+  const absentRows = automaticRows(absentAudit);
+  const emptyRows = automaticRows(emptyAudit);
+  const link = yahooLink(absentRows.listingRows[0], "");
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].searchParams.has("affiliate_type"), false);
+  assert.equal(calls[0].searchParams.has("affiliate_id"), false);
+  assert.equal(absent.records[0].raw.affiliate_url, "");
+  assert.equal(absent.records[0].source_url, itemUrl);
+  assert.equal(absent.records[0].id, explicitEmpty.records[0].id);
+  assert.equal(absentAudit.candidates[0].candidate_key, emptyAudit.candidates[0].candidate_key);
+  assert.equal(absentRows.listingRows[0].id, emptyRows.listingRows[0].id);
+  assert.match(link.href, /^https:\/\/shopping\.yahoo\.co\.jp\/search\?p=/);
+  assert.equal(link.isAffiliate, false);
 });
 
 test("Yahoo uses one ordinary discovery request and one same-query ValueCommerce enrichment", async () => {
@@ -163,6 +200,32 @@ test("Yahoo bounded end-to-end uses only an API-issued affiliate destination", a
   for (const forbidden of ["affiliate_id", "application_id", "authorization", "cookie", "access_key", "raw_response"]) {
     assert.equal(serialized.toLowerCase().includes(forbidden), false);
   }
+});
+
+test("Yahoo tracking Secret never enters bounded diagnostics, persistence artifacts, or step summaries", async () => {
+  let calls = 0;
+  const fetched = await fetchOne({
+    affiliateTrackingId: encodedAffiliateTrackingId,
+    fetchImpl: async () => response(calls++ === 0 ? yahooBody() : yahooBody({ url: yahooAffiliateUrl(itemUrl) })),
+  });
+  const audit = automaticAudit(fetched.records[0]);
+  const rows = automaticRows(audit);
+  const plan = {
+    selected_candidate_keys: [audit.candidates[0].candidate_key],
+    listing_writes_planned: rows.listingRows.length,
+    observation_writes_planned: rows.observationRows.length,
+    database_writes: 0,
+  };
+  const files = [
+    { name: "feed-results.json", text: JSON.stringify(fetched.feedResults) },
+    { name: "market-candidate-audit.json", text: JSON.stringify(audit) },
+    { name: "market-bounded-write-plan.json", text: JSON.stringify(plan) },
+    { name: "market-bounded-persistence.json", text: JSON.stringify(rows) },
+    { name: "github-step-summary.txt", text: automaticWorkflow.slice(automaticWorkflow.indexOf("steps:")) },
+  ];
+
+  assert.deepEqual(findAutomaticIngestionRolloutSecretLeaks(files, [encodedAffiliateTrackingId]), []);
+  for (const file of files) assert.equal(file.text.includes(encodedAffiliateTrackingId), false, file.name);
 });
 
 test("Yahoo missing, failed, mismatched, and conflicting enrichment preserve ordinary market data", async () => {

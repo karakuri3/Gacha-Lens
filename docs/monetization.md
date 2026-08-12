@@ -88,10 +88,11 @@ configuration without contacting external services or changing Production.
 ## Yahoo / ValueCommerce activation boundary
 
 - Code readiness does not activate Yahoo Shopping affiliate links in Production.
-- After ValueCommerce account and program review, create the official free-text link, take its referral URL through `&vc_url=`, URL-encode that complete prefix exactly once as Yahoo documents, and store that already encoded value in `YAHOO_AFFILIATE_TRACKING_ID`. Do not store the unencoded URL and do not encode the resulting setting again; invalid or ambiguous representations stop the Yahoo fetcher before any request.
+- External activation follows this order: (1) complete ValueCommerce account and program review, (2) generate the official referral prefix through `&vc_url=`, (3) URL-encode that complete prefix exactly once, (4) create the GitHub Actions Secret `YAHOO_AFFILIATE_TRACKING_ID`, (5) configure the same name in Vercel Production, (6) merge and safely rearm the reviewed workflow under separate approval, (7) observe a natural schedule only, and (8) verify a provider-issued sponsored Yahoo destination.
+- Do not store the unencoded URL and do not encode the resulting setting again; invalid or ambiguous representations stop the Yahoo fetcher before any request.
 - Yahoo Item Search requests are globally paced within each fetch run at a minimum of 1000ms between actual HTTP attempts. This includes discovery, affiliate enrichment, the next discovery, and retries even when a lower environment value is configured.
 - Never place the real tracking value in source, test fixtures, PR comments, diagnostics, audit artifacts, or database raw fields. The persisted provider destination may contain provider-issued tracking, but no separate Affiliate ID, Application ID, header, cookie, or API response is stored.
-- Automatic bounded workflow Secret wiring, Production environment configuration, and live verification require separate approval after this code PR is reviewed and merged.
+- The automatic bounded workflow has an optional reference to the identically named Actions Secret. Creating or changing the real Secret, configuring Vercel, merging/rearming workflow changes, and live verification remain separate approval boundaries.
 - Verify activation through a natural scheduled run: ordinary item identity must stay unchanged and only a genuine API-issued destination may become sponsored.
 
 See [Production Launch Readiness](./launch-readiness.md) for the complete
