@@ -117,6 +117,10 @@ test("affiliate and ranking safety check passes", () => {
   assert.equal(check(audit(), "affiliate_ranking_safety").status, "pass");
 });
 
+test("Rakuten affiliate code readiness check passes", () => {
+  assert.equal(check(audit(), "rakuten_affiliate_code_readiness").status, "pass");
+});
+
 test("audit has no Production network dependency", () => {
   const source = fs.readFileSync(SCRIPT, "utf8");
   assert.doesNotMatch(source, /\bfetch\s*\(/i);

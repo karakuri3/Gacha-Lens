@@ -8,7 +8,8 @@ The public product remains a capsule-toy trend and discovery guide. Monetization
 - Outbound clicks are recorded in `outbound_clicks` without a redirect page or personal identifier.
 - `AMAZON_ASSOCIATE_TAG` is optional. When it is set, Amazon links include the tag and the required disclosure appears in the footer.
 - Amazon affiliate links use `rel="sponsored noopener noreferrer"`.
-- Rakuten and Yahoo links remain ordinary search links until an approved provider-specific affiliate URL integration is configured. An ID alone never rewrites a public URL.
+- Rakuten API discovery omits `affiliateId` and keeps its ordinary `itemUrl` and `itemCode` as listing and candidate identity. When `RAKUTEN_AFFILIATE_ID` is configured, a bounded second request enriches the discovery result by exact `itemCode`; only the official affiliate-enabled `itemUrl === affiliateUrl` contract is preserved as separate sanitized provenance. Automatic bounded persistence carries that provenance without changing the durable listing ID. A released variant uses it only when the current listing is linked, active, non-review-required, single-item data from the Rakuten API.
+- When no verified API-derived Rakuten affiliate URL exists, the public CTA remains an ordinary, non-affiliate Rakuten search link. An ID alone never rewrites a generic URL.
 - The public footer always links to the privacy policy, terms, disclaimer, advertising disclosure, operator information, and contact page.
 - Rankings and forecast scores never receive an affiliate-provider or commission input.
 
@@ -53,7 +54,10 @@ The following environment variables are code-side integration points. Do not com
 | `GOOGLE_SITE_VERIFICATION` | Google Search Console verification token |
 | `NEXT_PUBLIC_GOOGLE_ADSENSE_ACCOUNT` | Optional `google-adsense-account` metadata value |
 | `AMAZON_ASSOCIATE_TAG` | Enables Amazon tag attribution and sponsored-link disclosure |
-| `RAKUTEN_AFFILIATE_ID` | Records provider readiness; public search links remain non-affiliate until reviewed URL support exists |
+| `RAKUTEN_APPLICATION_ID` | Rakuten Web Service application identifier used by the Item Search API |
+| `RAKUTEN_ACCESS_KEY` | Rakuten Web Service access key required with the application identifier |
+| `RAKUTEN_AFFILIATE_ID` | Optional Rakuten Affiliate identifier sent to the API; only the API-returned affiliate URL is published as sponsored |
+| `RAKUTEN_REQUEST_ORIGIN` | Optional request Origin/Referer override; defaults through `NEXT_PUBLIC_SITE_URL` to `https://gachalens.com` |
 | `YAHOO_AFFILIATE_TRACKING_ID` | Reserved for a reviewed Yahoo affiliate integration |
 
 ## External launch checklist
@@ -69,6 +73,14 @@ configuration without contacting external services or changing Production.
 5. Apply to each affiliate program and add only approved identifiers after reviewing that provider's link requirements.
 6. Apply to AdSense only after the public catalog, legal pages, contact route and original editorial content are stable.
 7. Review outbound-click totals by provider and product without adding affiliate commission to ranking logic.
+
+## Rakuten activation boundary
+
+- Code readiness does not activate Rakuten Affiliate in Production.
+- Configure the real `RAKUTEN_AFFILIATE_ID` only in the approved server-side Production environments after merge approval. Never place it in source, test fixtures, PR comments, or diagnostic artifacts.
+- Keep the Web Service Application ID, Access Key, and Affiliate ID as three separate credentials.
+- After deployment, observe a natural ingestion run and verify that a real API-derived Rakuten URL is used on one released variant. Do not use a manual ingestion dispatch for activation verification.
+- The footer keeps the Rakuten Developers credit visible without implying that Rakuten operates or endorses Gacha Lens.
 
 See [Production Launch Readiness](./launch-readiness.md) for the complete
 code-ready versus human-operated checklist.

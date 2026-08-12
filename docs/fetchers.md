@@ -124,11 +124,13 @@ Input:
 - `RAKUTEN_MARKET_QUERY_LIMIT`: Rakuten queries per run. Defaults to `8`.
 - `RAKUTEN_MARKET_HITS`: results per keyword, capped at 30. Defaults to `20`.
 - `RAKUTEN_REQUEST_DELAY_MS`: polite delay between Rakuten keyword requests. Defaults to `1200`.
-- `RAKUTEN_REQUEST_ORIGIN`: origin/referer sent for Rakuten allowed website checks. Defaults to `https://gachalens.vercel.app`.
+- `RAKUTEN_REQUEST_ORIGIN`: optional origin/referer override sent for Rakuten allowed website checks. It falls back to `NEXT_PUBLIC_SITE_URL`, then the Production canonical origin `https://gachalens.com`.
 
 Output:
 
 - `data/generated/market-raw.json`
+
+Rakuten discovery requests never include `affiliateId`, so their ordinary `itemUrl` and `itemCode` remain the stable `source_url` and listing identity. When Affiliate is configured, each discovery query may make at most one additional enrichment request. Only an enrichment row with the same `itemCode` and the official `itemUrl === affiliateUrl` response contract is joined back as separate `rakuten_api` provenance. Missing, failed, conflicting, or mismatched enrichment leaves the ordinary market record intact and disables the direct sponsored CTA.
 
 Market automatic scraping is not enabled as a primary path. Search terms are generated automatically from the official Supabase master and sent to the Yahoo Shopping and Rakuten official APIs. Approved CSV/JSON feeds remain supported. Mixed listings continue to support `unknown` and human review.
 

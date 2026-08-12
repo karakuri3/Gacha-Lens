@@ -34,6 +34,9 @@ export default function Footer() {
           当サイトはアフィリエイト広告を利用する場合があります。商品評価やランキングは広告報酬と切り離して決定します。
           {affiliateEnabled && affiliateConfig.amazon.active ? " Amazonのアソシエイトとして、Gacha Lensは適格販売により収入を得ています。" : ""}
         </small>
+        <small className="site-footer__provider-credit">
+          <a href="https://developers.rakuten.com/" target="_blank">Supported by Rakuten Developers</a>
+        </small>
       </div>
     </footer>
   );
