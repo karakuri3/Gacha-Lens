@@ -12,6 +12,7 @@ import {
 } from "../scripts/supabase-rest.mjs";
 import {
   evaluateAutomaticIngestionRollout,
+  evaluateAutomaticIngestionThrottle,
   loadAutomaticIngestionRolloutPolicy,
 } from "../lib/domain/automatic-ingestion-rollout.js";
 
@@ -71,7 +72,7 @@ test("completed history keeps the latest six eligible write-like runs", async ()
     ...Array.from({ length: 6 }, (_, index) => completed(`write-${index}`, index + 20, index < 2 ? "failed" : "succeeded")),
     ...Array.from({ length: 42 }, (_, index) => completed(`older-${index}`, index + 40, "succeeded", { execution_type: "read_only" })),
   ];
-  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded", now: new Date("2026-08-16T00:00:00Z") }, {
+  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded", maxRunsPer24Hours: 1, now: new Date("2026-08-16T00:00:00Z") }, {
     fetchRowsLimitedImpl: queuedLimitedReads([
       limited([], 100),
       limited(history, 60),
@@ -86,7 +87,7 @@ test("completed history keeps the latest six eligible write-like runs", async ()
 
 test("a saturated history window with fewer than six eligible runs fails closed", async () => {
   const history = Array.from({ length: 60 }, (_, index) => completed(`dry-${index}`, index, "failed", { mode: "dry-run" }));
-  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded" }, {
+  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded", maxRunsPer24Hours: 1 }, {
     fetchRowsLimitedImpl: queuedLimitedReads([limited([], 100), limited(history, 60)]),
   });
   assert.equal(store.available, false);
@@ -98,7 +99,7 @@ test("a saturated history window with fewer than six eligible runs fails closed"
 test("a saturated history window with ambiguous completion ordering fails closed", async () => {
   const history = Array.from({ length: 60 }, (_, index) => completed(`write-${index}`, index, "succeeded"));
   history[0] = { ...history[0], finished_at: null, started_at: "2026-08-16T00:00:00.000Z" };
-  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded" }, {
+  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded", maxRunsPer24Hours: 1 }, {
     fetchRowsLimitedImpl: queuedLimitedReads([limited([], 100), limited(history, 60)]),
   });
   assert.equal(store.available, false);
@@ -108,7 +109,7 @@ test("a saturated history window with ambiguous completion ordering fails closed
 
 test("a running-row result at the safety cap fails closed before history reads", async () => {
   const reads = [];
-  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded" }, {
+  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded", maxRunsPer24Hours: 1 }, {
     fetchRowsLimitedImpl: async (_table, options) => {
       reads.push(options.operationName);
       return limited(Array.from({ length: 100 }, (_, index) => ({ id: `running-${index}` })), 100);
@@ -119,9 +120,9 @@ test("a running-row result at the safety cap fails closed before history reads",
   assert.equal(store.report.running_rows.complete_for_decision, false);
 });
 
-test("rollout throttle history is a separate one-row 24-hour bounded query", async () => {
+test("rollout throttle history capacity follows the reviewed one-run policy", async () => {
   const optionsSeen = [];
-  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded", now: new Date("2026-08-16T12:00:00Z") }, {
+  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded", maxRunsPer24Hours: 1, now: new Date("2026-08-16T12:00:00Z") }, {
     fetchRowsLimitedImpl: async (_table, options) => {
       optionsSeen.push(options);
       if (options.operationName === "ingestion_runs.completed_history") return limited([], 60);
@@ -132,6 +133,62 @@ test("rollout throttle history is a separate one-row 24-hour bounded query", asy
   assert.equal(optionsSeen[2].maxRows, 1);
   assert.equal(optionsSeen[2].params["summary->>rollout_stage"], "eq.market-bounded");
   assert.equal(optionsSeen[2].params.finished_at, "gte.2026-08-15T12:00:00.000Z");
+});
+
+for (const maxRunsPer24Hours of [1, 2, 5]) {
+  test(`rollout history cannot bypass a future ${maxRunsPer24Hours}-run daily budget`, async () => {
+    const now = new Date("2026-08-16T12:00:00Z");
+    const rolloutRows = Array.from({ length: maxRunsPer24Hours }, (_, index) => ({
+      id: `bounded-${index}`,
+      task: "market",
+      status: "succeeded",
+      finished_at: new Date(now.getTime() - (index + 1) * 60_000).toISOString(),
+      summary: { rollout_stage: "market-bounded" },
+    }));
+    const reads = [];
+    const store = await readAutomaticDurableRunStore({
+      task: "market",
+      stage: "market-bounded",
+      maxRunsPer24Hours,
+      now,
+    }, {
+      fetchRowsLimitedImpl: async (_table, options) => {
+        reads.push(options);
+        if (options.operationName === "ingestion_runs.completed_history") return limited([], 60);
+        if (options.operationName === "ingestion_runs.rollout_history_24h") {
+          return limited(rolloutRows, maxRunsPer24Hours);
+        }
+        return limited([], options.maxRows);
+      },
+    });
+    const throttle = evaluateAutomaticIngestionThrottle({
+      stage: "market-bounded",
+      task: "market",
+      policy: { minimum_interval_minutes: 1, max_runs_per_24_hours: maxRunsPer24Hours },
+      history_rows: store.rollout_history_rows,
+      running_rows: store.running_rows,
+      github_rows: [],
+      now,
+    });
+    assert.equal(store.available, true);
+    assert.equal(reads[2].maxRows, maxRunsPer24Hours);
+    assert.equal(throttle.reason_code, "rollout_daily_budget_exhausted");
+  });
+}
+
+test("a policy above the supported rollout history capacity fails closed before reads", async () => {
+  let reads = 0;
+  const store = await readAutomaticDurableRunStore({
+    task: "market",
+    stage: "market-bounded",
+    maxRunsPer24Hours: 6,
+  }, {
+    fetchRowsLimitedImpl: async () => { reads += 1; return limited([], 1); },
+  });
+  assert.equal(store.available, false);
+  assert.equal(reads, 0);
+  assert.equal(store.report.rollout_history.complete_for_decision, false);
+  assert.equal(store.report.diagnostics[0].category, "invalid_response");
 });
 
 test("timeouts are retried exactly three times with deterministic bounded backoff", async () => {
@@ -313,7 +370,7 @@ test("Production snapshot rejects a non-exact count result", async () => {
 
 test("durable-store read failure records the safe diagnostic and performs no writes", async () => {
   let writeCalls = 0;
-  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded" }, {
+  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded", maxRunsPer24Hours: 1 }, {
     fetchRowsLimitedImpl: async () => {
       const error = new Error("private response");
       error.diagnostic = { operation_name: "ingestion_runs.running_rows", category: "http_522", status_code: 522, attempt_count: 3, duration_ms: 1 };
@@ -327,7 +384,7 @@ test("durable-store read failure records the safe diagnostic and performs no wri
 });
 
 test("a timeout diagnostic remains paired with durable_run_store_unavailable enforcement", async () => {
-  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded" }, {
+  const store = await readAutomaticDurableRunStore({ task: "market", stage: "market-bounded", maxRunsPer24Hours: 1 }, {
     fetchRowsLimitedImpl: async () => {
       const error = new Error("timed out");
       error.diagnostic = { operation_name: "ingestion_runs.running_rows", category: "timeout", status_code: null, attempt_count: 3, duration_ms: 15_000 };
@@ -354,7 +411,7 @@ test("bounded read contract keeps automatic preflight limits fixed", () => {
     running_max_rows: 100,
     completed_history_max_rows: 60,
     circuit_breaker_required_eligible_runs: 6,
-    rollout_history_max_rows: 1,
+    rollout_history_supported_max_rows: 5,
     snapshot_request_concurrency: 1,
     timeout_ms: 5_000,
     max_attempts: 3,

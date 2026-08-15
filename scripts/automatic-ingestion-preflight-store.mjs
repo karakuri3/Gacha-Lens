@@ -9,7 +9,7 @@ export const AUTOMATIC_PREFLIGHT_READ_CONTRACT = Object.freeze({
   running_max_rows: 100,
   completed_history_max_rows: 60,
   circuit_breaker_required_eligible_runs: 6,
-  rollout_history_max_rows: 1,
+  rollout_history_supported_max_rows: 5,
   snapshot_request_concurrency: 1,
   timeout_ms: SUPABASE_READ_RELIABILITY_CONTRACT.timeout_ms,
   max_attempts: SUPABASE_READ_RELIABILITY_CONTRACT.max_attempts,
@@ -34,6 +34,7 @@ export async function readAutomaticDurableRunStore(input = {}, dependencies = {}
   const task = String(input.task || "market");
   const stage = String(input.stage || "");
   const now = validDate(input.now) ?? new Date();
+  const rolloutHistoryCapacity = resolveRolloutHistoryCapacity(input.maxRunsPer24Hours);
   const diagnostics = [];
   const report = {
     available: false,
@@ -46,10 +47,16 @@ export async function readAutomaticDurableRunStore(input = {}, dependencies = {}
       ordering_complete: false,
     },
     rollout_history: {
-      ...boundedReadMetadata(AUTOMATIC_PREFLIGHT_READ_CONTRACT.rollout_history_max_rows),
+      ...boundedReadMetadata(rolloutHistoryCapacity ?? 0),
       window_hours: 24,
+      policy_max_runs_per_24_hours: Number(input.maxRunsPer24Hours) || null,
     },
   };
+
+  if (rolloutHistoryCapacity == null) {
+    diagnostics.push(completenessDiagnostic("ingestion_runs.rollout_history_capacity"));
+    return unavailableStore(report);
+  }
 
   let runningResult;
   try {
@@ -110,7 +117,7 @@ export async function readAutomaticDurableRunStore(input = {}, dependencies = {}
   try {
     rolloutHistoryResult = await fetchLimited("ingestion_runs", {
       select: "id,task,status,started_at,finished_at,summary",
-      maxRows: AUTOMATIC_PREFLIGHT_READ_CONTRACT.rollout_history_max_rows,
+      maxRows: rolloutHistoryCapacity,
       operationName: "ingestion_runs.rollout_history_24h",
       params: {
         task: `eq.${task}`,
@@ -272,4 +279,11 @@ function validDate(value) {
   if (value == null || value === "") return null;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function resolveRolloutHistoryCapacity(value) {
+  const required = Number(value);
+  if (!Number.isInteger(required) || required < 1) return null;
+  if (required > AUTOMATIC_PREFLIGHT_READ_CONTRACT.rollout_history_supported_max_rows) return null;
+  return required;
 }

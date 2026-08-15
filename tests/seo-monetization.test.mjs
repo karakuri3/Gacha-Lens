@@ -114,6 +114,10 @@ test("public sitemap source fetches only catalog identity columns in determinist
   const text = source("lib/data/public-sitemap-identifiers.js");
   assert.match(text, /id,slug,series_id,name,variant_type,parent:series!inner\(id,slug,franchise,brand,category\)/);
   assert.match(text, /DEFAULT_PAGE_SIZE = 1000/);
+  assert.match(text, /variant_type\.is\.null,variant_type\.neq\.provisional/);
+  assert.match(text, /\.not\("series_id", "is", null\)/);
+  assert.match(text, /\.neq\("slug", ""\)/);
+  assert.match(text, /\.neq\("name", ""\)/);
   assert.match(text, /\.order\("id", \{ ascending: true \}\)/);
   assert.match(text, /\.range\(from, from \+ pageSize - 1\)/);
   assert.doesNotMatch(text, /market|signal|stock|reaction/i);

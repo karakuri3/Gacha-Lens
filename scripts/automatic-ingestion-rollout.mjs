@@ -49,7 +49,11 @@ async function preflight() {
   const { policy, digest } = loadAutomaticIngestionRolloutPolicy(policyPath);
   const task = options.task || "market";
   const stage = options.stage || "";
-  const durableRunStore = await readAutomaticDurableRunStore({ task, stage });
+  const durableRunStore = await readAutomaticDurableRunStore({
+    task,
+    stage,
+    maxRunsPer24Hours: policy.stages?.[stage]?.max_runs_per_24_hours,
+  });
   const productionSnapshot = await readAutomaticProductionSnapshot();
   const runningRows = durableRunStore.running_rows;
   const historyRows = durableRunStore.circuit_history_rows;
