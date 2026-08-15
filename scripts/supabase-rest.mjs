@@ -1,3 +1,28 @@
+export const SUPABASE_READ_DIAGNOSTIC_CATEGORIES = Object.freeze([
+  "timeout",
+  "network",
+  "http_522",
+  "http_5xx",
+  "http_4xx",
+  "invalid_response",
+  "configuration",
+  "unknown",
+]);
+
+export const SUPABASE_READ_RELIABILITY_CONTRACT = Object.freeze({
+  timeout_ms: 5_000,
+  max_attempts: 3,
+  backoff_ms: Object.freeze([250, 500]),
+});
+
+export class SupabaseReadError extends Error {
+  constructor(diagnostic) {
+    super(`Supabase read failed: ${diagnostic?.category || "unknown"}.`);
+    this.name = "SupabaseReadError";
+    this.diagnostic = sanitizeReadDiagnostic(diagnostic);
+  }
+}
+
 export async function upsertRows(table, rows, options = {}) {
   if (!rows.length) return;
   const label = options.label || "upsert";
@@ -96,6 +121,68 @@ export async function fetchRowCount(table, params = {}) {
   return total;
 }
 
+export async function fetchRowsLimited(table, options = {}) {
+  const maxRows = boundedInteger(options.maxRows, 1, 1_000, 100);
+  const select = options.select ?? "*";
+  const extraParams = options.params ?? {};
+  if (!String(extraParams.order || "").trim()) {
+    throw new SupabaseReadError(readDiagnostic({
+      operationName: options.operationName || `${table}.bounded_rows`,
+      category: "configuration",
+    }));
+  }
+
+  const operationName = options.operationName || `${table}.bounded_rows`;
+  const { response, diagnostic } = await performReliableSupabaseRead(({ fetchImpl, signal }) => fetchImpl(restUrl(table, {
+    ...extraParams,
+    select,
+    limit: String(maxRows),
+    offset: "0",
+  }), {
+    headers: restHeaders(),
+    signal,
+  }), {
+    ...options,
+    operationName,
+  });
+
+  let rows;
+  try {
+    rows = await response.json();
+  } catch {
+    throw invalidResponseError(diagnostic);
+  }
+  if (!Array.isArray(rows) || rows.length > maxRows) throw invalidResponseError(diagnostic);
+
+  return {
+    rows,
+    max_rows: maxRows,
+    rows_returned: rows.length,
+    saturated: rows.length >= maxRows,
+    request_count: diagnostic.attempt_count,
+    diagnostic,
+  };
+}
+
+export async function fetchExactRowCountReliable(table, params = {}, options = {}) {
+  const operationName = options.operationName || `${table}.exact_count`;
+  const { response, diagnostic } = await performReliableSupabaseRead(({ fetchImpl, signal }) => fetchImpl(restUrl(table, {
+    ...params,
+    select: "id",
+    limit: "1",
+  }), {
+    method: "HEAD",
+    headers: restHeaders({ Prefer: "count=exact" }),
+    signal,
+  }), {
+    ...options,
+    operationName,
+  });
+  const count = parseContentRangeTotal(response.headers.get("content-range"));
+  if (!Number.isInteger(count) || count < 0) throw invalidResponseError(diagnostic);
+  return { count, diagnostic };
+}
+
 export async function deleteRowsByIds(table, ids, options = {}) {
   const safeIds = [...new Set(ids.filter(Boolean))];
   for (const batch of chunk(safeIds, options.batchSize ?? 80)) {
@@ -184,6 +271,155 @@ function parseMissingColumn(message = "") {
 function parseContentRangeTotal(value = "") {
   const total = Number(String(value).split("/").pop());
   return Number.isFinite(total) ? total : null;
+}
+
+async function performReliableSupabaseRead(request, options = {}) {
+  const operationName = safeOperationName(options.operationName);
+  const timeoutMs = boundedInteger(
+    options.timeoutMs,
+    1,
+    SUPABASE_READ_RELIABILITY_CONTRACT.timeout_ms,
+    SUPABASE_READ_RELIABILITY_CONTRACT.timeout_ms,
+  );
+  const maxAttempts = boundedInteger(
+    options.maxAttempts,
+    1,
+    SUPABASE_READ_RELIABILITY_CONTRACT.max_attempts,
+    SUPABASE_READ_RELIABILITY_CONTRACT.max_attempts,
+  );
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const sleepImpl = options.sleepImpl ?? ((delay) => new Promise((resolve) => setTimeout(resolve, delay)));
+  const nowImpl = options.nowImpl ?? Date.now;
+  const startedAt = nowImpl();
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response;
+    try {
+      response = await requestWithTimeout(request, fetchImpl, timeoutMs);
+    } catch (error) {
+      const category = classifyReadException(error);
+      const diagnostic = readDiagnostic({
+        operationName,
+        category,
+        attemptCount: attempt,
+        durationMs: nowImpl() - startedAt,
+      });
+      if (!isTransientReadFailure(diagnostic) || attempt === maxAttempts) {
+        throw new SupabaseReadError(diagnostic);
+      }
+      await sleepImpl(SUPABASE_READ_RELIABILITY_CONTRACT.backoff_ms[attempt - 1]);
+      continue;
+    }
+
+    if (response?.ok === true) {
+      return {
+        response,
+        diagnostic: readDiagnostic({
+          operationName,
+          category: null,
+          statusCode: response.status,
+          attemptCount: attempt,
+          durationMs: nowImpl() - startedAt,
+        }),
+      };
+    }
+
+    const diagnostic = readDiagnostic({
+      operationName,
+      category: classifyHttpStatus(response?.status),
+      statusCode: response?.status,
+      attemptCount: attempt,
+      durationMs: nowImpl() - startedAt,
+    });
+    if (!isTransientReadFailure(diagnostic) || attempt === maxAttempts) {
+      throw new SupabaseReadError(diagnostic);
+    }
+    await sleepImpl(SUPABASE_READ_RELIABILITY_CONTRACT.backoff_ms[attempt - 1]);
+  }
+
+  throw new SupabaseReadError(readDiagnostic({ operationName, category: "unknown", attemptCount: maxAttempts }));
+}
+
+async function requestWithTimeout(request, fetchImpl, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await request({ fetchImpl, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      const timeoutError = new Error("Supabase read timeout.");
+      timeoutError.name = "AbortError";
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function classifyReadException(error) {
+  if (error?.name === "AbortError" || error?.name === "TimeoutError" || error?.code === "ETIMEDOUT") return "timeout";
+  if (error?.code && ["ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "ENETUNREACH"].includes(error.code)) return "network";
+  if (error?.cause?.code && ["ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "ENETUNREACH"].includes(error.cause.code)) return "network";
+  if (error instanceof TypeError) return "network";
+  if (error?.message === "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required") return "configuration";
+  return "unknown";
+}
+
+function classifyHttpStatus(value) {
+  const status = safeStatusCode(value);
+  if (status === 522) return "http_522";
+  if (status !== null && status >= 500) return "http_5xx";
+  if (status !== null && status >= 400) return "http_4xx";
+  return "unknown";
+}
+
+function isTransientReadFailure(diagnostic) {
+  return ["timeout", "network", "http_522", "http_5xx"].includes(diagnostic.category)
+    || [408, 429].includes(diagnostic.status_code);
+}
+
+function invalidResponseError(diagnostic) {
+  return new SupabaseReadError({
+    ...diagnostic,
+    category: "invalid_response",
+  });
+}
+
+function readDiagnostic({ operationName, category, statusCode, attemptCount = 0, durationMs = 0 }) {
+  return sanitizeReadDiagnostic({
+    operation_name: operationName,
+    category,
+    status_code: statusCode,
+    attempt_count: attemptCount,
+    duration_ms: durationMs,
+  });
+}
+
+function sanitizeReadDiagnostic(value = {}) {
+  return {
+    operation_name: safeOperationName(value.operation_name),
+    category: SUPABASE_READ_DIAGNOSTIC_CATEGORIES.includes(value.category) ? value.category : null,
+    status_code: safeStatusCode(value.status_code),
+    attempt_count: boundedInteger(value.attempt_count, 0, SUPABASE_READ_RELIABILITY_CONTRACT.max_attempts, 0),
+    duration_ms: boundedInteger(value.duration_ms, 0, 300_000, 0),
+  };
+}
+
+function safeOperationName(value) {
+  const candidate = String(value || "supabase_read").toLowerCase();
+  return /^[a-z][a-z0-9_.-]{0,79}$/.test(candidate) ? candidate : "supabase_read";
+}
+
+function safeStatusCode(value) {
+  const status = Number(value);
+  return Number.isInteger(status) && status >= 100 && status <= 599 ? status : null;
+}
+
+function boundedInteger(value, minimum, maximum, fallback) {
+  const number = Number(value);
+  if (!Number.isInteger(number)) return fallback;
+  return Math.min(maximum, Math.max(minimum, number));
 }
 
 function omitKey(row, key) {

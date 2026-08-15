@@ -24,8 +24,12 @@ import {
   evaluateIngestionCircuitBreaker,
   evaluateIngestionConcurrency,
 } from "../lib/domain/ingestion-execution-safety.js";
+import {
+  readAutomaticDurableRunStore,
+  readAutomaticProductionSnapshot,
+} from "./automatic-ingestion-preflight-store.mjs";
 import { loadOptionalEnvFile } from "./load-optional-env.mjs";
-import { fetchRowCount, fetchRows } from "./supabase-rest.mjs";
+import { fetchRows } from "./supabase-rest.mjs";
 
 loadOptionalEnvFile();
 
@@ -45,28 +49,12 @@ async function preflight() {
   const { policy, digest } = loadAutomaticIngestionRolloutPolicy(policyPath);
   const task = options.task || "market";
   const stage = options.stage || "";
-  let runningRows = null;
-  let historyRows = null;
-  let counts = null;
-  let durableRunStoreAvailable = false;
-  try {
-    [runningRows, historyRows] = await Promise.all([
-      fetchRows("ingestion_runs", {
-      select: "id,task,status,started_at,finished_at,summary",
-      pageSize: 1000,
-      params: { task: `eq.${task}`, status: "eq.running", order: "started_at.asc,id.asc" },
-      }),
-      fetchRows("ingestion_runs", {
-      select: "id,task,status,started_at,finished_at,summary",
-      pageSize: 100,
-      params: { task: `eq.${task}`, status: "in.(succeeded,failed)", order: "finished_at.desc,id.desc" },
-      }),
-    ]);
-    durableRunStoreAvailable = true;
-  } catch {
-    durableRunStoreAvailable = false;
-  }
-  try { counts = await productionCounts(); } catch { counts = null; }
+  const durableRunStore = await readAutomaticDurableRunStore({ task, stage });
+  const productionSnapshot = await readAutomaticProductionSnapshot();
+  const runningRows = durableRunStore.running_rows;
+  const historyRows = durableRunStore.circuit_history_rows;
+  const rolloutHistoryRows = durableRunStore.rollout_history_rows;
+  const counts = productionSnapshot.counts;
   const githubRows = await fetchGithubRolloutRows(stage, task);
   const concurrency = evaluateIngestionConcurrency(runningRows, { task });
   const circuitBreaker = evaluateIngestionCircuitBreaker(historyRows);
@@ -85,13 +73,13 @@ async function preflight() {
     bounded_persistence_enabled: options["bounded-persistence-enabled"] ?? process.env.AUTOMATIC_INGESTION_BOUNDED_PERSISTENCE_ENABLED,
     bounded_approval: options["bounded-approval"] ?? process.env.AUTOMATIC_INGESTION_BOUNDED_APPROVAL,
     head_sha: options["head-sha"],
-    history_rows: historyRows,
+    history_rows: rolloutHistoryRows,
     running_rows: runningRows,
     github_rows: githubRows,
     concurrency,
     circuit_breaker: circuitBreaker,
-    durable_run_store_available: durableRunStoreAvailable,
-    production_snapshot_available: counts !== null,
+    durable_run_store_available: durableRunStore.available,
+    production_snapshot_available: productionSnapshot.available,
     simulation,
     prediction_only: simulation,
   });
@@ -121,9 +109,9 @@ async function preflight() {
     throttle: decision.throttle,
     concurrency,
     circuit_breaker: circuitBreaker,
-    durable_run_store: { available: durableRunStoreAvailable },
+    durable_run_store: durableRunStore.report,
     github_metadata: { available: githubRows !== null, completed_shadow_artifacts_checked: githubRows?.length ?? 0 },
-    production_snapshot: { available: counts !== null, counts },
+    production_snapshot: productionSnapshot,
     automatic_write_enabled: String(options["automatic-write-enabled"]) === "true",
     bounded_persistence_enabled: decision.bounded_persistence_enabled === true,
     bounded_approval_valid: decision.bounded_approval_valid === true,
@@ -340,12 +328,9 @@ function scan() {
 }
 
 async function productionCounts() {
-  const tables = ["market_listings", "market_listing_observations", "import_issues", "ingestion_runs", "series", "variants", "stock_reports", "restock_events"];
-  const values = await Promise.all([
-    ...tables.map((table) => fetchRowCount(table)),
-    fetchRowCount("market_listings", { review_required: "eq.true" }),
-  ]);
-  return Object.fromEntries([...tables, "review_required"].map((key, index) => [key, values[index]]));
+  const snapshot = await readAutomaticProductionSnapshot();
+  if (!snapshot.available || !snapshot.counts) throw new Error("Production snapshot is unavailable.");
+  return snapshot.counts;
 }
 
 async function fetchRowsByIds(table, ids) {
@@ -410,11 +395,29 @@ function renderPreflightMarkdown(report) {
     `- Throttle: ${report.throttle?.state ?? "unavailable"}`,
     `- Expected no-op: ${report.expected_noop === true}`,
     `- Expected no-op reason: ${report.expected_noop_reason ?? "none"}`,
+    `- Durable run store: ${report.durable_run_store.available ? "available" : "unavailable"}`,
+    `- Running rows complete: ${report.durable_run_store.running_rows.complete_for_decision}`,
+    `- Circuit history complete: ${report.durable_run_store.completed_history.complete_for_decision}`,
+    `- Production snapshot: ${report.production_snapshot.available ? "available" : "unavailable"}`,
+    `- Snapshot request concurrency: ${report.production_snapshot.request_concurrency}`,
+    ...renderReadDiagnostics("Durable store diagnostics", report.durable_run_store.diagnostics),
+    ...renderReadDiagnostics("Snapshot diagnostics", report.production_snapshot.diagnostics),
     "- Ingestion started: false",
     "- Cleanup started: false",
     "- Production writes: 0",
     "",
   ].join("\n");
+}
+
+function renderReadDiagnostics(label, diagnostics = []) {
+  if (!Array.isArray(diagnostics) || !diagnostics.length) return [`- ${label}: none`];
+  return diagnostics.map((diagnostic) => [
+    `- ${label}: ${diagnostic.operation_name}`,
+    `category=${diagnostic.category ?? "success"}`,
+    `status=${diagnostic.status_code ?? "none"}`,
+    `attempts=${diagnostic.attempt_count}`,
+    `duration_ms=${diagnostic.duration_ms}`,
+  ].join("; "));
 }
 
 function renderPreviewMarkdown(value) {
