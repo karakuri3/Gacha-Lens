@@ -709,8 +709,8 @@ test("approved-feed configuration never counts planner credentials", () => {
   });
   assert.equal(configuration.approvedFeedSourcesConfigured, 1);
   assert.equal(configuration.plannerApiSourcesConfigured, 0);
-  assert.equal(configuration.plannedSourceRequests.rakuten_ichiba, 0);
-  assert.equal(configuration.plannedSourceRequests.yahoo_shopping, 0);
+  assert.equal(configuration.plannedSourceRequests.planner_api.providers.rakuten_ichiba.total_requests, 0);
+  assert.equal(configuration.plannedSourceRequests.planner_api.providers.yahoo_shopping.total_requests, 0);
 });
 
 test("planner fetch does not invoke approved feeds", async () => {

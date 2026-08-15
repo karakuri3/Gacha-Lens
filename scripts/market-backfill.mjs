@@ -29,7 +29,11 @@ import {
   fetchMarketListingsRaw,
   normalizeMarketSourceScope,
 } from "../lib/fetchers/market-fetcher.js";
-import { planMarketSearchQueries } from "../lib/fetchers/market-query-planner.js";
+import {
+  countMarketQueryAttempts,
+  expandMarketQueryAttempts,
+  planMarketSearchQueries,
+} from "../lib/fetchers/market-query-planner.js";
 import {
   buildMarketManualCanarySelectionDiagnostics,
   loadMarketManualCanarySelectionProfile,
@@ -63,7 +67,12 @@ async function runDryMode(options) {
   const selectionProfile = manualProfile
     ? buildMarketManualCanarySelectionDiagnostics(manualProfile, plan.summary)
     : null;
-  const sourcePlan = describeMarketSourceConfiguration({ sourceScope: options.sourceScope, queryCount: plan.queries.length });
+  const queryAttemptCount = countMarketQueryAttempts(plan.queries);
+  const sourcePlan = describeMarketSourceConfiguration({
+    sourceScope: options.sourceScope,
+    queryCount: plan.queries.length,
+    queryAttemptCount,
+  });
   let sourceResult = emptySourceResult(plan.selected.length, sourcePlan);
   let auditRecords = [];
 
@@ -94,8 +103,8 @@ async function runDryMode(options) {
       reason: entry.priorityReason,
       coverage_state: entry.coverageState,
     })),
-    queries_generated: plan.queries.length,
-    query_sample: plan.queries.slice(0, 5).map((entry) => entry.query),
+    queries_generated: queryAttemptCount,
+    query_sample: expandMarketQueryAttempts(plan.queries).slice(0, 5).map((entry) => entry.query),
     planned_source_requests: sourcePlan.plannedSourceRequests,
     ...sourceResult,
     listing_upserts: 0,
