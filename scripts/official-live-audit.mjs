@@ -60,12 +60,12 @@ console.log(JSON.stringify({
 
 async function loadOfficialCatalog() {
   const series = await fetchRows("series", {
-      select: "id,slug,name,brand,category,release_month,release_week,release_date,price,image_url,official_url,is_released,source_type,updated_at",
+      select: "id,slug,name,franchise,brand,category,release_month,release_week,release_date,price,image_url,official_url,is_released,source_type,raw",
     params: { order: "id.asc" },
     operationName: "official_audit.series_catalog",
   });
   const variants = await fetchRows("variants", {
-      select: "id,slug,series_id,name,variant_type,image,official_url,price,brand,release_month,release_week,release_date,released,source_type,review_required,updated_at",
+      select: "id,slug,series_id,name,variant_type,rarity,role,image,official_url,price,brand,release_month,release_week,release_date,released,axes,signals,tags,source_type,review_required,raw",
     params: { order: "id.asc" },
     operationName: "official_audit.variant_catalog",
   });

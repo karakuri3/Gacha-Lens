@@ -1,0 +1,110 @@
+name: Gacha Official Bounded Write
+
+permissions:
+  contents: read
+  actions: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      audit_run_id:
+        description: Exact approved Official Read-Only Audit run ID
+        required: true
+        type: string
+      audit_digest:
+        description: Exact approved audit canonical digest
+        required: true
+        type: string
+      approval:
+        description: APPROVE_OFFICIAL_BOUNDED:<MAIN_SHA>:<AUDIT_CANONICAL_DIGEST>
+        required: true
+        type: string
+
+jobs:
+  official-bounded-write:
+    concurrency:
+      group: gacha-official-bounded-write
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify exact main revision
+        id: main_sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin main --depth=1
+          origin_main_sha="$(git rev-parse origin/main)"
+          test "$origin_main_sha" = "$GITHUB_SHA"
+          echo "origin_main_sha=$origin_main_sha" >> "$GITHUB_OUTPUT"
+      - name: Inspect exact official audit artifact
+        id: metadata
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: >-
+          npm run official:bounded-write -- metadata
+          --output-dir=${{ runner.temp }}/gacha-official-bounded-write/result
+          --audit-run-id=${{ inputs.audit_run_id }}
+          --head-sha=${{ github.sha }}
+      - name: Download exact official audit artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: official-read-only-audit-${{ inputs.audit_run_id }}
+          path: ${{ runner.temp }}/gacha-official-bounded-write/audit
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.audit_run_id }}
+          github-token: ${{ github.token }}
+      - name: Authorize bounded official candidate
+        id: authorize
+        env:
+          OFFICIAL_AUDIT_DIGEST: ${{ inputs.audit_digest }}
+          OFFICIAL_BOUNDED_APPROVAL: ${{ inputs.approval }}
+        run: >-
+          npm run official:bounded-write -- authorize
+          --output-dir=${{ runner.temp }}/gacha-official-bounded-write/result
+          --audit-dir=${{ runner.temp }}/gacha-official-bounded-write/audit
+          --audit-run-id=${{ inputs.audit_run_id }}
+          --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
+      - name: Execute transactional bounded official write
+        id: execute
+        continue-on-error: true
+        env:
+          OFFICIAL_AUDIT_DIGEST: ${{ inputs.audit_digest }}
+          OFFICIAL_BOUNDED_APPROVAL: ${{ inputs.approval }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: >-
+          npm run official:bounded-write -- execute
+          --output-dir=${{ runner.temp }}/gacha-official-bounded-write/result
+          --audit-dir=${{ runner.temp }}/gacha-official-bounded-write/audit
+          --audit-run-id=${{ inputs.audit_run_id }}
+          --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
+      - name: Scan sanitized bounded official result
+        id: scan
+        if: ${{ always() }}
+        run: >-
+          npm run official:bounded-write -- scan
+          --output-dir=${{ runner.temp }}/gacha-official-bounded-write/result
+      - name: Upload sanitized bounded official result
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-bounded-write-result-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-official-bounded-write/result
+          if-no-files-found: error
+          retention-days: 30
+      - name: Enforce bounded official result
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        run: >-
+          npm run official:bounded-write -- verify
+          --output-dir=${{ runner.temp }}/gacha-official-bounded-write/result

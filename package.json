@@ -8,6 +8,7 @@
     "build": "next build",
     "fetch:official": "node scripts/collect-official-data.mjs",
     "official:audit-live": "node scripts/official-live-audit.mjs",
+    "official:bounded-write": "node scripts/official-bounded-write.mjs",
     "fetch:market": "node scripts/collect-market-data.mjs",
     "fetch:x": "node scripts/collect-x-reactions.mjs",
     "fetch:stock": "node scripts/collect-stock-data.mjs",
@@ -41,6 +42,7 @@
     "test:rollout-policy": "node --test tests/automatic-ingestion-rollout.test.mjs",
     "test:catalog-discovery": "node --test tests/catalog-discovery.test.mjs",
     "test:official-read-only": "node --test tests/official-read-only-audit.test.mjs tests/official-rerelease-semantics.test.mjs",
+    "test:official-bounded-write": "node --test tests/official-bounded-write.test.mjs",
     "test:market-coverage": "node --test tests/market-coverage.test.mjs",
     "market:coverage": "node scripts/market-coverage-report.mjs",
     "market:backfill": "node scripts/market-backfill.mjs",
@@ -57,6 +59,7 @@
     "@supabase/supabase-js": "^2.100.0",
     "lucide-react": "^1.25.0",
     "next": "16.2.1",
+    "pg": "8.23.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
