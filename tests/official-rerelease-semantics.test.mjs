@@ -204,13 +204,14 @@ test("existing variant-level restock presentation still uses the variant URL", (
   assert.equal(presentation.name, "単品A");
 });
 
-test("official audit v2 remains zero-write and rejects legacy v1 authorization", () => {
+test("official audit v3 remains zero-write and rejects legacy v1/v2 authorization", () => {
   const record = parseOfficialDetailDocument(fixture("gashapon-rerelease-detail.html"), detailUrl).record;
   const report = validateOfficialReadOnlyAudit(buildOfficialReadOnlyAudit(auditInput(record, existingSeries(record))));
-  assert.equal(report.schema_version, 2);
+  assert.equal(report.schema_version, 3);
   assert.equal(report.database.writes, 0);
   assert.deepEqual(report.plan.would_delete, { series: 0, variants: 0, restock_events: 0, import_issues: 0 });
   assert.throws(() => validateOfficialReadOnlyAudit({ ...report, schema_version: 1 }), /schema is invalid/);
+  assert.throws(() => validateOfficialReadOnlyAudit({ ...report, schema_version: 2 }), /schema is invalid/);
 });
 
 function scheduleRecord() {
@@ -232,6 +233,7 @@ function existingSeries(record, release = {}) {
     id: record.id,
     slug: record.slug,
     name: record.name,
+    franchise: record.franchise,
     brand: record.brand,
     category: record.category,
     release_date: "2020-09-17",
