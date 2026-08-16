@@ -18,7 +18,7 @@ export default function Header() {
       <div className="site-header__inner">
         <Link href="/" className="site-logo" aria-label="Gacha Lens ホーム">
           <span className="site-logo__mark" aria-hidden="true">
-            <Image src="/brand/gacha-lens-logo.png" alt="" width={44} height={44} priority />
+            <Image src="/brand/gacha-lens-mark.png" alt="" width={44} height={44} priority />
           </span>
           <span className="site-logo__copy">
             <strong>Gacha Lens</strong>
