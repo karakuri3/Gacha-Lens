@@ -70,40 +70,74 @@ export async function fetchIdSet(table) {
 }
 
 export async function fetchRows(table, options = {}) {
-  const pageSize = options.pageSize ?? 1000;
+  const pageSize = boundedInteger(options.pageSize, 1, 10_000, 1000);
   const select = options.select ?? "*";
   const extraParams = options.params ?? {};
-  const firstResponse = await fetch(restUrl(table, {
-    ...extraParams,
+  const operationName = options.operationName || `${table}.fetch_rows`;
+  const firstPage = await fetchRowsPage(table, {
+    ...options,
+    operationName,
+    extraParams,
     select,
-    limit: String(pageSize),
-    offset: "0",
-  }), {
-    headers: restHeaders({ Prefer: "count=exact" }),
+    pageSize,
+    offset: 0,
+    exactCount: true,
   });
-  if (!firstResponse.ok) throw new Error(`${table} fetch failed: ${await errorMessage(firstResponse)}`);
+  const total = parseContentRangeTotal(firstPage.response.headers.get("content-range")) ?? firstPage.rows.length;
+  const firstExpected = Math.min(pageSize, total);
+  if (firstPage.rows.length !== firstExpected) throw invalidResponseError(firstPage.diagnostic);
+  const seenIds = new Set();
+  assertNoDuplicateRowIds(firstPage.rows, seenIds, firstPage.diagnostic);
+  if (total <= pageSize) return firstPage.rows;
 
-  const rows = await firstResponse.json();
-  const total = parseContentRangeTotal(firstResponse.headers.get("content-range")) ?? rows.length;
-  if (total <= pageSize) return rows;
-
-  const requests = [];
+  const rows = [...firstPage.rows];
   for (let offset = pageSize; offset < total; offset += pageSize) {
-    requests.push(fetch(restUrl(table, {
-      ...extraParams,
+    const page = await fetchRowsPage(table, {
+      ...options,
+      operationName,
+      extraParams,
       select,
-      limit: String(pageSize),
-      offset: String(offset),
-    }), {
-      headers: restHeaders(),
-    }));
+      pageSize,
+      offset,
+      exactCount: false,
+    });
+    const expected = Math.min(pageSize, total - offset);
+    if (page.rows.length !== expected) throw invalidResponseError(page.diagnostic);
+    assertNoDuplicateRowIds(page.rows, seenIds, page.diagnostic);
+    rows.push(...page.rows);
   }
-  const responses = await Promise.all(requests);
-  for (const response of responses) {
-    if (!response.ok) throw new Error(`${table} fetch failed: ${await errorMessage(response)}`);
-    rows.push(...((await response.json()) ?? []));
-  }
+  if (rows.length !== total) throw invalidResponseError(firstPage.diagnostic);
   return rows;
+}
+
+function assertNoDuplicateRowIds(rows, seenIds, diagnostic) {
+  for (const row of rows) {
+    const id = row?.id == null ? "" : String(row.id).trim();
+    if (!id) continue;
+    if (seenIds.has(id)) throw invalidResponseError(diagnostic);
+    seenIds.add(id);
+  }
+}
+
+async function fetchRowsPage(table, options) {
+  const { response, diagnostic } = await performReliableSupabaseRead(({ fetchImpl, signal }) => fetchImpl(restUrl(table, {
+    ...options.extraParams,
+    select: options.select,
+    limit: String(options.pageSize),
+    offset: String(options.offset),
+  }), {
+    headers: restHeaders(options.exactCount ? { Prefer: "count=exact" } : {}),
+    signal,
+  }), options);
+
+  let rows;
+  try {
+    rows = await response.json();
+  } catch {
+    throw invalidResponseError(diagnostic);
+  }
+  if (!Array.isArray(rows) || rows.length > options.pageSize) throw invalidResponseError(diagnostic);
+  return { response, rows, diagnostic };
 }
 
 export async function fetchRowCount(table, params = {}) {

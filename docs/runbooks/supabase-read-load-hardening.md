@@ -61,6 +61,31 @@ page by `id ASC`, and request remaining 1,000-row pages sequentially. Maximum
 page concurrency is one and does not grow with table size. A failed or short
 middle page fails the complete read and does not return partial rows as success.
 
+The script REST loader is a separate implementation from the application
+repository loader. `scripts/supabase-rest.mjs::fetchRows()` now uses the same
+bounded reliability contract: each page is requested sequentially, the first
+page alone requests an exact count, every request has a maximum five-second
+timeout and three transient-only attempts, and short intermediate pages fail
+closed. Generic callers retain their caller-defined ordering because this
+helper also serves filtered reads whose tables or desired order differ.
+
+The critical Production market path explicitly uses stable `id.asc` ordering:
+`market-backfill.mjs` -> `loadMarketCoverageData()` ->
+`loadOfficialCatalog()` -> `fetchRows(series)` followed by
+`fetchRows(variants)`. The two catalog tables are loaded sequentially, so their
+combined maximum page concurrency is one rather than the sum of two scans.
+
+Script caller review:
+
+| Area | Representative tables | Size/load assessment |
+| --- | --- | --- |
+| Automatic market and coverage | `series`, `variants`, `market_listings`, `ingestion_runs` | Catalog tables exceed 1,000 rows and use the sequential full loader; filtered coverage reads inherit bounded pagination. |
+| Official ingestion | `series`, `variants`, `market_listings` | Catalog/history reads may exceed one page and now inherit sequential pagination. |
+| Stock and X ingestion | `series`, `variants` through `loadOfficialCatalog()` | Full catalog loads are sequential across both tables. |
+| Canary/manual audit and bounded persistence | listings, observations, ingestion runs filtered by IDs/status | Usually bounded below one page; caller-defined deterministic ordering is preserved. |
+| Reports and remote audit | all configured audit tables | Some tables exceed 1,000 rows; every table's pages are sequential, although independent report tables may still be intentionally started by their caller. |
+| Admin/maintenance scripts | variants, signal tables, import issues | Potential full-table reads inherit sequential page behavior; destructive operations remain outside this PR and require separate approval. |
+
 ## Sitemap assessment
 
 The public sitemap cache revalidates every 300 seconds. Its variants/parent
