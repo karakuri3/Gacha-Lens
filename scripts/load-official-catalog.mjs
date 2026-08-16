@@ -1,11 +1,18 @@
 import { fetchRows } from "./supabase-rest.mjs";
 
-export async function loadOfficialCatalog(fallbackRows = []) {
+export async function loadOfficialCatalog(fallbackRows = [], options = {}) {
+  const fetchRowsImpl = options.fetchRowsImpl ?? fetchRows;
   try {
-    const [series, variants] = await Promise.all([
-      fetchRows("series", { select: "id,slug,name,franchise,brand,category,official_url,release_date,release_month,is_released,updated_at" }),
-      fetchRows("variants", { select: "id,slug,series_id,name,variant_type,release_date,released,brand,updated_at" }),
-    ]);
+    const series = await fetchRowsImpl("series", {
+      select: "id,slug,name,franchise,brand,category,official_url,release_date,release_month,is_released,updated_at",
+      params: { order: "id.asc" },
+      operationName: "series.official_catalog",
+    });
+    const variants = await fetchRowsImpl("variants", {
+      select: "id,slug,series_id,name,variant_type,release_date,released,brand,updated_at",
+      params: { order: "id.asc" },
+      operationName: "variants.official_catalog",
+    });
     if (series.length && variants.length) return catalogShape(series, variants);
   } catch (error) {
     console.warn(`[catalog] Supabase official master unavailable: ${error.message}`);
