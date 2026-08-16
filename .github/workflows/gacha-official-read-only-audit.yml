@@ -1,0 +1,68 @@
+name: Gacha Official Read-Only Audit
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  workflow_dispatch:
+
+jobs:
+  official-read-only-audit:
+    concurrency:
+      group: gacha-official-read-only-audit
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      # RLS currently requires service_role for catalog reads. The audited command imports no mutation helpers.
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      INGESTION_WRITE_DISABLED: "true"
+      MARKET_BACKFILL_WRITE_DISABLED: "true"
+      OFFICIAL_AUDIT_OUTPUT_DIR: ${{ runner.temp }}/gacha-official-read-only-audit
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify exact main revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+      - name: Run bounded official live audit
+        id: official_audit
+        continue-on-error: true
+        run: >-
+          npm run official:audit-live --
+          --output-dir=${{ runner.temp }}/gacha-official-read-only-audit
+          --expected-main-sha=${{ github.sha }}
+          --run-id=${{ github.run_id }}
+      - name: Scan sanitized official audit artifact
+        id: scan
+        if: ${{ always() && steps.official_audit.outcome == 'success' }}
+        run: >-
+          node scripts/official-live-audit-guard.mjs scan
+          --directory=${{ runner.temp }}/gacha-official-read-only-audit
+      - name: Upload sanitized official audit artifact
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-read-only-audit-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-official-read-only-audit
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce official audit readiness
+        if: ${{ always() }}
+        run: >-
+          node scripts/official-live-audit-guard.mjs verify
+          --report=${{ runner.temp }}/gacha-official-read-only-audit/official-live-audit.json
