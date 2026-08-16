@@ -211,9 +211,10 @@ test("mid-transaction failure rolls back without partial state", async () => {
   assert.deepEqual(adapter.snapshot(), { series: [], variants: [], restock_events: [] });
 });
 
-test("lost COMMIT acknowledgement is never reported as zero-write blocked", async () => {
+test("lost COMMIT acknowledgement is always treated as unknown and never rolled back", async () => {
   const fixture = artifactFixture();
   const base = createOfficialMemoryTransactionAdapter();
+  let rollbackCalls = 0;
 
   const adapter = {
     ...base,
@@ -222,7 +223,7 @@ test("lost COMMIT acknowledgement is never reported as zero-write blocked", asyn
       throw new Error("simulated_lost_commit_ack");
     },
     async rollback() {
-      throw new Error("simulated_rollback_after_commit_unavailable");
+      rollbackCalls += 1;
     },
   };
 
@@ -237,7 +238,10 @@ test("lost COMMIT acknowledgement is never reported as zero-write blocked", asyn
     "OFFICIAL_BOUNDED_WRITE_COMMIT_OUTCOME_UNKNOWN",
   );
   assert.equal(result.transaction.state, "commit_outcome_unknown");
+  assert.equal(result.transaction.rollback_attempted, false);
+  assert.equal(result.transaction.rollback_verified, false);
   assert.equal(result.database_writes, 3);
+  assert.equal(rollbackCalls, 0);
   assert.equal(adapter.snapshot().series.length, 1);
   assert.equal(adapter.snapshot().variants.length, 2);
 });
