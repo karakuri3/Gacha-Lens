@@ -8,6 +8,7 @@ import {
   buildAutomaticMarketRolloutPlan,
   loadAutomaticIngestionRolloutPolicy,
 } from "../lib/domain/automatic-ingestion-rollout.js";
+import { buildMarketBoundedCoverageSnapshot } from "../lib/domain/market-bounded-coverage.js";
 
 const { policy, digest } = loadAutomaticIngestionRolloutPolicy("config/automatic-ingestion-rollout-policy.json");
 const selection = [1, 2, 3, 4, 5].map((index) => ({
@@ -114,11 +115,31 @@ test("Run 31930988966 replay selection is stable under full candidate reversal",
   assert.deepEqual(replayPlan(audit).selected_candidate_keys, expected);
 });
 
+test("Run 31930988966 cross-run replay advances to uncovered candidate and variant", () => {
+  const audit = productionReplayAudit();
+  const first = replayPlan(audit);
+  const history = first.selected_candidate_keys.map((candidateKey, index) => {
+    const candidate = audit.candidates.find((entry) => entry.candidate_key === candidateKey);
+    return boundedHistoryRow(candidate, index + 1);
+  });
+  const second = replayPlan(audit, buildMarketBoundedCoverageSnapshot(history));
+  assert.deepEqual(first.selected_candidate_keys, ["11da70d6ad877fb3", "4e8ab49acab22512"]);
+  assert.deepEqual(second.selected_candidate_keys, ["043c45ddd8687c1e", "3dc2f8eb3b051968"]);
+  assert.equal(second.selected_new_variant_count, 1);
+  assert.equal(second.selected_previously_persisted_candidate_count, 0);
+  assert.equal(second.selected_candidate_keys.filter((key) => first.selected_candidate_keys.includes(key)).length, 0);
+});
+
 function select(candidates) {
-  return selectDeterministicMarketPersistenceCandidates({ candidates, selectedVariants: selection, capacity: 2 });
+  return selectDeterministicMarketPersistenceCandidates({
+    candidates,
+    selectedVariants: selection,
+    coverageSnapshot: buildMarketBoundedCoverageSnapshot([]),
+    capacity: 2,
+  });
 }
 
-function replayPlan(audit) {
+function replayPlan(audit, coverageSnapshot = buildMarketBoundedCoverageSnapshot([])) {
   return buildAutomaticMarketRolloutPlan({
     policy,
     policy_digest: digest,
@@ -128,7 +149,29 @@ function replayPlan(audit) {
     source_run_id: "31930988966",
     generated_at: "2026-08-16T00:00:00.000Z",
     throttle: { state: "clear" },
+    coverage_snapshot: coverageSnapshot,
   });
+}
+
+function boundedHistoryRow(candidate, index) {
+  return {
+    id: `bounded-history-${index}`,
+    listing_id: `listing-${candidate.candidate_key}`,
+    variant_id: candidate.target.variant_id,
+    observed_at: "2026-08-16T00:10:00.000Z",
+    raw: {
+      automatic_rollout: {
+        stage: "market-bounded",
+        workflow_run_id: "31930988966",
+        workflow_run_attempt: "1",
+        head_sha: "59a2956a2ba01f22ee7240d371a6436c5b65a6c7",
+        policy_digest: "a".repeat(64),
+        audit_digest: "b".repeat(64),
+        plan_digest: "c".repeat(64),
+        candidate_key: candidate.candidate_key,
+      },
+    },
+  };
 }
 
 function safe(key, variantIndex, options = {}) {

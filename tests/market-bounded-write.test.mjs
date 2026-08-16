@@ -25,6 +25,7 @@ import {
   validateMarketBoundedPlanIdentity,
 } from "../lib/domain/market-bounded-write.js";
 import { buildManualMarketBoundedDurableRunId } from "../lib/domain/manual-market-bounded-execution.js";
+import { buildMarketBoundedCoverageSnapshot } from "../lib/domain/market-bounded-coverage.js";
 
 const { policy, digest } = loadAutomaticIngestionRolloutPolicy("config/automatic-ingestion-rollout-policy.json");
 const headSha = "a".repeat(40);
@@ -108,12 +109,27 @@ for (const [name, mutate, reason] of [
   ["expired", ({ plan }) => rebind({ ...plan, generated_at: "2026-08-01T00:00:00.000Z", expires_at: "2026-08-01T00:15:00.000Z" }), "bounded_plan_expired"],
 ]) test(`identity rejects ${name}`, () => assert.throws(() => validateIdentity(name, mutate), (error) => error.reason_code === reason));
 
-test("exact eligible set is selected", () => assert.equal(selectExactMarketBoundedCandidates(fixture().audit, fixture().plan).length, 2));
-test("zero eligible candidates is a valid no-op", () => { const value = fixture(0); assert.deepEqual(selectExactMarketBoundedCandidates(value.audit, value.plan), []); });
+test("exact eligible set is selected", () => { const value = fixture(); assert.equal(selectExactMarketBoundedCandidates(value.audit, value.plan, value.plan.coverage_snapshot).length, 2); });
+test("zero eligible candidates is a valid no-op", () => { const value = fixture(0); assert.deepEqual(selectExactMarketBoundedCandidates(value.audit, value.plan, value.plan.coverage_snapshot), []); });
+test("missing persistence-time coverage snapshot fails closed", () => {
+  const value = fixture();
+  assert.throws(
+    () => selectExactMarketBoundedCandidates(value.audit, value.plan),
+    (error) => error.reason_code === "bounded_coverage_snapshot_mismatch",
+  );
+});
+test("coverage drift between plan and persistence fails before rows are built", () => {
+  const value = fixture();
+  const changedCoverage = buildMarketBoundedCoverageSnapshot(rowsFixture().observationRows);
+  assert.throws(
+    () => buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow, coverage_snapshot: changedCoverage }),
+    (error) => error.reason_code === "bounded_coverage_snapshot_mismatch",
+  );
+});
 test("reordered selected keys fail closed", () => {
   const value = fixture();
   value.plan = rebind({ ...value.plan, selected_candidate_keys: [...value.plan.selected_candidate_keys].reverse() });
-  assert.throws(() => selectExactMarketBoundedCandidates(value.audit, value.plan), (error) => error.reason_code === "bounded_candidate_set_mismatch");
+  assert.throws(() => selectExactMarketBoundedCandidates(value.audit, value.plan, value.plan.coverage_snapshot), (error) => error.reason_code === "bounded_candidate_set_mismatch");
 });
 test("substituting another independently safe candidate fails closed", () => {
   const value = fixture(3);
@@ -121,7 +137,7 @@ test("substituting another independently safe candidate fails closed", () => {
     ...value.plan,
     selected_candidate_keys: [value.plan.selected_candidate_keys[0], value.audit.candidates[2].candidate_key],
   });
-  assert.throws(() => selectExactMarketBoundedCandidates(value.audit, value.plan), (error) => error.reason_code === "bounded_candidate_set_mismatch");
+  assert.throws(() => selectExactMarketBoundedCandidates(value.audit, value.plan, value.plan.coverage_snapshot), (error) => error.reason_code === "bounded_candidate_set_mismatch");
 });
 test("a selected candidate becoming review-required fails before rows are built", () => {
   const value = fixture(3);
@@ -130,7 +146,7 @@ test("a selected candidate becoming review-required fails before rows are built"
   value.audit.candidates[0].assessment.reason = "review_required";
   value.audit.candidates[0].candidate_key = buildMarketCandidateKey(value.audit.candidates[0]);
   normalizeAudit(value.audit);
-  assert.throws(() => buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow }), (error) => error.reason_code === "bounded_candidate_set_mismatch");
+  assert.throws(() => buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow, coverage_snapshot: value.plan.coverage_snapshot }), (error) => error.reason_code === "bounded_candidate_set_mismatch");
 });
 test("an unselected safe candidate mutation changes the bound audit digest", () => {
   const value = fixture(3);
@@ -154,8 +170,8 @@ for (const [name, mutate] of [
   ["candidate removal", ({ audit }) => { audit.candidates.pop(); normalizeAudit(audit); }],
   ["duplicate key", ({ audit }) => { audit.candidates[1].candidate_key = audit.candidates[0].candidate_key; }],
   ["recomputed key mismatch", ({ audit }) => { audit.candidates[0].source.listing_id = "changed-identity"; }],
-]) test(`candidate set rejects ${name}`, () => { const value = fixture(); mutate(value); assert.throws(() => selectExactMarketBoundedCandidates(value.audit, value.plan)); });
-test("candidate selector uses deterministic sorted order", () => { const value = fixture(); value.audit.candidates.reverse(); assert.deepEqual(selectExactMarketBoundedCandidates(value.audit, value.plan).map((entry) => entry.candidate_key), value.plan.selected_candidate_keys); });
+]) test(`candidate set rejects ${name}`, () => { const value = fixture(); mutate(value); assert.throws(() => selectExactMarketBoundedCandidates(value.audit, value.plan, value.plan.coverage_snapshot)); });
+test("candidate selector uses deterministic sorted order", () => { const value = fixture(); value.audit.candidates.reverse(); assert.deepEqual(selectExactMarketBoundedCandidates(value.audit, value.plan, value.plan.coverage_snapshot).map((entry) => entry.candidate_key), value.plan.selected_candidate_keys); });
 
 for (const [name, mutate] of [
   ["confidence below 0.86", (c) => { c.assessment.confidence = 0.859; }],
@@ -168,7 +184,7 @@ for (const [name, mutate] of [
   ["edition conflict", (c) => { c.checks.parent_series_edition_conflict = true; }],
   ["price zero", (c) => { c.listing.price = 0; }],
 ]) test(`unsafe candidate ${name} cannot remain in exact set`, () => {
-  const value = fixture(); mutate(value.audit.candidates[0]); value.audit.candidates[0].candidate_key = buildMarketCandidateKey(value.audit.candidates[0]); normalizeAudit(value.audit); assert.throws(() => selectExactMarketBoundedCandidates(value.audit, value.plan));
+  const value = fixture(); mutate(value.audit.candidates[0]); value.audit.candidates[0].candidate_key = buildMarketCandidateKey(value.audit.candidates[0]); normalizeAudit(value.audit); assert.throws(() => selectExactMarketBoundedCandidates(value.audit, value.plan, value.plan.coverage_snapshot));
 });
 
 test("row builder creates at most two listing and observation rows", () => { const rows = rowsFixture(); assert.equal(rows.listingRows.length, 2); assert.equal(rows.observationRows.length, 2); });
@@ -188,7 +204,7 @@ test("bounded rows preserve allowlisted Rakuten affiliate provenance separately 
     contract: "item_search_20260701_item_code_join",
     documentation: "https://webservice.rakuten.co.jp/documentation/ichiba-item-search",
   };
-  const rows = buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow, observed_at: value.plan.generated_at });
+  const rows = buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow, coverage_snapshot: value.plan.coverage_snapshot, observed_at: value.plan.generated_at });
   assert.equal(candidate.candidate_key, originalKey);
   assert.equal(rows.listingRows[0].source_url, candidate.source.public_url);
   assert.equal(rows.listingRows[0].raw.public_url, candidate.source.public_url);
@@ -205,7 +221,7 @@ test("bounded rows reject fabricated Rakuten affiliate provenance before persist
     documentation: "https://webservice.rakuten.co.jp/documentation/ichiba-item-search",
   };
   assert.throws(
-    () => buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow, observed_at: value.plan.generated_at }),
+    () => buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow, coverage_snapshot: value.plan.coverage_snapshot, observed_at: value.plan.generated_at }),
     (error) => error.reason_code === "bounded_candidate_identity_mismatch"
   );
 });
@@ -415,7 +431,8 @@ function fixture(count = 2) {
   const candidates = Array.from({ length: count }, (_, index) => candidate(index + 1));
   const audit = { schema_version: 1, mode: "dry-run", source_scope: "planner-apis", workflow: { ...workflow }, selection: { selected_variant_count: Math.max(1, count), query_count: Math.max(1, count), selected_variants: Array.from({ length: Math.max(1, count) }, (_, index) => ({ variant_id: `variant-${index + 1}`, variant_slug: `variant-${index + 1}`, variant_name: `Variant ${index + 1}`, series_id: `series-${index + 1}`, series_slug: `series-${index + 1}`, series_name: `Series ${index + 1}`, query: `Series ${index + 1} Variant ${index + 1}` })) }, result: { candidate_count: count, accepted_count: count, review_count: 0, report_complete: true, truncated_count: 0 }, database_writes: { listings: 0, observations: 0, ingestion_runs: 0 }, candidates };
   const auditBytes = Buffer.from(`${JSON.stringify(audit, null, 2)}\n`);
-  const basePlan = buildAutomaticMarketRolloutPlan({ policy, policy_digest: digest, stage: "market-bounded", audit, source_run_id: workflow.run_id, head_sha: headSha, generated_at: "2026-08-02T00:00:00.000Z", throttle: { state: "clear" } });
+  const coverageSnapshot = buildMarketBoundedCoverageSnapshot([]);
+  const basePlan = buildAutomaticMarketRolloutPlan({ policy, policy_digest: digest, stage: "market-bounded", audit, source_run_id: workflow.run_id, head_sha: headSha, generated_at: "2026-08-02T00:00:00.000Z", throttle: { state: "clear" }, coverage_snapshot: coverageSnapshot });
   const plan = bindMarketBoundedPlanIdentity(basePlan, { audit_digest: calculateMarketAuditDigest(auditBytes), generated_at: "2026-08-02T00:00:00.000Z" });
   return { audit, auditBytes, plan };
 }
@@ -423,7 +440,7 @@ function fixture(count = 2) {
 function normalizeAudit(audit) { audit.result.candidate_count = audit.candidates.length; audit.result.accepted_count = audit.candidates.filter((x) => x.assessment.accepted).length; audit.result.review_count = audit.candidates.filter((x) => x.assessment.review_required).length; }
 function rebind(plan) { const value = structuredClone(plan); value.plan_digest = calculateMarketBoundedPlanDigest(value); return value; }
 function validateIdentity(name, mutate) { let value = fixture(); if (mutate) { const changed = mutate(value); if (Buffer.isBuffer(changed)) value.auditBytes = changed; else if (changed?.schema_version && changed?.workflow) value.audit = changed; else if (changed?.plan_digest) value.plan = changed; } return validateMarketBoundedPlanIdentity({ audit_bytes: value.auditBytes, audit: value.audit, plan: value.plan, workflow, policy_digest: digest, simulation: false, now: "2026-08-02T00:05:00.000Z" }); }
-function rowsFixture() { const value = fixture(); return buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow, observed_at: value.plan.generated_at }); }
+function rowsFixture() { const value = fixture(); return buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow, coverage_snapshot: value.plan.coverage_snapshot, observed_at: value.plan.generated_at }); }
 
 function durableRunFixture() {
   const id = buildManualMarketBoundedDurableRunId({ workflow_run_id: "31322475822", workflow_run_attempt: "1", plan_digest: "f".repeat(64) });

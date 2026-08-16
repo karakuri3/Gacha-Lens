@@ -5,6 +5,7 @@ import test from "node:test";
 import { buildMarketCandidateKey } from "../lib/domain/market-candidate-key.js";
 import { buildSanitizedMarketCandidateAudit } from "../lib/domain/market-candidate-audit.js";
 import { buildMarketBoundedRows } from "../lib/domain/market-bounded-write.js";
+import { buildMarketBoundedCoverageSnapshot } from "../lib/domain/market-bounded-coverage.js";
 import { buildMarketplaceLinks } from "../lib/domain/market-links.js";
 import { selectRakutenAffiliateListing } from "../lib/domain/rakuten-affiliate-link.js";
 import { compactMarketRawPayload } from "../lib/domain/market-raw.js";
@@ -476,6 +477,7 @@ function automaticAudit(record) {
 
 function automaticRows(audit) {
   const candidateKey = audit.candidates[0].candidate_key;
+  const coverageSnapshot = buildMarketBoundedCoverageSnapshot([]);
   return buildMarketBoundedRows({
     audit,
     plan: {
@@ -488,13 +490,18 @@ function automaticRows(audit) {
       selected_for_persistence_count: 1,
       safe_not_selected_count: 0,
       selected_distinct_variant_count: 1,
+      selected_new_variant_count: 1,
+      selected_previously_persisted_candidate_count: 0,
       selected_variant_count: 1,
       safe_not_selected_candidate_keys: [],
       safe_not_selected_candidates: [],
       policy_digest: "b".repeat(64),
       audit_digest: "c".repeat(64),
       plan_digest: "d".repeat(64),
+      coverage_snapshot: coverageSnapshot,
+      coverage_snapshot_digest: coverageSnapshot.snapshot_digest,
     },
+    coverage_snapshot: coverageSnapshot,
     workflow: { run_id: "31519031733", run_attempt: "1", head_sha: "a".repeat(40) },
     observed_at: "2026-08-11T17:43:36.000Z",
   });

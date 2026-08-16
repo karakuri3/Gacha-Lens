@@ -11,6 +11,7 @@ import {
 } from "../lib/domain/market-bounded-write.js";
 import { deleteRowsByIds, fetchRowCount, fetchRows, upsertRows } from "./supabase-rest.mjs";
 import { loadOptionalEnvFile } from "./load-optional-env.mjs";
+import { loadMarketBoundedCoverageSnapshot } from "./market-bounded-coverage-data.mjs";
 
 loadOptionalEnvFile();
 
@@ -74,7 +75,14 @@ async function persist() {
       policy_digest: options["policy-digest"],
       simulation: false,
     });
-    rows = buildMarketBoundedRows({ audit, plan, workflow, observed_at: plan.generated_at });
+    const coverageSnapshot = await loadMarketBoundedCoverageSnapshot({ workflow });
+    rows = buildMarketBoundedRows({
+      audit,
+      plan,
+      workflow,
+      coverage_snapshot: coverageSnapshot,
+      observed_at: plan.generated_at,
+    });
     if (!rows.candidates.length) {
       outcome = { ok: true, operations: { listings: [], observations: [] }, verification: { rows_verified: true, deltas_verified: true }, rollback: emptyRollback(), database_deltas: {}, database_writes: 0 };
       writeResult(outputDir, buildMarketBoundedResult({ workflow, plan, rows, ...outcome, status: "no-op", bounded_persistence_enabled: true, bounded_approval_valid: true }));

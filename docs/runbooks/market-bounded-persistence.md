@@ -22,9 +22,11 @@ The approval comparison trims only leading and trailing whitespace and otherwise
 
 The candidate audit is hashed from its saved bytes. The plan stores that `audit_digest`, a canonical `plan_digest`, and a 15-minute expiry. Persistence recomputes both digests and requires the audit Run ID, attempt, head SHA, event, plan stage, and policy digest to match the current workflow.
 
-The complete audit remains bound by its byte digest. Planning first identifies every independently safe candidate, then runs a deterministic diversity-first selector with an independent hard ceiling of two. The selector follows `audit.selection.selected_variants`, prefers one candidate per distinct variant, and only then makes a second pass. Within a variant it ranks sanitized identity evidence, confidence, and finally candidate key. Safe candidates beyond capacity remain explicitly recorded as safe but not selected.
+The complete audit remains bound by its byte digest. Planning first identifies every independently safe candidate, then runs a deterministic diversity-first selector with an independent hard ceiling of two. The selector reads bounded-only history from `market_listing_observations`, builds a sanitized durable snapshot, and prioritizes never-persisted variants followed by the least-recently persisted variants. Within a variant it prefers never-persisted candidate identities, then the oldest candidate coverage, before applying the existing sanitized identity evidence, confidence, and candidate-key ordering. Safe candidates beyond capacity remain explicitly recorded as safe but not selected.
 
-Persistence independently re-evaluates every candidate and re-runs the same selector. The plan's selected candidate keys, order, selected count, unselected-safe count, and distinct-variant count must exactly equal the recomputed result. A reordered plan or substitution with another otherwise-safe candidate fails closed. Zero safe candidates is a successful no-op.
+The snapshot uses only bounded observation IDs, `variant_id`, `listing_id`, `observed_at`, and the allowlisted `raw.automatic_rollout` identity marker. It contains no raw marketplace response or credential. Missing, malformed, duplicated, conflicting, unavailable, or ambiguously mapped history fails closed. The current workflow Run ID and attempt are excluded so an exact rerun observes the same pre-run snapshot.
+
+Persistence reads the durable history again immediately before row construction, verifies the snapshot digest, independently re-evaluates every candidate, and re-runs the same selector. The plan's selected candidate keys, order, selected count, coverage counts, unselected-safe count, and distinct-variant count must exactly equal the recomputed result. Any TOCTOU coverage drift, reordered plan, or substitution with another otherwise-safe candidate fails closed before a listing write. Zero safe candidates is a successful no-op.
 
 ## Rows and idempotency
 
@@ -34,7 +36,7 @@ For identity comparison only, Phase 6-D.1 removes query strings, fragments, and 
 
 Observation IDs bind workflow Run ID, attempt, policy digest, candidate key, and listing ID. Re-running the same Run/attempt with identical content is unchanged. Conflicting content, provider identity, external ID, URL, variant, or series fails before persistence.
 
-Selection itself does not currently prefer a not-yet-persisted listing because no such durable signal is present in the sanitized audit. Existing rows remain idempotent and write accounting still distinguishes insert, update, and unchanged operations, but the same best two candidates can be selected on later audits. Cross-run coverage rotation is intentionally deferred to Phase 8-B rather than adding a new Production query or rotation state here.
+Cross-run coverage reuses existing bounded observation markers and requires no schema, migration, RLS, policy, or grant change. The plan binds both the source-history digest and the canonical coverage snapshot digest. Exact Run/attempt re-evaluation remains idempotent because its own prior markers are excluded and deterministic observation IDs remain unchanged.
 
 Bounded rows use `raw.automatic_rollout`. They do not use or imply human-reviewed canary markers.
 
