@@ -83,12 +83,14 @@ jobs:
           OFFICIAL_AUDIT_DIGEST: ${{ inputs.audit_digest }}
           OFFICIAL_BOUNDED_APPROVAL: ${{ inputs.approval }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: >-
-          npm run official:bounded-write -- execute
-          --output-dir=${{ runner.temp }}/gacha-official-bounded-write/result
-          --audit-dir=${{ runner.temp }}/gacha-official-bounded-write/audit
-          --audit-run-id=${{ inputs.audit_run_id }}
-          --origin-main-sha=${{ steps.main_sha.outputs.origin_main_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main --depth=1
+          final_origin_main_sha="$(git rev-parse origin/main)"
+          test "$final_origin_main_sha" = "$GITHUB_SHA"
+
+          npm run official:bounded-write -- execute             --output-dir="${{ runner.temp }}/gacha-official-bounded-write/result"             --audit-dir="${{ runner.temp }}/gacha-official-bounded-write/audit"             --audit-run-id="${{ inputs.audit_run_id }}"             --origin-main-sha="$final_origin_main_sha"
       - name: Scan sanitized bounded official result
         id: scan
         if: ${{ always() }}

@@ -211,6 +211,73 @@ test("mid-transaction failure rolls back without partial state", async () => {
   assert.deepEqual(adapter.snapshot(), { series: [], variants: [], restock_events: [] });
 });
 
+test("lost COMMIT acknowledgement is never reported as zero-write blocked", async () => {
+  const fixture = artifactFixture();
+  const base = createOfficialMemoryTransactionAdapter();
+
+  const adapter = {
+    ...base,
+    async commit() {
+      await base.commit();
+      throw new Error("simulated_lost_commit_ack");
+    },
+    async rollback() {
+      throw new Error("simulated_rollback_after_commit_unavailable");
+    },
+  };
+
+  const result = await executeOfficialBoundedTransaction({
+    adapter,
+    authorization: authorize(fixture.report),
+    workflow: workflowIdentity(),
+  });
+
+  assert.equal(
+    result.final_verdict,
+    "OFFICIAL_BOUNDED_WRITE_COMMIT_OUTCOME_UNKNOWN",
+  );
+  assert.equal(result.transaction.state, "commit_outcome_unknown");
+  assert.equal(result.database_writes, 3);
+  assert.equal(adapter.snapshot().series.length, 1);
+  assert.equal(adapter.snapshot().variants.length, 2);
+});
+
+test("post-commit verification failure remains explicitly committed", async () => {
+  const fixture = artifactFixture();
+  const base = createOfficialMemoryTransactionAdapter();
+  let commitCompleted = false;
+
+  const adapter = {
+    ...base,
+    async readRow(...args) {
+      if (commitCompleted) {
+        throw new Error("simulated_post_commit_read_failure");
+      }
+
+      return base.readRow(...args);
+    },
+    async commit() {
+      await base.commit();
+      commitCompleted = true;
+    },
+  };
+
+  const result = await executeOfficialBoundedTransaction({
+    adapter,
+    authorization: authorize(fixture.report),
+    workflow: workflowIdentity(),
+  });
+
+  assert.equal(
+    result.final_verdict,
+    "OFFICIAL_BOUNDED_WRITE_COMMITTED_POST_VERIFY_FAILED",
+  );
+  assert.equal(result.transaction.state, "committed_post_verify_failed");
+  assert.equal(result.database_writes, 3);
+  assert.equal(adapter.snapshot().series.length, 1);
+  assert.equal(adapter.snapshot().variants.length, 2);
+});
+
 test("identical deterministic rerelease event remains none and authorizes no write", () => {
   const first = rereleaseFixture();
   const inserted = first.report.plan.candidates[0].apply_contract.restock_event.values;
@@ -252,6 +319,27 @@ test("writer workflow is workflow_dispatch-only with exact bounded inputs", () =
   assert.doesNotMatch(writerWorkflow, /mode:|cleanup|migration|db:upsert|\bDELETE\b|TRUNCATE/i);
   assert.match(writerWorkflow, /contents: read/);
   assert.match(writerWorkflow, /actions: read/);
+
+  const executeStep = writerWorkflow.match(
+    /- name: Execute transactional bounded official write\r?\n([\s\S]*?)\r?\n      - name: Scan sanitized bounded official result/,
+  )?.[1] ?? "";
+
+  assert.match(
+    executeStep,
+    /git fetch --no-tags origin main --depth=1/,
+  );
+  assert.match(
+    executeStep,
+    /final_origin_main_sha="\$\(git rev-parse origin\/main\)"/,
+  );
+  assert.match(
+    executeStep,
+    /test "\$final_origin_main_sha" = "\$GITHUB_SHA"/,
+  );
+  assert.doesNotMatch(
+    executeStep,
+    /steps\.main_sha\.outputs\.origin_main_sha/,
+  );
 });
 
 test("SUPABASE_DB_URL is scoped only to the writer execution step", () => {
