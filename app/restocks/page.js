@@ -2,7 +2,7 @@ import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import { getRankingSeries } from "@/lib/series";
 import { formatYen } from "@/lib/domain/public-display-clean";
-import { variantHref } from "@/lib/variant-url";
+import { resolveRestockEventPresentation } from "@/lib/domain/restock-event-presentation";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata = buildPageMetadata({
@@ -15,8 +15,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function RestocksPage() {
-  const items = await getRankingSeries("released");
-  const rows = dedupeEvents(items.flatMap((item) => (item.restock_events ?? []).map((event) => ({ item, event }))))
+  const series = await getRankingSeries("released", "series");
+  const rows = dedupeEvents(series.flatMap((item) => (item.restock_events ?? []).map((event) => ({
+    item,
+    event,
+    presentation: resolveRestockEventPresentation(item, event),
+  }))))
     .filter(({ event }) => !event.review_required)
     .sort((a, b) => dateValue(b.event.reported_at) - dateValue(a.event.reported_at));
 
@@ -32,19 +36,20 @@ export default async function RestocksPage() {
 
         {rows.length ? (
           <section className="signal-list" aria-label="再販・再入荷一覧">
-            {rows.map(({ item, event }, index) => (
-              <Link key={event.id || `${item.variant_id}-${event.reported_at}`} href={variantHref(item)} className="signal-row">
-                <div className="signal-row__image"><ProductImage src={item.image_url} alt={item.name} priority={index < 4} /></div>
+            {rows.map(({ item, event, presentation }, index) => (
+              <Link key={event.id || `${item.series_id}-${event.reported_at}`} href={presentation.href} className="signal-row">
+                <div className="signal-row__image"><ProductImage src={presentation.image_url} alt={presentation.name} priority={index < 4} /></div>
                 <div className="signal-row__main">
                   <span className="signal-row__badge">{event.event_label || restockLabel(event.event_type)}</span>
-                  <h2>{item.name}</h2>
-                  <p>{item.series_name}</p>
+                  <h2>{presentation.name}</h2>
+                  <p>{presentation.subtitle}</p>
                 </div>
                 <dl className="signal-row__facts">
                   <div><dt>確認日</dt><dd>{formatDate(event.reported_at)}</dd></div>
+                  <div><dt>再販時期</dt><dd>{presentation.rerelease_schedule}</dd></div>
                   <div><dt>場所</dt><dd>{placeLabel(event)}</dd></div>
-                  <div><dt>定価</dt><dd>{formatYen(item.price)}</dd></div>
-                  <div><dt>メーカー</dt><dd>{item.brand || "未登録"}</dd></div>
+                  <div><dt>定価</dt><dd>{formatYen(presentation.price)}</dd></div>
+                  <div><dt>メーカー</dt><dd>{presentation.brand || "未登録"}</dd></div>
                 </dl>
               </Link>
             ))}
@@ -72,6 +77,7 @@ function restockLabel(type) {
 }
 
 function placeLabel(event) {
+  if (event.source_type === "official_site") return "公式情報";
   return [event.region, event.shop_name].filter(Boolean).join(" / ") || "場所未登録";
 }
 

@@ -237,7 +237,7 @@ test("source zero results and parser drift block readiness", () => {
   const report = buildOfficialReadOnlyAudit(input);
   assert.ok(report.plan.blockers.includes("source_parser_failed:gashapon_schedule"));
   assert.ok(report.plan.blockers.includes("source_zero_results:gashapon_schedule"));
-  assert.deepEqual(report.plan.would_delete, { series: 0, variants: 0, import_issues: 0 });
+  assert.deepEqual(report.plan.would_delete, { series: 0, variants: 0, restock_events: 0, import_issues: 0 });
   assert.equal(report.plan.cleanup_operations, 0);
 });
 
@@ -322,7 +322,7 @@ function readyReport() {
 
 function readyInput() {
   const record = formalRecord("audit");
-  const counts = { series: 10214, variants: 23677, import_issues: 544, review_required: 7535, provisional_variants: 7535 };
+  const counts = { series: 10214, variants: 23677, restock_events: 0, import_issues: 544, review_required: 7535, provisional_variants: 7535 };
   return {
     snapshot: {
       fetched_at: "2026-08-16T00:00:00.000Z",
@@ -350,6 +350,7 @@ function readyInput() {
         source_type: "official_site",
       }],
       variants: [{ id: `${record.id}-provisional`, series_id: record.id, name: record.name, variant_type: "provisional", review_required: true }],
+      restock_events: [],
     },
     databaseBefore: counts,
     databaseAfter: { ...counts },

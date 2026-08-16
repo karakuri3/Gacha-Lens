@@ -69,7 +69,12 @@ async function loadOfficialCatalog() {
     params: { order: "id.asc" },
     operationName: "official_audit.variant_catalog",
   });
-  return { series, variants };
+  const restockEvents = await fetchRows("restock_events", {
+    select: "id,variant_id,matched_variant_id,series_id,source_type,source_weight,event_type,event_label,classification_reason,classification_keywords,text,region,shop_name,source_url,reported_at,confidence,review_required,raw",
+    params: { source_type: "eq.official_site", order: "id.asc" },
+    operationName: "official_audit.restock_catalog",
+  });
+  return { series, variants, restock_events: restockEvents };
 }
 
 async function loadMarketInterestOfficialUrls(variants) {
@@ -88,12 +93,14 @@ async function loadMarketInterestOfficialUrls(variants) {
 async function captureOfficialCounts(label) {
   const series = await count("series", {}, `${label}.series`);
   const variants = await count("variants", {}, `${label}.variants`);
+  const restockEvents = await count("restock_events", {}, `${label}.restock_events`);
   const importIssues = await count("import_issues", {}, `${label}.import_issues`);
   const reviewRequired = await count("variants", { review_required: "eq.true" }, `${label}.review_required`);
   const provisionalVariants = await count("variants", { variant_type: "eq.provisional" }, `${label}.provisional_variants`);
   return {
     series,
     variants,
+    restock_events: restockEvents,
     import_issues: importIssues,
     review_required: reviewRequired,
     provisional_variants: provisionalVariants,
