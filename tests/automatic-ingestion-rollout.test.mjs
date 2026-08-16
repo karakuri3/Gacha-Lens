@@ -18,6 +18,7 @@ import {
   resolveAutomaticIngestionRolloutStage,
   validateAutomaticIngestionRolloutPolicy,
 } from "../lib/domain/automatic-ingestion-rollout.js";
+import { buildMarketBoundedCoverageSnapshot } from "../lib/domain/market-bounded-coverage.js";
 
 const policyPath = "config/automatic-ingestion-rollout-policy.json";
 const policySource = fs.readFileSync(policyPath);
@@ -192,6 +193,16 @@ test("Yahoo candidate is allowlisted", () => {
 });
 
 test("two eligible candidates fit bounded budget", () => assert.equal(plan(auditWith(2)).auto_eligible_count, 2));
+test("bounded plan fails closed when durable coverage is unavailable", () => {
+  assert.throws(() => buildAutomaticMarketRolloutPlan({
+    policy,
+    policy_digest: digest,
+    stage: "market-bounded",
+    audit: auditWith(1),
+    head_sha: "a".repeat(40),
+    throttle: { state: "clear" },
+  }), (error) => error.reason_code === "rollout_coverage_unavailable");
+});
 test("three eligible candidates remain audited while only two are selected", () => {
   const result = plan(auditWith(3));
   assert.equal(result.safe_candidate_count, 3);
@@ -212,6 +223,20 @@ test("bounded plan retains complete safe-not-selected telemetry", () => {
 test("listing writes three reject", () => assert.equal(capturePlanError(auditWith(2), { listings: 3 }).reason_code, "rollout_budget_exceeded"));
 test("observation writes three reject", () => assert.equal(capturePlanError(auditWith(2), { observations: 3 }).reason_code, "rollout_budget_exceeded"));
 test("review-required write one rejects", () => assert.equal(capturePlanError(auditWith(1), { review_required: 1 }).reason_code, "rollout_budget_exceeded"));
+test("review-required-only candidates remain outside rotation with zero writes", () => {
+  const value = auditWith(2);
+  for (const entry of value.candidates) {
+    entry.assessment.accepted = false;
+    entry.assessment.review_required = true;
+    entry.assessment.reason = "review_required";
+  }
+  const result = plan(value);
+  assert.equal(result.safe_candidate_count, 0);
+  assert.equal(result.selected_for_persistence_count, 0);
+  assert.equal(result.listing_writes_planned, 0);
+  assert.equal(result.observation_writes_planned, 0);
+  assert.equal(result.review_required_writes_planned, 0);
+});
 test("safe candidate count 21 rejects", () => {
   const error = capturePlanError(auditWith(21));
   assert.equal(error.reason_code, "rollout_budget_exceeded");
@@ -520,7 +545,7 @@ function normalizeAuditTotals(value) {
 }
 
 function plan(audit, plannedCounts) {
-  return buildAutomaticMarketRolloutPlan({ policy, policy_digest: digest, stage: "market-bounded", audit: normalizeAuditTotals(audit), head_sha: "a".repeat(40), throttle: { state: "clear" }, planned_counts: plannedCounts });
+  return buildAutomaticMarketRolloutPlan({ policy, policy_digest: digest, stage: "market-bounded", audit: normalizeAuditTotals(audit), head_sha: "a".repeat(40), throttle: { state: "clear" }, planned_counts: plannedCounts, coverage_snapshot: buildMarketBoundedCoverageSnapshot([]) });
 }
 
 function capturePlanError(value, plannedCounts) {

@@ -30,6 +30,7 @@ import {
 } from "./automatic-ingestion-preflight-store.mjs";
 import { loadOptionalEnvFile } from "./load-optional-env.mjs";
 import { fetchRows } from "./supabase-rest.mjs";
+import { loadMarketBoundedCoverageSnapshot } from "./market-bounded-coverage-data.mjs";
 
 loadOptionalEnvFile();
 
@@ -161,6 +162,7 @@ async function plan() {
   const audit = JSON.parse(auditBytes.toString("utf8"));
   const { policy, digest } = loadAutomaticIngestionRolloutPolicy(policyPath);
   if (digest !== preflightReport.policy_digest) throw new Error("Rollout policy changed after preflight.");
+  const coverageSnapshot = await loadMarketBoundedCoverageSnapshot({ workflow: workflowIdentity() });
   let rolloutPlan;
   try {
     rolloutPlan = bindMarketBoundedPlanIdentity(buildAutomaticMarketRolloutPlan({
@@ -171,6 +173,7 @@ async function plan() {
       source_run_id: audit.workflow?.run_id || process.env.GITHUB_RUN_ID,
       head_sha: preflightReport.workflow?.head_sha,
       throttle: preflightReport.throttle,
+      coverage_snapshot: coverageSnapshot,
     }), { audit_digest: calculateMarketAuditDigest(auditBytes) });
   } catch (error) {
     if (error?.plan) {
@@ -235,7 +238,14 @@ async function preview() {
     });
     checks.audit_digest_verified = true;
     checks.plan_digest_verified = true;
-    rows = buildMarketBoundedRows({ audit, plan: planValue, workflow, observed_at: planValue.generated_at });
+    const coverageSnapshot = await loadMarketBoundedCoverageSnapshot({ workflow });
+    rows = buildMarketBoundedRows({
+      audit,
+      plan: planValue,
+      workflow,
+      coverage_snapshot: coverageSnapshot,
+      observed_at: planValue.generated_at,
+    });
     checks.candidate_set_verified = true;
     const [existingListings, existingObservations] = await Promise.all([
       fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)),

@@ -31,6 +31,7 @@ import {
 } from "../lib/domain/manual-market-bounded-execution.js";
 import { deleteRowsByIds, fetchRowCount, fetchRows, upsertRows } from "./supabase-rest.mjs";
 import { loadOptionalEnvFile } from "./load-optional-env.mjs";
+import { loadMarketBoundedCoverageSnapshot } from "./market-bounded-coverage-data.mjs";
 
 loadOptionalEnvFile();
 
@@ -183,7 +184,14 @@ async function persist() {
     checkpoint = "plan_identity_revalidation";
     validateMarketBoundedPlanIdentity({ audit_bytes: auditBytes, audit, plan, workflow, policy_digest: digest, simulation: true });
     checkpoint = "bounded_rows_build";
-    rows = buildMarketBoundedRows({ audit, plan, workflow, observed_at: plan.generated_at });
+    const coverageSnapshot = await loadMarketBoundedCoverageSnapshot({ workflow });
+    rows = buildMarketBoundedRows({
+      audit,
+      plan,
+      workflow,
+      coverage_snapshot: coverageSnapshot,
+      observed_at: plan.generated_at,
+    });
     const beforeCounts = safety.counts;
     const runId = buildManualMarketBoundedDurableRunId({
       workflow_run_id: workflow.run_id,
