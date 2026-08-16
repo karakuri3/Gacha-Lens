@@ -290,6 +290,25 @@ test("official audit workflow is dispatch-only and write-disabled", () => {
   assert.doesNotMatch(workflow, /db:upsert|db:cleanup|workflow enable|workflow disable|gh variable|migration/);
 });
 
+test("official audit workflow scopes runner paths and service-role credentials to only required steps", () => {
+  const jobEnv = workflow.match(/timeout-minutes: 20\r?\n    env:\r?\n([\s\S]*?)\r?\n    steps:/)?.[1] ?? "";
+  const auditStep = workflow.match(/- name: Run bounded official live audit\r?\n([\s\S]*?)\r?\n      - name: Scan sanitized official audit artifact/)?.[1] ?? "";
+  const scanStep = workflow.match(/- name: Scan sanitized official audit artifact\r?\n([\s\S]*?)\r?\n      - name: Upload sanitized official audit artifact/)?.[1] ?? "";
+  const uploadStep = workflow.match(/- name: Upload sanitized official audit artifact\r?\n([\s\S]*?)\r?\n      - name: Enforce official audit readiness/)?.[1] ?? "";
+  const verifyStep = workflow.match(/- name: Enforce official audit readiness\r?\n([\s\S]*)$/)?.[1] ?? "";
+
+  assert.doesNotMatch(jobEnv, /runner\.temp|SUPABASE_SERVICE_ROLE_KEY|NEXT_PUBLIC_SUPABASE_URL/);
+  assert.match(auditStep, /NEXT_PUBLIC_SUPABASE_URL: \$\{\{ secrets\.NEXT_PUBLIC_SUPABASE_URL \}\}/);
+  assert.match(auditStep, /SUPABASE_SERVICE_ROLE_KEY: \$\{\{ secrets\.SUPABASE_SERVICE_ROLE_KEY \}\}/);
+  assert.match(scanStep, /SUPABASE_SERVICE_ROLE_KEY: \$\{\{ secrets\.SUPABASE_SERVICE_ROLE_KEY \}\}/);
+  assert.doesNotMatch(scanStep, /NEXT_PUBLIC_SUPABASE_URL/);
+  assert.doesNotMatch(uploadStep, /SUPABASE_SERVICE_ROLE_KEY|NEXT_PUBLIC_SUPABASE_URL/);
+  assert.doesNotMatch(verifyStep, /SUPABASE_SERVICE_ROLE_KEY|NEXT_PUBLIC_SUPABASE_URL/);
+  for (const step of [auditStep, scanStep, uploadStep, verifyStep]) {
+    assert.match(step, /\$\{\{ runner\.temp \}\}\/gacha-official-read-only-audit/);
+  }
+});
+
 test("official audit workflow scans before artifact upload and then enforces readiness", () => {
   const scan = workflow.indexOf("Scan sanitized official audit artifact");
   const upload = workflow.indexOf("Upload sanitized official audit artifact");

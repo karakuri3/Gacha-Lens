@@ -18,12 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      # RLS currently requires service_role for catalog reads. The audited command imports no mutation helpers.
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       INGESTION_WRITE_DISABLED: "true"
       MARKET_BACKFILL_WRITE_DISABLED: "true"
-      OFFICIAL_AUDIT_OUTPUT_DIR: ${{ runner.temp }}/gacha-official-read-only-audit
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -42,6 +38,10 @@ jobs:
       - name: Run bounded official live audit
         id: official_audit
         continue-on-error: true
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          # RLS currently requires service_role for catalog reads. The audited command imports no mutation helpers.
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: >-
           npm run official:audit-live --
           --output-dir=${{ runner.temp }}/gacha-official-read-only-audit
@@ -50,6 +50,8 @@ jobs:
       - name: Scan sanitized official audit artifact
         id: scan
         if: ${{ always() && steps.official_audit.outcome == 'success' }}
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: >-
           node scripts/official-live-audit-guard.mjs scan
           --directory=${{ runner.temp }}/gacha-official-read-only-audit
