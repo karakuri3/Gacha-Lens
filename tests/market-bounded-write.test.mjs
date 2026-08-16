@@ -110,6 +110,45 @@ for (const [name, mutate, reason] of [
 
 test("exact eligible set is selected", () => assert.equal(selectExactMarketBoundedCandidates(fixture().audit, fixture().plan).length, 2));
 test("zero eligible candidates is a valid no-op", () => { const value = fixture(0); assert.deepEqual(selectExactMarketBoundedCandidates(value.audit, value.plan), []); });
+test("reordered selected keys fail closed", () => {
+  const value = fixture();
+  value.plan = rebind({ ...value.plan, selected_candidate_keys: [...value.plan.selected_candidate_keys].reverse() });
+  assert.throws(() => selectExactMarketBoundedCandidates(value.audit, value.plan), (error) => error.reason_code === "bounded_candidate_set_mismatch");
+});
+test("substituting another independently safe candidate fails closed", () => {
+  const value = fixture(3);
+  value.plan = rebind({
+    ...value.plan,
+    selected_candidate_keys: [value.plan.selected_candidate_keys[0], value.audit.candidates[2].candidate_key],
+  });
+  assert.throws(() => selectExactMarketBoundedCandidates(value.audit, value.plan), (error) => error.reason_code === "bounded_candidate_set_mismatch");
+});
+test("a selected candidate becoming review-required fails before rows are built", () => {
+  const value = fixture(3);
+  value.audit.candidates[0].assessment.accepted = false;
+  value.audit.candidates[0].assessment.review_required = true;
+  value.audit.candidates[0].assessment.reason = "review_required";
+  value.audit.candidates[0].candidate_key = buildMarketCandidateKey(value.audit.candidates[0]);
+  normalizeAudit(value.audit);
+  assert.throws(() => buildMarketBoundedRows({ audit: value.audit, plan: value.plan, workflow }), (error) => error.reason_code === "bounded_candidate_set_mismatch");
+});
+test("an unselected safe candidate mutation changes the bound audit digest", () => {
+  const value = fixture(3);
+  const approvedBytes = value.auditBytes;
+  value.audit.candidates[2].listing.price += 1;
+  value.audit.candidates[2].candidate_key = buildMarketCandidateKey(value.audit.candidates[2]);
+  value.auditBytes = Buffer.from(`${JSON.stringify(value.audit, null, 2)}\n`);
+  assert.notEqual(calculateMarketAuditDigest(value.auditBytes), calculateMarketAuditDigest(approvedBytes));
+  assert.throws(() => validateMarketBoundedPlanIdentity({
+    audit_bytes: value.auditBytes,
+    audit: value.audit,
+    plan: value.plan,
+    workflow,
+    policy_digest: digest,
+    simulation: false,
+    now: "2026-08-02T00:05:00.000Z",
+  }), (error) => error.reason_code === "bounded_audit_digest_mismatch");
+});
 for (const [name, mutate] of [
   ["candidate addition", ({ audit }) => { audit.candidates.push(candidate(3)); normalizeAudit(audit); }],
   ["candidate removal", ({ audit }) => { audit.candidates.pop(); normalizeAudit(audit); }],

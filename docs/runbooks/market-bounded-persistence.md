@@ -22,7 +22,9 @@ The approval comparison trims only leading and trailing whitespace and otherwise
 
 The candidate audit is hashed from its saved bytes. The plan stores that `audit_digest`, a canonical `plan_digest`, and a 15-minute expiry. Persistence recomputes both digests and requires the audit Run ID, attempt, head SHA, event, plan stage, and policy digest to match the current workflow.
 
-The plan's selected candidate keys must exactly equal the recomputed safe set. Candidates are re-evaluated immediately before row construction. Zero eligible candidates is a successful no-op; silent truncation or replacement is prohibited.
+The complete audit remains bound by its byte digest. Planning first identifies every independently safe candidate, then runs a deterministic diversity-first selector with an independent hard ceiling of two. The selector follows `audit.selection.selected_variants`, prefers one candidate per distinct variant, and only then makes a second pass. Within a variant it ranks sanitized identity evidence, confidence, and finally candidate key. Safe candidates beyond capacity remain explicitly recorded as safe but not selected.
+
+Persistence independently re-evaluates every candidate and re-runs the same selector. The plan's selected candidate keys, order, selected count, unselected-safe count, and distinct-variant count must exactly equal the recomputed result. A reordered plan or substitution with another otherwise-safe candidate fails closed. Zero safe candidates is a successful no-op.
 
 ## Rows and idempotency
 
@@ -31,6 +33,8 @@ The bounded path uses the existing marketplace provider normalization, listing I
 For identity comparison only, Phase 6-D.1 removes query strings, fragments, and non-root trailing slashes after the public URL sanitizer has accepted the URL. This permits a stored Rakuten or Yahoo URL with harmless tracking parameters to match the fresh canonical product URL. Scheme, host, path case, internal duplicate slashes, and percent encoding remain significant. Credential-bearing URLs, provider or external-ID drift, different product paths, malformed raw chains, cycles, and chains reaching depth 128 fail closed. Candidate-key generation, canary identity matching, and stored public URL behavior are unchanged.
 
 Observation IDs bind workflow Run ID, attempt, policy digest, candidate key, and listing ID. Re-running the same Run/attempt with identical content is unchanged. Conflicting content, provider identity, external ID, URL, variant, or series fails before persistence.
+
+Selection itself does not currently prefer a not-yet-persisted listing because no such durable signal is present in the sanitized audit. Existing rows remain idempotent and write accounting still distinguishes insert, update, and unchanged operations, but the same best two candidates can be selected on later audits. Cross-run coverage rotation is intentionally deferred to Phase 8-B rather than adding a new Production query or rotation state here.
 
 Bounded rows use `raw.automatic_rollout`. They do not use or imply human-reviewed canary markers.
 
