@@ -192,21 +192,44 @@ test("Yahoo candidate is allowlisted", () => {
 });
 
 test("two eligible candidates fit bounded budget", () => assert.equal(plan(auditWith(2)).auto_eligible_count, 2));
-test("three eligible candidates reject whole run", () => {
-  const error = capturePlanError(auditWith(3));
-  assert.equal(error.reason_code, "rollout_budget_exceeded");
-  assert.equal(error.plan.selected_candidate_keys.length, 3);
+test("three eligible candidates remain audited while only two are selected", () => {
+  const result = plan(auditWith(3));
+  assert.equal(result.safe_candidate_count, 3);
+  assert.equal(result.selected_for_persistence_count, 2);
+  assert.equal(result.safe_not_selected_count, 1);
+  assert.equal(result.listing_writes_planned, 2);
+  assert.equal(result.observation_writes_planned, 2);
+  assert.equal(result.budget_checks.state, "within_budget");
 });
-test("budget rejection retains the complete prediction plan for audit", () => {
-  const error = capturePlanError(auditWith(3));
-  assert.equal(error.plan.database_writes, 0);
-  assert.equal(error.plan.budget_checks.state, "exceeded");
-  assert.equal(error.plan.selected_candidate_keys.length, 3);
+test("bounded plan retains complete safe-not-selected telemetry", () => {
+  const result = plan(auditWith(3));
+  assert.equal(result.database_writes, 0);
+  assert.deepEqual(result.safe_not_selected_candidates, [{
+    candidate_key: "0000000000000003",
+    reason: "bounded_selection_capacity",
+  }]);
 });
 test("listing writes three reject", () => assert.equal(capturePlanError(auditWith(2), { listings: 3 }).reason_code, "rollout_budget_exceeded"));
 test("observation writes three reject", () => assert.equal(capturePlanError(auditWith(2), { observations: 3 }).reason_code, "rollout_budget_exceeded"));
 test("review-required write one rejects", () => assert.equal(capturePlanError(auditWith(1), { review_required: 1 }).reason_code, "rollout_budget_exceeded"));
-test("candidate count 21 rejects", () => assert.equal(capturePlanError(auditWith(21)).reason_code, "rollout_budget_exceeded"));
+test("safe candidate count 21 rejects", () => {
+  const error = capturePlanError(auditWith(21));
+  assert.equal(error.reason_code, "rollout_budget_exceeded");
+  assert.equal(error.plan.budget_checks.safe_candidates_within_limit, false);
+  assert.equal(error.plan.selected_for_persistence_count, 2);
+});
+test("total candidate count 41 rejects even when only two are safe", () => {
+  const value = auditWith(41);
+  for (const entry of value.candidates.slice(2)) {
+    entry.assessment.accepted = false;
+    entry.assessment.review_required = true;
+    entry.assessment.reason = "review_required";
+  }
+  const error = capturePlanError(value);
+  assert.equal(error.reason_code, "rollout_budget_exceeded");
+  assert.equal(error.plan.budget_checks.total_candidates_within_limit, false);
+  assert.equal(error.plan.safe_candidate_count, 2);
+});
 test("selected variants six rejects", () => {
   const value = auditWith(1);
   value.selection.selected_variants = Array.from({ length: 6 }, (_, index) => selection(index));

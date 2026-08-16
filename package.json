@@ -47,6 +47,7 @@
     "market:bounded-persist": "node scripts/market-bounded-persistence.mjs",
     "market:bounded-manual": "node scripts/manual-market-bounded-persistence.mjs",
     "test:market-bounded-write": "node --test tests/market-bounded-write.test.mjs",
+    "test:market-bounded-selection": "node --test tests/market-bounded-selection.test.mjs",
     "test:manual-market-bounded": "node --test tests/manual-market-bounded-execution.test.mjs"
   },
   "dependencies": {

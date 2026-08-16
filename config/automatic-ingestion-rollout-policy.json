@@ -34,8 +34,9 @@
       "minimum_interval_minutes": 720,
       "max_runs_per_24_hours": 1,
       "max_selected_variants": 5,
-      "max_candidates": 20,
-      "max_accepted_candidates": 2,
+      "max_candidates": 40,
+      "max_accepted_candidates": 20,
+      "max_persistence_candidates": 2,
       "max_listing_writes": 2,
       "max_observation_writes": 2,
       "max_review_required_writes": 0

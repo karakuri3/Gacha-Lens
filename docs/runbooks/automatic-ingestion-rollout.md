@@ -48,7 +48,11 @@ Human-reviewed canary rules remain unchanged and are not reused as automatic app
 
 ## Budget
 
-The bounded policy permits at most five selected variants, 20 candidates, two auto-eligible candidates, two listing writes, two observation writes, and zero review-required writes. Exceeding any budget rejects the whole plan. Candidates are never silently truncated to fit.
+The bounded policy keeps discovery, independent safety, and persistence selection as separate states. It permits at most five selected variants, 40 total audited candidates, 20 independently safe candidates, two persistence-selected candidates, two listing writes, two observation writes, and zero review-required writes. Exceeding any budget rejects the whole plan.
+
+The persistence selector is deterministic and diversity-first. It follows the catalog order in `audit.selection.selected_variants`, selects one independently safe candidate per distinct variant before a second pass, and ranks candidates within a variant by explicit target-label evidence, exact parent evidence, required discriminator evidence, confidence descending, then candidate key ascending. Provider delivery order, candidate input order, price, and commercial configuration do not affect selection. Independently safe candidates beyond the two-row persistence capacity remain visible as `bounded_selection_capacity`; they are not relabeled as review-required.
+
+The proposed `max_candidates: 40`, `max_accepted_candidates: 20`, and `max_persistence_candidates: 2` policy changes its digest. Production approval must not be rebound until the policy change is separately reviewed and approved.
 
 ## Simulation workflow
 
