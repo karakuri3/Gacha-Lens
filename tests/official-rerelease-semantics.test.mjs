@@ -233,6 +233,7 @@ function existingSeries(record, release = {}) {
     id: record.id,
     slug: record.slug,
     name: record.name,
+    franchise: record.franchise,
     brand: record.brand,
     category: record.category,
     release_date: "2020-09-17",

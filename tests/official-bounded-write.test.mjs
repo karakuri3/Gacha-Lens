@@ -33,6 +33,14 @@ test("valid schema v3 artifact deterministically selects one safe series", () =>
   assert.equal(selection.candidate.variant_count, 2);
 });
 
+test("series apply contract preserves official franchise", () => {
+  const { report, record } = artifactFixture();
+  const values = report.plan.candidates[0].apply_contract.series.values;
+
+  assert.equal(values.franchise, record.franchise);
+  assert.equal(values.franchise, "監査作品");
+});
+
 test("writer rejects schema v1 and v2 artifacts", () => {
   for (const schemaVersion of [1, 2]) {
     const { report } = artifactFixture();
