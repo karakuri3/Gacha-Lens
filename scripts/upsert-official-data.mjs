@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
+import {
+  assertLegacyOfficialRecordsSafe,
+  loadExistingRealVariantSeriesIdsStrict,
+} from "../lib/domain/official-upsert-safety.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { fetchRows, upsertRows } from "./supabase-rest.mjs";
 
@@ -8,8 +12,9 @@ loadEnvFile(".env.local");
 
 const generatedOfficial = loadGeneratedOfficialRaw();
 const officialRows = dedupeById([...generatedOfficial.records, ...officialSchedule, ...officialProducts]);
+assertLegacyOfficialRecordsSafe(officialRows);
 const seriesRows = dedupeRowsById(officialRows.map(toSeriesRow));
-const existingRealVariantSeriesIds = await loadExistingRealVariantSeriesIds();
+const existingRealVariantSeriesIds = await loadExistingRealVariantSeriesIdsStrict(fetchRows);
 const variantRows = dedupeRowsById(officialRows.flatMap((series) => {
   const variants = asArray(series.variants || series.items || series.lineup || series.line_up);
   if (variants.length) return variants.map((variant) => toVariantRow(variant, series));
@@ -46,19 +51,6 @@ function loadGeneratedOfficialRaw() {
     records: Array.isArray(parsed.records) ? parsed.records : [],
     issues: Array.isArray(parsed.issues) ? parsed.issues : [],
   };
-}
-
-async function loadExistingRealVariantSeriesIds() {
-  try {
-    const rows = await fetchRows("variants", {
-      select: "series_id",
-      params: { variant_type: "neq.provisional" },
-    });
-    return new Set(rows.map((row) => row.series_id).filter(Boolean));
-  } catch (error) {
-    console.warn(`[upsert-official] Existing real variants could not be read: ${error.message}`);
-    return new Set();
-  }
 }
 
 function dedupeById(records) {
