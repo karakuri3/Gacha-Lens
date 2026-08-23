@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   assertManualMarketAuditCountsUnchanged,
+  collectManualMarketAuditSecretValues,
   findManualMarketAuditSecretLeaks,
   validateManualMarketAuditReport,
 } from "../lib/domain/manual-market-audit-safety.js";
@@ -47,10 +48,7 @@ if (command === "snapshot") {
     text: fs.readFileSync(filePath, "utf8"),
   }));
   if (!files.length) throw new Error("Manual market audit artifact directory is empty.");
-  const secretValues = Object.entries(process.env)
-    .filter(([name]) => /(?:KEY|TOKEN|SECRET|PASSWORD|APPLICATION_ID|AFFILIATE_ID)$/i.test(name))
-    .map(([, value]) => value)
-    .filter(Boolean);
+  const secretValues = collectManualMarketAuditSecretValues(process.env);
   const findings = findManualMarketAuditSecretLeaks(files, secretValues);
   if (findings.length) throw new Error(`Manual market audit artifact secret scan failed for ${findings.length} file(s).`);
   console.log(JSON.stringify({ ok: true, files_scanned: files.length, secret_findings: 0 }));
