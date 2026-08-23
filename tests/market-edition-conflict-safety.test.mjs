@@ -304,6 +304,16 @@ test("26 sibling series Vol.3 remains an edition conflict before the product lab
   assert.equal(result.auditChecks.parentSeriesEditionConflict, true);
 });
 
+for (const marker of ["Vol.2", "PART2", "第2弾", "クラシック"]) {
+  test(`explicit ${marker} after a valid product label remains an edition conflict`, () => {
+    const result = assess(`ならぶんです。 Winnie the Pooh 【くまのプーさんA】 ${marker}`);
+    assert.equal(result.accepted, false);
+    assert.equal(result.reviewRequired, true);
+    assert.equal(result.reason, "parent_series_edition_conflict");
+    assert.equal(result.auditChecks.parentSeriesEditionConflict, true);
+  });
+}
+
 const FALSE_ACCEPTED_TITLES = [
   "バンダイ ガチャ ならぶんです。 Winnie the Pooh 2 くまのプーさん クラシック 【くまのプーさんA】",
   "バンダイ ガチャ ならぶんです。 Winnie the Pooh 2 くまのプーさん クラシック 【くまのプーさんB】",
