@@ -40,6 +40,7 @@ import {
   manualCanarySelectionOptions,
   shouldApplyMarketManualCanarySelection,
 } from "../lib/domain/market-manual-canary-selection.js";
+import { planManualMarketAuditDiagnostic } from "../lib/domain/manual-market-audit-diagnostic.js";
 import { loadOfficialCatalog } from "./load-official-catalog.mjs";
 import { loadMarketCoverageData } from "./market-coverage-data.mjs";
 import { deleteRowsByIds, fetchRowCount, fetchRows, upsertRows } from "./supabase-rest.mjs";
@@ -63,7 +64,15 @@ async function runDryMode(options) {
   const selectionOptions = manualProfile
     ? { ...options, ...manualCanarySelectionOptions(manualProfile) }
     : options;
-  const plan = planMarketSearchQueries(data.catalog, data.coverageRows, selectionOptions);
+  const diagnostic = options.manualDiagnosticPriorityFallback && manualProfile
+    ? planManualMarketAuditDiagnostic({
+      catalog: data.catalog,
+      coverageRows: data.coverageRows,
+      options: selectionOptions,
+      profile: manualProfile,
+    })
+    : { plan: planMarketSearchQueries(data.catalog, data.coverageRows, selectionOptions), manualDiagnostic: null };
+  const plan = diagnostic.plan;
   const selectionProfile = manualProfile
     ? buildMarketManualCanarySelectionDiagnostics(manualProfile, plan.summary)
     : null;
@@ -95,6 +104,7 @@ async function runDryMode(options) {
     write_protected: true,
     ...plan.summary,
     ...(selectionProfile ? { selection_profile: selectionProfile } : {}),
+    ...(diagnostic.manualDiagnostic ? { manual_diagnostic: diagnostic.manualDiagnostic } : {}),
     selected_variant_ids: plan.selected.map((entry) => entry.variantId),
     selected_sample: plan.selected.slice(0, 5).map((entry) => ({
       variant_id: entry.variantId,
@@ -406,6 +416,7 @@ function parseOptions(args) {
     release: ["released", "upcoming", "all"].includes(values.release) ? values.release : "all",
     cooldownHours: Math.max(0, Number(values.cooldownHours ?? values["cooldown-hours"] ?? 24) || 0),
     executeSources: flags.has("execute-sources"),
+    manualDiagnosticPriorityFallback: flags.has("manual-diagnostic-priority-fallback"),
     sourceScope: normalizeMarketSourceScope(values["source-scope"], MARKET_SOURCE_SCOPES.PLANNER_APIS),
     auditRunId: values["audit-run-id"] ?? "",
     candidateKeys: values["candidate-keys"] ?? "",

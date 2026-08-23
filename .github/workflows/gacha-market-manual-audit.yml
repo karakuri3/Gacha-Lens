@@ -85,6 +85,7 @@ jobs:
           --priority=1
           --release=released
           --source-scope=planner-apis
+          --manual-diagnostic-priority-fallback
           --execute-sources
       - name: Capture Production counts after audit
         id: after_counts
@@ -106,11 +107,15 @@ jobs:
           --profile=config/market-manual-canary-selection.json
           --expected-head-sha=${{ github.sha }}
           --expected-run-id=${{ github.run_id }}
-      - name: Build read-only rollout plan
-        run: >-
-          npm run market:rollout-plan --
-          --audit-path=${{ runner.temp }}/gacha-market-manual-audit/market-candidate-audit.json
-          --output-dir=${{ runner.temp }}/gacha-market-manual-audit/readiness
+      - name: Build read-only rollout plan when audit is canary-authoritative
+        run: |
+          if node scripts/manual-market-audit-guard.mjs is-non-authoritative --audit=${{ runner.temp }}/gacha-market-manual-audit/market-candidate-audit.json; then
+            echo "Diagnostic-only audit cannot be used for a rollout plan."
+          else
+            npm run market:rollout-plan -- \
+              --audit-path=${{ runner.temp }}/gacha-market-manual-audit/market-candidate-audit.json \
+              --output-dir=${{ runner.temp }}/gacha-market-manual-audit/readiness
+          fi
       - name: Scan artifact for secrets
         run: node scripts/manual-market-audit-guard.mjs scan --directory=${{ runner.temp }}/gacha-market-manual-audit
       - name: Upload sanitized manual market audit

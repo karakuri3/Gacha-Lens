@@ -13,6 +13,10 @@ import {
   buildSanitizedMarketCandidateAudit,
   renderMarketCandidateAuditMarkdown,
 } from "../lib/domain/market-candidate-audit.js";
+import { planManualMarketAuditDiagnostic } from "../lib/domain/manual-market-audit-diagnostic.js";
+import { validateApprovedMarketAudit } from "../lib/domain/market-canary-write.js";
+import { validateRolloutAudit } from "../lib/domain/market-rollout-plan.js";
+import { buildMarketBoundedRows } from "../lib/domain/market-bounded-write.js";
 import { planMarketSearchQueries } from "../lib/fetchers/market-query-planner.js";
 
 const NOW = new Date("2026-07-30T00:00:00Z");
@@ -260,4 +264,78 @@ test("market backfill wires the profile only through the manual dry-run predicat
 test("approved query replay remains independent of the manual selection profile", async () => {
   const source = await readFile(new URL("../lib/domain/market-approved-query-replay.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /manual-canary|manualCanary|maxVariantsPerSeries|excludedVariantIds/);
+});
+
+test("manual diagnostic selects available priority when priority one is empty without becoming canary-authoritative", () => {
+  const rows = [
+    row("priority-two-a", "series-a", { priority: 2 }),
+    row("priority-three-b", "series-b", { priority: 3 }),
+  ];
+  const diagnostic = planManualMarketAuditDiagnostic({
+    catalog: catalogFor(rows),
+    coverageRows: rows,
+    options: { now: NOW, cooldownHours: 0, limit: 5, priority: "1", release: "released" },
+    profile: PROFILE,
+  });
+  assert.equal(diagnostic.plan.selected.length, 2);
+  assert.deepEqual(diagnostic.plan.selected.map((entry) => entry.priority), [2, 3]);
+  assert.deepEqual(diagnostic.manualDiagnostic, {
+    kind: "manual_priority_fallback",
+    canary_eligible: false,
+    write_eligible: false,
+    requested_priority: "1",
+    effective_priority: "all",
+    fallback_reason: "priority_1_empty",
+  });
+
+  const selectionProfile = buildMarketManualCanarySelectionDiagnostics(PROFILE, diagnostic.plan.summary);
+  const report = buildSanitizedMarketCandidateAudit({
+    records: [],
+    queryPlan: diagnostic.plan.queries,
+    catalog: catalogFor(rows),
+    runContext: {
+      generated_at: "2026-07-30T00:00:00.000Z",
+      mode: "dry-run",
+      source_scope: "planner-apis",
+      run_id: "40000000001",
+      head_sha: "a".repeat(40),
+      event_name: "workflow_dispatch",
+    },
+    summary: {
+      selection_profile: selectionProfile,
+      manual_diagnostic: diagnostic.manualDiagnostic,
+      safety_assessed_records: 0,
+      no_result_variants: diagnostic.plan.selected.length,
+      listing_upserts: 0,
+      observations_created: 0,
+      ingestion_runs_written: 0,
+    },
+  });
+  assert.deepEqual(report.database_writes, { listings: 0, observations: 0, ingestion_runs: 0 });
+  assert.match(renderMarketCandidateAuditMarkdown(report), /Canary eligible: false/);
+  assert.throws(
+    () => validateApprovedMarketAudit(report, {
+      auditRunId: "40000000001",
+      isAncestor: true,
+      now: "2026-07-30T00:01:00.000Z",
+    }),
+    /Diagnostic-only/,
+  );
+  assert.throws(() => validateRolloutAudit(report), /Diagnostic-only/);
+  assert.throws(
+    () => buildMarketBoundedRows({ audit: report }),
+    /bounded_candidate_not_safe/,
+  );
+});
+
+test("priority one manual selection remains canary-authoritative", () => {
+  const rows = [row("priority-one", "series-a", { priority: 1 })];
+  const diagnostic = planManualMarketAuditDiagnostic({
+    catalog: catalogFor(rows),
+    coverageRows: rows,
+    options: { now: NOW, cooldownHours: 0, limit: 5, priority: "1", release: "released" },
+    profile: PROFILE,
+  });
+  assert.deepEqual(diagnostic.plan.selected.map((entry) => entry.variantId), ["priority-one"]);
+  assert.equal(diagnostic.manualDiagnostic, null);
 });

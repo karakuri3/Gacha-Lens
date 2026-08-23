@@ -34,6 +34,7 @@ test("manual audit workflow exposes only a bounded limit input", () => {
 test("manual audit command fixes market dry-run contract internally", () => {
   assert.match(workflow, /--mode=dry-run/);
   assert.match(workflow, /--priority=1/);
+  assert.match(workflow, /--manual-diagnostic-priority-fallback/);
   assert.match(workflow, /--release=released/);
   assert.match(workflow, /--source-scope=planner-apis/);
   assert.match(workflow, /--execute-sources/);
