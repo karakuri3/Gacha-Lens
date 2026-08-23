@@ -14,8 +14,8 @@ test("manual audit secret collection excludes public affiliate tracking identifi
     OTHER_TOKEN: "private-token-12345",
   });
 
-  assert.doesNotContain(values, "public-rakuten-affiliate-12345");
-  assert.doesNotContain(values, "public-yahoo-tracking-12345");
+  assert.equal(values.includes("public-rakuten-affiliate-12345"), false);
+  assert.equal(values.includes("public-yahoo-tracking-12345"), false);
   assert.ok(values.includes("private-rakuten-access-12345"));
   assert.ok(values.includes("private-service-role-12345"));
   assert.ok(values.includes("private-token-12345"));
