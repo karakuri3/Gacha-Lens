@@ -32,6 +32,7 @@ if (command === "snapshot") {
   validateManualMarketAuditReport(report, {
     expectedHeadSha: options["expected-head-sha"],
     expectedRunId: options["expected-run-id"],
+    expectedPriority: options["expected-priority"],
     blockedVariantIds: profile.blocked_variants.map((entry) => entry.variant_id),
   });
   assertManualMarketAuditCountsUnchanged(readJson(beforePath), readJson(afterPath));

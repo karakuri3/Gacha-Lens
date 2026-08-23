@@ -22,6 +22,11 @@ import {
   buildApprovedCanaryQueryPlan,
   sanitizeCanaryQueryReplay,
 } from "../lib/domain/market-approved-query-replay.js";
+import { buildPriorityThreeSeedReadOnlyDiagnostic } from "../lib/domain/manual-market-audit-diagnostic.js";
+import {
+  buildPriorityThreeSeedQueryPlanArtifact,
+  renderPriorityThreeSeedQueryPlanMarkdown,
+} from "../lib/domain/market-seed-audit.js";
 import {
   MARKET_SOURCE_SCOPES,
   assertMarketFetchComplete,
@@ -59,6 +64,7 @@ if (options.mode === "canary-write") {
 
 async function runDryMode(options) {
   const startedAt = Date.now();
+  assertReadOnlySeedAuditContract(options);
   const data = await loadMarketCoverageData();
   const manualProfile = resolveManualSelectionProfile(options);
   const selectionOptions = manualProfile
@@ -104,7 +110,9 @@ async function runDryMode(options) {
     write_protected: true,
     ...plan.summary,
     ...(selectionProfile ? { selection_profile: selectionProfile } : {}),
-    ...(diagnostic.manualDiagnostic ? { manual_diagnostic: diagnostic.manualDiagnostic } : {}),
+    ...(options.readOnlySeedAudit
+      ? { manual_diagnostic: buildPriorityThreeSeedReadOnlyDiagnostic() }
+      : diagnostic.manualDiagnostic ? { manual_diagnostic: diagnostic.manualDiagnostic } : {}),
     selected_variant_ids: plan.selected.map((entry) => entry.variantId),
     selected_sample: plan.selected.slice(0, 5).map((entry) => ({
       variant_id: entry.variantId,
@@ -142,6 +150,21 @@ function resolveManualSelectionProfile(options) {
   const profilePath = process.env.MARKET_MANUAL_CANARY_SELECTION_PATH
     || path.resolve("config/market-manual-canary-selection.json");
   return loadMarketManualCanarySelectionProfile(profilePath);
+}
+
+function assertReadOnlySeedAuditContract(options) {
+  if (!options.readOnlySeedAudit) return;
+  if (
+    process.env.BACKFILL_TASK !== "market"
+    || options.mode !== "dry-run"
+    || options.priority !== "3"
+    || options.release !== "released"
+    || options.sourceScope !== MARKET_SOURCE_SCOPES.PLANNER_APIS
+    || options.executeSources !== true
+    || options.manualDiagnosticPriorityFallback
+  ) {
+    throw new Error("Priority 3 seed audit requires the fixed read-only market contract.");
+  }
 }
 
 async function runWriteMode(options) {
@@ -321,6 +344,9 @@ function writeAuditReport({ records, plan, catalog, summary }) {
   const markdownName = "market-candidate-audit.md";
   fs.writeFileSync(path.join(outputDir, jsonName), `${JSON.stringify(report, null, 2)}\n`, "utf8");
   fs.writeFileSync(path.join(outputDir, markdownName), renderMarketCandidateAuditMarkdown(report), "utf8");
+  const seedQueryPlanOutput = summary.manual_diagnostic?.kind === "priority_3_seed_read_only"
+    ? writePriorityThreeSeedQueryPlan(outputDir, plan)
+    : {};
   return {
     audit_report_generated: true,
     audit_report_complete: report.result.report_complete,
@@ -329,6 +355,19 @@ function writeAuditReport({ records, plan, catalog, summary }) {
     audit_review_count: report.result.review_count,
     audit_json_path: jsonName,
     audit_markdown_path: markdownName,
+    ...seedQueryPlanOutput,
+  };
+}
+
+function writePriorityThreeSeedQueryPlan(outputDir, plan) {
+  const artifact = buildPriorityThreeSeedQueryPlanArtifact(plan);
+  const jsonName = "market-seed-query-plan.json";
+  const markdownName = "market-seed-query-plan.md";
+  fs.writeFileSync(path.join(outputDir, jsonName), `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+  fs.writeFileSync(path.join(outputDir, markdownName), renderPriorityThreeSeedQueryPlanMarkdown(artifact), "utf8");
+  return {
+    seed_query_plan_json_path: jsonName,
+    seed_query_plan_markdown_path: markdownName,
   };
 }
 
@@ -416,6 +455,7 @@ function parseOptions(args) {
     release: ["released", "upcoming", "all"].includes(values.release) ? values.release : "all",
     cooldownHours: Math.max(0, Number(values.cooldownHours ?? values["cooldown-hours"] ?? 24) || 0),
     executeSources: flags.has("execute-sources"),
+    readOnlySeedAudit: flags.has("read-only-seed-audit"),
     manualDiagnosticPriorityFallback: flags.has("manual-diagnostic-priority-fallback"),
     sourceScope: normalizeMarketSourceScope(values["source-scope"], MARKET_SOURCE_SCOPES.PLANNER_APIS),
     auditRunId: values["audit-run-id"] ?? "",
