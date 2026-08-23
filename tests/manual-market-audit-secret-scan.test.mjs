@@ -5,38 +5,47 @@ import {
   findManualMarketAuditSecretLeaks,
 } from "../lib/domain/manual-market-audit-safety.js";
 
-test("manual audit secret collection excludes public affiliate tracking identifiers", () => {
+test("manual audit secret collection excludes public provider identifiers", () => {
   const values = collectManualMarketAuditSecretValues({
+    RAKUTEN_APPLICATION_ID: "public-rakuten-application-12345",
     RAKUTEN_AFFILIATE_ID: "public-rakuten-affiliate-12345",
+    YAHOO_SHOPPING_APP_ID: "public-yahoo-app-12345",
     YAHOO_AFFILIATE_TRACKING_ID: "public-yahoo-tracking-12345",
     RAKUTEN_ACCESS_KEY: "private-rakuten-access-12345",
     SUPABASE_SERVICE_ROLE_KEY: "private-service-role-12345",
     OTHER_TOKEN: "private-token-12345",
   });
 
+  assert.equal(values.includes("public-rakuten-application-12345"), false);
   assert.equal(values.includes("public-rakuten-affiliate-12345"), false);
+  assert.equal(values.includes("public-yahoo-app-12345"), false);
   assert.equal(values.includes("public-yahoo-tracking-12345"), false);
   assert.ok(values.includes("private-rakuten-access-12345"));
   assert.ok(values.includes("private-service-role-12345"));
   assert.ok(values.includes("private-token-12345"));
 });
 
-test("public Rakuten affiliate URL is not treated as a secret leak", () => {
+test("public Rakuten provider identifiers are not treated as secret leaks", () => {
   const env = {
+    RAKUTEN_APPLICATION_ID: "public-rakuten-application-12345",
     RAKUTEN_AFFILIATE_ID: "public-rakuten-affiliate-12345",
     RAKUTEN_ACCESS_KEY: "private-rakuten-access-12345",
   };
   const secretValues = collectManualMarketAuditSecretValues(env);
-  const affiliateUrl = "https://item.rakuten.co.jp/example/item-1/?scid=af_pc_etc&sc2id=af_101_0_0&affiliateId=public-rakuten-affiliate-12345";
+  const publicText = [
+    "applicationId=public-rakuten-application-12345",
+    "https://item.rakuten.co.jp/example/item-1/?scid=af_pc_etc&sc2id=af_101_0_0&affiliateId=public-rakuten-affiliate-12345",
+  ].join("\n");
 
   assert.deepEqual(
-    findManualMarketAuditSecretLeaks([{ name: "market-candidate-audit.json", text: affiliateUrl }], secretValues),
+    findManualMarketAuditSecretLeaks([{ name: "market-candidate-audit.json", text: publicText }], secretValues),
     [],
   );
 });
 
 test("manual audit scan still catches real configured secrets", () => {
   const env = {
+    RAKUTEN_APPLICATION_ID: "public-rakuten-application-12345",
     RAKUTEN_AFFILIATE_ID: "public-rakuten-affiliate-12345",
     RAKUTEN_ACCESS_KEY: "private-rakuten-access-12345",
     SUPABASE_SERVICE_ROLE_KEY: "private-service-role-12345",
