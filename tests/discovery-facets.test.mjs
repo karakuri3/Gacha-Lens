@@ -6,6 +6,7 @@ import {
   collectPublicDiscoveryFacetCatalogs,
   collectPublicDiscoveryFacets,
   decodeDiscoveryFacetParam,
+  discoveryFacetLookupCandidates,
   discoveryFacetHref,
   discoveryFacetPageHref,
   findPublicDiscoveryFacet,
@@ -154,7 +155,9 @@ test("facet detail pages use targeted public queries instead of the sitemap popu
   assert.match(functionSource, /fetchSupabasePublicDiscoveryFacetSeriesPage/);
   assert.doesNotMatch(functionSource, /getPublicSitemapIdentifiers\(\)/);
   assert.doesNotMatch(functionSource, /fetchSupabaseParentSeriesByIds/);
-  assert.match(functionSource, /if \(result\.total === 0\) return null/);
+  assert.match(functionSource, /if \(result\.total === 0\) continue/);
+  assert.match(functionSource, /discoveryFacetLookupCandidates\(name\)/);
+  assert.match(functionSource, /for \(const facetName of facetNames\)/);
   assert.match(functionSource, /throw new Error\("Public discovery series page failed publication validation"\)/);
 });
 
@@ -179,6 +182,16 @@ test("public detail pages avoid global facet scans and preserve local display va
   const catalog = source("app/series/page.js");
   assert.match(catalog, /href="\/franchises"/);
   assert.match(catalog, /href="\/brands"/);
+});
+
+test("targeted facet lookup tries raw first and decodes valid percent-encoded params once", () => {
+  assert.deepEqual(discoveryFacetLookupCandidates("バンダイ"), ["バンダイ"]);
+  assert.deepEqual(discoveryFacetLookupCandidates("%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4"), [
+    "%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4",
+    "バンダイ",
+  ]);
+  assert.deepEqual(discoveryFacetLookupCandidates("100%値"), ["100%値"]);
+  assert.deepEqual(discoveryFacetLookupCandidates("100%25"), ["100%25", "100%"]);
 });
 
 test("related variant lookups are bounded and never load the broad repository in Supabase mode", () => {

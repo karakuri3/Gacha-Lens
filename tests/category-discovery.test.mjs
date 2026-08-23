@@ -129,7 +129,9 @@ test("category discovery uses a targeted public catalog query without sitemap ca
   assert.match(functionSource, /getSeriesCatalogPage\(\{ category, page: requestedPage/);
   assert.doesNotMatch(functionSource, /getPublicSitemapIdentifiers\(\)/);
   assert.doesNotMatch(functionSource, /result\.total !==/);
-  assert.match(functionSource, /if \(result\.total === 0\) return null/);
+  assert.match(functionSource, /if \(result\.total === 0\) continue/);
+  assert.match(functionSource, /discoveryFacetLookupCandidates\(name\)/);
+  assert.match(functionSource, /for \(const category of categories\)/);
   assert.doesNotMatch(source("lib/domain/category-discovery.js"), /affiliate|commission|ranking|forecast|market|stock|reaction/i);
 });
 
