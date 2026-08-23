@@ -1,0 +1,135 @@
+name: Gacha Market Seed Audit
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: Maximum Priority 3 variants to audit (1-5)
+        required: true
+        default: "5"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+          - "5"
+
+jobs:
+  market-seed-dry-run:
+    concurrency:
+      group: gacha-market-seed-audit
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      RAKUTEN_APPLICATION_ID: ${{ secrets.RAKUTEN_APPLICATION_ID }}
+      RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+      RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+      YAHOO_SHOPPING_APP_ID: ${{ secrets.YAHOO_SHOPPING_APP_ID }}
+      YAHOO_SHOPPING_FETCH_ENABLED: ${{ secrets.YAHOO_SHOPPING_FETCH_ENABLED }}
+      GACHA_DATA_SOURCE: supabase
+      MARKET_BACKFILL_WRITE_DISABLED: "true"
+      AUDIT_LIMIT: ${{ inputs.limit }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify main and fixed Priority 3 read-only contract
+        shell: bash
+        env:
+          FIXED_TASK: market
+          FIXED_MODE: dry-run
+          FIXED_PRIORITY: "3"
+          FIXED_RELEASE: released
+          FIXED_SOURCE_SCOPE: planner-apis
+          FIXED_EXECUTE_SOURCES: "true"
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+          test "$FIXED_TASK" = "market"
+          test "$FIXED_MODE" = "dry-run"
+          test "$FIXED_PRIORITY" = "3"
+          test "$FIXED_RELEASE" = "released"
+          test "$FIXED_SOURCE_SCOPE" = "planner-apis"
+          test "$FIXED_EXECUTE_SOURCES" = "true"
+          case "$AUDIT_LIMIT" in 1|2|3|4|5) ;; *) echo "::error::Limit must be between 1 and 5."; exit 1 ;; esac
+      - name: Capture Production counts before audit
+        id: before_counts
+        run: node scripts/manual-market-audit-guard.mjs snapshot --output=${{ runner.temp }}/seed-audit-before.json
+      - name: Run fixed Priority 3 market seed dry-run
+        id: market_backfill
+        env:
+          BACKFILL_TASK: market
+          MARKET_AUDIT_OUTPUT_DIR: ${{ runner.temp }}/gacha-market-seed-audit
+        run: >-
+          npm run market:backfill --
+          --mode=dry-run
+          --limit=${{ inputs.limit }}
+          --priority=3
+          --release=released
+          --source-scope=planner-apis
+          --execute-sources
+          --read-only-seed-audit
+      - name: Capture Production counts after audit
+        id: after_counts
+        if: ${{ always() && steps.before_counts.outcome == 'success' }}
+        run: node scripts/manual-market-audit-guard.mjs snapshot --output=${{ runner.temp }}/seed-audit-after.json
+      - name: Verify zero Production delta
+        if: ${{ always() && steps.before_counts.outcome == 'success' && steps.after_counts.outcome == 'success' }}
+        run: >-
+          node scripts/manual-market-audit-guard.mjs compare
+          --before=${{ runner.temp }}/seed-audit-before.json
+          --after=${{ runner.temp }}/seed-audit-after.json
+      - name: Validate complete Priority 3 zero-write audit
+        id: audit_verify
+        if: ${{ always() && steps.market_backfill.outcome == 'success' && steps.before_counts.outcome == 'success' && steps.after_counts.outcome == 'success' }}
+        run: >-
+          node scripts/manual-market-audit-guard.mjs verify
+          --audit=${{ runner.temp }}/gacha-market-seed-audit/market-candidate-audit.json
+          --before=${{ runner.temp }}/seed-audit-before.json
+          --after=${{ runner.temp }}/seed-audit-after.json
+          --profile=config/market-manual-canary-selection.json
+          --expected-head-sha=${{ github.sha }}
+          --expected-run-id=${{ github.run_id }}
+          --expected-priority=3
+      - name: Scan artifact for secrets
+        id: scan
+        if: ${{ always() && steps.market_backfill.outcome == 'success' }}
+        run: node scripts/manual-market-audit-guard.mjs scan --directory=${{ runner.temp }}/gacha-market-seed-audit
+      - name: Upload sanitized Priority 3 seed audit
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-candidate-audit-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-market-seed-audit
+          if-no-files-found: error
+          retention-days: 7
+      - name: Write summary
+        if: always()
+        run: |
+          echo "## Gacha Market Seed Audit" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Task: market" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: dry-run" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Priority: 3" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Source scope: planner-apis" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Selection profile: manual_canary_diversity" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Artifact: market-candidate-audit-${{ github.run_id }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Production writes: 0" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Status: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"

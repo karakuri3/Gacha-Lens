@@ -206,6 +206,16 @@ test("manual report rejects blocked selection and more than one variant per seri
   assert.throws(() => validateManualMarketAuditReport(repeated, validOptions()), /series cap|one variant per series/);
 });
 
+test("manual report enforces an optional fixed priority", () => {
+  const report = validReport();
+  report.selection.selected_variants[0].priority = 3;
+  assert.equal(validateManualMarketAuditReport(report, { ...validOptions(), expectedPriority: 3 }), true);
+  assert.throws(
+    () => validateManualMarketAuditReport(report, { ...validOptions(), expectedPriority: 1 }),
+    /selection priority/,
+  );
+});
+
 test("Production count comparison fails closed on any delta", () => {
   const before = counts();
   assert.equal(assertManualMarketAuditCountsUnchanged(before, { ...before }), true);
