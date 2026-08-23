@@ -29,11 +29,13 @@ function plan() {
 
 test("Priority 3 seed query plan keeps an allowlisted primary and fallback plan", () => {
   const artifact = buildPriorityThreeSeedQueryPlanArtifact(plan());
+  const markdown = renderPriorityThreeSeedQueryPlanMarkdown(artifact);
   assert.equal(artifact.priority, 3);
   assert.equal(artifact.selected_variant_count, 1);
   assert.equal(artifact.query_attempt_count, 2);
   assert.deepEqual(artifact.selected_variants[0].fallback_queries, ["Variant A ガチャ"]);
-  assert.match(renderPriorityThreeSeedQueryPlanMarkdown(artifact), /Primary query/);
+  assert.match(markdown, /Primary query/);
+  assert.doesNotMatch(markdown, /authorization\s*[:=]/i);
 });
 
 test("Priority 3 seed query plans reject non-P3 selection and secret-shaped fields", () => {
