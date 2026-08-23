@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import ProductImage from "@/components/ProductImage";
 import FavoriteButton from "@/components/FavoriteButton";
 import StructuredData from "@/components/StructuredData";
-import { DiscoveryFacetLink } from "@/components/DiscoveryFacetPages";
-import { getParentSeriesBySlug, getPublicDiscoveryFacets } from "@/lib/series";
+import { getParentSeriesBySlug } from "@/lib/series";
 import { seriesHref, variantHref } from "@/lib/variant-url";
 import { absoluteSiteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import {
@@ -20,9 +20,11 @@ import {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const getParentSeriesDetail = cache((slug) => getParentSeriesBySlug(slug));
+
 export async function generateMetadata({ params }) {
   const { slug } = await params;
-  const item = await getParentSeriesBySlug(slug);
+  const item = await getParentSeriesDetail(slug);
   if (!item) notFound();
   return buildPageMetadata({
     title: `${item.name} シリーズ | Gacha Lens`,
@@ -34,9 +36,8 @@ export async function generateMetadata({ params }) {
 
 export default async function ParentSeriesDetailPage({ params }) {
   const { slug } = await params;
-  const item = await getParentSeriesBySlug(slug);
+  const item = await getParentSeriesDetail(slug);
   if (!item) notFound();
-  const discoveryFacets = await getPublicDiscoveryFacets();
 
   const released = Boolean(item.is_released);
   const variants = item.variants ?? [];
@@ -84,9 +85,9 @@ export default async function ParentSeriesDetailPage({ params }) {
             <p className="page-lead" style={{ marginTop: 12 }}>{item.brand || item.character || "公式商品"}</p>
 
             <dl className="detail-facts">
-              <div><dt>メーカー</dt><dd><DiscoveryFacetLink type="brand" value={item.brand} facets={discoveryFacets.brands} /></dd></div>
-              <div><dt>作品</dt><dd><DiscoveryFacetLink type="franchise" value={item.franchise || item.character} facets={discoveryFacets.franchises} /></dd></div>
-              <div><dt>カテゴリ</dt><dd><DiscoveryFacetLink type="category" value={item.category} facets={discoveryFacets.categories} /></dd></div>
+              <div><dt>メーカー</dt><dd>{item.brand || "未登録"}</dd></div>
+              <div><dt>作品</dt><dd>{item.franchise || item.character || "未登録"}</dd></div>
+              <div><dt>カテゴリ</dt><dd>{item.category || "未登録"}</dd></div>
               <div><dt>ラインナップ</dt><dd>{variants.length ? `${variants.length}種` : "確認中"}</dd></div>
               <div><dt>発売</dt><dd>{formatSchedule(item)}</dd></div>
               <div><dt>価格</dt><dd>{formatYen(item.price)}</dd></div>

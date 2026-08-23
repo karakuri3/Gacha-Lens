@@ -1,14 +1,14 @@
 ﻿import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import ProductImage from "@/components/ProductImage";
-import { getPublicDiscoveryFacets, getRelatedSeries, getSeriesBySlug } from "@/lib/series";
+import { getRelatedSeries, getSeriesBySlug } from "@/lib/series";
 import SeriesCard from "@/components/SeriesCard";
 import MarketplaceLinks from "@/components/MarketplaceLinks";
 import CommunityReportForm from "@/components/CommunityReportForm";
 import PriceTrendChart from "@/components/PriceTrendChart";
 import FavoriteButton from "@/components/FavoriteButton";
 import StructuredData from "@/components/StructuredData";
-import { DiscoveryFacetLink } from "@/components/DiscoveryFacetPages";
 import { variantHref } from "@/lib/variant-url";
 import { absoluteSiteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import {
@@ -29,9 +29,11 @@ import {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const getVariantDetail = cache((slug) => getSeriesBySlug(slug));
+
 export async function generateMetadata({ params }) {
   const resolvedParams = await params;
-  const item = await getSeriesBySlug(resolvedParams.slug);
+  const item = await getVariantDetail(resolvedParams.slug);
   if (!item) notFound();
   const path = variantHref(item);
   const description = item.summary
@@ -46,14 +48,11 @@ export async function generateMetadata({ params }) {
 
 export default async function VariantDetailPage({ params }) {
   const resolvedParams = await params;
-  const item = await getSeriesBySlug(resolvedParams.slug);
+  const item = await getVariantDetail(resolvedParams.slug);
   if (!item) notFound();
 
   const isReleased = Boolean(item.is_released);
-  const [relatedRecords, discoveryFacets] = await Promise.all([
-    getRelatedSeries(item.slug, 8),
-    getPublicDiscoveryFacets(),
-  ]);
+  const relatedRecords = await getRelatedSeries(item.slug, 8);
   const related = relatedRecords
     .filter((entry) => Boolean(entry.is_released) === isReleased)
     .slice(0, 3);
@@ -104,9 +103,9 @@ export default async function VariantDetailPage({ params }) {
             <p className="page-lead" style={{ marginTop: 12 }}>{item.series_name}</p>
 
             <dl className="detail-facts">
-              <div><dt>メーカー</dt><dd><DiscoveryFacetLink type="brand" value={item.brand} facets={discoveryFacets.brands} /></dd></div>
-              <div><dt>作品</dt><dd><DiscoveryFacetLink type="franchise" value={item.parent_series?.franchise || item.character} facets={discoveryFacets.franchises} /></dd></div>
-              <div><dt>カテゴリ</dt><dd><DiscoveryFacetLink type="category" value={item.category} facets={discoveryFacets.categories} /></dd></div>
+              <div><dt>メーカー</dt><dd>{item.brand || "未登録"}</dd></div>
+              <div><dt>作品</dt><dd>{item.parent_series?.franchise || item.character || "未登録"}</dd></div>
+              <div><dt>カテゴリ</dt><dd>{item.category || "未登録"}</dd></div>
               <div><dt>発売</dt><dd>{formatSchedule(item)}</dd></div>
               <div><dt>定価</dt><dd>{formatYen(item.price)}</dd></div>
             </dl>

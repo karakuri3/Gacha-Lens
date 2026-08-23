@@ -6,6 +6,7 @@ import {
   collectPublicDiscoveryFacetCatalogs,
   collectPublicDiscoveryFacets,
   decodeDiscoveryFacetParam,
+  discoveryFacetLookupCandidates,
   discoveryFacetHref,
   discoveryFacetPageHref,
   findPublicDiscoveryFacet,
@@ -125,10 +126,14 @@ test("public sitemap fetch remains identity-only, paged, and deterministic", () 
   assert.doesNotMatch(text, /market|signal|stock|reaction/i);
 });
 
-test("parent catalog applies exact franchise and brand filters", () => {
+test("targeted discovery fetch applies exact franchise and brand filters with public child rows", () => {
   const text = source("lib/data/supabase-gacha-repository.js");
-  assert.match(text, /query\.eq\("franchise", options\.franchise\)/);
-  assert.match(text, /query\.eq\("brand", options\.brand\)/);
+  assert.match(text, /fetchSupabasePublicDiscoveryFacetSeriesPage/);
+  assert.match(text, /\.eq\(type, value\)/);
+  assert.match(text, /variants!inner\(id\)/);
+  assert.match(text, /applyPublicVariantRelationFilter\(query, "variants"\)/);
+  assert.match(text, /variant_type\.is\.null,variant_type\.neq\.provisional/);
+  assert.match(text, /Math\.min\(60, Number\(options\.pageSize\) \|\| 60\)/);
 });
 
 test("discovery routes publish canonical metadata and reject non-indexable facets", () => {
@@ -144,12 +149,16 @@ test("discovery routes publish canonical metadata and reject non-indexable facet
   }
 });
 
-test("landing pages hydrate only the cached public parent population", () => {
+test("facet detail pages use targeted public queries instead of the sitemap population", () => {
   const text = source("lib/series.js");
-  assert.match(text, /getPublicDiscoveryFacetSeriesPage/);
-  assert.match(text, /getPublicSitemapIdentifiers\(\)/);
-  assert.match(text, /fetchSupabaseParentSeriesByIds/);
-  assert.match(text, /items\.length !== requestedIds\.length/);
+  const functionSource = text.slice(text.indexOf("export async function getPublicDiscoveryFacetSeriesPage"), text.indexOf("function buildPublicSitemapData"));
+  assert.match(functionSource, /fetchSupabasePublicDiscoveryFacetSeriesPage/);
+  assert.doesNotMatch(functionSource, /getPublicSitemapIdentifiers\(\)/);
+  assert.doesNotMatch(functionSource, /fetchSupabaseParentSeriesByIds/);
+  assert.match(functionSource, /if \(result\.total === 0\) continue/);
+  assert.match(functionSource, /discoveryFacetLookupCandidates\(name\)/);
+  assert.match(functionSource, /for \(const facetName of facetNames\)/);
+  assert.match(functionSource, /throw new Error\("Public discovery series page failed publication validation"\)/);
 });
 
 test("sitemap includes indexable discovery routes and preserves the global cap", () => {
@@ -162,15 +171,38 @@ test("sitemap includes indexable discovery routes and preserves the global cap",
   assert.match(text, /entries\.length > MAX_SITEMAP_URLS/);
 });
 
-test("public detail and catalog pages expose only conditional discovery links", () => {
+test("public detail pages avoid global facet scans and preserve local display values", () => {
   for (const file of ["app/series/[slug]/page.js", "app/series/group/[slug]/page.js"]) {
     const text = source(file);
-    assert.match(text, /getPublicDiscoveryFacets/);
-    assert.match(text, /DiscoveryFacetLink/);
+    assert.doesNotMatch(text, /getPublicDiscoveryFacets/);
+    assert.doesNotMatch(text, /DiscoveryFacetLink/);
+    assert.match(text, /メーカー/);
+    assert.match(text, /カテゴリ/);
   }
   const catalog = source("app/series/page.js");
   assert.match(catalog, /href="\/franchises"/);
   assert.match(catalog, /href="\/brands"/);
+});
+
+test("targeted facet lookup tries raw first and decodes valid percent-encoded params once", () => {
+  assert.deepEqual(discoveryFacetLookupCandidates("バンダイ"), ["バンダイ"]);
+  assert.deepEqual(discoveryFacetLookupCandidates("%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4"), [
+    "%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4",
+    "バンダイ",
+  ]);
+  assert.deepEqual(discoveryFacetLookupCandidates("100%値"), ["100%値"]);
+  assert.deepEqual(discoveryFacetLookupCandidates("100%25"), ["100%25", "100%"]);
+});
+
+test("related variant lookups are bounded and never load the broad repository in Supabase mode", () => {
+  const series = source("lib/series.js");
+  const repository = source("lib/data/supabase-gacha-repository.js");
+  const related = series.slice(series.indexOf("export async function getRelatedSeries"), series.indexOf("export async function getPriceHistoryMapBySeriesSlugs"));
+  const supabaseBranch = related.slice(0, related.indexOf("  return (await getRepository())"));
+  assert.match(related, /fetchSupabaseRelatedCatalog/);
+  assert.doesNotMatch(supabaseBranch, /getRepository\(\)/);
+  assert.match(repository, /candidateLimit = Math\.max\(1, Math\.min\(24,/);
+  assert.match(repository, /\.limit\(candidateLimit\)/);
 });
 
 test("facet discovery is independent from affiliate and ranking signals", () => {
