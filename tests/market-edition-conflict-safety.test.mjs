@@ -234,7 +234,12 @@ test("22 existing set handling remains higher priority", () => {
 });
 
 test("23 Production ブレス candidate remains accepted", () => {
-  const series = { id: "precure", slug: "precure", name: "名探偵プリキュア! アクセサリーコレクション" };
+  const series = {
+    id: "precure",
+    slug: "precure",
+    name: "名探偵プリキュア! アクセサリーコレクション",
+    franchise: "名探偵プリキュア!",
+  };
   const target = { id: "bracelet", slug: "bracelet", series_id: series.id, name: "ブレス(キュアアンサー)", variant_type: "normal" };
   const result = assess("名探偵プリキュア! アクセサリーコレクション [2.ブレス(キュアアンサー)]【ネコポス配送対応】【C】", {
     series,
@@ -246,7 +251,12 @@ test("23 Production ブレス candidate remains accepted", () => {
 });
 
 test("24 Production おやすみ candidate remains accepted", () => {
-  const series = { id: "george", slug: "george", name: "おさるのジョージ ジョージの一日フィギュア" };
+  const series = {
+    id: "george",
+    slug: "george",
+    name: "おさるのジョージ ジョージの一日フィギュア",
+    franchise: "おさるのジョージ",
+  };
   const target = { id: "sleep", slug: "sleep", series_id: series.id, name: "おやすみ", variant_type: "normal" };
   const result = assess("おさるのジョージ ジョージの一日フィギュア [4.おやすみ]【ネコポス配送対応】【C】", {
     series,
@@ -256,6 +266,53 @@ test("24 Production おやすみ candidate remains accepted", () => {
   assert.equal(result.accepted, true);
   assert.equal(result.confidence, 0.86);
 });
+
+test("25 Production エンジェラ candidate remains accepted after its product label", () => {
+  const series = {
+    id: "jewelpet-clear-ring",
+    slug: "jewelpet-clear-ring",
+    name: "ジュエルペット ぷくっとクリアリング",
+    franchise: "ジュエルペット",
+  };
+  const target = { id: "angela", slug: "angela", series_id: series.id, name: "エンジェラ", variant_type: "normal" };
+  const result = assess("ジュエルペット ぷくっとクリアリング [5.エンジェラ]【ネコポス配送対応】【C】", {
+    series,
+    target,
+    siblings: [],
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.reason, "variant_and_parent_evidence_confirmed");
+  assert.equal(result.auditChecks.parentSeriesEditionConflict, false);
+});
+
+test("26 sibling series Vol.3 remains an edition conflict before the product label", () => {
+  const series = {
+    id: "jewelpet-clear-ring",
+    slug: "jewelpet-clear-ring",
+    name: "ジュエルペット ぷくっとクリアリング",
+    franchise: "ジュエルペット",
+  };
+  const target = { id: "angela", slug: "angela", series_id: series.id, name: "エンジェラ", variant_type: "normal" };
+  const result = assess("ジュエルペット アンブレラマーカー Vol.3 [5.エンジェラ]【ネコポス配送対応】【C】", {
+    series,
+    target,
+    siblings: [],
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.reviewRequired, true);
+  assert.equal(result.reason, "parent_series_edition_conflict");
+  assert.equal(result.auditChecks.parentSeriesEditionConflict, true);
+});
+
+for (const marker of ["Vol.2", "PART2", "第2弾", "クラシック"]) {
+  test(`explicit ${marker} after a valid product label remains an edition conflict`, () => {
+    const result = assess(`ならぶんです。 Winnie the Pooh 【くまのプーさんA】 ${marker}`);
+    assert.equal(result.accepted, false);
+    assert.equal(result.reviewRequired, true);
+    assert.equal(result.reason, "parent_series_edition_conflict");
+    assert.equal(result.auditChecks.parentSeriesEditionConflict, true);
+  });
+}
 
 const FALSE_ACCEPTED_TITLES = [
   "バンダイ ガチャ ならぶんです。 Winnie the Pooh 2 くまのプーさん クラシック 【くまのプーさんA】",
