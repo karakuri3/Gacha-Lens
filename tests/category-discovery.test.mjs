@@ -123,12 +123,13 @@ test("category pages use public catalog filtering, canonical metadata, and noind
   assert.doesNotMatch(text, /offers|aggregateRating|review:/);
 });
 
-test("category discovery uses public identity rows and exact category filters without signal inputs", () => {
+test("category discovery uses a targeted public catalog query without sitemap cache agreement", () => {
   const text = source("lib/series.js");
-  assert.match(text, /getPublicCategoryCatalogPage/);
-  assert.match(text, /getPublicSitemapIdentifiers\(\)/);
-  assert.match(text, /getSeriesCatalogPage\(\{ category: facet\.filter_value/);
-  assert.match(text, /result\.total !== facet\.variant_count/);
+  const functionSource = text.slice(text.indexOf("export async function getPublicCategoryCatalogPage"), text.indexOf("export async function getPublicDiscoveryFacetSeriesPage"));
+  assert.match(functionSource, /getSeriesCatalogPage\(\{ category, page: requestedPage/);
+  assert.doesNotMatch(functionSource, /getPublicSitemapIdentifiers\(\)/);
+  assert.doesNotMatch(functionSource, /result\.total !==/);
+  assert.match(functionSource, /if \(result\.total === 0\) return null/);
   assert.doesNotMatch(source("lib/domain/category-discovery.js"), /affiliate|commission|ranking|forecast|market|stock|reaction/i);
 });
 
@@ -150,11 +151,12 @@ test("categories index links only indexable facets while filtered catalog URLs a
   assert.match(catalog, /query\.q \|\| query\.category \? \{ index: false, follow: true \}/);
 });
 
-test("category links are present on public detail pages and sitemap only includes landing page one", () => {
+test("category detail pages keep local text while sitemap retains only canonical discovery URLs", () => {
   for (const file of ["app/series/[slug]/page.js", "app/series/group/[slug]/page.js"]) {
     const text = source(file);
-    assert.match(text, /DiscoveryFacetLink/);
-    assert.match(text, /type="category"/);
+    assert.doesNotMatch(text, /DiscoveryFacetLink/);
+    assert.doesNotMatch(text, /getPublicDiscoveryFacets/);
+    assert.match(text, /カテゴリ/);
   }
   const sitemap = source("app/sitemap.js");
   assert.match(sitemap, /categories\.map\(\(facet\)/);
