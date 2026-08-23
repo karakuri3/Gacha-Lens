@@ -5,6 +5,10 @@ import test from "node:test";
 import { getAffiliateProviderConfig, sanitizeAmazonTag } from "../lib/domain/affiliate-providers.js";
 import { buildMarketplaceLinks } from "../lib/domain/market-links.js";
 import { collectPublicParentSeriesSlugs } from "../lib/domain/sitemap-publication.js";
+import {
+  buildParentSeriesStructuredData,
+  buildVariantDetailStructuredData,
+} from "../lib/domain/public-detail-structured-data.js";
 import { absoluteSiteUrl, buildPageMetadata, getSiteUrl } from "../lib/site-metadata.js";
 
 const ROOT = process.cwd();
@@ -131,15 +135,64 @@ test("root metadata exposes website search structured data and verification hook
   assert.match(text, /metadataOther/);
 });
 
-test("variant detail publishes Product and Breadcrumb structured data", () => {
+test("variant detail publishes ItemPage and Breadcrumb without Product rich-result markup", () => {
   const text = source("app/series/[slug]/page.js");
-  assert.match(text, /"@type": "Product"/);
-  assert.match(text, /"@type": "BreadcrumbList"/);
+  assert.match(text, /buildVariantDetailStructuredData/);
+  assert.doesNotMatch(text, /"@type": "Product"/);
+  assert.doesNotMatch(text, /"@type": "ProductGroup"/);
   assert.match(text, /buildPageMetadata/);
   assert.match(text, /path: variantHref|const path = variantHref/);
   assert.doesNotMatch(text, /["']offers["']\s*:/);
   assert.doesNotMatch(text, /["']review["']\s*:/);
   assert.doesNotMatch(text, /["']aggregateRating["']\s*:/);
+});
+
+test("variant detail structured data is valid ItemPage JSON with breadcrumbs", () => {
+  const value = buildVariantDetailStructuredData({
+    name: "公開単品",
+    description: "公開単品の説明",
+    url: "https://gachalens.example/series/item",
+    image: "https://gachalens.example/item.jpg",
+    siteUrl: "https://gachalens.example/",
+    breadcrumbs: [
+      { name: "ホーム", url: "https://gachalens.example/" },
+      { name: "公開単品", url: "https://gachalens.example/series/item" },
+    ],
+  });
+  const parsed = JSON.parse(JSON.stringify(value));
+  assert.deepEqual(parsed.map((entry) => entry["@type"]), ["ItemPage", "BreadcrumbList"]);
+  assert.equal(JSON.stringify(parsed).includes("Product"), false);
+});
+
+test("parent series publishes CollectionPage, ItemList, and Breadcrumb without Product types", () => {
+  const text = source("app/series/group/[slug]/page.js");
+  assert.match(text, /buildParentSeriesStructuredData/);
+  assert.doesNotMatch(text, /"@type": "ProductGroup"/);
+  assert.doesNotMatch(text, /hasVariant/);
+
+  const value = buildParentSeriesStructuredData({
+    name: "公開シリーズ",
+    description: "公開シリーズの説明",
+    url: "https://gachalens.example/series/group/example",
+    siteUrl: "https://gachalens.example/",
+    items: [
+      { name: "単品A", url: "https://gachalens.example/series/a" },
+      { name: "単品B", url: "https://gachalens.example/series/b" },
+    ],
+    breadcrumbs: [
+      { name: "ホーム", url: "https://gachalens.example/" },
+      { name: "公開シリーズ", url: "https://gachalens.example/series/group/example" },
+    ],
+  });
+  const parsed = JSON.parse(JSON.stringify(value));
+  assert.deepEqual(parsed.map((entry) => entry["@type"]), ["CollectionPage", "ItemList", "BreadcrumbList"]);
+  assert.deepEqual(parsed[1].itemListElement.map((entry) => entry["@type"]), ["ListItem", "ListItem"]);
+  assert.equal(JSON.stringify(parsed).includes("Product"), false);
+});
+
+test("structured data hardening does not modify affiliate, ranking, or forecast logic", () => {
+  const helper = source("lib/domain/public-detail-structured-data.js");
+  assert.doesNotMatch(helper, /affiliate|commission|ranking|forecast|market|stock|reaction/i);
 });
 
 test("structured data renderer escapes HTML opening characters", () => {

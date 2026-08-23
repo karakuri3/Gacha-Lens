@@ -7,6 +7,7 @@ import StructuredData from "@/components/StructuredData";
 import { getParentSeriesBySlug } from "@/lib/series";
 import { seriesHref, variantHref } from "@/lib/variant-url";
 import { absoluteSiteUrl, buildPageMetadata } from "@/lib/site-metadata";
+import { buildParentSeriesStructuredData } from "@/lib/domain/public-detail-structured-data";
 import {
   formatSchedule,
   formatScore,
@@ -43,27 +44,26 @@ export default async function ParentSeriesDetailPage({ params }) {
   const variants = item.variants ?? [];
   const market = item.market_summary ?? {};
   const detailUrl = absoluteSiteUrl(seriesHref(item));
-  const seriesJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "ProductGroup",
-    "@id": `${detailUrl}#product-group`,
+  const structuredData = buildParentSeriesStructuredData({
     name: item.name,
     description: item.summary || `${item.name}のガチャシリーズです。`,
     url: detailUrl,
-    image: item.image_url ? [absoluteSiteUrl(item.image_url)] : undefined,
-    productGroupID: item.series_id || undefined,
-    brand: item.brand ? { "@type": "Brand", name: item.brand } : undefined,
-    hasVariant: variants.slice(0, 50).map((variant) => ({
-      "@type": "Product",
-      name: variant.name,
+    image: item.image_url ? absoluteSiteUrl(item.image_url) : undefined,
+    siteUrl: absoluteSiteUrl("/"),
+    items: variants.slice(0, 50).map((variant) => ({
+      name: variant.variant_name || variant.name,
       url: absoluteSiteUrl(variantHref(variant)),
-      sku: variant.id || undefined,
     })),
-  };
+    breadcrumbs: [
+      { name: "ホーム", url: absoluteSiteUrl("/") },
+      { name: "シリーズ一覧", url: absoluteSiteUrl("/series?scope=series") },
+      { name: item.name, url: detailUrl },
+    ],
+  });
 
   return (
     <main className="site-main">
-      <StructuredData value={seriesJsonLd} />
+      <StructuredData value={structuredData} />
       <div className="site-shell">
         <nav className="detail-breadcrumbs" aria-label="パンくずリスト">
           <Link href="/">ホーム</Link><span>/</span><Link href="/series?scope=series">シリーズ一覧</Link><span>/</span><strong>{item.name}</strong>

@@ -11,6 +11,7 @@ import FavoriteButton from "@/components/FavoriteButton";
 import StructuredData from "@/components/StructuredData";
 import { variantHref } from "@/lib/variant-url";
 import { absoluteSiteUrl, buildPageMetadata } from "@/lib/site-metadata";
+import { buildVariantDetailStructuredData } from "@/lib/domain/public-detail-structured-data";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
@@ -59,20 +60,23 @@ export default async function VariantDetailPage({ params }) {
   const tags = customerTags(item, isReleased);
   const siblingImages = (item.sibling_variants ?? []).filter((entry) => entry.image).slice(0, 5);
   const detailUrl = absoluteSiteUrl(variantHref(item));
-  const productJsonLd = buildProductJsonLd(item, detailUrl);
-  const breadcrumbJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      { "@type": "ListItem", position: 1, name: "ホーム", item: absoluteSiteUrl("/") },
-      { "@type": "ListItem", position: 2, name: "ガチャ一覧", item: absoluteSiteUrl("/series") },
-      { "@type": "ListItem", position: 3, name: item.name, item: detailUrl },
+  const pageDescription = item.summary || `${item.series_name}のラインナップ商品です。`;
+  const structuredData = buildVariantDetailStructuredData({
+    name: item.name,
+    description: pageDescription,
+    url: detailUrl,
+    image: item.image_url ? absoluteSiteUrl(item.image_url) : undefined,
+    siteUrl: absoluteSiteUrl("/"),
+    breadcrumbs: [
+      { name: "ホーム", url: absoluteSiteUrl("/") },
+      { name: "ガチャ一覧", url: absoluteSiteUrl("/series") },
+      { name: item.name, url: detailUrl },
     ],
-  };
+  });
 
   return (
     <main className="site-main">
-      <StructuredData value={[productJsonLd, breadcrumbJsonLd]} />
+      <StructuredData value={structuredData} />
       <div className="site-shell">
         <nav className="detail-breadcrumbs" aria-label="パンくずリスト">
           <Link href="/">ホーム</Link><span>/</span><Link href="/series">ガチャ一覧</Link><span>/</span><strong>{item.name}</strong>
@@ -210,32 +214,6 @@ export default async function VariantDetailPage({ params }) {
       </div>
     </main>
   );
-}
-
-function buildProductJsonLd(item, url) {
-  const releaseDate = item.release_date || item.first_sale_start || undefined;
-  return {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    "@id": `${url}#product`,
-    name: item.name,
-    description: item.summary || `${item.series_name}のラインナップ商品です。`,
-    url,
-    image: item.image_url ? [absoluteSiteUrl(item.image_url)] : undefined,
-    sku: item.variant_id || undefined,
-    category: item.category || "カプセルトイ",
-    brand: item.brand ? { "@type": "Brand", name: item.brand } : undefined,
-    isVariantOf: item.series_name ? {
-      "@type": "ProductGroup",
-      name: item.series_name,
-      productGroupID: item.series_id || undefined,
-    } : undefined,
-    additionalProperty: [
-      releaseDate ? { "@type": "PropertyValue", name: "発売日", value: releaseDate } : null,
-      item.rarity ? { "@type": "PropertyValue", name: "レアリティ", value: item.rarity } : null,
-      item.price ? { "@type": "PropertyValue", name: "メーカー希望価格", value: `${item.price}円` } : null,
-    ].filter(Boolean),
-  };
 }
 
 function ReleasedHeroMetrics({ item }) {
