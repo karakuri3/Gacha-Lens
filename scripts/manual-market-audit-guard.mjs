@@ -6,6 +6,7 @@ import {
   validateManualMarketAuditReport,
 } from "../lib/domain/manual-market-audit-safety.js";
 import { loadMarketManualCanarySelectionProfile } from "../lib/domain/market-manual-canary-selection.js";
+import { isNonAuthoritativeManualMarketAudit } from "../lib/domain/manual-market-audit-diagnostic.js";
 import { loadOptionalEnvFile } from "./load-optional-env.mjs";
 import { fetchRowCount } from "./supabase-rest.mjs";
 
@@ -53,8 +54,11 @@ if (command === "snapshot") {
   const findings = findManualMarketAuditSecretLeaks(files, secretValues);
   if (findings.length) throw new Error(`Manual market audit artifact secret scan failed for ${findings.length} file(s).`);
   console.log(JSON.stringify({ ok: true, files_scanned: files.length, secret_findings: 0 }));
+} else if (command === "is-non-authoritative") {
+  const auditPath = requiredPath(options.audit, "--audit");
+  if (!isNonAuthoritativeManualMarketAudit(readJson(auditPath))) process.exitCode = 1;
 } else {
-  throw new Error("Expected command: snapshot, compare, verify, or scan.");
+  throw new Error("Expected command: snapshot, compare, verify, scan, or is-non-authoritative.");
 }
 
 async function productionCounts() {

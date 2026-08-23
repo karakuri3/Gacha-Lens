@@ -182,6 +182,41 @@ test("Rakuten retries a transient response and preserves its normalized record f
   assert.equal(result.feedResults[0].query_index, 0);
 });
 
+test("Rakuten honors explicit empty queries without a generic provider request", async () => {
+  let calls = 0;
+  const result = await fetchRakutenMarketListingsRaw({
+    enabled: true,
+    applicationId: "application-id",
+    accessKey: "access-key",
+    queries: [],
+    fetchImpl: async () => {
+      calls += 1;
+      throw new Error("explicit empty queries must not fetch");
+    },
+  });
+  assert.equal(calls, 0);
+  assert.equal(result.configuredSources, 0);
+  assert.equal(result.feedResults.length, 0);
+  assert.equal(result.records.length, 0);
+});
+
+test("Yahoo honors explicit empty queries without a generic provider request", async () => {
+  let calls = 0;
+  const result = await fetchYahooShoppingListingsRaw({
+    enabled: true,
+    appId: "app-id",
+    queries: [],
+    fetchImpl: async () => {
+      calls += 1;
+      throw new Error("explicit empty queries must not fetch");
+    },
+  });
+  assert.equal(calls, 0);
+  assert.equal(result.configuredSources, 0);
+  assert.equal(result.feedResults.length, 0);
+  assert.equal(result.records.length, 0);
+});
+
 test("Yahoo retries rate limits, dedupes before limit, and preserves unique queries", async () => {
   const calledQueries = [];
   const statuses = [429, 200, 200];
