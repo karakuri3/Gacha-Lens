@@ -9,6 +9,9 @@ permissions:
 
 jobs:
   recall-v4-diagnostic:
+    concurrency:
+      group: gacha-market-bounded-v2
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
