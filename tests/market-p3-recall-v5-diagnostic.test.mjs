@@ -22,6 +22,8 @@ test("V5 anchor-minimal normalization removes only product forms and rejects gen
   assert.equal(normalizeRecallV5SeriesAnchor("クレヨンしんちゃん フェイスぬいぐるみ2"), "クレヨンしんちゃん");
   assert.equal(normalizeRecallV5SeriesAnchor("プリキュアオールスターズ カプセルラバーマスコット Name Collection!2"), "プリキュア");
   assert.equal(normalizeRecallV5SeriesAnchor("JAPAN ミニチュアパッケージチャーム"), "");
+  assert.equal(normalizeRecallV5SeriesAnchor("MLB™ Capsuleトルソー Players Edition"), "MLB");
+  assert.equal(normalizeRecallV5SeriesAnchor("MLB&trade; Capsuleトルソー Players Edition"), "MLB");
   assert.match(normalizeRecallV5SeriesAnchor("ポンデクルール アイカツ！ マルチカラーパウダーVol.2"), /ポンデクルール.*アイカツ/);
   assert.equal(normalizeRecallV5VariantAlias("天の川コズミックワンショルダー（カラー・コズミックブルー）（再録）"), "天の川コズミックワンショルダー コズミックブルー");
 });
