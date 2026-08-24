@@ -37,6 +37,7 @@ jobs:
           RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
           YAHOO_SHOPPING_APP_ID: ${{ secrets.YAHOO_SHOPPING_APP_ID }}
           YAHOO_SHOPPING_FETCH_ENABLED: ${{ secrets.YAHOO_SHOPPING_FETCH_ENABLED }}
+          YAHOO_SHOPPING_REQUEST_DELAY_MS: "5000"
         run: node scripts/market-p3-recall-v3-diagnostic.mjs --output-dir=${{ runner.temp }}/gacha-market-p3-recall-v3-diagnostic
       - name: Scan sanitized recall V3 diagnostic artifact
         id: scan
