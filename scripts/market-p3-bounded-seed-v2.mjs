@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadOfficialCatalog } from "./load-official-catalog.mjs";
 import { loadMarketCoverageData } from "./market-coverage-data.mjs";
 import { deleteRowsByIds, fetchRowCount, fetchRows, upsertRows } from "./supabase-rest.mjs";
@@ -20,19 +21,29 @@ import {
   validateP3BoundedSeedV2Invocation,
 } from "../lib/domain/market-p3-bounded-seed-v2.js";
 
-const options = parseOptions(process.argv.slice(2));
-const output = path.resolve(options["output-dir"] || "market-p3-bounded-seed-v2");
-fs.mkdirSync(output, { recursive: true });
-const store = createStore();
-let limit = null;
-let report = null;
-let selection = { selected: [], safe_candidate_count: 0, one_listing_per_variant: true, one_variant_per_series: true };
-let before = null;
-let rows = null;
+export async function executeP3BoundedSeedV2({
+  options = parseOptions(process.argv.slice(2)),
+  output_dir = null,
+  fixed_limit = null,
+  execution_mode = "manual-v2",
+  stage = "p3-bounded-seed-v2",
+  validate_invocation = () => validateP3BoundedSeedV2Invocation({ event_name: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF, confirmation: process.env.P3_BOUNDED_SEED_V2_CONFIRMATION, expected_main_sha: options["expected-main-sha"], head_sha: process.env.GITHUB_SHA, origin_main_sha: options["origin-main-sha"] }),
+} = {}) {
+  const output = path.resolve(output_dir || options["output-dir"] || "market-p3-bounded-seed-v2");
+  fs.mkdirSync(output, { recursive: true });
+  const store = createStore();
+  let limit = null;
+  let report = null;
+  let selection = { selected: [], safe_candidate_count: 0, one_listing_per_variant: true, one_variant_per_series: true };
+  let before = null;
+  let rows = null;
+  let resolved_execution_mode = execution_mode;
 
-try {
-  limit = parseP3BoundedSeedV2Limit(options.limit);
-  validateP3BoundedSeedV2Invocation({ event_name: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF, confirmation: process.env.P3_BOUNDED_SEED_V2_CONFIRMATION, expected_main_sha: options["expected-main-sha"], head_sha: process.env.GITHUB_SHA, origin_main_sha: options["origin-main-sha"] });
+  try {
+    limit = parseP3BoundedSeedV2Limit(fixed_limit ?? options.limit);
+    if (fixed_limit !== null && limit !== fixed_limit) throw new Error("P3 bounded seed v2 fixed limit is invalid.");
+    const invocation_mode = validate_invocation();
+    if (typeof invocation_mode === "string") resolved_execution_mode = invocation_mode;
   const data = await loadMarketCoverageData({ catalog: await loadOfficialCatalog() });
   const profile = loadMarketManualCanarySelectionProfile(path.resolve("config/market-manual-canary-selection.json"));
   const runId = String(process.env.GITHUB_RUN_ID ?? "").trim();
@@ -55,28 +66,31 @@ try {
   selection = selectP3BoundedSeedV2Candidates(report.candidates, { limit });
   before = await store.fetchCounts();
   if (!selection.selected.length) {
-    writeResult(buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), requested_limit: limit, selection, report, before, after: await store.fetchCounts(), status: "no-op" }));
+    writeResult(output, buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), execution_mode: resolved_execution_mode, requested_limit: limit, selection, report, before, after: await store.fetchCounts(), status: "no-op" }));
     console.log(JSON.stringify({ ok: true, status: "no-op", database_writes: 0 }));
   } else {
-    rows = buildP3BoundedSeedV2Rows({ candidates: selection.selected, workflow: workflowIdentity() });
+    rows = buildP3BoundedSeedV2Rows({ candidates: selection.selected, workflow: workflowIdentity(), stage });
     const [variantIdRows, matchedVariantRows, sourceUrlRows, existingListings, existingObservations] = await Promise.all([
       store.fetchRowsByVariantIds(rows.listingRows.map((row) => row.variant_id)), store.fetchRowsByMatchedVariantIds(rows.listingRows.map((row) => row.variant_id)),
       store.fetchRowsBySourceUrls(rows.listingRows.map((row) => row.source_url)), store.fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)), store.fetchRowsByIds("market_listing_observations", rows.observationRows.map((row) => row.id)),
     ]);
     assertP3BoundedSeedV2Prewrite({ rows, variantListings: [...variantIdRows, ...matchedVariantRows], sourceUrlRows, existingListings, existingObservations });
     const outcome = await persistP3BoundedSeedV2({ rows, store });
-    writeResult(buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), requested_limit: limit, selection, rows, report, before, after: await store.fetchCounts(), outcome, status: "succeeded" }));
+    writeResult(output, buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), execution_mode: resolved_execution_mode, requested_limit: limit, selection, rows, report, before, after: await store.fetchCounts(), outcome, status: "succeeded" }));
     console.log(JSON.stringify({ ok: true, status: "succeeded", database_writes: outcome.database_writes }));
   }
 } catch (error) {
   const rollback = error?.bounded_result?.rollback;
   const status = rollback?.attempted ? rollback.verified ? "rolled-back" : "rollback-failed" : "blocked";
-  writeResult(buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), requested_limit: limit, selection, rows, report, before, after: await safeCounts(store), error, status }));
-  throw error;
+    writeResult(output, buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), execution_mode: resolved_execution_mode, requested_limit: limit, selection, rows, report, before, after: await safeCounts(store), error, status }));
+    throw error;
+  }
 }
 
-function workflowIdentity() { return { run_id: process.env.GITHUB_RUN_ID, head_sha: process.env.GITHUB_SHA }; }
-function writeResult(result) { fs.writeFileSync(path.join(output, "market-p3-bounded-seed-v2-result.json"), `${JSON.stringify(result, null, 2)}\n`); fs.writeFileSync(path.join(output, "market-p3-bounded-seed-v2-result.md"), renderP3BoundedSeedV2ResultMarkdown(result)); }
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await executeP3BoundedSeedV2();
+
+function workflowIdentity() { return { run_id: process.env.GITHUB_RUN_ID, head_sha: process.env.GITHUB_SHA, event_name: process.env.GITHUB_EVENT_NAME }; }
+function writeResult(output, result) { fs.writeFileSync(path.join(output, "market-p3-bounded-seed-v2-result.json"), `${JSON.stringify(result, null, 2)}\n`); fs.writeFileSync(path.join(output, "market-p3-bounded-seed-v2-result.md"), renderP3BoundedSeedV2ResultMarkdown(result)); }
 function createStore() { return { fetchRowsByIds: (table, ids) => fetchIn(table, "id", ids, "*"), fetchRowsByVariantIds: (ids) => fetchIn("market_listings", "variant_id", ids, "id,variant_id"), fetchRowsByMatchedVariantIds: (ids) => fetchIn("market_listings", "matched_variant_id", ids, "id,matched_variant_id"), fetchRowsBySourceUrls: (urls) => fetchIn("market_listings", "source_url", urls, "id,variant_id,source_url"), fetchCounts: async () => { const tables = ["market_listings", "market_listing_observations", "import_issues", "ingestion_runs", "series", "variants", "stock_reports", "restock_events"]; const values = await Promise.all([...tables.map((table) => fetchRowCount(table)), fetchRowCount("market_listings", { review_required: "eq.true" })]); return Object.fromEntries([...tables, "review_required"].map((key, index) => [key, values[index]])); }, upsertRows: (table, rows, writeOptions) => upsertRows(table, rows, { ...writeOptions, label: "market-p3-bounded-seed-v2", allowSchemaFallback: false }), deleteRowsByIds: (table, ids, deleteOptions) => deleteRowsByIds(table, ids, deleteOptions), fetchObservationsByListingIds: (ids) => fetchIn("market_listing_observations", "listing_id", ids, "*") }; }
 function fetchIn(table, column, values, select) { if (!values.length) return []; const escaped = values.map((value) => `"${String(value).replaceAll('"', '\\"')}"`).join(","); return fetchRows(table, { select, pageSize: 100, params: { [column]: `in.(${escaped})`, order: "id.asc" } }); }
 async function safeCounts(value) { try { return await value.fetchCounts(); } catch { return null; } }
