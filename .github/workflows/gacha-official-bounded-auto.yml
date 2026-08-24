@@ -1,0 +1,108 @@
+name: Gacha Official Bounded Automatic Production
+
+on:
+  schedule:
+    # Daily at 02:27 UTC / 11:27 JST. This avoids the market workflows' :17 and :47 windows.
+    - cron: "27 2 * * *"
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  official-bounded-auto:
+    concurrency:
+      group: gacha-official-bounded-write
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify exact current main revision
+        id: main
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin_main_sha=""
+          main_verified="false"
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            git fetch --no-tags origin main --depth=1
+            origin_main_sha="$(git rev-parse origin/main)"
+            if [ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ] && [ "$origin_main_sha" = "$GITHUB_SHA" ]; then
+              main_verified="true"
+            fi
+          fi
+          echo "origin_main_sha=$origin_main_sha" >> "$GITHUB_OUTPUT"
+          echo "main_verified=$main_verified" >> "$GITHUB_OUTPUT"
+          test "$main_verified" = "true"
+      - name: Resolve false-by-default official automatic gate
+        id: gate
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          OFFICIAL_BOUNDED_AUTO_ENABLED: ${{ vars.OFFICIAL_BOUNDED_AUTO_ENABLED || '' }}
+          OFFICIAL_BOUNDED_AUTO_APPROVAL: ${{ vars.OFFICIAL_BOUNDED_AUTO_APPROVAL || '' }}
+        run: >-
+          npm run official:bounded-auto -- gate
+          --output-dir=${{ runner.temp }}/gacha-official-bounded-auto
+          --origin-main-sha=${{ steps.main.outputs.origin_main_sha }}
+      - name: Run read-only official live audit
+        id: audit
+        if: ${{ always() && steps.main.outcome == 'success' && steps.gate.outputs.execute == 'true' }}
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: >-
+          npm run official:audit-live --
+          --output-dir=${{ runner.temp }}/gacha-official-bounded-auto/audit
+          --expected-main-sha=${{ github.sha }}
+          --run-id=${{ github.run_id }}
+      - name: Decide bounded official automatic plan
+        id: prepare
+        if: ${{ always() && steps.gate.outputs.execute == 'true' }}
+        continue-on-error: true
+        run: >-
+          npm run official:bounded-auto -- prepare
+          --output-dir=${{ runner.temp }}/gacha-official-bounded-auto
+          --audit-dir=${{ runner.temp }}/gacha-official-bounded-auto/audit
+          --origin-main-sha=${{ steps.main.outputs.origin_main_sha }}
+      - name: Execute one bounded official transaction
+        id: execute
+        if: ${{ always() && steps.prepare.outputs.execute == 'true' }}
+        continue-on-error: true
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: >-
+          npm run official:bounded-auto -- execute
+          --output-dir=${{ runner.temp }}/gacha-official-bounded-auto
+          --audit-dir=${{ runner.temp }}/gacha-official-bounded-auto/audit
+          --origin-main-sha=${{ steps.main.outputs.origin_main_sha }}
+      - name: Scan sanitized official automatic artifact
+        id: scan
+        if: ${{ always() }}
+        run: >-
+          npm run official:bounded-auto -- scan
+          --output-dir=${{ runner.temp }}/gacha-official-bounded-auto
+      - name: Upload sanitized official automatic artifact
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-bounded-auto-result-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-official-bounded-auto
+          if-no-files-found: error
+          retention-days: 30
+      - name: Enforce official automatic result
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        run: >-
+          npm run official:bounded-auto -- verify
+          --output-dir=${{ runner.temp }}/gacha-official-bounded-auto
