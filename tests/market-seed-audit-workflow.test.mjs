@@ -35,6 +35,8 @@ test("Priority 3 seed workflow fixes the read-only retrieval contract", () => {
   assert.match(workflow, /--read-only-seed-audit/);
   assert.doesNotMatch(workflow, /manual-diagnostic-priority-fallback/);
   assert.match(workflow, /--expected-priority=3/);
+  assert.match(backfill, /priorityThreeSeedRotationKey/);
+  assert.match(backfill, /GITHUB_RUN_ID/);
 });
 
 test("Priority 3 seed workflow has no Production write path and verifies zero delta", () => {
@@ -58,4 +60,5 @@ test("existing Priority 1 Manual Audit remains unchanged", () => {
   assert.match(manualWorkflow, /--priority=1/);
   assert.match(manualWorkflow, /--manual-diagnostic-priority-fallback/);
   assert.doesNotMatch(manualWorkflow, /--priority=3|--read-only-seed-audit/);
+  assert.doesNotMatch(manualWorkflow, /priorityThreeSeedRotationKey|GITHUB_RUN_ID/);
 });
