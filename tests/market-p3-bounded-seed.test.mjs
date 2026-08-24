@@ -14,6 +14,7 @@ import {
   assertP3BoundedSeedPrewrite,
   buildP3BoundedSeedResult,
   buildP3BoundedSeedRows,
+  calculateP3BoundedSeedNoResultVariants,
   isEligibleP3BoundedSeedCandidate,
   parseP3BoundedSeedLimit,
   persistP3BoundedSeed,
@@ -77,6 +78,12 @@ test("limit remains within the explicit P3 cap", () => {
   for (const value of [1, 2, 3, 4, 5]) assert.equal(parseP3BoundedSeedLimit(value), value);
   for (const value of [0, 6, "no"]) assert.throws(() => parseP3BoundedSeedLimit(value));
   assert.equal(P3_BOUNDED_SEED_HARD_CAP, 5);
+});
+
+test("P3 retrieval diagnostics report selected variants without results", () => {
+  assert.equal(calculateP3BoundedSeedNoResultVariants(5, 2), 3);
+  assert.equal(calculateP3BoundedSeedNoResultVariants(5, 7), 0);
+  assert.match(runner, /no_result_variants:\s*calculateP3BoundedSeedNoResultVariants/);
 });
 
 test("selection keeps one strongest safe active single candidate per variant", () => {

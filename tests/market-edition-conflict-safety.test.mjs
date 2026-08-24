@@ -8,6 +8,7 @@ import {
 } from "../lib/domain/market-match-safety.js";
 import {
   analyzeExplicitMarketLabels,
+  analyzeParentSeriesIdentity,
   detectParentSeriesEditionConflict,
   explicitLabelMatchesVariant,
   extractBracketLabels,
@@ -44,12 +45,13 @@ const POOH_QUERY = {
   series_id: POOH_SERIES.id,
 };
 
-function fixtureCatalog(series = POOH_SERIES, target = POOH, siblings = [PIGLET]) {
+function fixtureCatalog(series = POOH_SERIES, target = POOH, siblings = [PIGLET], siblingSeries = []) {
   const variants = [target, ...siblings];
+  const seriesRows = [series, ...siblingSeries];
   return {
-    series: [series],
+    series: seriesRows,
     variants,
-    seriesById: new Map([[series.id, series]]),
+    seriesById: new Map(seriesRows.map((row) => [row.id, row])),
     variantById: new Map(variants.map((variant) => [variant.id, variant])),
   };
 }
@@ -58,6 +60,7 @@ function assess(title, options = {}) {
   const series = options.series ?? POOH_SERIES;
   const target = options.target ?? POOH;
   const siblings = options.siblings ?? [PIGLET];
+  const siblingSeries = options.siblingSeries ?? [];
   const query = options.query ?? {
     query: `${series.name} ${target.name} ガチャ 単品`,
     variant_id: target.id,
@@ -66,7 +69,7 @@ function assess(title, options = {}) {
   return assessMarketCandidate(
     { id: options.listingId ?? "listing-2", title },
     query,
-    fixtureCatalog(series, target, siblings),
+    fixtureCatalog(series, target, siblings, siblingSeries),
   );
 }
 
@@ -1039,4 +1042,96 @@ test("101 source artifact 30655163177 keeps all eleven candidate decisions and k
     "efef962964b26fbf",
     "ff5baa7deca4ff32",
   ]);
+});
+
+test("102 exact parent evidence ignores a strictly contained sibling series term", () => {
+  const cases = [
+    {
+      series: {
+        id: "sanrio-pink", slug: "sanrio-pink", franchise: "サンリオキャラクターズ",
+        name: "サンリオキャラクターズ 星色天使チャーム キャンディピンクver.",
+      },
+      siblingSeries: [{
+        id: "sanrio-base", slug: "sanrio-base", franchise: "サンリオキャラクターズ",
+        name: "サンリオキャラクターズ 星色天使チャーム",
+      }],
+      target: { id: "sanrio-kitty", slug: "sanrio-kitty", series_id: "sanrio-pink", name: "ハローキティ", variant_type: "normal" },
+      title: "【ハローキティ】サンリオキャラクターズ 星色天使チャーム キャンディピンクVer.",
+    },
+    {
+      series: {
+        id: "alien-two", slug: "alien-two", franchise: "コスチュームエイリアン",
+        name: "コスチュームエイリアン フィギュアマスコット2",
+      },
+      siblingSeries: [{
+        id: "alien-base", slug: "alien-base", franchise: "コスチュームエイリアン",
+        name: "コスチュームエイリアン フィギュアマスコット",
+      }],
+      target: { id: "alien-bo", slug: "alien-bo", series_id: "alien-two", name: "コスチューム:ボー・ピープ", variant_type: "normal" },
+      title: "【コスチューム:ボー・ピープ】コスチュームエイリアン フィギュアマスコット2",
+    },
+  ];
+
+  for (const fixture of cases) {
+    const result = assess(fixture.title, fixture);
+    assert.equal(result.accepted, true, fixture.series.id);
+    assert.equal(result.reason, "variant_and_parent_evidence_confirmed", fixture.series.id);
+    assert.equal(result.confidence, 0.86, fixture.series.id);
+    assert.equal(result.auditChecks.parentSeriesExactEvidencePresent, true, fixture.series.id);
+    assert.equal(result.auditChecks.parentSeriesEditionConflict, false, fixture.series.id);
+  }
+});
+
+test("103 sibling containment does not permit a shorter parent or reject a longer sibling edition", () => {
+  const fullSeries = {
+    id: "sanrio-pink", slug: "sanrio-pink", franchise: "サンリオキャラクターズ",
+    name: "サンリオキャラクターズ 星色天使チャーム キャンディピンクver.",
+  };
+  const baseSeries = {
+    id: "sanrio-base", slug: "sanrio-base", franchise: "サンリオキャラクターズ",
+    name: "サンリオキャラクターズ 星色天使チャーム",
+  };
+  const fullTarget = { id: "sanrio-kitty", slug: "sanrio-kitty", series_id: fullSeries.id, name: "ハローキティ", variant_type: "normal" };
+  const baseTarget = { ...fullTarget, id: "sanrio-base-kitty", series_id: baseSeries.id };
+
+  const onlyBase = assess("【ハローキティ】サンリオキャラクターズ 星色天使チャーム", {
+    series: fullSeries, target: fullTarget, siblingSeries: [baseSeries], siblings: [],
+  });
+  assert.equal(onlyBase.accepted, false);
+  assert.equal(onlyBase.reviewRequired, true);
+
+  const longerSibling = assess("【ハローキティ】サンリオキャラクターズ 星色天使チャーム キャンディピンクver.", {
+    series: baseSeries, target: baseTarget, siblingSeries: [fullSeries], siblings: [],
+  });
+  assert.equal(longerSibling.accepted, false);
+  assert.equal(longerSibling.reason, "parent_series_edition_conflict");
+  assert.equal(longerSibling.auditChecks.parentSeriesEditionConflict, true);
+});
+
+test("104 every shorter sibling occurrence must remain inside an exact parent range", () => {
+  const fullSeries = {
+    id: "sanrio-pink", slug: "sanrio-pink", franchise: "サンリオキャラクターズ",
+    name: "サンリオキャラクターズ 星色天使チャーム キャンディピンクver.",
+  };
+  const baseSeries = {
+    id: "sanrio-base", slug: "sanrio-base", franchise: "サンリオキャラクターズ",
+    name: "サンリオキャラクターズ 星色天使チャーム",
+  };
+  const target = { id: "sanrio-kitty", slug: "sanrio-kitty", series_id: fullSeries.id, name: "ハローキティ", variant_type: "normal" };
+  const options = { series: fullSeries, target, siblingSeries: [baseSeries], siblings: [] };
+  const exactParent = "サンリオキャラクターズ 星色天使チャーム キャンディピンクver.";
+
+  const repeatedExactParent = analyzeParentSeriesIdentity({
+    title: `【ハローキティ】${exactParent} ${exactParent}`,
+    parentSeriesName: fullSeries.name,
+    parentSeriesFranchise: fullSeries.franchise,
+    siblingSeriesNames: [baseSeries.name],
+  });
+  assert.equal(repeatedExactParent.parentSeriesExactEvidencePresent, true);
+  assert.equal(repeatedExactParent.parentSeriesSiblingConflict, false);
+
+  const independentSibling = assess(`【ハローキティ】${exactParent} ＋ サンリオキャラクターズ 星色天使チャーム`, options);
+  assert.equal(independentSibling.accepted, false);
+  assert.equal(independentSibling.reason, "parent_series_edition_conflict");
+  assert.equal(independentSibling.auditChecks.parentSeriesEditionConflict, true);
 });
