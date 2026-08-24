@@ -1,0 +1,55 @@
+name: Gacha Market P3 Recall V5 Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  recall-v5-diagnostic:
+    concurrency:
+      group: gacha-market-bounded-v2
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify exact current main revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/main"
+          git fetch --no-tags origin main --depth=1
+          test "$GITHUB_SHA" = "$(git rev-parse origin/main)"
+      - name: Run read-only P3 recall V5 diagnostic
+        id: diagnostic
+        env:
+          GACHA_DATA_SOURCE: supabase
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RAKUTEN_APPLICATION_ID: ${{ secrets.RAKUTEN_APPLICATION_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          YAHOO_SHOPPING_APP_ID: ${{ secrets.YAHOO_SHOPPING_APP_ID }}
+          YAHOO_SHOPPING_FETCH_ENABLED: ${{ secrets.YAHOO_SHOPPING_FETCH_ENABLED }}
+          YAHOO_SHOPPING_REQUEST_DELAY_MS: "5000"
+        run: node scripts/market-p3-recall-v5-diagnostic.mjs --output-dir=${{ runner.temp }}/gacha-market-p3-recall-v5-diagnostic
+      - name: Scan sanitized recall V5 diagnostic artifact
+        id: scan
+        if: ${{ always() }}
+        run: node scripts/manual-market-audit-guard.mjs scan --directory=${{ runner.temp }}/gacha-market-p3-recall-v5-diagnostic
+      - name: Upload sanitized recall V5 diagnostic artifact
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-p3-recall-v5-diagnostic-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-market-p3-recall-v5-diagnostic
+          if-no-files-found: error
+          retention-days: 14
