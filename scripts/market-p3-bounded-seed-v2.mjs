@@ -21,17 +21,18 @@ import {
 } from "../lib/domain/market-p3-bounded-seed-v2.js";
 
 const options = parseOptions(process.argv.slice(2));
-const limit = parseP3BoundedSeedV2Limit(options.limit);
-validateP3BoundedSeedV2Invocation({ event_name: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF, confirmation: process.env.P3_BOUNDED_SEED_V2_CONFIRMATION, expected_main_sha: options["expected-main-sha"], head_sha: process.env.GITHUB_SHA, origin_main_sha: options["origin-main-sha"] });
-
 const output = path.resolve(options["output-dir"] || "market-p3-bounded-seed-v2");
 fs.mkdirSync(output, { recursive: true });
 const store = createStore();
+let limit = null;
 let report = null;
 let selection = { selected: [], safe_candidate_count: 0, one_listing_per_variant: true, one_variant_per_series: true };
 let before = null;
+let rows = null;
 
 try {
+  limit = parseP3BoundedSeedV2Limit(options.limit);
+  validateP3BoundedSeedV2Invocation({ event_name: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF, confirmation: process.env.P3_BOUNDED_SEED_V2_CONFIRMATION, expected_main_sha: options["expected-main-sha"], head_sha: process.env.GITHUB_SHA, origin_main_sha: options["origin-main-sha"] });
   const data = await loadMarketCoverageData({ catalog: await loadOfficialCatalog() });
   const profile = loadMarketManualCanarySelectionProfile(path.resolve("config/market-manual-canary-selection.json"));
   const runId = String(process.env.GITHUB_RUN_ID ?? "").trim();
@@ -57,20 +58,20 @@ try {
     writeResult(buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), requested_limit: limit, selection, report, before, after: await store.fetchCounts(), status: "no-op" }));
     console.log(JSON.stringify({ ok: true, status: "no-op", database_writes: 0 }));
   } else {
-    const rows = buildP3BoundedSeedV2Rows({ candidates: selection.selected, workflow: workflowIdentity() });
+    rows = buildP3BoundedSeedV2Rows({ candidates: selection.selected, workflow: workflowIdentity() });
     const [variantIdRows, matchedVariantRows, sourceUrlRows, existingListings, existingObservations] = await Promise.all([
       store.fetchRowsByVariantIds(rows.listingRows.map((row) => row.variant_id)), store.fetchRowsByMatchedVariantIds(rows.listingRows.map((row) => row.variant_id)),
       store.fetchRowsBySourceUrls(rows.listingRows.map((row) => row.source_url)), store.fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)), store.fetchRowsByIds("market_listing_observations", rows.observationRows.map((row) => row.id)),
     ]);
     assertP3BoundedSeedV2Prewrite({ rows, variantListings: [...variantIdRows, ...matchedVariantRows], sourceUrlRows, existingListings, existingObservations });
     const outcome = await persistP3BoundedSeedV2({ rows, store });
-    writeResult(buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), requested_limit: limit, selection, report, before, after: await store.fetchCounts(), outcome, status: "succeeded" }));
+    writeResult(buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), requested_limit: limit, selection, rows, report, before, after: await store.fetchCounts(), outcome, status: "succeeded" }));
     console.log(JSON.stringify({ ok: true, status: "succeeded", database_writes: outcome.database_writes }));
   }
 } catch (error) {
   const rollback = error?.bounded_result?.rollback;
   const status = rollback?.attempted ? rollback.verified ? "rolled-back" : "rollback-failed" : "blocked";
-  writeResult(buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), requested_limit: limit, selection, report, before, after: await safeCounts(store), error, status }));
+  writeResult(buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), requested_limit: limit, selection, rows, report, before, after: await safeCounts(store), error, status }));
   throw error;
 }
 

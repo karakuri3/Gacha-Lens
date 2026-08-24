@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { MARKET_BOUNDED_PERSISTENCE_POLICIES, planMarketBoundedOperations } from "../lib/domain/market-bounded-write.js";
@@ -81,8 +83,22 @@ test("P3 v2 rows and prewrite reject all evidence and duplicate paths before wri
   const rows = buildP3BoundedSeedV2Rows({ candidates: Array.from({ length: 10 }, (_, index) => candidate(index + 1)), workflow: { run_id: "123", head_sha: sha }, observed_at: "2026-08-25T00:00:00.000Z" });
   assert.equal(rows.listingRows.length, 10); assert.equal(rows.observationRows.length, 10); assert.equal(rows.listingRows[0].raw.p3_bounded_seed.stage, "p3-bounded-seed-v2");
   assert.equal(assertP3BoundedSeedV2Prewrite({ rows }), true);
-  for (const key of ["variantListings", "sourceUrlRows", "existingListings", "existingObservations"]) assert.throws(() => assertP3BoundedSeedV2Prewrite({ rows, [key]: [{ id: "existing" }] }));
-  const duplicate = structuredClone(rows); duplicate.listingRows[1].series_id = duplicate.listingRows[0].series_id; assert.throws(() => assertP3BoundedSeedV2Prewrite({ rows: duplicate }));
+  for (const [label, mutate] of [
+    ["target variant", (value) => { value.listingRows[1].variant_id = value.listingRows[0].variant_id; }],
+    ["series", (value) => { value.listingRows[1].series_id = value.listingRows[0].series_id; }],
+    ["listing ID", (value) => { value.listingRows[1].id = value.listingRows[0].id; }],
+    ["observation ID", (value) => { value.observationRows[1].id = value.observationRows[0].id; }],
+    ["canonical source URL", (value) => { value.listingRows[1].source_url = value.listingRows[0].source_url; }],
+  ]) {
+    const duplicate = structuredClone(rows); mutate(duplicate); assert.throws(() => assertP3BoundedSeedV2Prewrite({ rows: duplicate }), label);
+  }
+  for (const [label, input] of [
+    ["existing variant ID", { variantListings: [{ variant_id: rows.listingRows[0].variant_id }] }],
+    ["existing matched variant ID", { variantListings: [{ matched_variant_id: rows.listingRows[0].matched_variant_id }] }],
+    ["existing source URL", { sourceUrlRows: [{ source_url: rows.listingRows[0].source_url }] }],
+    ["existing listing ID", { existingListings: [{ id: rows.listingRows[0].id }] }],
+    ["existing observation ID", { existingObservations: [{ id: rows.observationRows[0].id }] }],
+  ]) assert.throws(() => assertP3BoundedSeedV2Prewrite({ rows, ...input }), label);
 });
 
 test("P3 v2 persists 10 and 25 inserts only, while 26 fails closed", async () => {
@@ -103,10 +119,84 @@ test("P3 v2 insert-only race protection rejects update and unchanged before writ
   assert.equal(planMarketBoundedOperations({ listingRows: rows.listingRows, observationRows: rows.observationRows, persistencePolicy: MARKET_BOUNDED_PERSISTENCE_POLICIES.p3_seed_v2 }).listings[0].operation, "insert");
 });
 
+test("P3 v2 full batch write and verification failures roll back 10 and 25 rows", async () => {
+  for (const size of [10, 25]) for (const failure of ["market_listings", "market_listing_observations", "verification"]) {
+    const rows = buildP3BoundedSeedV2Rows({ candidates: Array.from({ length: size }, (_, index) => candidate(index + 1)), workflow: { run_id: `${failure}-${size}`, head_sha: sha } });
+    const store = fakeStore({ failAfterPartialWrite: failure, preservedListing: { id: `preserved-${size}-${failure}`, variant_id: "unrelated" } });
+    const error = await captureFailure(() => persistP3BoundedSeedV2({ rows, store }));
+    assert.equal(error.bounded_result.rollback.attempted, true); assert.equal(error.bounded_result.rollback.verified, true);
+    assert.equal(store.rows.market_listings.size, 1); assert.equal(store.rows.market_listing_observations.size, 0);
+    assert.equal(store.rows.market_listings.has(`preserved-${size}-${failure}`), true);
+    assert.deepEqual(await store.fetchCounts(), { ...counts(1), market_listing_observations: 0 });
+  }
+});
+
+test("P3 v2 rollback failure never claims committed variants", async () => {
+  const rows = buildP3BoundedSeedV2Rows({ candidates: Array.from({ length: 25 }, (_, index) => candidate(index + 1)), workflow: { run_id: "rollback-failed", head_sha: sha } });
+  const store = fakeStore({ failAfterPartialWrite: "market_listing_observations", rollbackIncomplete: true });
+  const error = await captureFailure(() => persistP3BoundedSeedV2({ rows, store }));
+  assert.equal(error.bounded_result.rollback.attempted, true); assert.equal(error.bounded_result.rollback.verified, false);
+  const result = resultFor("rollback-failed", { selected: rows.candidates, error });
+  assert.deepEqual(result.selection.persisted_variant_ids, []);
+});
+
+test("P3 v2 result separates selected and persisted variants for every outcome", () => {
+  const selected = [candidate(1), candidate(2)];
+  const rows = buildP3BoundedSeedV2Rows({ candidates: selected, workflow: { run_id: "123", head_sha: sha } });
+  const operations = { listings: rows.listingRows.map((entry) => ({ id: entry.id, operation: "insert" })), observations: rows.observationRows.map((entry) => ({ id: entry.id, operation: "insert" })) };
+  const succeeded = resultFor("succeeded", { selected, outcome: { operations, verification: { rows_verified: true, deltas_verified: true } } });
+  assert.deepEqual(succeeded.selection.persisted_variant_ids, selected.map((entry) => entry.target.variant_id));
+  for (const status of ["blocked", "no-op", "rolled-back", "rollback-failed"]) {
+    const result = resultFor(status, { selected, outcome: { operations, verification: { rows_verified: true, deltas_verified: true } } });
+    assert.equal(result.selection.selected_variant_ids.length, 2); assert.deepEqual(result.selection.persisted_variant_ids, []);
+  }
+  const unverified = resultFor("succeeded", { selected, outcome: { operations, verification: { rows_verified: false, deltas_verified: true } } });
+  assert.deepEqual(unverified.selection.persisted_variant_ids, []);
+});
+
+test("P3 v2 runner writes a sanitized blocked artifact before runner-level validation fails", () => {
+  const output = fs.mkdtempSync(path.join(os.tmpdir(), "gacha-p3-v2-"));
+  try {
+    const result = spawnSync(process.execPath, [path.join(root, "scripts/market-p3-bounded-seed-v2.mjs"), "--limit=9", `--output-dir=${output}`], { cwd: root, env: { ...process.env, GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_REF: "refs/heads/main" }, encoding: "utf8" });
+    assert.notEqual(result.status, 0);
+    const artifact = JSON.parse(fs.readFileSync(path.join(output, "market-p3-bounded-seed-v2-result.json"), "utf8"));
+    assert.equal(artifact.status, "blocked"); assert.equal(artifact.production_counts_before, null); assert.equal(artifact.production_counts_after, null);
+    assert.equal(fs.existsSync(path.join(output, "market-p3-bounded-seed-v2-result.md")), true);
+    assert.doesNotMatch(JSON.stringify(artifact), /token|secret/i);
+  } finally { fs.rmSync(output, { recursive: true, force: true }); }
+});
+
 test("P3 v2 result is sanitized and retains no-result diagnostics", () => {
-  const result = buildP3BoundedSeedV2Result({ workflow: { run_id: "123", head_sha: sha }, requested_limit: 10, selection: { selected: [candidate(1)], one_listing_per_variant: true, one_variant_per_series: true }, report: { result: { candidate_count: 1, accepted_count: 1, review_count: 0, no_result_variant_count: calculateP3BoundedSeedNoResultVariants(5, 2) } }, before: counts(0), after: counts(0), status: "no-op" });
+  const result = resultFor("no-op", { selected: [candidate(1)], report: { result: { candidate_count: 1, accepted_count: 1, review_count: 0, no_result_variant_count: calculateP3BoundedSeedNoResultVariants(5, 2) } } });
   assert.equal(result.contract.version, "v2"); assert.equal(result.contract.hard_cap, 25); assert.equal(result.retrieval.no_result_variant_count, 3); assert.doesNotMatch(JSON.stringify(result), /token|secret/i);
 });
 
 function counts(value) { return { market_listings: value, market_listing_observations: value, import_issues: 0, ingestion_runs: 0, review_required: 0, series: 0, variants: 0, stock_reports: 0, restock_events: 0 }; }
-function fakeStore() { const rows = { market_listings: new Map(), market_listing_observations: new Map(), ingestion_runs: new Map() }; const calls = []; return { rows, calls, fetchRowsByIds: async (table, ids) => ids.map((id) => rows[table].get(id)).filter(Boolean).map((row) => structuredClone(row)), fetchCounts: async () => ({ ...counts(rows.market_listings.size), market_listing_observations: rows.market_listing_observations.size }), upsertRows: async (table, values) => { calls.push({ table }); for (const row of values) rows[table].set(row.id, structuredClone(row)); }, deleteRowsByIds: async (table, ids) => { let deleted = 0; for (const id of ids) deleted += rows[table].delete(id) ? 1 : 0; return deleted; }, fetchObservationsByListingIds: async (ids) => [...rows.market_listing_observations.values()].filter((row) => ids.includes(row.listing_id)) }; }
+function resultFor(status, { selected = [], report = null, outcome = null, error = null } = {}) {
+  const rows = selected.length ? buildP3BoundedSeedV2Rows({ candidates: selected, workflow: { run_id: "123", head_sha: sha } }) : null;
+  return buildP3BoundedSeedV2Result({ workflow: { run_id: "123", head_sha: sha }, requested_limit: 10, selection: { selected, one_listing_per_variant: true, one_variant_per_series: true }, rows, report, before: counts(0), after: counts(0), outcome, error, status });
+}
+async function captureFailure(run) { try { await run(); assert.fail("expected bounded persistence to fail"); } catch (error) { return error; } }
+function fakeStore({ failAfterPartialWrite = null, rollbackIncomplete = false, preservedListing = null } = {}) {
+  const rows = { market_listings: new Map(), market_listing_observations: new Map(), ingestion_runs: new Map() };
+  if (preservedListing) rows.market_listings.set(preservedListing.id, structuredClone(preservedListing));
+  const calls = []; let verificationFailed = false;
+  return {
+    rows, calls,
+    fetchRowsByIds: async (table, ids) => {
+      if (failAfterPartialWrite === "verification" && table === "market_listing_observations" && !verificationFailed && rows.market_listing_observations.size) { verificationFailed = true; return []; }
+      return ids.map((id) => rows[table].get(id)).filter(Boolean).map((row) => structuredClone(row));
+    },
+    fetchCounts: async () => ({ ...counts(rows.market_listings.size), market_listing_observations: rows.market_listing_observations.size }),
+    upsertRows: async (table, values) => {
+      calls.push({ table });
+      if (failAfterPartialWrite === table) { for (const row of values.slice(0, Math.min(3, values.length))) rows[table].set(row.id, structuredClone(row)); throw new Error(`${table} partial failure`); }
+      for (const row of values) rows[table].set(row.id, structuredClone(row));
+    },
+    deleteRowsByIds: async (table, ids) => {
+      if (rollbackIncomplete && table === "market_listings") return 0;
+      let deleted = 0; for (const id of ids) deleted += rows[table].delete(id) ? 1 : 0; return deleted;
+    },
+    fetchObservationsByListingIds: async (ids) => [...rows.market_listing_observations.values()].filter((row) => ids.includes(row.listing_id)),
+  };
+}
