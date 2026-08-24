@@ -57,6 +57,15 @@ test("V4-only evidence is a stable candidate difference with correct fields and 
   assert.deepEqual(result.v4_only_accepted_records[0], { candidate_key: "only-v4", listing_key: "rakuten_ichiba:item-1", provider: "rakuten_ichiba", executed_query: "series variant", title: "candidate title", status: "active", listing_type: "single", confidence: 0.9, accepted: true, safety_reason: "variant_and_parent_evidence_confirmed", target_variant_id: "v" });
 });
 
+test("same V3 listing is excluded while the new V4 listing alone remains attributable", () => {
+  const base = { rakuten_result_count: 0, yahoo_result_count: 0, accepted: false, candidate_count: 0, providers_queried: ["rakuten_ichiba", "yahoo_shopping"] };
+  const same = { candidate_key: "same-listing", provider: "rakuten_ichiba", accepted: false, safety_reason: "not_single_item" };
+  const fresh = { candidate_key: "new-v4-listing", provider: "yahoo_shopping", accepted: false, safety_reason: "target_variant_not_confirmed" };
+  const row = buildRecallV4Comparison([{ id: "v", name: "variant" }], [{ name: "series" }], { v2: { per_variant: [base] }, v3: { per_variant: [{ ...base, candidate_evidence: [same] }] }, v4: { per_variant: [{ ...base, candidate_evidence: [same, fresh] }] } })[0];
+  assert.deepEqual(row.v4_only_records.map((record) => record.candidate_key), ["new-v4-listing"]);
+  assert.deepEqual(row.v4_provider_responsible, ["yahoo_shopping"]);
+});
+
 test("V4 invalidates provider-contaminated comparisons and preserves zero-write decision semantics", () => {
   const metrics = { variants_with_results: 0, accepted_unique_variant_count: 0 };
   const clean = { metrics, request_diagnostics: { aggregate: { requests_rate_limited: 0, requests_timed_out: 0, requests_permanently_failed: 0 } } };
@@ -77,6 +86,23 @@ test("V4 arms execute strictly sequentially", async () => {
     return { name };
   });
   assert.equal(maximum, 1); assert.deepEqual(order, ["start:v2", "finish:v2", "start:v3", "finish:v3", "start:v4", "finish:v4"]);
+});
+
+test("blocked sequential execution preserves completed and failing arms without starting V4", async () => {
+  const results = {}; const started = [];
+  await assert.rejects(() => runRecallV4ArmsSequentially([["v2"], ["v3"], ["v4"]], async (name) => {
+    started.push(name);
+    return { name, request_diagnostics: { aggregate: { requests_rate_limited: name === "v3" ? 1 : 0, requests_timed_out: 0, requests_permanently_failed: 0 }, providers: { yahoo_shopping: { requests_rate_limited: name === "v3" ? 1 : 0, requests_timed_out: 0, requests_permanently_failed: 0 } } } };
+  }, results), (error) => error.diagnostic_failure.arm === "v3" && error.diagnostic_failure.failure_categories.includes("rate_limited"));
+  assert.deepEqual(started, ["v2", "v3"]); assert.deepEqual(Object.keys(results), ["v2", "v3"]);
+});
+
+test("decision aggregates sanitized safety_reason and keeps wins variant-level", () => {
+  const metrics = { variants_with_results: 1, accepted_unique_variant_count: 0 };
+  const arm = { metrics, request_diagnostics: { aggregate: { requests_rate_limited: 0, requests_timed_out: 0, requests_permanently_failed: 0 } } };
+  const comparison = [{ v4_added_result: true, v4_newly_accepted: false, v4_only_records: [{ candidate_key: "one" }, { candidate_key: "two" }], v4_only_accepted_records: [], v4_only_rejected_records: [{ safety_reason: "not_single_item" }, { safety_reason: "not_single_item" }] }];
+  const decision = buildRecallV4Decision({ v2: arm, v3: arm, v4: arm }, comparison, true);
+  assert.equal(decision.v4_retrieval_win_count, 1); assert.equal(decision.v4_only_record_count, 2); assert.equal(decision.top_v4_rejection_reasons.not_single_item, 2);
 });
 
 test("V4 workflow is dispatch-only, read-only, and leaves Production Auto unchanged", () => {
