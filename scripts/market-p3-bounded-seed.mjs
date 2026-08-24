@@ -12,6 +12,7 @@ import {
   assertP3BoundedSeedPrewrite,
   buildP3BoundedSeedResult,
   buildP3BoundedSeedRows,
+  calculateP3BoundedSeedNoResultVariants,
   parseP3BoundedSeedLimit,
   persistP3BoundedSeed,
   renderP3BoundedSeedResultMarkdown,
@@ -69,6 +70,10 @@ try {
     },
     summary: {
       safety_assessed_records: safety.records.filter((row) => row.market_safety_assessed).length,
+      no_result_variants: calculateP3BoundedSeedNoResultVariants(
+        plan.selected.length,
+        safety.summary.variants_with_results,
+      ),
       listing_upserts: 0, observations_created: 0, ingestion_runs_written: 0,
     },
   });
