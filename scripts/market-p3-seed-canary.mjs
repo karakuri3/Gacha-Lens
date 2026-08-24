@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { loadOfficialCatalog } from "./load-official-catalog.mjs";
 import { fetchMarketListingsRaw, MARKET_SOURCE_SCOPES, assertMarketFetchComplete } from "../lib/fetchers/market-fetcher.js";
-import { buildMarketSearchQueriesForVariant } from "../lib/fetchers/market-query-planner.js";
+import { buildPriorityThreeSeedQueriesForVariant } from "../lib/fetchers/market-seed-query-planner.js";
 import { applyMarketCandidateSafety } from "../lib/domain/market-match-safety.js";
 import { buildSanitizedMarketCandidateAudit, renderMarketCandidateAuditMarkdown } from "../lib/domain/market-candidate-audit.js";
 import { assertP3SeedCanaryPrewrite, buildP3SeedCanaryResult, buildP3SeedCanaryRows, loadP3SeedCanaryTarget, persistP3SeedCanary, selectExactP3SeedCanaryCandidate, validateP3SeedCanaryInvocation } from "../lib/domain/market-p3-seed-canary.js";
@@ -14,8 +14,9 @@ validateP3SeedCanaryInvocation({ event_name: process.env.GITHUB_EVENT_NAME, ref:
 const catalog = await loadOfficialCatalog();
 const variant = catalog.variantById.get(target.variant_id); const series = catalog.seriesById.get(target.series_id);
 if (!variant || !series || variant.series_id !== target.series_id) throw new Error("Fixed P3 target is absent from the current public catalog.");
-const queries = buildMarketSearchQueriesForVariant(variant, series).map((query) => ({ ...query, priority: 3, priority_reason: "recent_release_without_evidence", coverage_state: "priority_3_seed" }));
+const queries = buildPriorityThreeSeedQueriesForVariant(variant, series).map((query) => ({ ...query, priority: 3, priority_reason: "recent_release_without_evidence", coverage_state: "priority_3_seed" }));
 if (queries.length !== 1) throw new Error("Fixed P3 target did not produce one strict query plan.");
+if (queries[0].query_profile !== "priority_3_seed_strict" || queries[0].fallback_queries.some((query) => !query.includes(series.name) || !query.includes(variant.name))) throw new Error("Fixed P3 target query profile is not strict.");
 const fetched = assertMarketFetchComplete(await fetchMarketListingsRaw({ catalog, queries, sourceScope: MARKET_SOURCE_SCOPES.PLANNER_APIS }));
 const safety = applyMarketCandidateSafety({ records: fetched.records, queryPlan: queries, catalog });
 const report = buildSanitizedMarketCandidateAudit({ records: safety.records, queryPlan: queries, catalog, runContext: { mode: "dry-run", source_scope: "planner-apis", run_id: process.env.GITHUB_RUN_ID, run_attempt: process.env.GITHUB_RUN_ATTEMPT, head_sha: process.env.GITHUB_SHA, event_name: process.env.GITHUB_EVENT_NAME }, summary: { safety_assessed_records: safety.records.filter((row) => row.market_safety_assessed).length, listing_upserts: 0, observations_created: 0, ingestion_runs_written: 0 } });
@@ -27,13 +28,14 @@ if (options.persist !== "true") {
 } else {
   const rows = buildP3SeedCanaryRows({ candidate, target, workflow: { run_id: process.env.GITHUB_RUN_ID, run_attempt: process.env.GITHUB_RUN_ATTEMPT, head_sha: process.env.GITHUB_SHA } });
   const store = createStore();
-  const [before, variantListings, existingListings, existingObservations] = await Promise.all([
+  const [before, variantListings, sourceUrlRows, existingListings, existingObservations] = await Promise.all([
     store.fetchCounts(),
     store.fetchRowsByVariantId(target.variant_id),
+    store.fetchRowsBySourceUrl(target.public_url),
     store.fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)),
     store.fetchRowsByIds("market_listing_observations", rows.observationRows.map((row) => row.id)),
   ]);
-  assertP3SeedCanaryPrewrite({ target, rows, variantListings, existingListings, existingObservations });
+  assertP3SeedCanaryPrewrite({ target, rows, variantListings, sourceUrlRows, existingListings, existingObservations });
   try {
     const outcome = await persistP3SeedCanary({ rows, store });
     const after = await store.fetchCounts();
@@ -53,6 +55,7 @@ function createStore() {
   return {
     fetchRowsByIds: (table, ids) => ids.length ? fetchRows(table, { select: "*", pageSize: 1, params: { id: `in.(${ids.map((id) => `\"${String(id).replaceAll('"', '\\"')}\"`).join(",")})`, order: "id.asc" } }) : [],
     fetchRowsByVariantId: (variantId) => fetchRows("market_listings", { select: "id", pageSize: 2, params: { variant_id: `eq.${variantId}`, order: "id.asc" } }),
+    fetchRowsBySourceUrl: (sourceUrl) => fetchRows("market_listings", { select: "id,variant_id,source_url", pageSize: 2, params: { source_url: `eq.${sourceUrl}`, order: "id.asc" } }),
     fetchCounts: async () => {
       const tables = ["market_listings", "market_listing_observations", "import_issues", "ingestion_runs", "series", "variants", "stock_reports", "restock_events"];
       const values = await Promise.all([...tables.map((table) => fetchRowCount(table)), fetchRowCount("market_listings", { review_required: "eq.true" })]);

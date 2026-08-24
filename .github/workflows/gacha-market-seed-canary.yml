@@ -64,6 +64,7 @@ jobs:
           --persist=true
           --output-dir=${{ runner.temp }}/gacha-market-p3-seed-canary
       - name: Scan sanitized canary artifact
+        id: scan
         if: ${{ always() }}
         run: node scripts/manual-market-audit-guard.mjs scan --directory=${{ runner.temp }}/gacha-market-p3-seed-canary
       - name: Upload sanitized P3 seed canary artifact

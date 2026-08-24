@@ -29,6 +29,20 @@ test("P3 seed canary workflow is dispatch-only and has no arbitrary target input
   assert.doesNotMatch(inputs, /(variant_id|series_id|listing_id|provider|public_url)/);
 });
 
+test("artifact scan has an id usable by the conditional upload", () => {
+  const scanBlock = workflow.match(/- name: Scan sanitized canary artifact[\s\S]*?(?=\n\s+- name:|\n\s+uses:|$)/)?.[0] ?? "";
+  assert.match(scanBlock, /id:\s*scan/);
+  assert.match(workflow, /steps\.scan\.outcome == 'success'/);
+});
+
+test("canary runner uses only the strict Priority 3 query builder", () => {
+  const runner = fs.readFileSync(path.join(root, "scripts", "market-p3-seed-canary.mjs"), "utf8");
+  assert.match(runner, /buildPriorityThreeSeedQueriesForVariant/);
+  assert.doesNotMatch(runner, /buildMarketSearchQueriesForVariant/);
+  assert.match(runner, /query_profile/);
+  assert.match(fs.readFileSync(path.join(root, "lib/fetchers/market-seed-query-planner.js"), "utf8"), /priority_3_seed_strict/);
+});
+
 test("fixed target accepts only the exact active safe White Eggplant listing", () => assert.equal(selectExactP3SeedCanaryCandidate([candidate()], target).candidate_key, "1234567890abcdef"));
 
 for (const [name, change] of [
@@ -55,6 +69,7 @@ test("any existing target variant evidence fails closed before writing", () => {
   assert.throws(() => assertP3SeedCanaryPrewrite({ target, rows, variantListings: [{ id: "other-market-listing" }] }));
   assert.throws(() => assertP3SeedCanaryPrewrite({ target, rows, existingListings: [{ id: rows.listingRows[0].id }] }));
   assert.throws(() => assertP3SeedCanaryPrewrite({ target, rows, existingObservations: [{ id: rows.observationRows[0].id }] }));
+  assert.throws(() => assertP3SeedCanaryPrewrite({ target, rows, sourceUrlRows: [{ id: "other", variant_id: "other" }] }));
 });
 
 for (const price of [0, -1, NaN]) test(`invalid price ${String(price)} fails closed`, () => {
