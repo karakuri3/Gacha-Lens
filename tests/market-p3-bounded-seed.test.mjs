@@ -14,6 +14,7 @@ import {
   assertP3BoundedSeedPrewrite,
   buildP3BoundedSeedResult,
   buildP3BoundedSeedRows,
+  isEligibleP3BoundedSeedCandidate,
   parseP3BoundedSeedLimit,
   persistP3BoundedSeed,
   selectP3BoundedSeedCandidates,
@@ -62,6 +63,8 @@ test("P3 runner fixes priority three, released planner APIs, strict retrieval, a
   assert.match(runner, /MARKET_SOURCE_SCOPES\.PLANNER_APIS/);
   assert.match(runner, /query_profile !== PRIORITY_THREE_SEED_QUERY_PROFILE/);
   assert.match(runner, /manualCanarySelectionOptions/);
+  assert.match(runner, /maxVariantsPerSeries: 1/);
+  assert.match(runner, /fetchRowsByMatchedVariantIds/);
 });
 
 test("exact main and confirmation are mandatory", () => {
@@ -94,6 +97,24 @@ for (const [label, mutate] of [
   assert.equal(selectP3BoundedSeedCandidates([value]).selected.length, 0);
 });
 
+test("P3 requires a native source listing ID while supported Rakuten and Yahoo identities remain eligible", () => {
+  for (const value of [undefined, "", "   "]) {
+    const missing = candidate(1); missing.source.listing_id = value;
+    assert.equal(isEligibleP3BoundedSeedCandidate(missing), false);
+  }
+  assert.equal(isEligibleP3BoundedSeedCandidate(candidate(1)), true);
+  const yahoo = candidate(2, { source: { provider: "yahoo_shopping", listing_id: "seller:item-2", public_url: "https://store.shopping.yahoo.co.jp/seller/item-2.html" } });
+  assert.equal(isEligibleP3BoundedSeedCandidate(yahoo), true);
+});
+
+test("selection hard-caps P3 at one variant per parent series independent of profile settings", () => {
+  const selection = selectP3BoundedSeedCandidates([
+    candidate(1, { series_id: "shared" }), candidate(2, { series_id: "shared" }), candidate(3, { series_id: "other" }),
+  ], { limit: 5 });
+  assert.deepEqual(selection.selected.map((row) => row.target.series_id).sort(), ["other", "shared"]);
+  assert.equal(new Set(selection.selected.map((row) => row.target.series_id)).size, selection.selected.length);
+});
+
 test("P3 rows cap at five and preserve one listing and observation per variant", () => {
   const candidates = Array.from({ length: 5 }, (_, index) => candidate(index + 1));
   const rows = buildP3BoundedSeedRows({ candidates, workflow: { run_id: "123", head_sha: sha }, observed_at: "2026-08-24T00:00:00.000Z" });
@@ -111,6 +132,13 @@ test("batch prewrite rejects every duplicate and pre-existing evidence before wr
   assert.throws(() => assertP3BoundedSeedPrewrite({ rows, existingObservations: [{ id: rows.observationRows[0].id }] }));
   const duplicate = structuredClone(rows); duplicate.listingRows[1].variant_id = duplicate.listingRows[0].variant_id;
   assert.throws(() => assertP3BoundedSeedPrewrite({ rows: duplicate }));
+  const duplicateSeries = structuredClone(rows); duplicateSeries.listingRows[1].series_id = duplicateSeries.listingRows[0].series_id;
+  assert.throws(() => assertP3BoundedSeedPrewrite({ rows: duplicateSeries }));
+});
+
+test("prewrite rejects evidence associated only through matched_variant_id", () => {
+  const rows = buildP3BoundedSeedRows({ candidates: [candidate(1)], workflow: { run_id: "123", head_sha: sha } });
+  assert.throws(() => assertP3BoundedSeedPrewrite({ rows, variantListings: [{ id: "legacy", matched_variant_id: rows.listingRows[0].variant_id }] }));
 });
 
 test("generic P1 persistence remains hard-capped at exactly two while explicit P3 policy permits five", () => {
@@ -125,6 +153,39 @@ test("P3 shared persistence rolls back the entire batch after observation failur
   const store = fakeStore({ failObservation: true });
   await assert.rejects(() => persistP3BoundedSeed({ rows, store }), (error) => error.bounded_result?.rollback?.attempted === true && error.bounded_result.rollback.verified === true);
   assert.equal(store.rows.market_listings.size, 0); assert.equal(store.rows.market_listing_observations.size, 0);
+});
+
+test("explicit P3 policy persists and verifies a complete five-variant batch", async () => {
+  const rows = buildP3BoundedSeedRows({ candidates: Array.from({ length: 5 }, (_, index) => candidate(index + 1)), workflow: { run_id: "123", head_sha: sha } });
+  const store = fakeStore();
+  const outcome = await persistP3BoundedSeed({ rows, store });
+  assert.equal(outcome.database_writes, 10);
+  assert.equal(outcome.database_deltas.market_listings, 5);
+  assert.equal(outcome.database_deltas.market_listing_observations, 5);
+});
+
+for (const [label, seed] of [
+  ["exact existing listing", (store, rows) => store.rows.market_listings.set(rows.listingRows[0].id, structuredClone(rows.listingRows[0]))],
+  ["identical listing and observation", (store, rows) => { store.rows.market_listings.set(rows.listingRows[0].id, structuredClone(rows.listingRows[0])); store.rows.market_listing_observations.set(rows.observationRows[0].id, structuredClone(rows.observationRows[0])); }],
+  ["existing observation", (store, rows) => store.rows.market_listing_observations.set(rows.observationRows[0].id, structuredClone(rows.observationRows[0]))],
+]) test(`P3 insert-only policy rejects ${label} before any write`, async () => {
+  const rows = buildP3BoundedSeedRows({ candidates: [candidate(1), candidate(2)], workflow: { run_id: "123", head_sha: sha } });
+  const store = fakeStore(); seed(store, rows);
+  await assert.rejects(() => persistMarketBounded({ listingRows: rows.listingRows, observationRows: rows.observationRows, store, persistencePolicy: MARKET_BOUNDED_PERSISTENCE_POLICIES.p3_seed_v1 }));
+  assert.equal(store.calls.length, 0);
+});
+
+test("P1 retains unchanged semantics while keeping the two-row cap", () => {
+  const rows = buildP3BoundedSeedRows({ candidates: [candidate(1), candidate(2)], workflow: { run_id: "123", head_sha: sha } });
+  const operations = planMarketBoundedOperations({
+    listingRows: rows.listingRows,
+    observationRows: rows.observationRows,
+    existingListings: rows.listingRows.map((row) => structuredClone(row)),
+    existingObservations: rows.observationRows.map((row) => structuredClone(row)),
+  });
+  assert.deepEqual(operations.listings.map((entry) => entry.operation), ["unchanged", "unchanged"]);
+  assert.deepEqual(operations.observations.map((entry) => entry.operation), ["unchanged", "unchanged"]);
+  assert.equal(MARKET_BOUNDED_PERSISTENCE_HARD_CAP, 2);
 });
 
 test("success and failure result artifacts are sanitized", () => {
@@ -142,13 +203,15 @@ test("existing fixed White Eggplant canary remains separate and unchanged", () =
 function counts(value) { return { market_listings: value, market_listing_observations: value, import_issues: 0, ingestion_runs: 0, review_required: 0, series: 0, variants: 0, stock_reports: 0, restock_events: 0 }; }
 function fakeStore({ failObservation = false } = {}) {
   const rows = { market_listings: new Map(), market_listing_observations: new Map(), ingestion_runs: new Map() };
+  const calls = [];
   const count = () => counts(rows.market_listings.size);
   count().market_listing_observations = rows.market_listing_observations.size;
   return {
     rows,
-    fetchRowsByIds: async (table, ids) => ids.map((id) => rows[table].get(id)).filter(Boolean).map(structuredClone),
+    calls,
+    fetchRowsByIds: async (table, ids) => ids.map((id) => rows[table].get(id)).filter(Boolean).map((row) => structuredClone(row)),
     fetchCounts: async () => ({ ...counts(rows.market_listings.size), market_listing_observations: rows.market_listing_observations.size }),
-    upsertRows: async (table, values) => { if (failObservation && table === "market_listing_observations") throw new Error("forced observation failure"); for (const row of values) rows[table].set(row.id, structuredClone(row)); },
+    upsertRows: async (table, values) => { calls.push({ table }); if (failObservation && table === "market_listing_observations") throw new Error("forced observation failure"); for (const row of values) rows[table].set(row.id, structuredClone(row)); },
     deleteRowsByIds: async (table, ids) => { let deleted = 0; for (const id of ids) deleted += rows[table].delete(id) ? 1 : 0; return deleted; },
     fetchObservationsByListingIds: async (ids) => [...rows.market_listing_observations.values()].filter((row) => ids.includes(row.listing_id)),
   };

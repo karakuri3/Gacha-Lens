@@ -42,11 +42,14 @@ try {
   const profile = loadMarketManualCanarySelectionProfile(path.resolve("config/market-manual-canary-selection.json"));
   const rotationKey = priorityThreeBoundedSeedRotationKey();
   const plan = planPriorityThreeSeedSearchQueries(data.catalog, data.coverageRows, {
-    ...manualCanarySelectionOptions(profile),
+    excludedVariantIds: manualCanarySelectionOptions(profile).excludedVariantIds,
+    maxVariantsPerSeries: 1,
     limit,
     rotationKey,
   });
+  const selectedSeriesIds = plan.selected.map((entry) => String(entry.seriesId ?? "").trim());
   if (plan.selected.length > limit || plan.queries.length !== plan.selected.length
+    || selectedSeriesIds.some((id) => !id) || new Set(selectedSeriesIds).size !== selectedSeriesIds.length
     || plan.queries.some((query) => query.query_profile !== PRIORITY_THREE_SEED_QUERY_PROFILE)) {
     throw new Error("P3 bounded seed collection contract is invalid.");
   }
@@ -82,13 +85,14 @@ try {
     console.log(JSON.stringify({ ok: true, status: "no-op", database_writes: 0 }));
   } else {
     const rows = buildP3BoundedSeedRows({ candidates: selection.selected, workflow: workflowIdentity() });
-    const [variantListings, sourceUrlRows, existingListings, existingObservations] = await Promise.all([
+    const [variantIdRows, matchedVariantRows, sourceUrlRows, existingListings, existingObservations] = await Promise.all([
       store.fetchRowsByVariantIds(rows.listingRows.map((row) => row.variant_id)),
+      store.fetchRowsByMatchedVariantIds(rows.listingRows.map((row) => row.variant_id)),
       store.fetchRowsBySourceUrls(rows.listingRows.map((row) => row.source_url)),
       store.fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)),
       store.fetchRowsByIds("market_listing_observations", rows.observationRows.map((row) => row.id)),
     ]);
-    assertP3BoundedSeedPrewrite({ rows, variantListings, sourceUrlRows, existingListings, existingObservations });
+    assertP3BoundedSeedPrewrite({ rows, variantListings: [...variantIdRows, ...matchedVariantRows], sourceUrlRows, existingListings, existingObservations });
     const outcome = await persistP3BoundedSeed({ rows, store });
     const after = await store.fetchCounts();
     writeResult(buildP3BoundedSeedResult({ workflow: workflowIdentity(), requested_limit: limit, selection, report, before, after, outcome, status: "succeeded" }));
@@ -121,6 +125,7 @@ function createStore() {
   return {
     fetchRowsByIds: (table, ids) => fetchIn(table, "id", ids, "*"),
     fetchRowsByVariantIds: (ids) => fetchIn("market_listings", "variant_id", ids, "id,variant_id"),
+    fetchRowsByMatchedVariantIds: (ids) => fetchIn("market_listings", "matched_variant_id", ids, "id,matched_variant_id"),
     fetchRowsBySourceUrls: (urls) => fetchIn("market_listings", "source_url", urls, "id,variant_id,source_url"),
     fetchCounts: async () => {
       const tables = ["market_listings", "market_listing_observations", "import_issues", "ingestion_runs", "series", "variants", "stock_reports", "restock_events"];
