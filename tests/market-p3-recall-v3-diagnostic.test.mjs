@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { buildPriorityThreeSeedQueriesForVariant, buildPriorityThreeSeedRecallV3QueriesForVariant, normalizeRecallSeriesAlias, normalizeRecallVariantAlias, PRIORITY_THREE_SEED_RECALL_V3_QUERY_PROFILE } from "../lib/fetchers/market-seed-query-planner.js";
+import { buildRecallV3Comparison, buildRecallV3VariantArm, normalizeDiagnosticProvider } from "../lib/domain/market-p3-recall-v3-diagnostic.js";
 
 const root = process.cwd();
 const workflow = fs.readFileSync(path.join(root, ".github/workflows/gacha-market-p3-recall-v3-diagnostic.yml"), "utf8");
@@ -44,12 +45,9 @@ test("recall diagnostic builds each arm from sanitized request and retrieval met
   assert.match(diagnosticRunner, /active_accepted_unique_variant_count/);
 });
 
-test("per-variant comparison retains sanitized executed query and arm deltas", () => {
-  for (const field of ["official_series", "official_variant", "providers_queried", "rakuten_result_count", "yahoo_result_count", "baseline_has_result", "full_provider_added_result", "recall_v3_added_result", "safety_reasons", "executed_query"]) {
-    assert.match(diagnosticRunner, new RegExp(`${field}:`));
-  }
-  assert.match(diagnosticRunner, /executed_query: safeText\(/);
-  assert.match(diagnosticRunner, /recall_v3_added_result: !fullHasResult/);
+test("per-variant comparison delegates to the tested deterministic helper", () => {
+  assert.match(diagnosticRunner, /buildRecallV3VariantArm\(query, safety\.records, audit\.candidates, request_diagnostics\)/);
+  assert.match(diagnosticRunner, /buildRecallV3Comparison\(targets, series, results\)/);
 });
 
 test("Markdown renders actual diagnostic arm metrics, per-variant rows, and zero-delta evidence", () => {
@@ -61,4 +59,36 @@ test("Markdown renders actual diagnostic arm metrics, per-variant rows, and zero
   assert.match(diagnosticRunner, /## Per-variant comparison/);
   assert.match(diagnosticRunner, /Production counts/);
   assert.doesNotMatch(diagnosticRunner, /renderMarketCandidateAuditMarkdown/);
+});
+
+test("normalized record providers count Rakuten and Yahoo per variant", () => {
+  const query = { variant_id: "v1", series_id: "s1", query: "series variant", fallback_queries: [] };
+  const records = [
+    { source: "rakuten", raw: { provider: "rakuten_ichiba", query: { variant_id: "v1", query: "series variant" } } },
+    { source: "yahoo", raw: { provider: "yahoo_shopping", query: { variant_id: "v1", query: "series variant" } } },
+  ];
+  const diagnostics = { queries: [{ provider: "rakuten_ichiba", query: "series variant" }, { provider: "yahoo_shopping", query: "series variant" }] };
+  const arm = buildRecallV3VariantArm(query, records, [], diagnostics);
+  assert.equal(normalizeDiagnosticProvider(records[0]), "rakuten_ichiba");
+  assert.equal(arm.rakuten_result_count, 1); assert.equal(arm.yahoo_result_count, 1);
+});
+
+test("baseline provider coverage and result deltas are computed per variant", () => {
+  const targets = Array.from({ length: 10 }, (_, index) => ({ id: `v${index}`, name: `variant${index}` }));
+  const seriesEntries = targets.map((_, index) => ({ name: `series${index}` }));
+  const queries = targets.map((target, index) => ({ variant_id: target.id, series_id: `s${index}`, query: `q${index}`, fallback_queries: [] }));
+  const baselineDiagnostics = { queries: queries.flatMap((query, index) => [
+    ...(index < 8 ? [{ provider: "rakuten_ichiba", query: query.query }] : []),
+    { provider: "yahoo_shopping", query: query.query },
+  ]) };
+  const baseline = queries.map((query, index) => buildRecallV3VariantArm(query, index === 0 ? [{ source: "rakuten", raw: { query: { variant_id: query.variant_id, query: query.query } } }] : [], [], baselineDiagnostics));
+  assert.equal(baseline.filter((entry) => entry.providers_queried.includes("rakuten_ichiba")).length, 8);
+  assert.equal(baseline.filter((entry) => entry.providers_queried.includes("yahoo_shopping")).length, 10);
+  const noResult = (entry) => ({ ...entry, rakuten_result_count: 0, yahoo_result_count: 0 });
+  const full = baseline.map((entry, index) => index === 1 ? { ...noResult(entry), yahoo_result_count: 1 } : noResult(entry));
+  const v3 = baseline.map((entry, index) => index === 2 ? { ...noResult(entry), rakuten_result_count: 1 } : noResult(entry));
+  const comparison = buildRecallV3Comparison(targets, seriesEntries, { v2_baseline: { per_variant: baseline }, v2_full_provider_coverage: { per_variant: full }, recall_v3: { per_variant: v3 } });
+  assert.equal(comparison[0].baseline_has_result, true);
+  assert.equal(comparison[1].full_provider_added_result, true);
+  assert.equal(comparison[2].recall_v3_added_result, true);
 });
