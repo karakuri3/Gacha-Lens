@@ -19,7 +19,7 @@ permissions:
 jobs:
   p3-seed-canary:
     concurrency:
-      group: gacha-ingestion
+      group: gacha-market-bounded-v2
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -64,8 +64,10 @@ jobs:
           --persist=true
           --output-dir=${{ runner.temp }}/gacha-market-p3-seed-canary
       - name: Scan sanitized canary artifact
+        if: ${{ always() }}
         run: node scripts/manual-market-audit-guard.mjs scan --directory=${{ runner.temp }}/gacha-market-p3-seed-canary
       - name: Upload sanitized P3 seed canary artifact
+        if: ${{ always() && steps.scan.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: market-p3-seed-canary-result-${{ github.run_id }}
