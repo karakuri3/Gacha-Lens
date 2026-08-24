@@ -39,6 +39,7 @@ import {
   expandMarketQueryAttempts,
   planMarketSearchQueries,
 } from "../lib/fetchers/market-query-planner.js";
+import { planPriorityThreeSeedSearchQueries } from "../lib/fetchers/market-seed-query-planner.js";
 import {
   buildMarketManualCanarySelectionDiagnostics,
   loadMarketManualCanarySelectionProfile,
@@ -77,7 +78,15 @@ async function runDryMode(options) {
       options: selectionOptions,
       profile: manualProfile,
     })
-    : { plan: planMarketSearchQueries(data.catalog, data.coverageRows, selectionOptions), manualDiagnostic: null };
+    : {
+      plan: options.readOnlySeedAudit
+        ? planPriorityThreeSeedSearchQueries(data.catalog, data.coverageRows, {
+          ...selectionOptions,
+          rotationKey: priorityThreeSeedRotationKey(),
+        })
+        : planMarketSearchQueries(data.catalog, data.coverageRows, selectionOptions),
+      manualDiagnostic: null,
+    };
   const plan = diagnostic.plan;
   const selectionProfile = manualProfile
     ? buildMarketManualCanarySelectionDiagnostics(manualProfile, plan.summary)
@@ -165,6 +174,12 @@ function assertReadOnlySeedAuditContract(options) {
   ) {
     throw new Error("Priority 3 seed audit requires the fixed read-only market contract.");
   }
+}
+
+function priorityThreeSeedRotationKey() {
+  const runId = String(process.env.GITHUB_RUN_ID || "").trim();
+  if (!/^\d+$/.test(runId)) throw new Error("Priority 3 seed audit requires a GitHub workflow run ID.");
+  return `priority-3-seed:${runId}`;
 }
 
 async function runWriteMode(options) {
