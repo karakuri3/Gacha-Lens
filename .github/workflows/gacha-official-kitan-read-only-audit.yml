@@ -1,0 +1,65 @@
+name: Gacha Official Kitan Read-Only Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  kitan-readiness-audit:
+    concurrency:
+      group: gacha-official-kitan-manual-canary
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      INGESTION_WRITE_DISABLED: "true"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify exact main revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+      - name: Run Kitan bounded read-only readiness audit
+        id: audit
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: >-
+          npm run official:kitan-readiness-audit --
+          --output-dir=${{ runner.temp }}/gacha-official-kitan-readiness-audit
+          --expected-main-sha=${{ github.sha }}
+          --run-id=${{ github.run_id }}
+      - name: Scan sanitized Kitan readiness artifact
+        id: scan
+        if: ${{ always() && steps.audit.outcome == 'success' }}
+        run: >-
+          node scripts/official-live-audit-guard.mjs scan
+          --directory=${{ runner.temp }}/gacha-official-kitan-readiness-audit
+      - name: Upload sanitized Kitan readiness artifact
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-kitan-readiness-audit-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-official-kitan-readiness-audit
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce Kitan readiness result
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module -e 'import fs from "node:fs"; const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (report.final_verdict !== "OFFICIAL_KITAN_READINESS_READY" || report.manual_canary_ready !== true || report.database.writes !== 0) process.exit(1);' "${{ runner.temp }}/gacha-official-kitan-readiness-audit/official-kitan-readiness-audit.json"
