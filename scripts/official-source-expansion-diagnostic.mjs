@@ -17,8 +17,8 @@ const expectedSha = text(args["expected-main-sha"] || process.env.GITHUB_SHA);
 const headSha = currentHeadSha();
 if (expectedSha && expectedSha !== headSha) throw new Error("Official source expansion diagnostic main SHA mismatch.");
 const mode = normalizeOfficialSourceExpansionMode(args.mode || process.env.OFFICIAL_SOURCE_EXPANSION_MODE);
-const snapshot = await fetchOfficialSourceExpansionDiagnostic({ mode });
-const report = buildOfficialSourceExpansionReport({ snapshot, workflow: { run_id: args["run-id"] || process.env.GITHUB_RUN_ID, head_sha: headSha, event_name: process.env.GITHUB_EVENT_NAME || "local" }, database: { before: null, after: null, zero_delta_verified: true } });
+const snapshot = await fetchOfficialSourceExpansionDiagnostic({ mode, providerCursors: parseCursor(args.cursor || process.env.OFFICIAL_SOURCE_EXPANSION_CURSOR) });
+const report = buildOfficialSourceExpansionReport({ snapshot, workflow: { run_id: args["run-id"] || process.env.GITHUB_RUN_ID, head_sha: headSha, event_name: process.env.GITHUB_EVENT_NAME || "local" } });
 const json = `${JSON.stringify(report, null, 2)}\n`;
 const markdown = formatOfficialSourceExpansionMarkdown(report);
 const leaks = findOfficialSourceExpansionLeaks([{ name: "official-source-expansion-diagnostic.json", text: json }, { name: "official-source-expansion-diagnostic.md", text: markdown }], explicitSecretValues());
@@ -30,5 +30,6 @@ console.log(JSON.stringify({ ok: true, final_verdict: report.final_verdict, data
 
 function currentHeadSha() { const sha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(); if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error("Current Git revision is unavailable."); return sha; }
 function parseArgs(values) { return { command: values.find((value) => !value.startsWith("--")) || "run", ...Object.fromEntries(values.filter((value) => value.startsWith("--") && value.includes("=")).map((value) => { const [key, ...rest] = value.slice(2).split("="); return [key, rest.join("=")] })) }; }
+function parseCursor(value) { if (!value) return {}; try { const parsed = JSON.parse(value); if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(); return parsed; } catch { throw new Error("Official source expansion cursor must be a JSON object."); } }
 function explicitSecretValues() { return [process.env.SUPABASE_SERVICE_ROLE_KEY, process.env.RAKUTEN_APPLICATION_ID, process.env.YAHOO_SHOPPING_APP_ID].map(text).filter(Boolean); }
 function text(value) { return value == null ? "" : String(value).trim(); }

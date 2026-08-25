@@ -9,6 +9,11 @@ on:
         default: CURRENT
         type: choice
         options: [CURRENT, BACKFILL_SAMPLE]
+      cursor:
+        description: Optional diagnostic-only JSON cursor from a prior BACKFILL_SAMPLE artifact.
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -49,6 +54,7 @@ jobs:
           --expected-main-sha=${{ github.sha }}
           --run-id=${{ github.run_id }}
           --mode=${{ inputs.mode }}
+          --cursor=${{ inputs.cursor }}
       - name: Scan sanitized diagnostic artifact
         id: scan
         if: ${{ always() && steps.diagnostic.outcome == 'success' }}
