@@ -7,7 +7,10 @@ import {
   formatOfficialReadOnlyAuditMarkdown,
   validateOfficialReadOnlyAudit,
 } from "../lib/domain/official-read-only-audit.js";
-import { fetchOfficialLiveSnapshot } from "../lib/fetchers/official-live-audit.js";
+import {
+  buildKnownOfficialCatalogIdentity,
+  fetchOfficialLiveSnapshot,
+} from "../lib/fetchers/official-live-audit.js";
 import {
   fetchExactRowCountReliable,
   fetchRows,
@@ -23,7 +26,16 @@ if (expectedMainSha && headSha !== expectedMainSha) throw new Error("Official au
 const before = await captureOfficialCounts("before");
 const catalog = await loadOfficialCatalog();
 const marketInterestOfficialUrls = await loadMarketInterestOfficialUrls(catalog.variants);
-const snapshot = await fetchOfficialLiveSnapshot({ marketInterestOfficialUrls });
+const selectionMode = text(args["selection-mode"]) || "priority";
+const knownOfficialIdentity = selectionMode === "progressive"
+  ? buildKnownOfficialCatalogIdentity(catalog)
+  : { urls: [], ids: [] };
+const snapshot = await fetchOfficialLiveSnapshot({
+  selectionMode,
+  knownOfficialUrls: knownOfficialIdentity.urls,
+  knownOfficialIds: knownOfficialIdentity.ids,
+  marketInterestOfficialUrls,
+});
 const after = await captureOfficialCounts("after");
 const report = validateOfficialReadOnlyAudit(buildOfficialReadOnlyAudit({
   snapshot,

@@ -66,6 +66,7 @@ jobs:
           npm run official:audit-live --
           --output-dir=${{ runner.temp }}/gacha-official-bounded-auto/audit
           --expected-main-sha=${{ github.sha }}
+          --selection-mode=progressive
           --run-id=${{ github.run_id }}
       - name: Decide bounded official automatic plan
         id: prepare

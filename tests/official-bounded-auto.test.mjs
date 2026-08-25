@@ -13,6 +13,10 @@ import {
 } from "../lib/domain/official-bounded-auto.js";
 import { createOfficialMemoryTransactionAdapter } from "../lib/domain/official-bounded-write.js";
 import { buildOfficialReadOnlyAudit } from "../lib/domain/official-read-only-audit.js";
+import {
+  buildKnownOfficialCatalogIdentity,
+  selectOfficialAuditDetails,
+} from "../lib/fetchers/official-live-audit.js";
 
 const HEAD_SHA = "a".repeat(40);
 const OTHER_SHA = "b".repeat(40);
@@ -49,22 +53,126 @@ test("missing and false gates produce zero-write disabled results", () => {
   }
 });
 
-test("enabled gate requires exact current-main approval", () => {
+test("enabled gate requires the exact reviewed policy approval", () => {
   assert.equal(resolveGate({ enabled: "true", approval: "" }).state, "blocked");
-  const gate = resolveGate({ enabled: "true", approval: expectedOfficialAutoApproval(HEAD_SHA) });
+  const gate = resolveGate({ enabled: "true", approval: expectedOfficialAutoApproval() });
   assert.equal(gate.state, "enabled");
   assert.equal(gate.approval_valid, true);
+  assert.equal(resolveGate({
+    enabled: "true",
+    approval: "APPROVE_OFFICIAL_BOUNDED_AUTO_V2",
+  }).state, "blocked");
+});
+
+test("unrelated main revisions retain reviewed policy approval while exact origin main remains mandatory", () => {
+  const approval = expectedOfficialAutoApproval();
+  assert.equal(resolveGate({ enabled: "true", approval }).state, "enabled");
+  assert.equal(resolveGate({
+    enabled: "true",
+    approval,
+    headSha: OTHER_SHA,
+    originMainSha: OTHER_SHA,
+  }).state, "enabled");
 });
 
 test("main SHA mismatch fails closed before any official fetch or write", () => {
   const gate = resolveGate({
     enabled: "true",
-    approval: expectedOfficialAutoApproval(HEAD_SHA),
+    approval: expectedOfficialAutoApproval(),
     originMainSha: OTHER_SHA,
   });
   assert.equal(gate.state, "blocked");
   assert.equal(gate.reason_code, "official_auto_main_sha_mismatch");
   assert.equal(buildOfficialAutoGateResult({ workflow: workflowIdentity(), gate }).database_writes, 0);
+});
+
+test("automatic progressive selection skips known upcoming products and advances on later runs", () => {
+  const discoveries = [
+    autoDiscovery("known-1", 1),
+    autoDiscovery("known-2", 2),
+    autoDiscovery("unseen-1", 3),
+    autoDiscovery("unseen-2", 4),
+  ];
+  const first = selectOfficialAuditDetails(discoveries, {
+    selectionMode: "progressive",
+    knownOfficialIds: ["known-1", "known-2"],
+    gashaponLimit: 2,
+    takaratomyLimit: 2,
+    now: new Date("2026-08-25T00:00:00.000Z"),
+  });
+  assert.deepEqual(first.map((entry) => entry.record.id), ["unseen-1", "unseen-2"]);
+
+  const laterDiscoveries = [
+    ...discoveries,
+    autoDiscovery("unseen-3", 5),
+    autoDiscovery("unseen-4", 6),
+  ];
+  const second = selectOfficialAuditDetails(laterDiscoveries, {
+    selectionMode: "progressive",
+    knownOfficialIds: ["known-1", "known-2", "unseen-1", "unseen-2"],
+    gashaponLimit: 2,
+    takaratomyLimit: 2,
+    now: new Date("2026-08-25T00:00:00.000Z"),
+  });
+  assert.deepEqual(second.map((entry) => entry.record.id), ["unseen-3", "unseen-4"]);
+});
+
+test("progressive selection falls back to established refresh priority when all products are known", () => {
+  const discoveries = [
+    autoDiscovery("older", 11, "gashapon", "2025-01-01"),
+    autoDiscovery("recent", 12, "gashapon", "2026-08-01"),
+    autoDiscovery("upcoming", 13, "gashapon", "2026-09-01"),
+  ];
+  const selected = selectOfficialAuditDetails(discoveries, {
+    selectionMode: "progressive",
+    knownOfficialUrls: discoveries.map((entry) => entry.url),
+    gashaponLimit: 2,
+    takaratomyLimit: 2,
+    now: new Date("2026-08-25T00:00:00.000Z"),
+  });
+  assert.deepEqual(selected.map((entry) => entry.record.id), ["upcoming", "recent"]);
+});
+
+test("progressive selection preserves the two-detail limit independently per provider", () => {
+  const discoveries = [
+    autoDiscovery("g-1", 21),
+    autoDiscovery("g-2", 22),
+    autoDiscovery("g-3", 23),
+    autoDiscovery("t-1", 31, "takaratomy_arts"),
+    autoDiscovery("t-2", 32, "takaratomy_arts"),
+    autoDiscovery("t-3", 33, "takaratomy_arts"),
+  ];
+  const selected = selectOfficialAuditDetails(discoveries, {
+    selectionMode: "progressive",
+    gashaponLimit: 2,
+    takaratomyLimit: 2,
+  });
+  assert.equal(selected.filter((entry) => entry.provider === "gashapon").length, 2);
+  assert.equal(selected.filter((entry) => entry.provider === "takaratomy_arts").length, 2);
+});
+
+test("only the automatic workflow enables progressive catalog selection", () => {
+  const auditStep = step("Run read-only official live audit", "Decide bounded official automatic plan");
+  assert.match(auditStep, /--selection-mode=progressive/);
+  assert.doesNotMatch(manualAuditWorkflow, /--selection-mode=progressive/);
+});
+
+test("automatic catalog identity passes deterministic known official URLs and parent IDs", () => {
+  assert.deepEqual(buildKnownOfficialCatalogIdentity({
+    series: [
+      { id: "series-b", official_url: "https://gashapon.jp/products/detail.php?jan_code=2" },
+      { id: "series-a", official_url: "https://gashapon.jp/products/detail.php?jan_code=1" },
+    ],
+    variants: [
+      { id: "variant-1", series_id: "series-a", official_url: "https://gashapon.jp/products/detail.php?jan_code=1" },
+    ],
+  }), {
+    urls: [
+      "https://gashapon.jp/products/detail.php?jan_code=1",
+      "https://gashapon.jp/products/detail.php?jan_code=2",
+    ],
+    ids: ["series-a", "series-b"],
+  });
 });
 
 test("required official source failure blocks automatic authorization", () => {
@@ -263,6 +371,18 @@ function resolveGate(overrides = {}) {
     originMainSha: HEAD_SHA,
     ...overrides,
   });
+}
+
+function autoDiscovery(id, sequence, provider = "gashapon", releaseDate = "2026-09-01") {
+  const url = provider === "gashapon"
+    ? `https://gashapon.jp/products/detail.php?jan_code=${String(sequence).padStart(16, "0")}`
+    : `https://www.takaratomy-arts.co.jp/items/item.html?n=${sequence}`;
+  return {
+    provider,
+    source_key: provider === "gashapon" ? "gashapon_schedule" : "takaratomy_search",
+    url,
+    record: { id, release_date: releaseDate },
+  };
 }
 
 function authorize(report) {

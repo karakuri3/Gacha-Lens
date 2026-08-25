@@ -10,13 +10,16 @@ Merging the workflow does not authorize Production writes. Both repository
 variables below are required:
 
 - `OFFICIAL_BOUNDED_AUTO_ENABLED=true`
-- `OFFICIAL_BOUNDED_AUTO_APPROVAL=APPROVE_OFFICIAL_BOUNDED_AUTO_V1:<CURRENT_MAIN_SHA>`
+- `OFFICIAL_BOUNDED_AUTO_APPROVAL=APPROVE_OFFICIAL_BOUNDED_AUTO_V1`
 
 When the enable variable is absent or not exactly `true`, the scheduled run
 creates a sanitized disabled artifact and performs no provider fetch and no
 database write. An enabled gate with a missing, stale, or malformed approval
-fails closed. A new main revision therefore requires a separately approved
-approval rebind.
+fails closed. The approval is bound to the reviewed automatic policy version,
+so unrelated main revisions do not require a rebind. Any behavior-changing
+automatic policy revision must increment the approval version and receive a new
+explicit approval. Every run still verifies that its checkout exactly matches
+the current `origin/main` revision before provider access or writes.
 
 ## Execution boundary
 
@@ -35,10 +38,14 @@ The automatic caps reuse the established live-audit envelope:
 - at most 40 variant writes per run;
 - at most 4 official restock-event writes per run.
 
-The live collector inspects at most two Bandai and two Takara Tomy Arts detail
-pages per run. Four series and forty variants therefore cover the reviewed
-daily collection envelope while treating larger changes as an incident rather
-than silently approving them.
+The automatic live collector inspects at most two Bandai and two Takara Tomy
+Arts detail pages per run. It deterministically prioritizes official identities
+that are absent from the current catalog, then progresses to the next unseen
+identities on later runs. If every discovered identity is already known, it
+uses the established upcoming/recent/market-interest refresh ordering. Manual
+official audits retain that established ordering. Four series and forty
+variants therefore cover the reviewed daily collection envelope while treating
+larger changes as an incident rather than silently approving them.
 
 ## Fail-closed policy
 
@@ -57,5 +64,5 @@ official bounded writer so the two write paths cannot overlap.
 
 Setting or changing either repository variable is a Production approval action.
 Do not activate the gate until the Draft PR has been reviewed, merged, and the
-exact main SHA has been named in a separate explicit approval. No workflow
+policy version has been named in a separate explicit approval. No workflow
 dispatch is needed or permitted for this schedule-only workflow.
