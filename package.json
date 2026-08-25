@@ -48,6 +48,7 @@
     "test:official-bounded-write": "node --test tests/official-bounded-write.test.mjs",
     "test:official-bounded-auto": "node --test tests/official-bounded-auto.test.mjs",
     "test:official-source-expansion": "node --test tests/official-source-expansion-diagnostic.test.mjs",
+    "test:official-provider-capabilities": "node --test tests/official-provider-capabilities.test.mjs",
     "test:market-coverage": "node --test tests/market-coverage.test.mjs",
     "market:coverage": "node scripts/market-coverage-report.mjs",
     "market:backfill": "node scripts/market-backfill.mjs",
