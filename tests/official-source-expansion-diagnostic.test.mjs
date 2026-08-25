@@ -25,6 +25,16 @@ test("Kitan Club parser uses the live detail prose plus pickup image/name struct
   assert.match(parsed.record.diagnostic_identity.series_id, /kitan_club:hato_nuigurumi/);
 });
 
+test("Kitan Club uses the exact official lineup prose to exclude a non-lineup pickup gallery card", () => {
+  const parsed = parseProviderDetail("kitan_club", fixture("kitan-capwatch-qbb-detail.html"), "https://kitan.jp/products/capwatch_qbb/");
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.record.variant_count, 6);
+  assert.equal(parsed.record.price, 500);
+  assert.deepEqual(parsed.record.variants.map((variant) => variant.name), ["ベビーチーズ（プレーン）", "アーモンド入りベビーチーズ", "カマンベール入りベビーチーズ", "クリームチーズ入りベビーチーズ", "ブラックペッパー入りベビーチーズ", "チーズDE鉄分ベビーチーズ"]);
+  assert.equal(parsed.record.variants.some((variant) => variant.name === "腕にQBBベビーチーズが巻ける！"), false);
+  assert.equal(parseProviderDetail("kitan_club", fixture("kitan-capwatch-qbb-detail.html").replace("全6種", "全5種"), "https://kitan.jp/products/capwatch_qbb/").ok, false);
+});
+
 test("Qualia parser reads the live product/view metadata but fails closed without named variants", () => {
   const parsed = parseProviderDetail("qualia", fixture("qualia-detail.html"), "https://www.qualia-45.jp/product/view/2031");
   assert.equal(parsed.ok, false);
@@ -69,6 +79,33 @@ test("Qualia diagnostic discovers an official archive Lineup and promotes only t
   assert.equal(qualia.lineup_success, 1);
   assert.equal(qualia.lineup_archive_pages_fetched, 2);
   assert.equal(buildOfficialSourceExpansionReport({ snapshot }).providers.find((provider) => provider.source === "qualia").metrics.total_variants, 4);
+});
+
+test("Qualia CURRENT selects the newest explicit official month and prioritizes matching current formal Lineup evidence", async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (url === "https://kitan.jp/products/") return response(fixture("kitan-list.html"), 200);
+    if (url === "https://kitan.jp/products/hato_nuigurumi/") return response(fixture("kitan-detail.html"), 200);
+    if (url === "https://www.qualia-45.jp/product.html") return response(fixture("qualia-current-archive-navigation.html"), 200);
+    if (url.includes("/product/search/ym:2026-08")) return response(fixture("qualia-current-list.html"), 200);
+    if (url === "https://www.qualia-45.jp/product/view/2999") return response(fixture("qualia-current-detail.html"), 200);
+    if (url === "https://www.qualia-45.jp/product/view/1222") return response("", 500);
+    if (url === "https://www.qualia-45.jp/distinations/") return response(fixture("qualia-current-distinations-archive.html"), 200);
+    if (url === "https://www.qualia-45.jp/distinations/page/2/") return response("<main></main>", 200);
+    if (url === "https://www.qualia-45.jp/distinations/latest_official_lineup/") return response(fixture("qualia-current-distinations-lineup.html"), 200);
+    return response("", 404);
+  };
+  const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 1, qualiaLineupFetchLimit: 1, requestDelayMs: 0, fetchImpl });
+  const qualia = snapshot.providers.find((provider) => provider.source === "qualia");
+  assert.equal(qualia.archive_cursor, "2026-08");
+  assert.equal(qualia.records.length, 1);
+  assert.equal(qualia.records[0].series_name, "最新公式ラインナップ");
+  assert.equal(qualia.records[0].variant_count, 3);
+  assert.ok(calls.includes("https://www.qualia-45.jp/product/search/ym:2026-08?target=product"));
+  assert.equal(calls.includes("https://www.qualia-45.jp/product/view/1222"), false);
+  assert.ok(calls.includes("https://www.qualia-45.jp/distinations/latest_official_lineup/"));
+  assert.equal(calls.includes("https://www.qualia-45.jp/distinations/unrelated_current_lineup/"), false);
 });
 
 test("Qualia BACKFILL_SAMPLE applies the same bounded explicit Lineup discovery", async () => {
@@ -139,7 +176,8 @@ test("diagnostic fetch is sequential, observes request budgets, emits metrics, a
     ["https://kitan.jp/products/", fixture("kitan-list.html")],
     ["https://kitan.jp/products/hato_nuigurumi/", fixture("kitan-detail.html")],
     ["https://kitan.jp/products/archive_2010/", fixture("kitan-detail.html")],
-    ["https://www.qualia-45.jp/product.html", fixture("qualia-list.html")],
+    ["https://www.qualia-45.jp/product.html", fixture("qualia-archive-navigation.html")],
+    ["https://www.qualia-45.jp/product/search/ym:2021-01?target=product", fixture("qualia-list.html")],
     ["https://www.qualia-45.jp/distinations/", fixture("qualia-distinations-archive-page-2.html")],
     ["https://www.qualia-45.jp/product/view/2031", fixture("qualia-detail.html")],
     ["https://www.qualia-45.jp/product/view/1019", fixture("qualia-detail.html")],
@@ -148,7 +186,7 @@ test("diagnostic fetch is sequential, observes request budgets, emits metrics, a
   const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 2, requestDelayMs: 0, fetchImpl: async (url) => {
     calls.push(url); return response(pages.get(url) || "", pages.has(url) ? 200 : 404);
   } });
-  assert.equal(calls.length, 8);
+  assert.equal(calls.length, 9);
   assert.ok(snapshot.providers.every((provider) => provider.detail_attempted <= 2));
   assert.equal(snapshot.providers.find((provider) => provider.source === "qualia").metadata_records.length, 2);
   assert.equal(snapshot.providers.find((provider) => provider.source === "qualia").metadata_records[0].series_name, "殻からの脱出。 マスコットフィギュア");
@@ -208,6 +246,16 @@ test("duplicate identities are reported and sanitized reports cannot contain sec
   assert.deepEqual(findOfficialSourceExpansionLeaks([{ name: "bad.json", text: '{"raw_response":"x"}' }]), ["bad.json:forbidden_fields"]);
 });
 
+test("reports distinguish successful records, metadata-only quarantine, and rejection reasons", () => {
+  const report = buildOfficialSourceExpansionReport({ snapshot: { providers: [{ source: "qualia", manufacturer: "クオリア", parser_success: true, parser_complete: false, records: [{ variants: [{ name: "A" }] }], metadata_records: [{ official_url: "https://www.qualia-45.jp/product/view/1" }], successful_records: 1, metadata_only_records: 1, rejected_records: 1, rejection_reasons: { official_detail_zero_lineup: 1 } }] } });
+  const provider = report.providers[0];
+  assert.equal(report.final_verdict, "OFFICIAL_SOURCE_EXPANSION_DIAGNOSTIC_PARTIAL");
+  assert.equal(provider.metrics.successful_records, 1);
+  assert.equal(provider.metrics.metadata_only_records, 1);
+  assert.deepEqual(provider.metrics.rejection_reasons, { official_detail_zero_lineup: 1 });
+  assert.match(formatOfficialSourceExpansionMarkdown(report), /Metadata-only records: 1/);
+});
+
 test("workflow is dispatch-only, validates bounded diagnostic modes, uploads run-scoped artifacts, and has no write credentials", () => {
   assert.match(workflow, /workflow_dispatch:/);
   assert.doesNotMatch(workflow, /\bschedule:|\bpush:|\bpull_request:|\bworkflow_run:|\brepository_dispatch:/);
@@ -230,7 +278,8 @@ function diagnosticFixtureFetch({ lineupBody = null, archiveBody = fixture("qual
     calls.push(url);
     if (url === "https://kitan.jp/products/") return response(fixture("kitan-list.html"), 200);
     if (url === "https://kitan.jp/products/hato_nuigurumi/") return response(fixture("kitan-detail.html"), 200);
-    if (url === "https://www.qualia-45.jp/product.html") return response(fixture("qualia-lineup-list.html"), 200);
+    if (url === "https://www.qualia-45.jp/product.html") return response(fixture("qualia-archive-navigation.html"), 200);
+    if (url.includes("/product/search/ym:")) return response(fixture("qualia-lineup-list.html"), 200);
     if (url === "https://www.qualia-45.jp/product/view/9000") return response(qualiaDetail, 200);
     if (url === "https://www.qualia-45.jp/distinations/") return response(archiveBody, 200);
     if (url === "https://www.qualia-45.jp/distinations/page/2/") return response(archivePageBody, 200);
