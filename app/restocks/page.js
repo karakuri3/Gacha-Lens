@@ -38,7 +38,7 @@ export default async function RestocksPage() {
           <section className="signal-list" aria-label="再販・再入荷一覧">
             {rows.map(({ item, event, presentation }, index) => (
               <Link key={event.id || `${item.series_id}-${event.reported_at}`} href={presentation.href} className="signal-row">
-                <div className="signal-row__image"><ProductImage src={presentation.image_url} alt={presentation.name} priority={index < 4} /></div>
+                <div className="signal-row__image"><ProductImage item={presentation} alt={presentation.name} priority={index < 4} /></div>
                 <div className="signal-row__main">
                   <span className="signal-row__badge">{event.event_label || restockLabel(event.event_type)}</span>
                   <h2>{presentation.name}</h2>

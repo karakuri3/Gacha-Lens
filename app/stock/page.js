@@ -51,7 +51,7 @@ export default async function StockPage({ searchParams }) {
           <section className="signal-list" aria-label="在庫目撃一覧">
             {rows.map(({ item, report }, index) => (
               <Link key={report.id || `${item.variant_id}-${report.reported_at}`} href={variantHref(item)} className="signal-row">
-                <div className="signal-row__image"><ProductImage src={item.image_url} alt={item.name} priority={index < 4} /></div>
+                <div className="signal-row__image"><ProductImage item={item} alt={item.name} priority={index < 4} /></div>
                 <div className="signal-row__main">
                   <span className={`signal-row__badge stock-${report.status || "unknown"}`}>{report.status_label || stockLabel(report.status)}</span>
                   <h2>{item.name}</h2>
