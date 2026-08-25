@@ -26,7 +26,7 @@ export default function SeriesCard({ series, priority = false, scope = "variant"
           imageScope={isSeries ? "series" : series.image_scope}
           alt={series.name}
           priority={priority}
-          emptyLabel={isSeries ? "シリーズ画像なし" : "画像なし"}
+          emptyLabel="画像なし"
         />
       </div>
       <div>
