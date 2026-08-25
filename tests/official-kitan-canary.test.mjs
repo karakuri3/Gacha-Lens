@@ -18,6 +18,8 @@ test("Kitan safe product builds one deterministic, bounded manual canary candida
   const first = readiness(kitanRecord("kitan-capwatch-qbb-detail.html", "capwatch_qbb"));
   const second = readiness(kitanRecord("kitan-capwatch-qbb-detail.html", "capwatch_qbb"));
   assert.equal(first.final_verdict, "OFFICIAL_KITAN_READINESS_READY");
+  assert.equal(first.plan.eligible_candidate_count, 1);
+  assert.equal(first.plan.selected_candidate_count, 1);
   assert.equal(first.plan.candidate_count, 1);
   assert.equal(first.plan.selected_candidate.variant_count, 6);
   assert.equal(first.plan.selected_candidate.apply_contract.restock_event, null);
@@ -25,6 +27,61 @@ test("Kitan safe product builds one deterministic, bounded manual canary candida
   assert.deepEqual(first.plan.selected_candidate.variants.map((variant) => variant.id), second.plan.selected_candidate.variants.map((variant) => variant.id));
   assert.equal(first.database.writes, 0);
   assert.equal(first.database.delta.series, 0);
+});
+
+test("multiple safe Kitan records select exactly one newest deterministic canary contract", () => {
+  const base = kitanRecord("kitan-capwatch-qbb-detail.html", "capwatch_qbb");
+  const records = ["2026-06-01", "2026-07-01", "2026-08-01", "2026-08-10", "2026-08-20"].map((release_date, index) => ({
+    ...base,
+    source_product_id: `safe-${index}`,
+    official_url: `https://kitan.jp/products/safe-${index}/`,
+    series_name: `Kitan safe ${index}`,
+    release_date,
+    release_month: release_date.slice(0, 7),
+  }));
+  const report = readinessRecords(records, {}, { audit_date: "2026-08-20" });
+  assert.equal(report.manual_canary_ready, true);
+  assert.equal(report.plan.eligible_candidate_count, 5);
+  assert.equal(report.plan.selected_candidate_count, 1);
+  assert.equal(report.plan.selected_candidate.source_product_id, "safe-4");
+  assert.equal(report.plan.selected_candidate.variant_count, 6);
+  assert.equal(report.plan.selected_candidate.apply_contract.variants.length, 6);
+  assert.equal(report.plan.eligible_candidates.every((candidate) => !Object.hasOwn(candidate, "apply_contract")), true);
+  assert.equal(authorize(report).candidate.series_id, report.plan.selected_candidate.series_id);
+
+  const twoSafe = readinessRecords(records.slice(0, 2), {}, { audit_date: "2026-08-20" });
+  assert.equal(twoSafe.manual_canary_ready, true);
+  assert.equal(twoSafe.plan.eligible_candidate_count, 2);
+  assert.equal(twoSafe.plan.selected_candidate_count, 1);
+  assert.equal(twoSafe.plan.selected_candidate.source_product_id, "safe-1");
+});
+
+test("conflicted Kitan records are excluded while remaining safe records can select one canary", () => {
+  const base = kitanRecord("kitan-capwatch-qbb-detail.html", "capwatch_qbb");
+  const safe = Array.from({ length: 4 }, (_, index) => ({ ...base, source_product_id: `safe-${index}`, official_url: `https://kitan.jp/products/safe-${index}/`, series_name: `Kitan safe ${index}`, release_date: `2026-07-0${index + 1}`, release_month: "2026-07" }));
+  const conflict = { ...kitanRecord("kitan-moomin-conflicting-count-detail.html", "moomin_vase"), source_product_id: "conflict", official_url: "https://kitan.jp/products/conflict/" };
+  const report = readinessRecords([conflict, ...safe]);
+  assert.equal(report.manual_canary_ready, true);
+  assert.equal(report.plan.eligible_candidate_count, 4);
+  assert.equal(report.plan.selected_candidate_count, 1);
+  assert.equal(report.source.source_count_conflict_excluded_count, 1);
+});
+
+test("frozen Kitan release status uses exact date and conservative current-month semantics", () => {
+  const base = kitanRecord("kitan-capwatch-qbb-detail.html", "capwatch_qbb");
+  for (const [label, record, expected] of [
+    ["past exact date", { ...base, release_date: "2026-08-19", release_month: "2026-08" }, true],
+    ["today exact date", { ...base, release_date: "2026-08-20", release_month: "2026-08" }, true],
+    ["future exact date", { ...base, release_date: "2026-08-21", release_month: "2026-08" }, false],
+    ["past month", { ...base, release_date: null, release_month: "2026-07" }, true],
+    ["future month", { ...base, release_date: null, release_month: "2026-09" }, false],
+    ["current month", { ...base, release_date: null, release_month: "2026-08" }, false],
+  ]) {
+    const report = readiness(record, {}, { audit_date: "2026-08-20" });
+    assert.equal(report.plan.selected_candidate.release_status.released, expected, label);
+    assert.equal(report.plan.selected_candidate.apply_contract.series.values.is_released, expected, label);
+    assert.equal(report.plan.selected_candidate.apply_contract.variants.every((variant) => variant.values.released === expected), true, label);
+  }
 });
 
 test("What’s Michael uses the decoded deterministic source identity", () => {
@@ -66,6 +123,28 @@ test("identity collisions and precondition drift fail closed before durable muta
   assert.equal(result.final_verdict, "OFFICIAL_BOUNDED_WRITE_ROLLED_BACK");
   assert.equal(result.database_writes, 0);
   assert.equal(result.reason_code, "official_bounded_insert_identity_exists");
+});
+
+test("a Kitan URL slug change with exact factual identity blocks a duplicate insert", () => {
+  const incoming = kitanRecord("kitan-capwatch-qbb-detail.html", "new-capwatch-slug");
+  const oldSeriesId = buildKitanStableIdentity("old-capwatch-slug");
+  const oldVariants = incoming.variants.map((variant) => ({ id: buildKitanStableIdentity("old-capwatch-slug", variant.name), series_id: oldSeriesId, name: variant.name }));
+  const report = buildOfficialKitanReadinessAudit({
+    provider: { source: "kitan_club", parser_success: true, issue_codes: [], records: [incoming] },
+    catalog: { series: [{ id: oldSeriesId, name: incoming.series_name, brand: "キタンクラブ", source_type: "official_site", official_url: "https://kitan.jp/products/old-capwatch-slug/", release_date: incoming.release_date, release_month: incoming.release_month, price: incoming.price }], variants: oldVariants },
+    databaseBefore: counts(), databaseAfter: counts(), workflow: { run_id: "900", head_sha: HEAD, audit_date: "2026-08-20" },
+  });
+  assert.equal(report.manual_canary_ready, false);
+  assert.match(report.plan.rejected_candidates[0].reasons.join(","), /kitan_identity_drift_possible/);
+});
+
+test("similar Kitan products with distinct factual evidence do not trigger an identity-drift match", () => {
+  const incoming = kitanRecord("kitan-capwatch-qbb-detail.html", "new-capwatch-slug");
+  const report = readiness(incoming, {
+    series: [{ id: buildKitanStableIdentity("different"), name: "CAPWATCH QBBベビーチーズ 別商品", brand: "キタンクラブ", source_type: "official_site", official_url: "https://kitan.jp/products/different/", release_month: "2026-09", price: 400 }],
+    variants: [],
+  }, { audit_date: "2026-08-20" });
+  assert.equal(report.manual_canary_ready, true);
 });
 
 test("Kitan canary approval is exact and rejects stale SHA, digest, run ID, and approval", () => {
@@ -117,9 +196,10 @@ test("Kitan canary artifact summaries carry no approval or credential field", ()
   assert.deepEqual(findOfficialBoundedLeaks([{ name: "result.json", text: JSON.stringify(summary) }], ["private-value"]), []);
 });
 
-function readiness(record, catalog = { series: [], variants: [] }) {
-  return validateOfficialKitanReadinessAudit(buildOfficialKitanReadinessAudit({ provider: { source: "kitan_club", parser_success: true, issue_codes: [], records: [record] }, catalog, databaseBefore: counts(), databaseAfter: counts(), workflow: { run_id: "900", head_sha: HEAD, event_name: "workflow_dispatch" } }));
+function readiness(record, catalog = { series: [], variants: [] }, workflow = {}) {
+  return readinessRecords([record], catalog, workflow);
 }
+function readinessRecords(records, catalog = { series: [], variants: [] }, workflow = {}) { return validateOfficialKitanReadinessAudit(buildOfficialKitanReadinessAudit({ provider: { source: "kitan_club", parser_success: true, issue_codes: [], records }, catalog, databaseBefore: counts(), databaseAfter: counts(), workflow: { run_id: "900", head_sha: HEAD, event_name: "workflow_dispatch", audit_date: "2026-08-20", ...workflow } })); }
 function authorize(report, values = {}) { return authorizeOfficialKitanCanary({ report, auditRunId: values.auditRunId || "900", auditDigest: values.auditDigest || report.canonical_digest, approval: values.approval || `APPROVE_OFFICIAL_KITAN_CANARY:${HEAD}:${report.canonical_digest}`, headSha: values.headSha || HEAD, originMainSha: values.originMainSha || HEAD }); }
 function kitanRecord(file, productId) { const parsed = parseProviderDetail("kitan_club", fixture(file), `https://kitan.jp/products/${productId}/`); assert.equal(parsed.ok, true); return parsed.record; }
 function counts() { return { series: 10, variants: 20, restock_events: 0, import_issues: 0, review_required: 0, provisional_variants: 0 }; }
