@@ -141,10 +141,26 @@ for (const [label, mutate] of [["name", (html) => html.replaceAll("リアル恐�
 
 test("Qualia without an official archive Lineup link remains metadata-only and fetches no guessed URL", async () => {
   const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 1, requestDelayMs: 0, fetchImpl: diagnosticFixtureFetch({ archiveBody: "<main><nav><a href=\"/distinations/page/2/\">2</a></nav></main>", archivePageBody: "<main></main>" }) });
+  const kitan = snapshot.providers.find((provider) => provider.source === "kitan_club");
   const qualia = snapshot.providers.find((provider) => provider.source === "qualia");
   assert.equal(qualia.records.length, 0);
   assert.equal(qualia.metadata_records.length, 1);
   assert.equal(qualia.lineup_attempted, 0);
+  assert.equal(qualia.successful_records, 0);
+  assert.equal(qualia.metadata_only_records, 1);
+  assert.equal(qualia.rejected_records, 0);
+  assert.deepEqual(qualia.rejection_reasons, {});
+  for (const provider of [kitan, qualia]) assert.equal(provider.successful_records + provider.metadata_only_records + provider.rejected_records, provider.detail_attempted);
+});
+
+test("a detail HTTP failure is a true rejection and cannot become metadata-only", async () => {
+  const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 1, requestDelayMs: 0, fetchImpl: diagnosticFixtureFetch({ qualiaDetailStatus: 500 }) });
+  const qualia = snapshot.providers.find((provider) => provider.source === "qualia");
+  assert.equal(qualia.successful_records, 0);
+  assert.equal(qualia.metadata_only_records, 0);
+  assert.equal(qualia.rejected_records, 1);
+  assert.deepEqual(qualia.rejection_reasons, { official_fetch_network_or_rate_limit: 1 });
+  assert.equal(qualia.successful_records + qualia.metadata_only_records + qualia.rejected_records, qualia.detail_attempted);
 });
 
 test("Qualia Lineup discovery is sequential and bounded to the explicit small fetch limit", async () => {
@@ -246,13 +262,14 @@ test("duplicate identities are reported and sanitized reports cannot contain sec
   assert.deepEqual(findOfficialSourceExpansionLeaks([{ name: "bad.json", text: '{"raw_response":"x"}' }]), ["bad.json:forbidden_fields"]);
 });
 
-test("reports distinguish successful records, metadata-only quarantine, and rejection reasons", () => {
-  const report = buildOfficialSourceExpansionReport({ snapshot: { providers: [{ source: "qualia", manufacturer: "クオリア", parser_success: true, parser_complete: false, records: [{ variants: [{ name: "A" }] }], metadata_records: [{ official_url: "https://www.qualia-45.jp/product/view/1" }], successful_records: 1, metadata_only_records: 1, rejected_records: 1, rejection_reasons: { official_detail_zero_lineup: 1 } }] } });
+test("reports distinguish successful records, metadata-only quarantine, and true rejection reasons", () => {
+  const report = buildOfficialSourceExpansionReport({ snapshot: { providers: [{ source: "qualia", manufacturer: "クオリア", parser_success: true, parser_complete: false, records: [{ variants: [{ name: "A" }] }], metadata_records: [{ official_url: "https://www.qualia-45.jp/product/view/1" }], successful_records: 1, metadata_only_records: 1, metadata_only_reasons: { lineup_unavailable: 1 }, rejected_records: 1, rejection_reasons: { official_fetch_http_error: 1 } }] } });
   const provider = report.providers[0];
   assert.equal(report.final_verdict, "OFFICIAL_SOURCE_EXPANSION_DIAGNOSTIC_PARTIAL");
   assert.equal(provider.metrics.successful_records, 1);
   assert.equal(provider.metrics.metadata_only_records, 1);
-  assert.deepEqual(provider.metrics.rejection_reasons, { official_detail_zero_lineup: 1 });
+  assert.deepEqual(provider.metrics.metadata_only_reasons, { lineup_unavailable: 1 });
+  assert.deepEqual(provider.metrics.rejection_reasons, { official_fetch_http_error: 1 });
   assert.match(formatOfficialSourceExpansionMarkdown(report), /Metadata-only records: 1/);
 });
 
@@ -273,14 +290,14 @@ test("existing manual and automatic official workflows remain isolated", () => {
 
 function response(body, status) { return { ok: status >= 200 && status < 300, status, text: async () => body }; }
 
-function diagnosticFixtureFetch({ lineupBody = null, archiveBody = fixture("qualia-distinations-archive.html"), archivePageBody = fixture("qualia-distinations-archive-page-2.html"), qualiaDetail = fixture("qualia-lineup-product-detail.html"), calls = [] } = {}) {
+function diagnosticFixtureFetch({ lineupBody = null, archiveBody = fixture("qualia-distinations-archive.html"), archivePageBody = fixture("qualia-distinations-archive-page-2.html"), qualiaDetail = fixture("qualia-lineup-product-detail.html"), qualiaDetailStatus = 200, calls = [] } = {}) {
   return async (url) => {
     calls.push(url);
     if (url === "https://kitan.jp/products/") return response(fixture("kitan-list.html"), 200);
     if (url === "https://kitan.jp/products/hato_nuigurumi/") return response(fixture("kitan-detail.html"), 200);
     if (url === "https://www.qualia-45.jp/product.html") return response(fixture("qualia-archive-navigation.html"), 200);
     if (url.includes("/product/search/ym:")) return response(fixture("qualia-lineup-list.html"), 200);
-    if (url === "https://www.qualia-45.jp/product/view/9000") return response(qualiaDetail, 200);
+    if (url === "https://www.qualia-45.jp/product/view/9000") return response(qualiaDetail, qualiaDetailStatus);
     if (url === "https://www.qualia-45.jp/distinations/") return response(archiveBody, 200);
     if (url === "https://www.qualia-45.jp/distinations/page/2/") return response(archivePageBody, 200);
     if (/^https:\/\/www\.qualia-45\.jp\/distinations\/[^/]+\/$/.test(url)) return response(lineupBody || fixture("qualia-distinations-lineup.html"), 200);
