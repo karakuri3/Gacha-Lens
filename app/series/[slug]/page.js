@@ -58,14 +58,14 @@ export default async function VariantDetailPage({ params }) {
     .filter((entry) => Boolean(entry.is_released) === isReleased)
     .slice(0, 3);
   const tags = customerTags(item, isReleased);
-  const siblingImages = (item.sibling_variants ?? []).filter((entry) => entry.image).slice(0, 5);
+  const siblingImages = (item.sibling_variants ?? []).filter((entry) => entry.has_variant_image).slice(0, 5);
   const detailUrl = absoluteSiteUrl(variantHref(item));
   const pageDescription = item.summary || `${item.series_name}のラインナップ商品です。`;
   const structuredData = buildVariantDetailStructuredData({
     name: item.name,
     description: pageDescription,
     url: detailUrl,
-    image: item.image_url ? absoluteSiteUrl(item.image_url) : undefined,
+    image: item.variant_image_url ? absoluteSiteUrl(item.variant_image_url) : undefined,
     siteUrl: absoluteSiteUrl("/"),
     breadcrumbs: [
       { name: "ホーム", url: absoluteSiteUrl("/") },
@@ -85,13 +85,13 @@ export default async function VariantDetailPage({ params }) {
         <section className="detail-hero">
           <div className="detail-media">
             <div className="detail-image">
-              <ProductImage src={item.image_url} alt={item.name} priority emptyLabel="単品画像未取得" />
+              <ProductImage item={item} alt={item.name} priority emptyLabel="画像なし" />
             </div>
             {siblingImages.length > 1 ? (
               <div className="detail-thumbnails" aria-label="同じシリーズの画像">
                 {siblingImages.map((entry) => (
                   <Link key={entry.id} href={variantHref(entry)} title={entry.name}>
-                    <ProductImage src={entry.image} alt={entry.name} />
+                    <ProductImage item={entry} alt={entry.name} />
                   </Link>
                 ))}
               </div>
@@ -131,6 +131,9 @@ export default async function VariantDetailPage({ params }) {
                 name: item.name,
                 series_name: item.series_name,
                 image_url: item.image_url,
+                display_image_url: item.display_image_url,
+                series_image_url: item.series_image_url,
+                image_scope: item.image_scope,
                 is_released: isReleased,
                 primary_label: isReleased ? item.market_evidence?.label : "発売",
                 primary_value: isReleased ? formatMarketEvidenceValue(item.market_evidence) : `${formatSchedule(item)}・${formatYen(item.price)}`,
@@ -173,7 +176,11 @@ export default async function VariantDetailPage({ params }) {
             <div className="lineup-grid">
               {(item.sibling_variants ?? []).map((entry) => (
                 <Link key={entry.id} href={variantHref(entry)}>
-                  <span className="lineup-grid__image"><ProductImage src={entry.image} alt={entry.name} emptyLabel="単品画像未取得" /></span>
+                  <span className="lineup-grid__image">
+                    {entry.image_scope === "series_fallback"
+                      ? <span className="lineup-grid__series-fallback">シリーズ</span>
+                      : <ProductImage item={entry} alt={entry.name} emptyLabel="画像なし" />}
+                  </span>
                   <span><strong>{entry.name}</strong><small>{entry.rarity} / {entry.role}</small></span>
                 </Link>
               ))}

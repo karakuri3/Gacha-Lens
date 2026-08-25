@@ -20,10 +20,13 @@ export default function SeriesCard({ series, priority = false, scope = "variant"
     <Link href={isSeries ? seriesHref(series) : variantHref(series)} className="card product-card">
       <div className="product-image">
         <ProductImage
+          item={isSeries ? undefined : series}
           src={series.image_url || series.imageUrl}
+          fallbackSrc={isSeries ? "" : series.series_image_url}
+          imageScope={isSeries ? "series" : series.image_scope}
           alt={series.name}
           priority={priority}
-          emptyLabel={isSeries ? "シリーズ画像未取得" : "単品画像未取得"}
+          emptyLabel={isSeries ? "シリーズ画像なし" : "画像なし"}
         />
       </div>
       <div>

@@ -134,7 +134,7 @@ function ScheduleCard({ item, priority = false }) {
   const tags = customerTags(item, false);
   return (
     <Link href={variantHref(item)} className="card product-card">
-      <div className="product-image"><ProductImage src={item.image_url} alt={item.name} priority={priority} /></div>
+      <div className="product-image"><ProductImage item={item} alt={item.name} priority={priority} /></div>
       <div>
         <div className="tag-row" style={{ marginBottom: 10 }}>
           <span className="tag">{hasConfirmedReleaseDate(item) && week ? `${week}より順次` : "発売日確認中"}</span>

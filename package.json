@@ -42,6 +42,7 @@
     "test:ingestion-safety": "node --test tests/ingestion-execution-safety.test.mjs tests/ingestion-run-report.test.mjs tests/ingestion-workflow-safety.test.mjs",
     "test:rollout-policy": "node --test tests/automatic-ingestion-rollout.test.mjs",
     "test:catalog-discovery": "node --test tests/catalog-discovery.test.mjs",
+    "test:image-presentation": "node --test tests/variant-image-presentation.test.mjs",
     "test:official-read-only": "node --test tests/official-read-only-audit.test.mjs tests/official-rerelease-semantics.test.mjs",
     "test:official-bounded-write": "node --test tests/official-bounded-write.test.mjs",
     "test:official-bounded-auto": "node --test tests/official-bounded-auto.test.mjs",

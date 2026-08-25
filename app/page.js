@@ -151,7 +151,7 @@ function DashboardSpotlight({ item }) {
       <PanelHead title="いま一番注目の商品" meta="価格・売れ行き・在庫を総合" href={variantHref(item)} />
       <Link href={variantHref(item)} className="dashboard-spotlight">
         <div className="dashboard-spotlight__image">
-          <ProductImage src={item.image_url} alt={item.name} priority />
+          <ProductImage item={item} alt={item.name} priority />
           <span>注目 1位</span>
         </div>
         <div className="dashboard-spotlight__copy">
@@ -186,7 +186,7 @@ function RankingTile({ item, rank }) {
   return (
     <Link href={variantHref(item)} className="dashboard-rank-tile">
       <span className={`dashboard-rank-tile__rank rank-${rank}`}>{rank}</span>
-      <div className="dashboard-rank-tile__image"><ProductImage src={item.image_url} alt={item.name} priority={rank <= 3} /></div>
+      <div className="dashboard-rank-tile__image"><ProductImage item={item} alt={item.name} priority={rank <= 3} /></div>
       <strong>{item.name}</strong>
       <span>{formatMarketEvidenceValue(item.market_evidence)}</span>
       <small>{Number.isFinite(change) ? formatChange(change) : sellThroughLabel(item.market_summary)} ・ 売れた数 {(item.sold_count ?? 0).toLocaleString("ja-JP")}件</small>
@@ -200,7 +200,7 @@ function CompactMarketRow({ item, rank, mode }) {
   return (
     <Link href={variantHref(item)} className="dashboard-mini-row" role="listitem">
       <span>{rank}</span>
-      <div className="dashboard-table__image"><ProductImage src={item.image_url} alt={item.name} /></div>
+      <div className="dashboard-table__image"><ProductImage item={item} alt={item.name} /></div>
       <div><strong>{item.name}</strong><small>{item.series_name}</small></div>
       <div className="dashboard-mini-row__value">
         <b>{mode === "price" ? formatMarketEvidenceValue(item.market_evidence) : mode === "rising" ? formatChange(priceChangePercent(item)) : formatScore(watchScore(item))}</b>
@@ -213,7 +213,7 @@ function CompactMarketRow({ item, rank, mode }) {
 function UpcomingRow({ item }) {
   return (
     <Link href={variantHref(item)} className="dashboard-compact-row">
-      <div className="dashboard-compact-row__image"><ProductImage src={item.image_url} alt={item.name} /></div>
+      <div className="dashboard-compact-row__image"><ProductImage item={item} alt={item.name} /></div>
       <div><strong>{item.name}</strong><span>{formatSchedule(item)} ・ {formatYen(item.price)}</span></div>
       <b>{formatScore(opportunityScore(item))}</b>
     </Link>
@@ -225,7 +225,7 @@ function AvailabilityRow({ item }) {
   const status = summary.has_stock_signal || summary.has_restock_signal ? stockStatusLabel(summary) : "流通あり";
   return (
     <Link href={variantHref(item)} className="dashboard-compact-row dashboard-compact-row--stock">
-      <div className="dashboard-compact-row__image"><ProductImage src={item.image_url} alt={item.name} /></div>
+      <div className="dashboard-compact-row__image"><ProductImage item={item} alt={item.name} /></div>
       <div><strong>{item.name}</strong><span>{sellThroughLabel(item.market_summary)}</span></div>
       <b>{status}</b>
     </Link>

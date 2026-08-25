@@ -67,7 +67,7 @@ export default function FavoritesPage() {
             {items.map((item) => (
               <article key={item.slug} className="card favorite-card">
                 <Link href={favoriteHref(item)} className="favorite-card__link">
-                  <div className="favorite-card__image"><ProductImage src={item.image_url} alt={item.name} /></div>
+                  <div className="favorite-card__image"><ProductImage item={item} alt={item.name} /></div>
                   <div className="favorite-card__copy">
                     <span>{item.is_released ? "発売中" : "発売予定"}</span>
                     <h2>{item.name}</h2>

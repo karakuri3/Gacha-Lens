@@ -129,7 +129,7 @@ function RankingCard({ item, mode, scope }) {
     <Link href={scope === "series" ? seriesHref(item) : variantHref(item)} className={`card product-card rank-${item.rank}`}>
       <span className={`rank-medal rank-medal--${item.rank}`}>{item.rank}位</span>
       <div className="product-image">
-        <ProductImage src={item.image_url} alt={item.name} priority={item.rank <= 3} emptyLabel={scope === "series" ? "シリーズ画像未取得" : "単品画像未取得"} />
+        <ProductImage item={scope === "series" ? undefined : item} src={item.image_url} fallbackSrc={scope === "series" ? "" : item.series_image_url} imageScope={scope === "series" ? "series" : item.image_scope} alt={item.name} priority={item.rank <= 3} emptyLabel={scope === "series" ? "シリーズ画像なし" : "画像なし"} />
       </div>
       <div className="ranking-card__info">
         <ProductTitle item={item} scope={scope} />
@@ -145,7 +145,7 @@ function RankingRow({ item, mode, scope }) {
     <Link href={scope === "series" ? seriesHref(item) : variantHref(item)} className="card rank-row">
       <div className="rank-number">#{item.rank}</div>
       <div className="product-image">
-        <ProductImage src={item.image_url} alt={item.name} emptyLabel={scope === "series" ? "シリーズ画像未取得" : "単品画像未取得"} />
+        <ProductImage item={scope === "series" ? undefined : item} src={item.image_url} fallbackSrc={scope === "series" ? "" : item.series_image_url} imageScope={scope === "series" ? "series" : item.image_scope} alt={item.name} emptyLabel={scope === "series" ? "シリーズ画像なし" : "画像なし"} />
       </div>
       <div>
         <ProductTitle item={item} scope={scope} />
