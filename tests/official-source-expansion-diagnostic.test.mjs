@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import { buildOfficialSourceExpansionReport, findOfficialSourceExpansionLeaks, formatOfficialSourceExpansionMarkdown } from "../lib/domain/official-source-expansion-diagnostic.js";
-import { fetchOfficialSourceExpansionDiagnostic, linkQualiaProductToLineup, listOfficialSourceExpansionProviders, parseProviderDetail, parseProviderList, parseQualiaArchiveNavigation, parseQualiaLineupDocument, parseQualiaLineupLinks } from "../lib/fetchers/official-sources/registry.js";
+import { fetchOfficialSourceExpansionDiagnostic, linkQualiaProductToLineup, listOfficialSourceExpansionProviders, parseProviderDetail, parseProviderList, parseQualiaArchiveNavigation, parseQualiaLineupArchivePages, parseQualiaLineupDocument, parseQualiaLineupLinks } from "../lib/fetchers/official-sources/registry.js";
 
 const fixture = (name) => fs.readFileSync(`tests/fixtures/official/${name}`, "utf8");
 const workflow = fs.readFileSync(".github/workflows/gacha-official-source-expansion-diagnostic.yml", "utf8");
@@ -35,7 +35,7 @@ test("Qualia parser reads the live product/view metadata but fails closed withou
 });
 
 test("Qualia formal distinations Lineup parses bounded names without guessed product links", () => {
-  const lineup = parseQualiaLineupDocument(fixture("qualia-distinations-lineup.html"), "https://www.qualia-45.jp/distinations/real-kyoryu-headc/");
+  const lineup = parseQualiaLineupDocument(fixture("qualia-distinations-lineup.html"), "https://www.qualia-45.jp/distinations/kyoryu_headc/");
   assert.equal(lineup.ok, true);
   assert.equal(lineup.record.price, 500);
   assert.equal(lineup.record.release_month, "2025-07");
@@ -50,20 +50,24 @@ test("Qualia formal distinations Lineup parses bounded names without guessed pro
   assert.equal(linkQualiaProductToLineup({ series_name: "リアル恐竜ヘッドコレクション", release_month: "2025-07", price: 500, expected_variant_count: 5 }, lineup).reason, "lineup_variant_count_mismatch");
 });
 
-test("Qualia Lineup discovery accepts only an explicit official distinations URL", () => {
-  assert.deepEqual(parseQualiaLineupLinks('<a href="https://qualia-45.jp/distinations/real-kyoryu-headc/">Lineup</a>', "https://www.qualia-45.jp/product.html"), ["https://www.qualia-45.jp/distinations/real-kyoryu-headc/"]);
-  assert.deepEqual(parseQualiaLineupLinks('<a href="https://example.invalid/distinations/real-kyoryu-headc/">Lineup</a><a href="/distinations/not-a-lineup/?query=1">Ignore</a>', "https://www.qualia-45.jp/product.html"), []);
+test("Qualia Lineup archive discovery accepts only explicit official archive and Lineup URLs", () => {
+  const archive = fixture("qualia-distinations-archive.html");
+  assert.deepEqual(parseQualiaLineupLinks(archive, "https://www.qualia-45.jp/distinations/"), ["https://www.qualia-45.jp/distinations/kyoryu_headc/"]);
+  assert.deepEqual(parseQualiaLineupArchivePages(archive, "https://www.qualia-45.jp/distinations/"), ["https://www.qualia-45.jp/distinations/", "https://www.qualia-45.jp/distinations/page/2/", "https://www.qualia-45.jp/distinations/page/3/"]);
+  assert.deepEqual(parseQualiaLineupLinks('<a href="https://example.invalid/distinations/kyoryu_headc/">Lineup</a><a href="/distinations/not-a-lineup/?query=1">Ignore</a>', "https://www.qualia-45.jp/distinations/"), []);
 });
 
-test("Qualia diagnostic follows an explicit official Lineup link and promotes only the exact matching product", async () => {
+test("Qualia diagnostic discovers an official archive Lineup and promotes only the exact matching product", async () => {
   const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 1, qualiaLineupFetchLimit: 1, requestDelayMs: 0, fetchImpl: diagnosticFixtureFetch() });
   const qualia = snapshot.providers.find((provider) => provider.source === "qualia");
+  assert.doesNotMatch(fixture("qualia-lineup-product-detail.html"), /distinations/);
   assert.equal(qualia.records.length, 1);
   assert.equal(qualia.records[0].variant_count, 4);
   assert.equal(qualia.metadata_records.length, 0);
   assert.equal(qualia.formal_lineup_evidence.length, 1);
   assert.equal(qualia.lineup_attempted, 1);
   assert.equal(qualia.lineup_success, 1);
+  assert.equal(qualia.lineup_archive_pages_fetched, 2);
   assert.equal(buildOfficialSourceExpansionReport({ snapshot }).providers.find((provider) => provider.source === "qualia").metrics.total_variants, 4);
 });
 
@@ -74,7 +78,9 @@ test("Qualia BACKFILL_SAMPLE applies the same bounded explicit Lineup discovery"
     if (url === "https://www.qualia-45.jp/product.html") return response(fixture("qualia-archive-navigation.html"), 200);
     if (url.includes("/product/search/ym:2019-01")) return response(fixture("qualia-lineup-list.html"), 200);
     if (url === "https://www.qualia-45.jp/product/view/9000") return response(fixture("qualia-lineup-product-detail.html"), 200);
-    if (url === "https://www.qualia-45.jp/distinations/real-kyoryu-headc/") return response(fixture("qualia-distinations-lineup.html"), 200);
+    if (url === "https://www.qualia-45.jp/distinations/") return response(fixture("qualia-distinations-archive.html"), 200);
+    if (url === "https://www.qualia-45.jp/distinations/page/2/") return response(fixture("qualia-distinations-archive-page-2.html"), 200);
+    if (url === "https://www.qualia-45.jp/distinations/kyoryu_headc/") return response(fixture("qualia-distinations-lineup.html"), 200);
     return response("", 404);
   };
   const snapshot = await fetchOfficialSourceExpansionDiagnostic({ mode: "BACKFILL_SAMPLE", backfillSampleDetailLimit: 1, qualiaLineupFetchLimit: 1, requestDelayMs: 0, fetchImpl });
@@ -82,12 +88,12 @@ test("Qualia BACKFILL_SAMPLE applies the same bounded explicit Lineup discovery"
   assert.equal(qualia.archive_cursor, "2019-01");
   assert.equal(qualia.records[0].variant_count, 4);
   assert.equal(qualia.lineup_attempted, 1);
-  assert.equal(qualia.request_count, 4);
+  assert.equal(qualia.request_count, 6);
 });
 
 for (const [label, mutate] of [["name", (html) => html.replaceAll("リアル恐竜ヘッドコレクション", "別の恐竜" )], ["release month", (html) => html.replace("2025年7月", "2025年8月")], ["price", (html) => html.replace("1回500円", "1回600円")]]) {
   test(`Qualia diagnostic keeps formal Lineup evidence separate on ${label} mismatch`, async () => {
-    const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 1, qualiaLineupFetchLimit: 1, requestDelayMs: 0, fetchImpl: diagnosticFixtureFetch(mutate(fixture("qualia-distinations-lineup.html"))) });
+    const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 1, qualiaLineupFetchLimit: 1, requestDelayMs: 0, fetchImpl: diagnosticFixtureFetch({ lineupBody: mutate(fixture("qualia-distinations-lineup.html")) }) });
     const qualia = snapshot.providers.find((provider) => provider.source === "qualia");
     assert.equal(qualia.records.length, 0);
     assert.equal(qualia.metadata_records.length, 1);
@@ -96,8 +102,8 @@ for (const [label, mutate] of [["name", (html) => html.replaceAll("リアル恐�
   });
 }
 
-test("Qualia without an explicit official Lineup link remains metadata-only and fetches no guessed URL", async () => {
-  const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 1, requestDelayMs: 0, fetchImpl: diagnosticFixtureFetch(null, fixture("qualia-detail.html")) });
+test("Qualia without an official archive Lineup link remains metadata-only and fetches no guessed URL", async () => {
+  const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 1, requestDelayMs: 0, fetchImpl: diagnosticFixtureFetch({ archiveBody: "<main><nav><a href=\"/distinations/page/2/\">2</a></nav></main>", archivePageBody: "<main></main>" }) });
   const qualia = snapshot.providers.find((provider) => provider.source === "qualia");
   assert.equal(qualia.records.length, 0);
   assert.equal(qualia.metadata_records.length, 1);
@@ -107,13 +113,15 @@ test("Qualia without an explicit official Lineup link remains metadata-only and 
 test("Qualia Lineup discovery is sequential and bounded to the explicit small fetch limit", async () => {
   const lineupLinks = ["a", "b", "c", "d"].map((slug) => `<a href="https://www.qualia-45.jp/distinations/${slug}/">Lineup</a>`).join("");
   const calls = [];
-  const fetchImpl = diagnosticFixtureFetch(null, fixture("qualia-lineup-product-detail.html").replace("</div>", `${lineupLinks}</div>`), calls);
-  const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 1, qualiaLineupFetchLimit: 3, requestDelayMs: 0, fetchImpl });
+  const fetchImpl = diagnosticFixtureFetch({ archiveBody: `<main>${lineupLinks}<nav><a href="/distinations/page/2/">2</a><a href="/distinations/page/3/">3</a></nav></main>`, calls });
+  const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 1, qualiaLineupFetchLimit: 3, qualiaLineupArchivePageLimit: 2, requestDelayMs: 0, fetchImpl });
   const qualia = snapshot.providers.find((provider) => provider.source === "qualia");
-  assert.equal(qualia.lineup_discovered, 5);
+  assert.equal(qualia.lineup_discovered, 4);
   assert.equal(qualia.lineup_attempted, 3);
   assert.equal(qualia.lineup_fetch_limit, 3);
-  assert.equal(calls.filter((url) => url.includes("/distinations/")).length, 3);
+  assert.equal(qualia.lineup_archive_pages_fetched, 2);
+  assert.equal(qualia.lineup_archive_page_limit, 2);
+  assert.equal(calls.filter((url) => /^https:\/\/www\.qualia-45\.jp\/distinations\/[^/]+\/$/.test(url)).length, 3);
 });
 
 test("provider list parsing is canonical, bounded later, and rejects foreign URLs", () => {
@@ -132,6 +140,7 @@ test("diagnostic fetch is sequential, observes request budgets, emits metrics, a
     ["https://kitan.jp/products/hato_nuigurumi/", fixture("kitan-detail.html")],
     ["https://kitan.jp/products/archive_2010/", fixture("kitan-detail.html")],
     ["https://www.qualia-45.jp/product.html", fixture("qualia-list.html")],
+    ["https://www.qualia-45.jp/distinations/", fixture("qualia-distinations-archive-page-2.html")],
     ["https://www.qualia-45.jp/product/view/2031", fixture("qualia-detail.html")],
     ["https://www.qualia-45.jp/product/view/1019", fixture("qualia-detail.html")],
   ]);
@@ -139,7 +148,7 @@ test("diagnostic fetch is sequential, observes request budgets, emits metrics, a
   const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 2, requestDelayMs: 0, fetchImpl: async (url) => {
     calls.push(url); return response(pages.get(url) || "", pages.has(url) ? 200 : 404);
   } });
-  assert.equal(calls.length, 6);
+  assert.equal(calls.length, 8);
   assert.ok(snapshot.providers.every((provider) => provider.detail_attempted <= 2));
   assert.equal(snapshot.providers.find((provider) => provider.source === "qualia").metadata_records.length, 2);
   assert.equal(snapshot.providers.find((provider) => provider.source === "qualia").metadata_records[0].series_name, "殻からの脱出。 マスコットフィギュア");
@@ -216,14 +225,16 @@ test("existing manual and automatic official workflows remain isolated", () => {
 
 function response(body, status) { return { ok: status >= 200 && status < 300, status, text: async () => body }; }
 
-function diagnosticFixtureFetch(lineupBody = null, qualiaDetail = fixture("qualia-lineup-product-detail.html"), calls = []) {
+function diagnosticFixtureFetch({ lineupBody = null, archiveBody = fixture("qualia-distinations-archive.html"), archivePageBody = fixture("qualia-distinations-archive-page-2.html"), qualiaDetail = fixture("qualia-lineup-product-detail.html"), calls = [] } = {}) {
   return async (url) => {
     calls.push(url);
     if (url === "https://kitan.jp/products/") return response(fixture("kitan-list.html"), 200);
     if (url === "https://kitan.jp/products/hato_nuigurumi/") return response(fixture("kitan-detail.html"), 200);
     if (url === "https://www.qualia-45.jp/product.html") return response(fixture("qualia-lineup-list.html"), 200);
     if (url === "https://www.qualia-45.jp/product/view/9000") return response(qualiaDetail, 200);
-    if (url.includes("/distinations/")) return response(lineupBody || fixture("qualia-distinations-lineup.html"), 200);
+    if (url === "https://www.qualia-45.jp/distinations/") return response(archiveBody, 200);
+    if (url === "https://www.qualia-45.jp/distinations/page/2/") return response(archivePageBody, 200);
+    if (/^https:\/\/www\.qualia-45\.jp\/distinations\/[^/]+\/$/.test(url)) return response(lineupBody || fixture("qualia-distinations-lineup.html"), 200);
     return response("", 404);
   };
 }
