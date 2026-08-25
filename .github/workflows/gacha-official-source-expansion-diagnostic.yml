@@ -1,0 +1,65 @@
+name: Gacha Official Source Expansion Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Diagnostic sampling mode only; never enables persistence.
+        required: true
+        default: CURRENT
+        type: choice
+        options: [CURRENT, BACKFILL_SAMPLE]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  official-source-expansion-diagnostic:
+    concurrency:
+      group: gacha-official-source-expansion-diagnostic
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      INGESTION_WRITE_DISABLED: "true"
+      MARKET_BACKFILL_WRITE_DISABLED: "true"
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify exact main revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+      - name: Run diagnostic-only official source sample
+        id: diagnostic
+        continue-on-error: true
+        run: >-
+          node scripts/official-source-expansion-diagnostic.mjs
+          --output-dir=${{ runner.temp }}/gacha-official-source-expansion-diagnostic
+          --expected-main-sha=${{ github.sha }}
+          --run-id=${{ github.run_id }}
+          --mode=${{ inputs.mode }}
+      - name: Scan sanitized diagnostic artifact
+        id: scan
+        if: ${{ always() && steps.diagnostic.outcome == 'success' }}
+        run: >-
+          node scripts/official-source-expansion-diagnostic.mjs scan
+          --output-dir=${{ runner.temp }}/gacha-official-source-expansion-diagnostic
+      - name: Upload sanitized diagnostic artifact
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-source-expansion-diagnostic-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-official-source-expansion-diagnostic
+          if-no-files-found: error
+          retention-days: 7
