@@ -46,7 +46,7 @@ jobs:
           --run-id=${{ github.run_id }}
       - name: Scan sanitized Qualia series readiness artifact
         id: scan
-        if: ${{ always() && steps.audit.outcome == 'success' }}
+        if: ${{ always() }}
         run: >-
           node scripts/official-live-audit-guard.mjs scan
           --directory=${{ runner.temp }}/gacha-official-qualia-series-readiness-audit

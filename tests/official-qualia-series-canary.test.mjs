@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   buildOfficialQualiaSeriesCanaryReadyResult,
@@ -11,6 +13,8 @@ import {
   validateOfficialQualiaSeriesReadinessAudit,
 } from "../lib/domain/official-qualia-series-canary.js";
 import { createOfficialMemoryTransactionAdapter, findOfficialBoundedLeaks } from "../lib/domain/official-bounded-write.js";
+import { findOfficialAuditLeaks } from "../lib/domain/official-read-only-audit.js";
+import { runOfficialQualiaSeriesReadinessAudit } from "../scripts/official-qualia-series-readiness-audit.mjs";
 
 const HEAD = "a".repeat(40);
 const AUDIT_RUN_ID = "901";
@@ -142,8 +146,56 @@ test("an existing Qualia row requiring update is excluded from canary writes", (
   assert.equal(report.final_verdict, "OFFICIAL_QUALIA_SERIES_READINESS_BLOCKED");
   assert.equal(report.plan.manual_update_required.length, 1);
   assert.equal(report.plan.selected_candidate_count, 0);
+  assert.match(report.blockers.join(","), /qualia_manual_update_required/);
   assert.equal(report.plan.series_updates, 0);
   assert.equal(report.database.writes, 0);
+});
+
+test("NOOP plus a manual Qualia update remains explicitly blocked without a write plan", () => {
+  const noopCandidate = readiness([qualiaRecord({ id: "2999" })]).plan.selected_candidate;
+  const updateCandidate = readiness([qualiaRecord({ id: "3000", name: "Second product" })]).plan.selected_candidate;
+  const noop = { ...noopCandidate.apply_contract.series.values, raw: {} };
+  const needsManualUpdate = { ...updateCandidate.apply_contract.series.values, price: 400, raw: {} };
+  const report = readiness([qualiaRecord({ id: "2999" }), qualiaRecord({ id: "3000", name: "Second product" })], { series: [noop, needsManualUpdate] });
+  assert.equal(report.final_verdict, "OFFICIAL_QUALIA_SERIES_READINESS_BLOCKED");
+  assert.match(report.blockers.join(","), /qualia_manual_update_required/);
+  assert.equal(report.plan.noop_candidates.length, 1);
+  assert.equal(report.plan.manual_update_required.length, 1);
+  assert.equal(report.plan.series_updates, 0);
+  assert.equal(report.database.writes, 0);
+});
+
+test("readiness source failure replaces a stale READY artifact with sanitized zero-write BLOCKED evidence", async () => {
+  const outputDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "qualia-readiness-"));
+  const secret = "private-service-role-value";
+  try {
+    fs.writeFileSync(path.join(outputDirectory, "official-qualia-series-readiness-audit.json"), JSON.stringify({ final_verdict: "OFFICIAL_QUALIA_SERIES_READINESS_READY" }));
+    const { report } = await runOfficialQualiaSeriesReadinessAudit({
+      args: { "output-dir": outputDirectory, "expected-main-sha": HEAD, "run-id": AUDIT_RUN_ID },
+      env: { SUPABASE_SERVICE_ROLE_KEY: secret, GITHUB_EVENT_NAME: "workflow_dispatch" },
+      dependencies: {
+        currentHeadSha: () => HEAD,
+        captureCounts: async () => counts(),
+        fetchProvider: async () => { throw new Error(`network failed: ${secret}`); },
+      },
+    });
+    const json = fs.readFileSync(path.join(outputDirectory, "official-qualia-series-readiness-audit.json"), "utf8");
+    const markdown = fs.readFileSync(path.join(outputDirectory, "official-qualia-series-readiness-audit.md"), "utf8");
+    assert.equal(report.final_verdict, "OFFICIAL_QUALIA_SERIES_READINESS_BLOCKED");
+    assert.equal(report.database.writes, 0);
+    assert.equal(report.plan.series_inserts, 0);
+    assert.equal(report.plan.variant_inserts, 0);
+    assert.equal(report.reason_code, "qualia_series_readiness_unexpected_failure");
+    assert.doesNotMatch(json, /OFFICIAL_QUALIA_SERIES_READINESS_READY/);
+    assert.doesNotMatch(markdown, /OFFICIAL_QUALIA_SERIES_READINESS_READY/);
+    assert.deepEqual(findOfficialAuditLeaks([
+      { name: "official-qualia-series-readiness-audit.json", text: json },
+      { name: "official-qualia-series-readiness-audit.md", text: markdown },
+    ], [secret]), []);
+    validateOfficialQualiaSeriesReadinessAudit(JSON.parse(json));
+  } finally {
+    fs.rmSync(outputDirectory, { recursive: true, force: true });
+  }
 });
 
 test("Qualia ownership, URL, and factual identity drift conflicts block insertion", () => {
@@ -306,6 +358,10 @@ test("Qualia workflows are dispatch-only and statically preserve the series-only
   }
   assert.match(auditWorkflow, /INGESTION_WRITE_DISABLED: "true"/);
   assert.match(auditWorkflow, /official-qualia-series-readiness-audit/);
+  const readinessScanBlock = auditWorkflow.slice(auditWorkflow.indexOf("Scan sanitized Qualia series readiness artifact"), auditWorkflow.indexOf("Upload sanitized Qualia series readiness artifact"));
+  assert.match(readinessScanBlock, /id: scan/);
+  assert.match(readinessScanBlock, /if: \$\{\{ always\(\) \}\}/);
+  assert.doesNotMatch(readinessScanBlock, /steps\.audit\.outcome/);
   assert.match(canaryWorkflow, /APPROVE_OFFICIAL_QUALIA_SERIES_CANARY:<MAIN_SHA>:<AUDIT_DIGEST>/);
   assert.doesNotMatch(canaryWorkflow, /apply_contract_digest:/);
   assert.match(canaryWorkflow, /official-qualia-series-readiness-audit-\$\{\{ inputs\.audit_run_id \}\}/);
@@ -314,7 +370,7 @@ test("Qualia workflows are dispatch-only and statically preserve the series-only
   const executeBlock = canaryWorkflow.slice(canaryWorkflow.indexOf("Execute transactional Qualia"), canaryWorkflow.indexOf("Finalize truthful Qualia"));
   assert.match(executeBlock, /SUPABASE_DB_URL: \$\{\{ secrets\.SUPABASE_DB_URL \}\}/);
   assert.ok(canaryWorkflow.indexOf("Authorize Qualia series bounded canary") < canaryWorkflow.indexOf("SUPABASE_DB_URL:"));
-  assert.match(readinessScript, /fetchOfficialProviderSourceExpansionDiagnostic\("qualia", \{ mode: "CURRENT" \}\)/);
+  assert.match(readinessScript, /dependencies\.fetchProvider \|\| fetchOfficialProviderSourceExpansionDiagnostic/);
   assert.match(readinessScript, /fetchRowsLimited\("series"/);
   assert.doesNotMatch(readinessScript, /fetchRowsLimited\("variants"|writeRow|INSERT INTO|UPDATE public/);
   assert.ok(canaryScript.indexOf("const authorization = resolveAuthorization()") < canaryScript.indexOf("client = new Client"));

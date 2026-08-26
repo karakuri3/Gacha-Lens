@@ -1,8 +1,10 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   buildOfficialQualiaSeriesReadinessAudit,
+  buildOfficialQualiaSeriesReadinessBlockedArtifact,
   buildQualiaSeriesStableIdentity,
   formatOfficialQualiaSeriesReadinessMarkdown,
   validateOfficialQualiaSeriesReadinessAudit,
@@ -11,48 +13,107 @@ import { findOfficialAuditLeaks } from "../lib/domain/official-read-only-audit.j
 import { fetchOfficialProviderSourceExpansionDiagnostic } from "../lib/fetchers/official-sources/registry.js";
 import { fetchExactRowCountReliable, fetchRowsLimited } from "./supabase-rest.mjs";
 
-loadEnvFile(".env.local");
-const args = parseArgs(process.argv.slice(2));
-const outputDirectory = path.resolve(required(args["output-dir"], "--output-dir"));
-const headSha = currentHeadSha();
-const expectedMainSha = text(args["expected-main-sha"] || process.env.GITHUB_SHA);
-if (expectedMainSha && expectedMainSha !== headSha) throw new Error("Qualia series readiness audit main SHA does not match the approved revision.");
-
-const before = await captureCounts("before");
-const provider = await fetchOfficialProviderSourceExpansionDiagnostic("qualia", { mode: "CURRENT" });
-const catalog = await loadCatalog([...asArray(provider?.metadata_records), ...asArray(provider?.records)]);
-const after = await captureCounts("after");
-const report = validateOfficialQualiaSeriesReadinessAudit(buildOfficialQualiaSeriesReadinessAudit({
-  provider,
-  catalog,
-  databaseBefore: before,
-  databaseAfter: after,
-  workflow: {
-    run_id: args["run-id"] || process.env.GITHUB_RUN_ID,
-    head_sha: headSha,
-    event_name: process.env.GITHUB_EVENT_NAME || "local",
+export async function runOfficialQualiaSeriesReadinessAudit({
+  args = parseArgs(process.argv.slice(2)),
+  env = process.env,
+  dependencies = {},
+} = {}) {
+  const outputDirectory = path.resolve(required(args["output-dir"], "--output-dir"));
+  const workflow = {
+    run_id: args["run-id"] || env.GITHUB_RUN_ID,
+    head_sha: null,
+    event_name: env.GITHUB_EVENT_NAME || "local",
     audit_date: dateJst(),
-  },
-}));
-const json = `${JSON.stringify(report, null, 2)}\n`;
-const markdown = `${formatOfficialQualiaSeriesReadinessMarkdown(report)}\n`;
-const leaks = findOfficialAuditLeaks([
-  { name: "official-qualia-series-readiness-audit.json", text: json },
-  { name: "official-qualia-series-readiness-audit.md", text: markdown },
-], explicitSecretValues());
-if (leaks.length) throw new Error("Qualia series readiness audit secret scan failed.");
-fs.mkdirSync(outputDirectory, { recursive: true });
-fs.writeFileSync(path.join(outputDirectory, "official-qualia-series-readiness-audit.json"), json, "utf8");
-fs.writeFileSync(path.join(outputDirectory, "official-qualia-series-readiness-audit.md"), markdown, "utf8");
-console.log(JSON.stringify({
-  ok: true,
-  verdict: report.final_verdict,
-  selected_candidate_count: report.plan.selected_candidate_count,
-  series_inserts: report.plan.series_inserts,
-  variant_writes: 0,
-  database_writes: 0,
-  output_directory: outputDirectory,
-}, null, 2));
+  };
+  let before = null;
+  let after = null;
+  let report;
+
+  try {
+    const headSha = (dependencies.currentHeadSha || currentHeadSha)();
+    workflow.head_sha = headSha;
+    const expectedMainSha = text(args["expected-main-sha"] || env.GITHUB_SHA);
+    if (expectedMainSha && expectedMainSha !== headSha) throw readinessError("qualia_series_readiness_main_sha_mismatch");
+
+    before = await (dependencies.captureCounts || captureCounts)("before");
+    const provider = await (dependencies.fetchProvider || fetchOfficialProviderSourceExpansionDiagnostic)("qualia", { mode: "CURRENT" });
+    const catalog = await (dependencies.loadCatalog || loadCatalog)([...asArray(provider?.metadata_records), ...asArray(provider?.records)]);
+    after = await (dependencies.captureCounts || captureCounts)("after");
+    report = validateOfficialQualiaSeriesReadinessAudit(buildOfficialQualiaSeriesReadinessAudit({
+      provider,
+      catalog,
+      databaseBefore: before,
+      databaseAfter: after,
+      workflow,
+    }));
+  } catch (error) {
+    report = buildOfficialQualiaSeriesReadinessBlockedArtifact({
+      workflow,
+      reasonCode: readinessFailureReason(error),
+      databaseBefore: before,
+      databaseAfter: after,
+    });
+  }
+
+  try {
+    writeReadinessArtifact({ outputDirectory, report, env });
+  } catch {
+    report = buildOfficialQualiaSeriesReadinessBlockedArtifact({
+      workflow,
+      reasonCode: "qualia_series_readiness_artifact_sanitization_failed",
+      databaseBefore: before,
+      databaseAfter: after,
+    });
+    writeReadinessArtifact({ outputDirectory, report, env });
+  }
+  return { outputDirectory, report };
+}
+
+function writeReadinessArtifact({ outputDirectory, report, env }) {
+  const json = `${JSON.stringify(report, null, 2)}\n`;
+  const markdown = `${formatOfficialQualiaSeriesReadinessMarkdown(report)}\n`;
+  const leaks = findOfficialAuditLeaks([
+    { name: "official-qualia-series-readiness-audit.json", text: json },
+    { name: "official-qualia-series-readiness-audit.md", text: markdown },
+  ], explicitSecretValues(env));
+  if (leaks.length) throw readinessError("qualia_series_readiness_artifact_sanitization_failed");
+  fs.mkdirSync(outputDirectory, { recursive: true });
+  fs.writeFileSync(path.join(outputDirectory, "official-qualia-series-readiness-audit.json"), json, "utf8");
+  fs.writeFileSync(path.join(outputDirectory, "official-qualia-series-readiness-audit.md"), markdown, "utf8");
+}
+
+function readinessFailureReason(error) {
+  const code = text(error?.reason_code);
+  if (/^qualia_series_readiness_[a-z0-9_]{1,80}$/.test(code)) return code;
+  return "qualia_series_readiness_unexpected_failure";
+}
+
+function readinessError(reasonCode) {
+  const error = new Error(reasonCode);
+  error.reason_code = reasonCode;
+  return error;
+}
+
+async function main() {
+  loadEnvFile(".env.local");
+  const { outputDirectory, report } = await runOfficialQualiaSeriesReadinessAudit();
+  console.log(JSON.stringify({
+    ok: report.final_verdict !== "OFFICIAL_QUALIA_SERIES_READINESS_BLOCKED",
+    verdict: report.final_verdict,
+    selected_candidate_count: report.plan.selected_candidate_count,
+    series_inserts: report.plan.series_inserts,
+    variant_writes: 0,
+    database_writes: 0,
+    output_directory: outputDirectory,
+  }, null, 2));
+  if (report.final_verdict === "OFFICIAL_QUALIA_SERIES_READINESS_BLOCKED") {
+    throw readinessError(report.reason_code || "qualia_series_readiness_blocked");
+  }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}
 
 async function loadCatalog(records) {
   const products = [...new Map(records
@@ -118,8 +179,8 @@ function uniqueRows(rows) {
   return [...new Map(rows.map((row) => [text(row?.id), row]).filter(([id]) => id)).values()];
 }
 
-function explicitSecretValues() {
-  return [process.env.SUPABASE_SERVICE_ROLE_KEY, process.env.SUPABASE_SECRET_KEY, process.env.SUPABASE_DB_URL].map(text).filter(Boolean);
+function explicitSecretValues(env) {
+  return [env.SUPABASE_SERVICE_ROLE_KEY, env.SUPABASE_SECRET_KEY, env.SUPABASE_DB_URL].map(text).filter(Boolean);
 }
 
 function loadEnvFile(fileName) {
