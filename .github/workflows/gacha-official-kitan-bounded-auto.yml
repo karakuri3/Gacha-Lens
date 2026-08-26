@@ -81,6 +81,19 @@ jobs:
             --output-dir="${{ runner.temp }}/gacha-official-kitan-bounded-auto" \
             --audit-dir="${{ runner.temp }}/gacha-official-kitan-bounded-auto/audit" \
             --origin-main-sha="$final_origin_main_sha"
+      - name: Finalize Kitan automatic terminal result
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          reason="official_kitan_bounded_auto_terminal_failure"
+          if [ "${{ steps.main.outcome }}" = "failure" ]; then reason="official_kitan_bounded_auto_main_verification_failed"; fi
+          if [ "${{ steps.audit.outcome }}" = "failure" ]; then reason="official_kitan_bounded_auto_audit_failed"; fi
+          if [ "${{ steps.prepare.outcome }}" = "failure" ]; then reason="official_kitan_bounded_auto_prepare_failed"; fi
+          if [ "${{ steps.execute.outcome }}" = "failure" ]; then reason="official_kitan_bounded_auto_execution_failed"; fi
+          node scripts/official-kitan-bounded-auto.mjs finalize \
+            --output-dir="${{ runner.temp }}/gacha-official-kitan-bounded-auto" \
+            --reason="$reason"
       - name: Scan sanitized Kitan automatic artifact
         id: scan
         if: ${{ always() }}
