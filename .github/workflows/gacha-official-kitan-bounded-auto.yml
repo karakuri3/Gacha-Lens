@@ -1,0 +1,115 @@
+name: Gacha Official Kitan Bounded Automatic Production
+
+on:
+  schedule:
+    # Daily at 02:37 UTC / 11:37 JST, after the F0 official run at 02:27 UTC.
+    - cron: "37 2 * * *"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  kitan-bounded-auto:
+    concurrency:
+      group: gacha-official-bounded-write
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Resolve false-by-default Kitan automatic gate
+        id: gate
+        env:
+          OFFICIAL_KITAN_BOUNDED_AUTO_ENABLED: ${{ vars.OFFICIAL_KITAN_BOUNDED_AUTO_ENABLED || '' }}
+          OFFICIAL_KITAN_BOUNDED_AUTO_APPROVAL: ${{ vars.OFFICIAL_KITAN_BOUNDED_AUTO_APPROVAL || '' }}
+        run: >-
+          node scripts/official-kitan-bounded-auto.mjs gate
+          --output-dir=${{ runner.temp }}/gacha-official-kitan-bounded-auto
+      - uses: actions/setup-node@v6
+        if: ${{ steps.gate.outputs.execute == 'true' }}
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        if: ${{ steps.gate.outputs.execute == 'true' }}
+      - name: Verify exact current main revision
+        id: main
+        if: ${{ steps.gate.outputs.execute == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "schedule"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin main --depth=1
+          origin_main_sha="$(git rev-parse origin/main)"
+          test "$origin_main_sha" = "$GITHUB_SHA"
+          echo "origin_main_sha=$origin_main_sha" >> "$GITHUB_OUTPUT"
+      - name: Run same-run read-only Kitan readiness audit
+        id: audit
+        if: ${{ steps.gate.outputs.execute == 'true' && steps.main.outcome == 'success' }}
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: >-
+          npm run official:kitan-readiness-audit --
+          --output-dir=${{ runner.temp }}/gacha-official-kitan-bounded-auto/audit
+          --expected-main-sha=${{ github.sha }}
+          --run-id=${{ github.run_id }}
+      - name: Prepare insert-only Kitan automatic plan
+        id: prepare
+        if: ${{ steps.gate.outputs.execute == 'true' && steps.audit.outcome == 'success' }}
+        run: >-
+          npm run official:kitan-bounded-auto -- prepare
+          --output-dir=${{ runner.temp }}/gacha-official-kitan-bounded-auto
+          --audit-dir=${{ runner.temp }}/gacha-official-kitan-bounded-auto/audit
+          --origin-main-sha=${{ steps.main.outputs.origin_main_sha }}
+      - name: Execute one insert-only Kitan transaction
+        id: execute
+        if: ${{ steps.prepare.outputs.execute == 'true' }}
+        continue-on-error: true
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main --depth=1
+          final_origin_main_sha="$(git rev-parse origin/main)"
+          test "$final_origin_main_sha" = "$GITHUB_SHA"
+          npm run official:kitan-bounded-auto -- execute \
+            --output-dir="${{ runner.temp }}/gacha-official-kitan-bounded-auto" \
+            --audit-dir="${{ runner.temp }}/gacha-official-kitan-bounded-auto/audit" \
+            --origin-main-sha="$final_origin_main_sha"
+      - name: Finalize Kitan automatic terminal result
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          reason="official_kitan_bounded_auto_terminal_failure"
+          if [ "${{ steps.main.outcome }}" = "failure" ]; then reason="official_kitan_bounded_auto_main_verification_failed"; fi
+          if [ "${{ steps.audit.outcome }}" = "failure" ]; then reason="official_kitan_bounded_auto_audit_failed"; fi
+          if [ "${{ steps.prepare.outcome }}" = "failure" ]; then reason="official_kitan_bounded_auto_prepare_failed"; fi
+          if [ "${{ steps.execute.outcome }}" = "failure" ]; then reason="official_kitan_bounded_auto_execution_failed"; fi
+          node scripts/official-kitan-bounded-auto.mjs finalize \
+            --output-dir="${{ runner.temp }}/gacha-official-kitan-bounded-auto" \
+            --reason="$reason"
+      - name: Scan sanitized Kitan automatic artifact
+        id: scan
+        if: ${{ always() }}
+        run: >-
+          node scripts/official-kitan-bounded-auto.mjs scan
+          --output-dir=${{ runner.temp }}/gacha-official-kitan-bounded-auto
+      - name: Upload sanitized Kitan automatic artifact
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-kitan-bounded-auto-result-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-official-kitan-bounded-auto
+          if-no-files-found: error
+          retention-days: 30
+      - name: Enforce Kitan automatic result
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        run: >-
+          node scripts/official-kitan-bounded-auto.mjs verify
+          --output-dir=${{ runner.temp }}/gacha-official-kitan-bounded-auto
