@@ -10,6 +10,11 @@ import {
   isSafeRecentOfficialSeriesOnly,
 } from "../lib/domain/sitemap-publication.js";
 import { buildCatalogCanonicalHref, parseCatalogQuery } from "../lib/domain/catalog-query.js";
+import {
+  MAX_OBSERVER_SITEMAP_ROWS,
+  SERIES_OBSERVER_PAGE_SIZE,
+  fetchBoundedSeriesObserverRows,
+} from "../lib/data/series-observer-pagination.js";
 
 const ROOT = process.cwd();
 const source = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
@@ -41,6 +46,20 @@ function variant(overrides = {}) {
     parent: { id: "series-1", slug: "parent-one" },
     ...overrides,
   };
+}
+
+function createSeriesObserverClient(rows, calls) {
+  const data = [...rows].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  const query = {
+    select() { return query; },
+    eq() { return query; },
+    order(column, options) { calls.push({ type: "order", column, options }); return query; },
+    range(from, to) {
+      calls.push({ type: "range", from, to });
+      return Promise.resolve({ data: data.slice(from, to + 1), error: null });
+    },
+  };
+  return { from(table) { calls.push({ type: "from", table }); return query; } };
 }
 
 test("public variant parents and safe recent series-only records enter the series observer", () => {
@@ -130,12 +149,49 @@ test("root sitemap remains separate while observer routes use dynamic XML handle
 
 test("series-only observer reads only bounded official series columns without a mutation path", () => {
   const identifiers = source("lib/data/public-sitemap-identifiers.js");
-  const observerFetch = identifiers.slice(identifiers.indexOf("export async function fetchSeriesObserverRows"));
-  assert.match(identifiers, /id,slug,name,brand,official_url,price,release_date,release_month,source_type,updated_at/);
-  assert.match(observerFetch, /\.eq\("source_type", "official_site"\)/);
-  assert.match(observerFetch, /\.range\(0, maxRows\)/);
-  assert.match(observerFetch, /Series observer source exceeds/);
-  assert.doesNotMatch(observerFetch, /\.insert\(|\.update\(|\.delete\(|\.upsert\(/i);
+  const pagination = source("lib/data/series-observer-pagination.js");
+  assert.match(identifiers, /fetchBoundedSeriesObserverRows/);
+  assert.match(pagination, /id,slug,name,brand,official_url,price,release_date,release_month,source_type,updated_at/);
+  assert.match(pagination, /\.eq\("source_type", "official_site"\)/);
+  assert.match(pagination, /\.range\(offset, offset \+ requestSize - 1\)/);
+  assert.match(pagination, /Series observer source exceeds/);
+  assert.doesNotMatch(pagination, /\.insert\(|\.update\(|\.delete\(|\.upsert\(/i);
+});
+
+test("series observer reads deterministic 1000-row pages and reaches safe records after the first API page", async () => {
+  const calls = [];
+  const rows = Array.from({ length: SERIES_OBSERVER_PAGE_SIZE + 2 }, (_, index) => series({
+    id: String(index).padStart(6, "0"),
+    slug: index === SERIES_OBSERVER_PAGE_SIZE ? "official:qualia:series:a192bb6aadb74c8703ac13e9" : `series-${index}`,
+  }));
+  const fetched = await fetchBoundedSeriesObserverRows(createSeriesObserverClient(rows, calls));
+  assert.equal(fetched.length, SERIES_OBSERVER_PAGE_SIZE + 2);
+  assert.deepEqual(calls.filter((call) => call.type === "range"), [
+    { type: "range", from: 0, to: 999 },
+    { type: "range", from: 1000, to: 1999 },
+  ]);
+  assert.deepEqual(calls.filter((call) => call.type === "order"), [
+    { type: "order", column: "id", options: { ascending: true } },
+    { type: "order", column: "id", options: { ascending: true } },
+  ]);
+  const entries = collectSeriesObserverEntries({ seriesRows: fetched, today: TODAY });
+  assert.ok(entries.some((entry) => entry.slug === "official:qualia:series:a192bb6aadb74c8703ac13e9"));
+});
+
+test("series observer accepts the 50,000-row cap and fails closed on the 50,001st sentinel row", async () => {
+  const exactCalls = [];
+  const exactRows = Array.from({ length: MAX_OBSERVER_SITEMAP_ROWS }, (_, index) => series({ id: String(index).padStart(6, "0"), slug: `exact-${index}` }));
+  const exact = await fetchBoundedSeriesObserverRows(createSeriesObserverClient(exactRows, exactCalls));
+  assert.equal(exact.length, MAX_OBSERVER_SITEMAP_ROWS);
+  assert.deepEqual(exactCalls.filter((call) => call.type === "range").at(-1), { type: "range", from: 50000, to: 50000 });
+
+  const overflowCalls = [];
+  const overflowRows = Array.from({ length: MAX_OBSERVER_SITEMAP_ROWS + 1 }, (_, index) => series({ id: String(index).padStart(6, "0"), slug: `overflow-${index}` }));
+  await assert.rejects(
+    fetchBoundedSeriesObserverRows(createSeriesObserverClient(overflowRows, overflowCalls)),
+    /exceeds 50000/
+  );
+  assert.deepEqual(overflowCalls.filter((call) => call.type === "range").at(-1), { type: "range", from: 50000, to: 50000 });
 });
 
 test("robots publishes root and observer sitemaps without weakening disallows", () => {
