@@ -3,7 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 import { createOfficialMemoryTransactionAdapter } from "../lib/domain/official-bounded-write.js";
 import { buildKitanStableIdentity, buildOfficialKitanReadinessAudit } from "../lib/domain/official-kitan-canary.js";
-import { authorizeOfficialKitanBoundedAuto, buildOfficialKitanBoundedAutoDisabledResult, executeOfficialKitanBoundedAutoTransaction, finalizeOfficialKitanBoundedAutoTransaction, prepareOfficialKitanBoundedAuto, resolveOfficialKitanBoundedAutoGate } from "../lib/domain/official-kitan-bounded-auto.js";
+import { authorizeOfficialKitanBoundedAuto, buildOfficialKitanBoundedAutoDisabledResult, executeOfficialKitanBoundedAutoTransaction, finalizeOfficialKitanBoundedAutoTerminalResult, finalizeOfficialKitanBoundedAutoTransaction, prepareOfficialKitanBoundedAuto, resolveOfficialKitanBoundedAutoGate } from "../lib/domain/official-kitan-bounded-auto.js";
 import { parseProviderDetail } from "../lib/fetchers/official-sources/registry.js";
 
 const HEAD = "a".repeat(40);
@@ -104,6 +104,25 @@ test("postflight mismatch preserves a committed transaction instead of replacing
   assert.equal(result.final_verdict, "OFFICIAL_KITAN_BOUNDED_AUTO_POSTFLIGHT_FAILED");
   assert.equal(result.database_writes, 7);
   assert.equal(result.transaction.state, "committed");
+});
+
+test("terminal finalizer converts a pre-write READY plan into a zero-write blocked artifact", () => {
+  const ready = prepare(audit([record("ready", "2026-08-20")]));
+  const blocked = finalizeOfficialKitanBoundedAutoTerminalResult({ existing: ready, workflow, reasonCode: "official_kitan_bounded_auto_main_verification_failed" });
+  assert.equal(blocked.final_verdict, "OFFICIAL_KITAN_BOUNDED_AUTO_BLOCKED");
+  assert.equal(blocked.database_writes, 0);
+  assert.equal(blocked.transaction.state, "not_started");
+  assert.equal(blocked.transaction.rollback_attempted, false);
+  assert.equal(blocked.reason_code, "official_kitan_bounded_auto_main_verification_failed");
+  assert.equal(blocked.plan.selected_apply_contract_digest, ready.plan.selected_apply_contract_digest);
+});
+
+test("terminal finalizer never overwrites committed, uncertain, failed postflight, noop, or disabled truth", () => {
+  const base = prepare(audit([record("ready", "2026-08-20")]));
+  for (const final_verdict of ["OFFICIAL_KITAN_BOUNDED_AUTO_COMMITTED", "OFFICIAL_KITAN_BOUNDED_AUTO_COMMIT_OUTCOME_UNKNOWN", "OFFICIAL_KITAN_BOUNDED_AUTO_COMMITTED_POST_VERIFY_FAILED", "OFFICIAL_KITAN_BOUNDED_AUTO_POSTFLIGHT_FAILED", "OFFICIAL_KITAN_BOUNDED_AUTO_NOOP", "OFFICIAL_KITAN_BOUNDED_AUTO_DISABLED"]) {
+    const existing = { ...base, final_verdict, database_writes: final_verdict.includes("UNKNOWN") ? 7 : 0, transaction: { state: final_verdict.includes("UNKNOWN") ? "commit_outcome_unknown" : "committed" } };
+    assert.strictEqual(finalizeOfficialKitanBoundedAutoTerminalResult({ existing, workflow, reasonCode: "later_failure" }), existing, final_verdict);
+  }
 });
 
 test("workflow is schedule-only, gated before audit secrets, and shares the bounded concurrency lock", () => {

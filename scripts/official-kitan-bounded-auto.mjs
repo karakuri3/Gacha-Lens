@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { findOfficialBoundedLeaks, requireOfficialDatabaseUrl } from "../lib/domain/official-bounded-write.js";
-import { authorizeOfficialKitanBoundedAuto, buildOfficialKitanBoundedAutoDisabledResult, executeOfficialKitanBoundedAutoTransaction, finalizeOfficialKitanBoundedAutoTransaction, formatOfficialKitanBoundedAutoMarkdown, prepareOfficialKitanBoundedAuto, resolveOfficialKitanBoundedAutoGate } from "../lib/domain/official-kitan-bounded-auto.js";
+import { authorizeOfficialKitanBoundedAuto, buildOfficialKitanBoundedAutoDisabledResult, executeOfficialKitanBoundedAutoTransaction, finalizeOfficialKitanBoundedAutoTerminalResult, finalizeOfficialKitanBoundedAutoTransaction, formatOfficialKitanBoundedAutoMarkdown, prepareOfficialKitanBoundedAuto, resolveOfficialKitanBoundedAutoGate } from "../lib/domain/official-kitan-bounded-auto.js";
 
 const [command, ...rest] = process.argv.slice(2);
 const args = parseArgs(rest);
@@ -58,7 +58,10 @@ async function execute() {
   }
   finally { if (client) await client.end().catch(() => {}); }
 }
-function finalize() { if (!fs.existsSync(resultFile())) writeBlocked(text(args.reason) || "official_kitan_bounded_auto_terminal_failure"); }
+function finalize() {
+  const existing = fs.existsSync(resultFile()) ? readJson(resultFile()) : null;
+  writeResult(finalizeOfficialKitanBoundedAutoTerminalResult({ existing, workflow: workflowIdentity(), reasonCode: text(args.reason) || "official_kitan_bounded_auto_terminal_failure" }));
+}
 function scan() { const files = listFiles(outputDirectory).filter((file) => /\.(?:json|md)$/i.test(file)).map((file) => ({ name: path.basename(file), text: fs.readFileSync(file, "utf8") })); if (!files.length || findOfficialBoundedLeaks(files, [process.env.SUPABASE_DB_URL, process.env.OFFICIAL_KITAN_BOUNDED_AUTO_APPROVAL, process.env.GITHUB_TOKEN]).length) throw coded("official_kitan_bounded_auto_secret_scan_failed"); writeJson(path.join(outputDirectory, "official-kitan-bounded-auto-secret-scan.json"), { schema_version: 1, secret_findings: 0 }); }
 function verify() { const value = readJson(resultFile()); const scanResult = readJson(path.join(outputDirectory, "official-kitan-bounded-auto-secret-scan.json")); if (!["OFFICIAL_KITAN_BOUNDED_AUTO_DISABLED", "OFFICIAL_KITAN_BOUNDED_AUTO_NOOP", "OFFICIAL_KITAN_BOUNDED_AUTO_COMMITTED"].includes(value.final_verdict) || scanResult.secret_findings !== 0 || value.deletes !== 0 || value.cleanup_operations !== 0) throw coded("official_kitan_bounded_auto_final_verification_failed"); }
 function writeBlocked(reasonCode) { writeResult({ ...buildOfficialKitanBoundedAutoDisabledResult({ workflow: workflowIdentity() }), automatic_gate_enabled: true, reason_code: reasonCode, final_verdict: "OFFICIAL_KITAN_BOUNDED_AUTO_BLOCKED" }); }
