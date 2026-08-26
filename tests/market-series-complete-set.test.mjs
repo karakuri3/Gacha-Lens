@@ -67,6 +67,11 @@ test("complete-set classifier rejects duplicate catalog parent names and standal
   assert.equal(assessSeriesCompleteSetCandidate(duplicate.listing, duplicate.query, duplicate.catalog).reason, "parent_series_catalog_identity_ambiguous");
 
   for (const title of [
+    "Gacha Series Collection 全種のうち1種",
+    "Gacha Series Collection 全種よりランダム1種",
+    "Gacha Series Collection 全種から1種",
+    "Gacha Series Collection 全種 ランダム1個",
+    "Gacha Series Collection 全種類のうち1種類",
     "Gacha Series Collection 全5種のうち1種",
     "Gacha Series Collection 全5種よりランダム1種",
     "Gacha Series Collection 全5種 ランダム1個",
