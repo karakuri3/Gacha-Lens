@@ -126,6 +126,34 @@ test("diagnostic evaluates only existing not_single_item records and emits a ser
   assert.match(markdown, /Complete-set accepted: 1/);
 });
 
+test("complete-set diagnostic resolves Production planner query context without retargeting", () => {
+  const value = fixture();
+  const base = { ...value.listing, market_safety: { reason: "not_single_item", accepted: false } };
+  const productionRecord = {
+    ...base,
+    raw: { ...value.listing.raw, query: { ...value.query, query: value.query.query } },
+  };
+  const keywordRecord = {
+    ...base,
+    raw: { provider: value.listing.raw.provider, keyword: value.query.query },
+  };
+  const unresolvedRecord = {
+    ...base,
+    raw: { ...value.listing.raw, query: { ...value.query, query: "Other Series Other Variant" } },
+  };
+  const evaluations = evaluateSeriesCompleteSetCandidates({
+    records: [productionRecord, keywordRecord, unresolvedRecord],
+    queryPlan: [value.query],
+    catalog: value.catalog,
+  });
+
+  assert.equal(evaluations[0].assessment.reason, "series_complete_set_confirmed");
+  assert.equal(evaluations[1].assessment.reason, "series_complete_set_confirmed");
+  assert.equal(evaluations[2].assessment.reason, "query_context_missing");
+  assert.equal(evaluations[0].preview.variant_id, null);
+  assert.equal(evaluations[0].preview.matched_variant_id, null);
+});
+
 test("complete-set diagnostic workflow is dispatch-only, bounded, and has no write path", () => {
   assert.match(workflow, /^on:\s*\r?\n\s+workflow_dispatch:/m);
   assert.doesNotMatch(workflow, /^\s+(schedule|push|pull_request|workflow_run|repository_dispatch):/m);
