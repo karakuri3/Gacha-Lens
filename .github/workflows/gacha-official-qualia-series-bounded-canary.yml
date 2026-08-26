@@ -1,0 +1,129 @@
+name: Gacha Official Qualia Series Bounded Canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      audit_run_id:
+        description: Exact approved Qualia series readiness audit run ID
+        required: true
+        type: string
+      audit_digest:
+        description: Exact approved Qualia series audit canonical digest
+        required: true
+        type: string
+      approval:
+        description: APPROVE_OFFICIAL_QUALIA_SERIES_CANARY:<MAIN_SHA>:<AUDIT_DIGEST>
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  qualia-series-bounded-canary:
+    concurrency:
+      group: gacha-official-qualia-series-manual-canary
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify exact main revision
+        id: main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin main --depth=1
+          origin_main_sha="$(git rev-parse origin/main)"
+          test "$origin_main_sha" = "$GITHUB_SHA"
+          echo "origin_main_sha=$origin_main_sha" >> "$GITHUB_OUTPUT"
+      - name: Download exact Qualia series readiness artifact
+        id: audit
+        uses: actions/download-artifact@v4
+        with:
+          name: official-qualia-series-readiness-audit-${{ inputs.audit_run_id }}
+          path: ${{ runner.temp }}/gacha-official-qualia-series-bounded-canary/audit
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.audit_run_id }}
+          github-token: ${{ github.token }}
+      - name: Authorize Qualia series bounded canary
+        id: authorize
+        env:
+          QUALIA_SERIES_CANARY_AUDIT_DIGEST: ${{ inputs.audit_digest }}
+          QUALIA_SERIES_CANARY_APPROVAL: ${{ inputs.approval }}
+        run: >-
+          npm run official:qualia-series-bounded-canary -- authorize
+          --output-dir=${{ runner.temp }}/gacha-official-qualia-series-bounded-canary/result
+          --audit-dir=${{ runner.temp }}/gacha-official-qualia-series-bounded-canary/audit
+          --audit-run-id=${{ inputs.audit_run_id }}
+          --origin-main-sha=${{ steps.main.outputs.origin_main_sha }}
+      - name: Execute transactional Qualia series bounded canary
+        id: execute
+        continue-on-error: true
+        env:
+          QUALIA_SERIES_CANARY_AUDIT_DIGEST: ${{ inputs.audit_digest }}
+          QUALIA_SERIES_CANARY_APPROVAL: ${{ inputs.approval }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main --depth=1
+          final_origin_main_sha="$(git rev-parse origin/main)"
+          test "$final_origin_main_sha" = "$GITHUB_SHA"
+          npm run official:qualia-series-bounded-canary -- execute \
+            --output-dir="${{ runner.temp }}/gacha-official-qualia-series-bounded-canary/result" \
+            --audit-dir="${{ runner.temp }}/gacha-official-qualia-series-bounded-canary/audit" \
+            --audit-run-id="${{ inputs.audit_run_id }}" \
+            --origin-main-sha="$final_origin_main_sha"
+      - name: Finalize truthful Qualia series canary result
+        id: finalize
+        if: ${{ always() }}
+        env:
+          QUALIA_SERIES_CANARY_AUDIT_DIGEST: ${{ inputs.audit_digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          reason="qualia_series_canary_execution_not_completed"
+          if [ "${{ steps.main.outcome }}" != "success" ]; then reason="qualia_series_canary_main_verification_failed"
+          elif [ "${{ steps.audit.outcome }}" != "success" ]; then reason="qualia_series_canary_audit_download_failed"
+          elif [ "${{ steps.authorize.outcome }}" != "success" ]; then reason="qualia_series_canary_authorization_failed"
+          elif [ "${{ steps.execute.outcome }}" != "success" ]; then reason="qualia_series_canary_execution_failed"
+          fi
+          npm run official:qualia-series-bounded-canary -- finalize \
+            --output-dir="${{ runner.temp }}/gacha-official-qualia-series-bounded-canary/result" \
+            --audit-run-id="${{ inputs.audit_run_id }}" \
+            --audit-digest="${{ inputs.audit_digest }}" \
+            --reason-code="$reason"
+      - name: Scan sanitized Qualia series canary result
+        id: scan
+        if: ${{ always() && steps.finalize.outcome == 'success' }}
+        env:
+          QUALIA_SERIES_CANARY_APPROVAL: ${{ inputs.approval }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          npm run official:qualia-series-bounded-canary -- scan
+          --output-dir=${{ runner.temp }}/gacha-official-qualia-series-bounded-canary/result
+      - name: Upload sanitized Qualia series canary result
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-qualia-series-bounded-canary-result-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-official-qualia-series-bounded-canary/result
+          if-no-files-found: error
+          retention-days: 30
+      - name: Enforce Qualia series canary result
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        run: >-
+          npm run official:qualia-series-bounded-canary -- verify
+          --output-dir=${{ runner.temp }}/gacha-official-qualia-series-bounded-canary/result
