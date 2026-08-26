@@ -67,6 +67,7 @@
     "test:market-bounded-write": "node --test tests/market-bounded-write.test.mjs",
     "test:market-bounded-selection": "node --test tests/market-bounded-selection.test.mjs",
     "test:market-bounded-coverage": "node --test tests/market-bounded-coverage.test.mjs",
+    "test:market-series-complete-set": "node --test tests/market-series-complete-set.test.mjs",
     "test:manual-market-bounded": "node --test tests/manual-market-bounded-execution.test.mjs"
   },
   "dependencies": {

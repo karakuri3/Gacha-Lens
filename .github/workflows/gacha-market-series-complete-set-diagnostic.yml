@@ -1,0 +1,55 @@
+name: Gacha Market Series Complete-Set Read-Only Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  series-complete-set-diagnostic:
+    concurrency:
+      group: gacha-market-series-complete-set-diagnostic
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify fixed read-only Priority 3 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/main"
+          git fetch --no-tags origin main --depth=1
+          test "$GITHUB_SHA" = "$(git rev-parse origin/main)"
+      - name: Run series complete-set diagnostic
+        id: diagnostic
+        env:
+          GACHA_DATA_SOURCE: supabase
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RAKUTEN_APPLICATION_ID: ${{ secrets.RAKUTEN_APPLICATION_ID }}
+          RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+          YAHOO_SHOPPING_APP_ID: ${{ secrets.YAHOO_SHOPPING_APP_ID }}
+          YAHOO_SHOPPING_FETCH_ENABLED: ${{ secrets.YAHOO_SHOPPING_FETCH_ENABLED }}
+          MARKET_BACKFILL_WRITE_DISABLED: "true"
+        run: node scripts/market-series-complete-set-diagnostic.mjs --output-dir=${{ runner.temp }}/gacha-market-series-complete-set-diagnostic
+      - name: Scan sanitized complete-set artifact
+        id: scan
+        if: ${{ always() }}
+        run: node scripts/manual-market-audit-guard.mjs scan --directory=${{ runner.temp }}/gacha-market-series-complete-set-diagnostic
+      - name: Upload sanitized complete-set diagnostic artifact
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-series-complete-set-diagnostic-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-market-series-complete-set-diagnostic
+          if-no-files-found: error
+          retention-days: 7
