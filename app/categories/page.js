@@ -1,13 +1,12 @@
 import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
-import { getCategoryCatalog, getPublicDiscoveryFacets } from "@/lib/series";
-import { buildCatalogHref } from "@/lib/domain/catalog-query";
-import { categoryDiscoveryHref, findPublicCategoryFacet } from "@/lib/domain/category-discovery";
+import { getParentSeriesCategoryCatalog } from "@/lib/series";
+import { categoryDiscoveryHref } from "@/lib/domain/category-discovery";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata = buildPageMetadata({
   title: "カテゴリ一覧 | Gacha Lens",
-  description: "登録済みのガチャをカテゴリ別に探せます。",
+  description: "登録済みのガチャシリーズをカテゴリ別に探せます。",
   path: "/categories",
 });
 
@@ -15,7 +14,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function CategoriesPage() {
-  const [categories, discoveryFacets] = await Promise.all([getCategoryCatalog(), getPublicDiscoveryFacets()]);
+  const categories = await getParentSeriesCategoryCatalog();
 
   return (
     <main className="site-main">
@@ -23,16 +22,15 @@ export default async function CategoriesPage() {
         <section className="page-hero">
           <p className="eyebrow">CATEGORY</p>
           <h1 className="page-title">カテゴリから探す</h1>
-          <p className="page-lead">登録されている単品だけを、実際のカテゴリごとにまとめています。</p>
+          <p className="page-lead">登録されているガチャシリーズを、実際のカテゴリごとにまとめています。</p>
         </section>
 
         {categories.length ? (
           <section className="category-grid">
             {categories.map((category, index) => {
-              const facet = findPublicCategoryFacet(discoveryFacets.categories, category.name);
               return <Link
                 key={category.name}
-                href={facet ? categoryDiscoveryHref(facet.name) : buildCatalogHref({}, { category: category.name })}
+                href={categoryDiscoveryHref(category.name)}
                 className="category-card"
               >
                 <div className="category-card__image">
@@ -40,8 +38,8 @@ export default async function CategoriesPage() {
                 </div>
                 <div>
                   <h2>{category.name}</h2>
-                  <p>{category.item_count.toLocaleString("ja-JP")}件の単品</p>
-                  {category.upcoming_count > 0 ? <small>発売予定 {category.upcoming_count.toLocaleString("ja-JP")}件</small> : null}
+                  <p>{category.series_count.toLocaleString("ja-JP")}シリーズ</p>
+                  {category.upcoming_count > 0 ? <small>発売予定 {category.upcoming_count.toLocaleString("ja-JP")}シリーズ</small> : null}
                 </div>
                 <span aria-hidden="true">→</span>
               </Link>;

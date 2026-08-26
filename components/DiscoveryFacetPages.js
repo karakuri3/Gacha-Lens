@@ -103,17 +103,17 @@ export function CategoryDiscoveryLanding({ facet, items, page }) {
         <section className="page-hero discovery-landing-hero">
           <p className="eyebrow">CATEGORY</p>
           <h1 className="page-title">{facet.name}のガチャ</h1>
-          <p className="page-lead">公開中の{facet.series_count.toLocaleString("ja-JP")}シリーズ、{facet.variant_count.toLocaleString("ja-JP")}件の単品をカテゴリ別に確認できます。</p>
+          <p className="page-lead">公開中の{facet.series_count.toLocaleString("ja-JP")}シリーズをカテゴリ別に確認できます。</p>
         </section>
         <div className="section-head catalog-results-head">
           <div>
-            <h2 className="section-title">単品一覧</h2>
-            <p className="section-sub">発売中・発売予定の公開単品だけを表示しています。</p>
+            <h2 className="section-title">シリーズ一覧</h2>
+            <p className="section-sub">発売中・発売予定のガチャシリーズを表示しています。</p>
           </div>
           <Link href="/categories" className="text-link">カテゴリへ</Link>
         </div>
         <section className="grid grid--cards">
-          {items.map((item, index) => <SeriesCard key={item.slug} series={item} priority={index < 6} />)}
+          {items.map((item, index) => <SeriesCard key={item.slug} series={item} scope="series" priority={index < 6} />)}
         </section>
         {page?.totalPages > 1 ? <CategoryDiscoveryPagination facet={facet} page={page.page} totalPages={page.totalPages} /> : null}
       </div>
@@ -124,7 +124,7 @@ export function CategoryDiscoveryLanding({ facet, items, page }) {
 function CategoryDiscoveryPagination({ facet, page, totalPages }) {
   const pages = buildPageWindow(page, totalPages);
   return (
-    <nav className="pagination" aria-label="カテゴリ単品一覧のページ">
+    <nav className="pagination" aria-label="カテゴリシリーズ一覧のページ">
       <Link className={`pill-link ${page <= 1 ? "is-disabled" : ""}`} href={categoryDiscoveryPageHref(facet.name, Math.max(1, page - 1))} aria-disabled={page <= 1}>前へ</Link>
       <div className="pagination__pages">
         {pages.map((value) => (

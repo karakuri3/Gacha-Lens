@@ -34,10 +34,10 @@ const variant = {
   variant_type: "normal",
 };
 
-test("1 empty query uses defaults", () => assert.deepEqual(parseCatalogQuery({}), {
-  q: "", scope: "variant", release: "all", category: "", month: "", sort: "newest", page: 1, legacyMode: "",
+test("1 empty query defaults to series discovery", () => assert.deepEqual(parseCatalogQuery({}), {
+  q: "", scope: "series", release: "all", category: "", month: "", sort: "newest", page: 1, legacyMode: "",
 }));
-test("2 invalid scope uses variant", () => assert.equal(parseCatalogQuery({ scope: "other" }).scope, "variant"));
+test("2 invalid scope uses series", () => assert.equal(parseCatalogQuery({ scope: "other" }).scope, "series"));
 test("3 invalid release uses all", () => assert.equal(parseCatalogQuery({ release: "later" }).release, "all"));
 test("4 zero and negative pages use one", () => {
   assert.equal(parseCatalogQuery({ page: 0 }).page, 1);
@@ -50,10 +50,23 @@ test("8 URL round trip preserves filters", () => {
   const href = buildCatalogHref(parseCatalogQuery({ q: "アトム", scope: "series", release: "upcoming", category: "フィギュア", month: "2026-08", sort: "price_asc", page: 3 }), {}, { resetPage: false });
   const url = new URL(href, "https://example.test");
   assert.equal(url.searchParams.get("q"), "アトム");
-  assert.equal(url.searchParams.get("scope"), "series");
+  assert.equal(url.searchParams.get("scope"), null);
   assert.equal(url.searchParams.get("page"), "3");
 });
 test("9 filter changes reset page", () => assert.equal(new URL(buildCatalogHref({ page: 8 }, { release: "released" }), "https://example.test").searchParams.get("page"), null));
+test("9a series default is canonical without a scope parameter", () => assert.equal(buildCatalogHref({}, {}), "/series"));
+test("9b explicit variant scope is preserved in catalog URLs", () => assert.equal(buildCatalogHref({}, { scope: "variant" }), "/series?scope=variant"));
+test("9c legacy signal filters remain variant-first without an explicit scope", () => assert.equal(parseCatalogQuery({ filter: "market" }).scope, "variant"));
+test("9d legacy series overrides round-trip without reverting to variant", () => {
+  const query = parseCatalogQuery({ filter: "market" });
+  const href = buildCatalogHref(query, { scope: "series" });
+  assert.equal(parseCatalogQuery(Object.fromEntries(new URL(href, "https://example.test").searchParams)).scope, "series");
+});
+test("9e market pagination and explicit variant URLs remain variant-first", () => {
+  const market = parseCatalogQuery({ filter: "market", page: 2 });
+  assert.equal(parseCatalogQuery(Object.fromEntries(new URL(buildCatalogHref(market, { page: 3 }, { resetPage: false }), "https://example.test").searchParams)).scope, "variant");
+  assert.equal(parseCatalogQuery({ scope: "variant" }).scope, "variant");
+});
 
 test("10 variant name is searchable", () => assert.equal(recordMatchesCatalogQuery(variant, { q: "アトム" }), true));
 test("11 parent series name searches variants", () => assert.equal(recordMatchesCatalogQuery(variant, { q: "鉄腕アトム フィギュア" }), true));
@@ -82,8 +95,25 @@ test("28 blank and meaningless categories are removed", () => assert.match(repos
 test("29 previous and next month calculation works", () => assert.equal(shiftCatalogMonth("2026-08", 1), "2026-09"));
 test("30 December advances to next January", () => assert.equal(shiftCatalogMonth("2026-12", 1), "2027-01"));
 test("31 January returns to previous December", () => assert.equal(shiftCatalogMonth("2026-01", -1), "2025-12"));
-test("32 undated releases are kept out of dated week groups", () => assert.match(schedulePage, /const undatedItems = items\.filter/));
-test("33 schedule excludes provisional variants", () => assert.match(schedulePage, /item\.variant_type !== "provisional"/));
+test("32 schedule uses parent series data and series links", () => {
+  assert.match(schedulePage, /getParentSeriesCatalogPage/);
+  assert.match(schedulePage, /getUpcomingParentSeriesScheduleMonths/);
+  assert.match(schedulePage, /seriesHref\(item\)/);
+  assert.doesNotMatch(schedulePage, /getSeriesCatalogPage/);
+  assert.doesNotMatch(schedulePage, /variantHref\(item\)/);
+});
+test("33 undated series are kept out of week groups without deriving a variant date", () => {
+  assert.match(schedulePage, /const undatedItems = items\.filter/);
+  assert.match(schedulePage, /item\.release_week \|\| item\.schedule_week/);
+  assert.match(schedulePage, /item\.release_date \|\| item\.releaseDate/);
+  assert.doesNotMatch(schedulePage, /item\.variant_type/);
+});
+test("33a upcoming parent month list includes series-only records", () => {
+  const monthsSource = repository.slice(repository.indexOf("export async function fetchSupabaseUpcomingParentSeriesMonths"), repository.indexOf("export async function fetchSupabasePublicVariantIdentifiers"));
+  assert.match(monthsSource, /select\("release_date,release_month"\)/);
+  assert.match(monthsSource, /collectUpcomingParentSeriesMonths/);
+  assert.doesNotMatch(monthsSource, /variants!inner|applyPublicVariantRelationFilter/);
+});
 test("34 schedule metrics do not include market or profit labels", () => {
   assert.doesNotMatch(schedulePage, /market_evidence|profit_estimate|利益目安|参考相場/);
 });
@@ -91,14 +121,36 @@ test("34 schedule metrics do not include market or profit labels", () => {
 test("35 home search submits to series query", () => {
   assert.match(homePage, /<form action="\/series" method="get" role="search">/);
   assert.match(homePage, /name="q"/);
+  assert.match(homePage, /name="scope" value="series"/);
+});
+test("35a home upcoming module is series-first while market ranking stays variant-first", () => {
+  assert.match(homePage, /getRankingSeries\("released", "variant"\)/);
+  assert.match(homePage, /getRankingSeries\("upcoming", "series"\)/);
+  assert.match(homePage, /href=\{seriesHref\(item\)\}/);
 });
 test("36 zero result message is present", () => assert.match(seriesPage, /条件に一致する商品が見つかりませんでした/));
 test("37 clear filter action is present", () => assert.match(seriesPage, /条件をすべてクリア/));
 test("38 free search and filtered category pages are noindex", () => assert.match(seriesPage, /query\.q \|\| query\.category \? \{ index: false, follow: true \}/));
-test("39 category link uses encoded URL builder", () => assert.match(categoriesPage, /buildCatalogHref\(\{\}, \{ category: category\.name \}\)/));
+test("39 category link uses encoded discovery URL builder", () => assert.match(categoriesPage, /categoryDiscoveryHref\(category\.name\)/));
 test("40 mobile filter has bounded columns", () => {
   assert.match(css, /\.catalog-filter-grid \{ grid-template-columns: 1fr 1fr; \}/);
   assert.match(css, /minmax\(0, 1fr\)/);
+});
+test("41 series scope is the first active discovery tab", () => {
+  const seriesTab = seriesPage.indexOf('scope: "series"');
+  const variantTab = seriesPage.indexOf('scope: "variant"');
+  assert.ok(seriesTab >= 0 && variantTab >= 0 && seriesTab < variantTab);
+  assert.match(seriesPage, /entityLabel = query\.scope === "series" \? "シリーズ" : "単品"/);
+});
+test("42 legacy market series-tab transition clears the legacy filter", () => {
+  assert.match(seriesPage, /scope: "series", legacyMode: "", filter: ""/);
+});
+test("43 sidebar keeps market links variant-first but release discovery series-first", () => {
+  const sidebar = read("components/AppSidebar.js");
+  assert.match(sidebar, /filter=circulating[^"]*scope=variant|scope=variant&filter=circulating/);
+  assert.match(sidebar, /scope=variant&filter=market/);
+  assert.match(sidebar, /release=released&sort=newest/);
+  assert.doesNotMatch(sidebar, /scope=variant&filter=released/);
 });
 
 test("month range is half-open", () => assert.deepEqual(catalogMonthRange("2026-08"), { start: "2026-08-01", end: "2026-09-01" }));

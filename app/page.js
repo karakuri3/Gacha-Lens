@@ -3,7 +3,7 @@ import ProductImage from "@/components/ProductImage";
 import PriceTrendChart from "@/components/PriceTrendChart";
 import { Search } from "lucide-react";
 import { getRankingSeries } from "@/lib/series";
-import { variantHref } from "@/lib/variant-url";
+import { seriesHref, variantHref } from "@/lib/variant-url";
 import { buildPageMetadata } from "@/lib/site-metadata";
 import {
   customerTags,
@@ -29,15 +29,15 @@ export const metadata = buildPageMetadata({
 });
 
 export default async function Home() {
-  const [releasedSeries, upcomingSeries] = await Promise.all([
-    getRankingSeries("released"),
-    getRankingSeries("upcoming"),
+  const [releasedVariants, upcomingSeries] = await Promise.all([
+    getRankingSeries("released", "variant"),
+    getRankingSeries("upcoming", "series"),
   ]);
-  const hot = releasedSeries
+  const hot = releasedVariants
     .filter(isCirculatingItem)
     .sort((a, b) => releasedPriorityScore(b) - releasedPriorityScore(a));
   const upcoming = upcomingSeries
-    .filter((item) => !item.is_released && item.variant_type !== "provisional" && (item.forecast_score ?? 0) > 0)
+    .filter((item) => !item.is_released && (item.forecast_score ?? 0) > 0)
     .sort((a, b) => upcomingPriority(b) - upcomingPriority(a));
   const spotlight = hot[0];
   const highPriceItems = [...hot]
@@ -66,6 +66,7 @@ export default async function Home() {
           </div>
           <form action="/series" method="get" role="search">
             <label className="sr-only" htmlFor="home-catalog-search">商品名、作品名、キャラクター名で検索</label>
+            <input type="hidden" name="scope" value="series" />
             <input id="home-catalog-search" name="q" type="search" placeholder="商品名、作品名、キャラクター名で検索" />
             <button type="submit" aria-label="ガチャを検索"><Search size={18} aria-hidden="true" /><span>検索</span></button>
           </form>
@@ -91,7 +92,7 @@ export default async function Home() {
 
             <div className="dashboard-lower-grid">
               <section className="dashboard-panel">
-                <PanelHead title="成約・参考価格 上位" meta="直近90日・成約3件以上" href="/series?filter=market&sort=market" />
+                <PanelHead title="成約・参考価格 上位" meta="直近90日・成約3件以上" href="/series?scope=variant&filter=market&sort=market" />
                 <div className="dashboard-mini-table" role="list">
                   {highPriceItems.map((item, index) => (
                     <CompactMarketRow key={item.slug} item={item} rank={index + 1} mode="price" />
@@ -121,7 +122,7 @@ export default async function Home() {
             </section>
 
             <section className="dashboard-panel">
-              <PanelHead title="在庫・流通の動き" meta="直近の観測" href="/series?filter=circulating&sort=watch" />
+              <PanelHead title="在庫・流通の動き" meta="直近の観測" href="/series?scope=variant&filter=circulating&sort=watch" />
               <div className="dashboard-compact-list">
                 {movementItems.map((item) => (
                   <AvailabilityRow key={item.slug} item={item} />
@@ -212,10 +213,9 @@ function CompactMarketRow({ item, rank, mode }) {
 
 function UpcomingRow({ item }) {
   return (
-    <Link href={variantHref(item)} className="dashboard-compact-row">
-      <div className="dashboard-compact-row__image"><ProductImage item={item} alt={item.name} /></div>
+    <Link href={seriesHref(item)} className="dashboard-compact-row">
+      <div className="dashboard-compact-row__image"><ProductImage item={undefined} src={item.image_url || item.imageUrl} imageScope="series" alt={item.name} emptyLabel="画像なし" /></div>
       <div><strong>{item.name}</strong><span>{formatSchedule(item)} ・ {formatYen(item.price)}</span></div>
-      <b>{formatScore(opportunityScore(item))}</b>
     </Link>
   );
 }

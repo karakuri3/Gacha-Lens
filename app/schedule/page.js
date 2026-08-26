@@ -1,64 +1,49 @@
 import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
-import { getSeriesCatalogPage, getUpcomingScheduleMonths } from "@/lib/series";
-import { variantHref } from "@/lib/variant-url";
+import { getParentSeriesCatalogPage, getUpcomingParentSeriesScheduleMonths } from "@/lib/series";
+import { seriesHref } from "@/lib/variant-url";
 import {
   formatCatalogMonth,
   normalizeCatalogMonth,
   shiftCatalogMonth,
 } from "@/lib/domain/catalog-query";
-import {
-  UPCOMING_METRIC_LABELS,
-  buildUpcomingCustomerMetrics,
-  customerTags,
-  opportunityScore,
-} from "@/lib/domain/public-display-clean";
+import { formatYen } from "@/lib/domain/public-display-clean";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const weeks = ["第1週", "第2週", "第3週", "第4週", "第5週"];
-const scheduleMetricLabels = [
-  UPCOMING_METRIC_LABELS.price,
-  UPCOMING_METRIC_LABELS.forecast,
-  UPCOMING_METRIC_LABELS.upside,
-  UPCOMING_METRIC_LABELS.scarcity,
-  UPCOMING_METRIC_LABELS.opportunity,
-];
-
 export async function generateMetadata({ searchParams }) {
   const month = normalizeCatalogMonth((await searchParams)?.month);
   return buildPageMetadata({
     title: month ? `${formatCatalogMonth(month)}の発売予定 | Gacha Lens` : "発売スケジュール | Gacha Lens",
-    description: "発売予定のガチャ単品を月と週から確認できます。",
+    description: "発売予定の正式公開されたガチャシリーズを月と週から確認できます。",
     path: month ? `/schedule?month=${month}` : "/schedule",
   });
 }
 
 export default async function SchedulePage({ searchParams }) {
   const params = await searchParams;
-  const availableMonths = await getUpcomingScheduleMonths();
+  const availableMonths = await getUpcomingParentSeriesScheduleMonths();
   const currentMonth = currentCatalogMonth();
   const requestedMonth = normalizeCatalogMonth(params?.month);
   const selectedMonth = requestedMonth || availableMonths.find((month) => month >= currentMonth) || availableMonths[0] || currentMonth;
-  const catalogPage = await getSeriesCatalogPage({
+  const catalogPage = await getParentSeriesCatalogPage({
     release: "upcoming",
     month: selectedMonth,
     sort: "newest",
     page: 1,
     pageSize: 120,
   });
-  const items = catalogPage.items
-    .filter((item) => !item.is_released && item.variant_type !== "provisional")
-    .sort(compareScheduleItems);
-  const datedItems = items.filter((item) => hasConfirmedReleaseDate(item) && normalizeWeek(item.schedule_week));
-  const undatedItems = items.filter((item) => !hasConfirmedReleaseDate(item) || !normalizeWeek(item.schedule_week));
+  const items = catalogPage.items.filter((item) => !item.is_released).sort(compareScheduleItems);
+  const scheduledItems = items.filter((item) => normalizeWeek(seriesScheduleWeek(item)));
+  const undatedItems = items.filter((item) => !normalizeWeek(seriesScheduleWeek(item)));
   const groups = weeks
     .map((week) => ({
       key: week,
       label: `${week}より順次`,
-      items: datedItems.filter((item) => normalizeWeek(item.schedule_week) === week),
+      items: scheduledItems.filter((item) => normalizeWeek(seriesScheduleWeek(item)) === week),
     }))
     .filter((group) => group.items.length > 0);
   if (undatedItems.length) {
@@ -71,8 +56,8 @@ export default async function SchedulePage({ searchParams }) {
         <section className="page-hero">
           <p className="eyebrow">SCHEDULE</p>
           <h1 className="page-title">新作・発売予定</h1>
-          <p className="page-lead">月と週を切り替えて、正式公開された単品の発売情報を確認できます。</p>
-          <Link className="context-guide-link" href="/guides/forecast-ranking">発売予定と予測スコアの見方</Link>
+          <p className="page-lead">月と週を切り替えて、正式公開されたガチャシリーズの発売情報を確認できます。</p>
+          <Link className="context-guide-link" href="/guides/forecast-ranking">発売予定データの見方</Link>
         </section>
 
         <nav className="schedule-month-nav" aria-label="発売月を移動">
@@ -95,9 +80,9 @@ export default async function SchedulePage({ searchParams }) {
         <div className="section-head schedule-results-head">
           <div>
             <h2 className="section-title">{formatCatalogMonth(selectedMonth)}</h2>
-            <p className="section-sub">発売予定 {catalogPage.total.toLocaleString("ja-JP")}件</p>
+            <p className="section-sub">発売予定シリーズ {catalogPage.total.toLocaleString("ja-JP")}件</p>
           </div>
-          <Link href={`/series?release=upcoming&month=${selectedMonth}&sort=newest`} className="button-link">一覧で見る</Link>
+          <Link href={`/series?release=upcoming&month=${selectedMonth}&sort=newest`} className="button-link">シリーズ一覧で見る</Link>
         </div>
 
         {groups.length > 0 ? (
@@ -129,24 +114,22 @@ export default async function SchedulePage({ searchParams }) {
 }
 
 function ScheduleCard({ item, priority = false }) {
-  const week = normalizeWeek(item.schedule_week);
-  const metrics = buildUpcomingCustomerMetrics(item).filter((metric) => scheduleMetricLabels.includes(metric.label));
-  const tags = customerTags(item, false);
+  const week = normalizeWeek(seriesScheduleWeek(item));
   return (
-    <Link href={variantHref(item)} className="card product-card">
-      <div className="product-image"><ProductImage item={item} alt={item.name} priority={priority} /></div>
+    <Link href={seriesHref(item)} className="card product-card">
+      <div className="product-image"><ProductImage item={undefined} src={item.image_url || item.imageUrl} imageScope="series" alt={item.name} priority={priority} emptyLabel="画像なし" /></div>
       <div>
         <div className="tag-row" style={{ marginBottom: 10 }}>
-          <span className="tag">{hasConfirmedReleaseDate(item) && week ? `${week}より順次` : "発売日確認中"}</span>
-          {item.rarity ? <span className="tag">{item.rarity}</span> : null}
+          <span className="tag">{week ? `${week}より順次` : "発売日確認中"}</span>
+          <span className="tag">シリーズ</span>
         </div>
         <h2 className="product-name">{item.name}</h2>
-        <div className="product-meta">{item.series_name} / {item.role}</div>
+        <div className="product-meta">{item.brand || "公式商品"} / {item.variant_count ? `${item.variant_count}種` : "ラインナップ確認中"}</div>
       </div>
       <div className="metric-grid">
-        {metrics.map((metric) => <Metric key={metric.label} {...metric} />)}
+        <Metric label="発売" value={releaseLabel(item)} />
+        <Metric label="定価" value={formatYen(item.price)} />
       </div>
-      {tags.length > 0 ? <div className="tag-row">{tags.map((tag) => <span key={tag} className="tag tag--signal">{tag}</span>)}</div> : null}
     </Link>
   );
 }
@@ -158,8 +141,8 @@ function Metric({ label, value, tone = "" }) {
 function compareScheduleItems(a, b) {
   const dateDiff = releaseTime(a) - releaseTime(b);
   if (dateDiff !== 0) return dateDiff;
-  const weekDiff = weekIndex(a.schedule_week) - weekIndex(b.schedule_week);
-  return weekDiff || opportunityScore(b) - opportunityScore(a);
+  const weekDiff = weekIndex(seriesScheduleWeek(a)) - weekIndex(seriesScheduleWeek(b));
+  return weekDiff || String(a.name || "").localeCompare(String(b.name || ""), "ja");
 }
 
 function releaseTime(item) {
@@ -167,8 +150,19 @@ function releaseTime(item) {
   return Number.isFinite(time) ? time : Number.MAX_SAFE_INTEGER;
 }
 
-function hasConfirmedReleaseDate(item) {
-  return Number.isFinite(Date.parse(item.release_date || item.releaseDate || ""));
+function seriesScheduleWeek(item) {
+  const explicitWeek = item.release_week || item.schedule_week || "";
+  if (explicitWeek) return explicitWeek;
+  const date = String(item.release_date || item.releaseDate || "");
+  const match = date.match(/^\d{4}-\d{2}-(\d{2})$/);
+  if (!match) return "";
+  return `第${Math.min(5, Math.ceil(Number(match[1]) / 7))}週`;
+}
+
+function releaseLabel(item) {
+  const date = String(item.release_date || item.releaseDate || "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date.replace(/-/g, "/");
+  return formatCatalogMonth(String(item.release_month || item.schedule_month || "")) || "発売日確認中";
 }
 
 function normalizeWeek(value = "") {

@@ -73,6 +73,7 @@ export default async function SeriesPage({ searchParams }) {
   const visibleItems = catalogPage ? filtered : filtered.slice(startIndex, startIndex + PAGE_SIZE);
   const displayStart = totalCount ? startIndex + 1 : 0;
   const displayEnd = startIndex + visibleItems.length;
+  const entityLabel = query.scope === "series" ? "シリーズ" : "単品";
   const showGlobalCounts = query.scope === "variant" && !query.q && !query.category && !query.month && !query.legacyMode;
 
   return (
@@ -81,7 +82,7 @@ export default async function SeriesPage({ searchParams }) {
         <section className="page-hero">
           <p className="eyebrow">SEARCH</p>
           <h1 className="page-title">ガチャを探す</h1>
-          <p className="page-lead">商品名、作品名、キャラクター名、カテゴリ、発売月から探せます。</p>
+          <p className="page-lead">シリーズ、作品名、メーカー、カテゴリ、発売月から探せます。</p>
         </section>
 
         <nav className="catalog-discovery-links" aria-label="別の探し方">
@@ -93,11 +94,11 @@ export default async function SeriesPage({ searchParams }) {
         </nav>
 
         <nav className="entity-scope-tabs" aria-label="検索単位">
+          <Link href={buildCatalogHref(query, { scope: "series", legacyMode: "", filter: "" })} className={query.scope === "series" ? "is-active" : ""} aria-current={query.scope === "series" ? "page" : undefined}>
+            <strong>シリーズから探す</strong><span>ラインナップ・コンプ・発売情報</span>
+          </Link>
           <Link href={buildCatalogHref(query, { scope: "variant" })} className={query.scope === "variant" ? "is-active" : ""} aria-current={query.scope === "variant" ? "page" : undefined}>
             <strong>単品から探す</strong><span>キャラクター・レア・シークレット</span>
-          </Link>
-          <Link href={buildCatalogHref(query, { scope: "series" })} className={query.scope === "series" ? "is-active" : ""} aria-current={query.scope === "series" ? "page" : undefined}>
-            <strong>シリーズから探す</strong><span>ラインナップ・コンプ・発売情報</span>
           </Link>
         </nav>
 
@@ -106,7 +107,7 @@ export default async function SeriesPage({ searchParams }) {
           <div className="form-grid catalog-filter-grid">
             <div className="field catalog-keyword-field">
               <label htmlFor="catalog-q">キーワード</label>
-              <input id="catalog-q" name="q" type="search" defaultValue={query.q} placeholder="商品名、作品名、キャラクター名で検索" />
+              <input id="catalog-q" name="q" type="search" defaultValue={query.q} placeholder="シリーズ名、作品名、メーカー名で検索" />
             </div>
             <div className="field">
               <label htmlFor="catalog-release">発売状態</label>
@@ -158,10 +159,10 @@ export default async function SeriesPage({ searchParams }) {
           <div>
             <h2 className="section-title">
               {query.q
-                ? `「${query.q}」の検索結果 ${totalCount.toLocaleString("ja-JP")}件`
+                ? `「${query.q}」の${entityLabel}検索結果 ${totalCount.toLocaleString("ja-JP")}件`
                 : totalCount
-                  ? `全${totalCount.toLocaleString("ja-JP")}件中 ${displayStart.toLocaleString("ja-JP")}-${displayEnd.toLocaleString("ja-JP")}件`
-                  : "検索結果 0件"}
+                  ? `全${totalCount.toLocaleString("ja-JP")}${entityLabel}中 ${displayStart.toLocaleString("ja-JP")}-${displayEnd.toLocaleString("ja-JP")}${entityLabel}`
+                  : `${entityLabel}検索結果 0件`}
             </h2>
             <p className="section-sub">{query.scope === "variant" ? "正式公開された単品だけを表示しています。" : "親シリーズ単位で表示しています。"}</p>
           </div>
@@ -189,7 +190,7 @@ export default async function SeriesPage({ searchParams }) {
 function ActiveFilters({ query }) {
   const values = [
     query.q ? `検索: ${query.q}` : "",
-    query.scope === "series" ? "シリーズ" : "",
+    query.scope === "variant" ? "単品" : "",
     query.release === "released" ? "発売中" : query.release === "upcoming" ? "発売予定" : "",
     query.category ? `カテゴリ: ${query.category}` : "",
     query.month ? `発売月: ${formatCatalogMonth(query.month)}` : "",
