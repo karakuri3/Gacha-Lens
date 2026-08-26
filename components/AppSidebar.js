@@ -18,7 +18,7 @@ const primaryItems = [
 const discoveryItems = [
   { label: "今出回っている", href: "/series?scope=variant&filter=circulating&sort=watch", icon: Activity },
   { label: "相場データあり", href: "/series?scope=variant&filter=market&sort=market", icon: SearchCheck },
-  { label: "発売中を探す", href: "/series?scope=variant&filter=released&sort=recommended", icon: PackageSearch },
+  { label: "発売中を探す", href: "/series?release=released&sort=newest", icon: PackageSearch },
 ];
 
 export default function AppSidebar() {

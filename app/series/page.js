@@ -94,7 +94,7 @@ export default async function SeriesPage({ searchParams }) {
         </nav>
 
         <nav className="entity-scope-tabs" aria-label="検索単位">
-          <Link href={buildCatalogHref(query, { scope: "series" })} className={query.scope === "series" ? "is-active" : ""} aria-current={query.scope === "series" ? "page" : undefined}>
+          <Link href={buildCatalogHref(query, { scope: "series", legacyMode: "", filter: "" })} className={query.scope === "series" ? "is-active" : ""} aria-current={query.scope === "series" ? "page" : undefined}>
             <strong>シリーズから探す</strong><span>ラインナップ・コンプ・発売情報</span>
           </Link>
           <Link href={buildCatalogHref(query, { scope: "variant" })} className={query.scope === "variant" ? "is-active" : ""} aria-current={query.scope === "variant" ? "page" : undefined}>

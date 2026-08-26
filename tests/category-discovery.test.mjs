@@ -112,9 +112,9 @@ test("category route helpers preserve Japanese, literal percent signs, spaces, a
   assert.equal(discoveryFacetHref("category", "\u30df\u30cb\u30c1\u30e5\u30a2"), "/categories/%E3%83%9F%E3%83%8B%E3%83%81%E3%83%A5%E3%82%A2");
 });
 
-test("category pages use public catalog filtering, canonical metadata, and noindex pagination", () => {
+test("category pages use parent-series filtering, canonical metadata, and noindex pagination", () => {
   const text = source("app/categories/[name]/page.js");
-  assert.match(text, /getPublicCategoryCatalogPage/);
+  assert.match(text, /getPublicCategorySeriesPage/);
   assert.match(text, /if \(!result\) notFound\(\)/);
   assert.match(text, /pageSize: 60/);
   assert.match(text, /noIndex: page > 1/);
@@ -123,34 +123,50 @@ test("category pages use public catalog filtering, canonical metadata, and noind
   assert.doesNotMatch(text, /offers|aggregateRating|review:/);
 });
 
-test("category discovery uses a targeted public catalog query without sitemap cache agreement", () => {
+test("category discovery uses a targeted parent series query without sitemap cache agreement", () => {
   const text = source("lib/series.js");
-  const functionSource = text.slice(text.indexOf("export async function getPublicCategoryCatalogPage"), text.indexOf("export async function getPublicDiscoveryFacetSeriesPage"));
-  assert.match(functionSource, /getSeriesCatalogPage\(\{ category, page: requestedPage/);
+  const functionSource = text.slice(text.indexOf("export async function getPublicCategorySeriesPage"), text.indexOf("export async function getPublicDiscoveryFacetSeriesPage"));
+  assert.match(functionSource, /getParentSeriesCatalogPage\(\{/);
   assert.doesNotMatch(functionSource, /getPublicSitemapIdentifiers\(\)/);
   assert.doesNotMatch(functionSource, /result\.total !==/);
-  assert.match(functionSource, /if \(result\.total === 0\) continue/);
-  assert.match(functionSource, /discoveryFacetLookupCandidates\(name\)/);
-  assert.match(functionSource, /for \(const category of categories\)/);
+  assert.match(functionSource, /if \(result\.total === 0\) return null/);
+  assert.match(functionSource, /getParentSeriesCategoryCatalog\(\)/);
   assert.doesNotMatch(source("lib/domain/category-discovery.js"), /affiliate|commission|ranking|forecast|market|stock|reaction/i);
 });
 
 test("category database filtering remains exact while URL names remain normalized", () => {
   const repository = source("lib/data/supabase-gacha-repository.js");
   const categorySource = source("lib/domain/category-discovery.js");
-  assert.match(repository, /query\.eq\("parent\.category", options\.category\)/);
+  assert.match(repository, /query\.eq\("category", options\.category\)/);
   assert.match(categorySource, /filter_value: \[\.\.\.group\.rawValues\]\[0\]/);
   assert.match(categorySource, /rawValues\.size === 1/);
 });
 
-test("categories index links only indexable facets while filtered catalog URLs are noindex", () => {
+test("categories index is parent-series-first while filtered catalog URLs stay noindex", () => {
   const categories = source("app/categories/page.js");
   const catalog = source("app/series/page.js");
-  assert.match(categories, /getPublicDiscoveryFacets/);
+  assert.match(categories, /getParentSeriesCategoryCatalog/);
   assert.match(categories, /categoryDiscoveryHref/);
-  assert.match(categories, /buildCatalogHref/);
+  assert.match(categories, /series_count/);
   assert.match(catalog, /noIndex: Boolean\(query\.q \|\| query\.category\)/);
   assert.match(catalog, /query\.q \|\| query\.category \? \{ index: false, follow: true \}/);
+});
+
+test("parent category catalog retains a series-only category and its exact parent count", () => {
+  const repository = source("lib/data/supabase-gacha-repository.js");
+  const categorySource = repository.slice(repository.indexOf("export async function fetchSupabaseParentSeriesCategoryCatalog"), repository.indexOf("export async function fetchSupabaseUpcomingParentSeriesMonths"));
+  assert.match(categorySource, /fetchTable\(supabaseClient, TABLE_MAP\.series, "id,category,image_url,is_released"\)/);
+  assert.match(categorySource, /series_count \+= 1/);
+  assert.match(categorySource, /if \(!row\.is_released\) group\.upcoming_count \+= 1/);
+  assert.doesNotMatch(categorySource, /TABLE_MAP\.variants|countPublicVariants/);
+});
+
+test("category landing renders parent-series cards instead of variant cards", () => {
+  const landing = source("components/DiscoveryFacetPages.js");
+  const categoryLanding = landing.slice(landing.indexOf("export function CategoryDiscoveryLanding"));
+  assert.match(categoryLanding, /シリーズ一覧/);
+  assert.match(categoryLanding, /scope="series"/);
+  assert.doesNotMatch(categoryLanding, /単品一覧|公開単品/);
 });
 
 test("category detail pages keep local text while sitemap retains only canonical discovery URLs", () => {
