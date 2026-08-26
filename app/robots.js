@@ -7,7 +7,11 @@ export default function robots() {
       allow: "/",
       disallow: ["/api/", "/review/", "/supabase-series"],
     },
-    sitemap: absoluteSiteUrl("/sitemap.xml"),
+    sitemap: [
+      absoluteSiteUrl("/sitemap.xml"),
+      absoluteSiteUrl("/series-sitemap.xml"),
+      absoluteSiteUrl("/variant-sitemap.xml"),
+    ],
     host: absoluteSiteUrl("/"),
   };
 }

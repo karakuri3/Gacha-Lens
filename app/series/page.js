@@ -4,6 +4,7 @@ import { getCategoryCatalog, getParentSeriesCatalogPage, getRankingSeries, getSe
 import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display-clean";
 import {
   buildCatalogHref,
+  buildCatalogCanonicalHref,
   formatCatalogMonth,
   hasActiveCatalogFilters,
   parseCatalogQuery,
@@ -29,12 +30,7 @@ const sortOptions = [
 
 export async function generateMetadata({ searchParams }) {
   const query = parseCatalogQuery(await searchParams);
-  const canonical = buildCatalogHref({
-    scope: query.scope,
-    release: query.release,
-    category: query.category,
-    month: query.month,
-  });
+  const canonical = buildCatalogCanonicalHref(query);
   const metadata = buildPageMetadata({
     title: query.q ? `「${query.q}」の検索結果 | Gacha Lens` : "ガチャ一覧 | Gacha Lens",
     description: "商品名・作品名・シリーズ名・カテゴリ・発売月から、公開中のガチャを探せます。",

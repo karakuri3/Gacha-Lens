@@ -83,9 +83,32 @@ export function isSitemapSourceReady(sourceText) {
   ]);
 }
 
+export function isObserverSitemapSourceReady({ robotsText, seriesRouteText, variantRouteText, publicationText }) {
+  return hasEvery(robotsText, [
+    'absoluteSiteUrl("/sitemap.xml")',
+    'absoluteSiteUrl("/series-sitemap.xml")',
+    'absoluteSiteUrl("/variant-sitemap.xml")',
+    'disallow: ["/api/", "/review/", "/supabase-series"]',
+  ])
+    && [seriesRouteText, variantRouteText].every((route) => hasEvery(route, [
+      'export const dynamic = "force-dynamic"',
+      "new Response(buildObserverSitemapXml(entries",
+      '"Content-Type": "application/xml; charset=utf-8"',
+    ]))
+    && hasEvery(publicationText, [
+      "MAX_OBSERVER_SITEMAP_URLS = 50000",
+      "Observer sitemap exceeds ${MAX_OBSERVER_SITEMAP_URLS} URLs",
+      "collectSeriesObserverEntries",
+      "collectVariantObserverEntries",
+    ]);
+}
+
 function buildStaticChecks(root) {
   const robots = source(root, "app/robots.js");
   const sitemap = source(root, "app/sitemap.js");
+  const seriesObserverRoute = source(root, "app/series-sitemap.xml/route.js");
+  const variantObserverRoute = source(root, "app/variant-sitemap.xml/route.js");
+  const sitemapPublication = source(root, "lib/domain/sitemap-publication.js");
   const affiliateProviders = source(root, "lib/domain/affiliate-providers.js");
   const marketLinks = source(root, "lib/domain/market-links.js");
   const rakutenFetcher = source(root, "lib/fetchers/rakuten-market-fetcher.js");
@@ -128,6 +151,17 @@ function buildStaticChecks(root) {
       isSitemapSourceReady(sitemap) ? "pass" : "fail",
       true,
       "Sitemap must publish core public routes, guides, and retain the 50,000 URL cap."
+    ),
+    check(
+      "observer_sitemaps",
+      isObserverSitemapSourceReady({
+        robotsText: robots,
+        seriesRouteText: seriesObserverRoute,
+        variantRouteText: variantObserverRoute,
+        publicationText: sitemapPublication,
+      }) ? "pass" : "fail",
+      true,
+      "Root, series, and variant observer sitemaps must remain published with independent 50,000 URL fail-closed caps."
     ),
     check(
       "public_catalog_routes",
