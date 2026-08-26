@@ -7,6 +7,8 @@ import {
   assessSeriesCompleteSetCandidate,
   buildSeriesCompleteSetPreview,
   evaluateSeriesCompleteSetCandidates,
+  hasCatalogParentIdentityAmbiguity,
+  withoutCompleteSetSignals,
 } from "../lib/domain/market-series-complete-set.js";
 import { buildSeriesCompleteSetDiagnostic, renderSeriesCompleteSetDiagnosticMarkdown } from "../lib/domain/market-series-complete-set-diagnostic.js";
 
@@ -35,6 +37,44 @@ test("complete-set classifier accepts exact parent series and matching formal co
     assert.equal(result.seriesId, value.series.id);
     assert.equal(result.variantId, null);
     assert.equal(result.matchedVariantId, null);
+  }
+});
+
+test("complete-set signals do not become edition tails while actual editions stay fail closed", () => {
+  const accepted = fixture({
+    seriesName: "ノンタン めじるしアクセサリー",
+    franchise: "ノンタン",
+    title: "ノンタン めじるしアクセサリー 全5種セット フルコンプ",
+  });
+  assert.equal(assessSeriesCompleteSetCandidate(accepted.listing, accepted.query, accepted.catalog).accepted, true);
+  assert.equal(withoutCompleteSetSignals(accepted.listing.title), "ノンタン めじるしアクセサリー");
+
+  for (const title of [
+    "ノンタン めじるしアクセサリー Vol.2 全5種セット",
+    "ノンタン めじるしアクセサリー 全5種セット Vol.2",
+  ]) {
+    const value = fixture({ seriesName: "ノンタン めじるしアクセサリー", franchise: "ノンタン", title });
+    assert.equal(assessSeriesCompleteSetCandidate(value.listing, value.query, value.catalog).reason, "parent_series_identity_conflict");
+  }
+});
+
+test("complete-set classifier rejects duplicate catalog parent names and standalone one-of-all listings", () => {
+  const duplicate = fixture();
+  const sameName = { id: "series-b", name: duplicate.series.name, franchise: "Other" };
+  duplicate.catalog.series.push(sameName);
+  duplicate.catalog.seriesById.set(sameName.id, sameName);
+  assert.equal(hasCatalogParentIdentityAmbiguity(duplicate.series, duplicate.catalog.series), true);
+  assert.equal(assessSeriesCompleteSetCandidate(duplicate.listing, duplicate.query, duplicate.catalog).reason, "parent_series_catalog_identity_ambiguous");
+
+  for (const title of [
+    "Gacha Series Collection 全5種のうち1種",
+    "Gacha Series Collection 全5種よりランダム1種",
+    "Gacha Series Collection 全5種 ランダム1個",
+    "Gacha Series Collection 単品 全5種より1種",
+    "Gacha Series Collection 全5種セット バラ売り",
+  ]) {
+    const value = fixture({ title });
+    assert.equal(assessSeriesCompleteSetCandidate(value.listing, value.query, value.catalog).reason, "complete_set_single_item_conflict");
   }
 });
 
