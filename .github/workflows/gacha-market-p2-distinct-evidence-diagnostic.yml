@@ -1,0 +1,76 @@
+name: Gacha Market P2 Distinct Evidence Read-Only Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: Maximum Priority 2 variants to diagnose (5-25)
+        required: true
+        default: "5"
+        type: choice
+        options:
+          - "5"
+          - "10"
+          - "15"
+          - "20"
+          - "25"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  priority-two-distinct-evidence:
+    concurrency:
+      group: gacha-market-p2-distinct-evidence-diagnostic
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GACHA_DATA_SOURCE: supabase
+      MARKET_BACKFILL_WRITE_DISABLED: "true"
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      RAKUTEN_APPLICATION_ID: ${{ secrets.RAKUTEN_APPLICATION_ID }}
+      RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+      YAHOO_SHOPPING_APP_ID: ${{ secrets.YAHOO_SHOPPING_APP_ID }}
+      YAHOO_SHOPPING_FETCH_ENABLED: ${{ secrets.YAHOO_SHOPPING_FETCH_ENABLED }}
+      YAHOO_SHOPPING_REQUEST_DELAY_MS: "5000"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify exact current main and fixed Priority 2 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/main"
+          git fetch --no-tags origin main --depth=1
+          test "$GITHUB_SHA" = "$(git rev-parse origin/main)"
+          case "${{ inputs.limit }}" in 5|10|15|20|25) ;; *) exit 1 ;; esac
+      - name: Run read-only Priority 2 distinct evidence diagnostic
+        id: diagnostic
+        env:
+          AUDIT_LIMIT: ${{ inputs.limit }}
+          DIAGNOSTIC_OUTPUT_DIR: ${{ runner.temp }}/gacha-market-p2-distinct-evidence-diagnostic
+        run: >-
+          node scripts/market-p2-distinct-evidence-diagnostic.mjs
+          --limit=$AUDIT_LIMIT
+          --expected-main-sha=${{ github.sha }}
+          --output-dir=$DIAGNOSTIC_OUTPUT_DIR
+      - name: Scan sanitized Priority 2 diagnostic artifact
+        id: scan
+        if: ${{ always() }}
+        run: node scripts/manual-market-audit-guard.mjs scan --directory=${{ runner.temp }}/gacha-market-p2-distinct-evidence-diagnostic
+      - name: Upload sanitized Priority 2 diagnostic artifact
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-p2-distinct-evidence-diagnostic-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-market-p2-distinct-evidence-diagnostic
+          if-no-files-found: error
+          retention-days: 7

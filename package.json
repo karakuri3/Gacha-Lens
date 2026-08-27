@@ -67,6 +67,7 @@
     "test:market-bounded-write": "node --test tests/market-bounded-write.test.mjs",
     "test:market-bounded-selection": "node --test tests/market-bounded-selection.test.mjs",
     "test:market-bounded-coverage": "node --test tests/market-bounded-coverage.test.mjs",
+    "test:market-p2-distinct-evidence": "node --test tests/market-p2-distinct-evidence-diagnostic.test.mjs tests/market-p2-distinct-evidence-workflow.test.mjs",
     "test:market-series-complete-set": "node --test tests/market-series-complete-set.test.mjs",
     "test:market-series-complete-set-canary": "node --test tests/market-series-complete-set-canary.test.mjs",
     "market:series-complete-set-readiness": "node scripts/market-series-complete-set-readiness.mjs",
