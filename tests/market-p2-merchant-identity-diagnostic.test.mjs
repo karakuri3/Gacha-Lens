@@ -9,7 +9,9 @@ import {
 } from "../lib/domain/market-p2-distinct-evidence-diagnostic.js";
 import {
   buildMarketplaceStorefrontEvidenceByCandidateKey,
+  buildSanitizedMarketplaceStorefrontProvenance,
   compareIndependentStorefrontEvidence,
+  recoverRakutenLegacyShopCode,
   resolveMarketplaceStorefrontEvidence,
 } from "../lib/domain/market-storefront-identity.js";
 import { PRIORITY_TWO_DISTINCT_EVIDENCE_QUERY_PROFILE } from "../lib/fetchers/market-p2-distinct-evidence-query-planner.js";
@@ -79,6 +81,40 @@ test("trusted same-provider codes identify the same storefront while different c
   assert.equal(compareIndependentStorefrontEvidence(rakuten, [{ ...rakuten, storefront_id: "realize-store" }]), true);
 });
 
+test("Rakuten raw shopCode takes priority and valid legacy itemCode recovers only its formal shop code", () => {
+  const preferred = resolveMarketplaceStorefrontEvidence({
+    source: "rakuten_ichiba",
+    raw: { provider: "rakuten_ichiba", shopCode: "toysanta", source_listing_id: "other-store:10381220" },
+  });
+  assert.equal(preferred.storefront_id, "toysanta");
+  assert.equal(preferred.storefront_identity_source, "rakuten_item_search_shop_code");
+
+  const legacy = resolveMarketplaceStorefrontEvidence({
+    source: "rakuten_ichiba",
+    raw: { provider: "rakuten_ichiba", source_listing_id: "auc-toysanta:10381220" },
+  });
+  assert.equal(legacy.storefront_id, "auc-toysanta");
+  assert.equal(legacy.storefront_identity_source, "rakuten_item_code_shop_code_legacy");
+  assert.equal(recoverRakutenLegacyShopCode({ source_listing_id: "auc-toysanta:10381220", itemCode: "auc-toysanta:10381220" }), "auc-toysanta");
+});
+
+test("malformed or ambiguous Rakuten itemCode values fail closed", () => {
+  for (const source_listing_id of ["auc-toysanta", ":10381220", "auc toysanta:10381220", "auc-toysanta:", "auc-toysanta:10381220:extra", ""]) {
+    const identity = resolveMarketplaceStorefrontEvidence({ source: "rakuten_ichiba", raw: { provider: "rakuten_ichiba", source_listing_id } });
+    assert.equal(identity.storefront_id, null, source_listing_id || "empty");
+  }
+  assert.equal(recoverRakutenLegacyShopCode({ source_listing_id: "auc-toysanta:10381220", itemCode: "other-store:10381220" }), null);
+});
+
+test("Yahoo accepts only provider-issued IDs and never recovers a storefront from a canonical URL or display name", () => {
+  const current = resolveMarketplaceStorefrontEvidence({ source: "yahoo_shopping", raw: { provider: "yahoo_shopping", seller: { sellerId: "toysanta", name: "トイサンタ" } } });
+  const legacy = resolveMarketplaceStorefrontEvidence({ source: "yahoo_shopping", raw: { provider: "yahoo_shopping", sellerId: "toysanta" } });
+  const ambiguous = resolveMarketplaceStorefrontEvidence({ source: "yahoo_shopping", source_url: "https://store.shopping.yahoo.co.jp/toysanta/item.html", raw: { provider: "yahoo_shopping", seller: { name: "トイサンタ" } } });
+  assert.equal(current.storefront_id, "toysanta");
+  assert.equal(legacy.storefront_identity_source, "yahoo_shopping_seller_id_legacy");
+  assert.equal(ambiguous.storefront_id, null);
+});
+
 test("merchant diagnostic preserves distinct listing semantics and reports only safe storefront evidence", () => {
   const incoming = marketRecord({ listingId: "new", url: "https://item.rakuten.co.jp/realize-store/new/", shopCode: "realize-store", shopName: "Realize" });
   const existing = marketRecord({ listingId: "old", shopCode: "toysanta", shopName: "トイサンタ" });
@@ -108,6 +144,15 @@ test("similar Rakuten and Yahoo display names never establish merchant equivalen
   assert.equal(result.summary.merchant_identity_status, "unknown");
 });
 
+test("legacy existing Rakuten storefront evidence makes D1C same and different storefront comparisons deterministic", () => {
+  const sameCandidate = marketRecord({ listingId: "new", url: "https://item.rakuten.co.jp/auc-toysanta/new/", shopCode: "auc-toysanta" });
+  const sameExisting = { id: "old", variant_id: "v1", source: "rakuten_ichiba", source_url: "https://item.rakuten.co.jp/auc-toysanta/old/", raw: { provider: "rakuten_ichiba", source_listing_id: "auc-toysanta:10381220" } };
+  assert.equal(diagnostic({ records: [sameCandidate], existingListings: [sameExisting] }).variants[0].accepted_distinct[0].independent_storefront_evidence, false);
+
+  const differentCandidate = marketRecord({ listingId: "new", url: "https://item.rakuten.co.jp/realize-store/new/", shopCode: "realize-store" });
+  assert.equal(diagnostic({ records: [differentCandidate], existingListings: [sameExisting] }).variants[0].accepted_distinct[0].independent_storefront_evidence, true);
+});
+
 test("a display name without a provider-issued ID is never treated as storefront or merchant identity", () => {
   const result = resolveMarketplaceStorefrontEvidence(marketRecord({ provider: "yahoo_shopping", sellerId: "", sellerName: "トイサンタ" }));
   assert.deepEqual(result, {
@@ -127,4 +172,15 @@ test("missing trusted storefront metadata stays unknown and sanitized artifacts 
   assert.equal(distinct.independent_storefront_evidence, "unknown");
   const serialized = JSON.stringify(result);
   for (const forbidden of ["credential", "do-not-leak", '"raw"', "seller"]) assert.equal(serialized.includes(forbidden), false);
+});
+
+test("future storefront provenance is a strict sanitized allowlist and does not infer merchant identity", () => {
+  const provenance = buildSanitizedMarketplaceStorefrontProvenance(marketRecord({ shopCode: "auc-toysanta", shopName: "トイサンタ" }));
+  assert.deepEqual(provenance, {
+    storefront_id: "auc-toysanta",
+    storefront_name: "トイサンタ",
+    storefront_identity_source: "rakuten_item_search_shop_code",
+  });
+  const serialized = JSON.stringify(provenance);
+  assert.doesNotMatch(serialized, /credential|raw|merchant|seller/i);
 });
