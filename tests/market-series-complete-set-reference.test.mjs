@@ -21,6 +21,7 @@ registerHooks({
 });
 const { createGachaRepository } = await import("../lib/series.js");
 const page = fs.readFileSync(path.join(root, "app/series/group/[slug]/page.js"), "utf8");
+const seriesModule = fs.readFileSync(path.join(root, "lib/series.js"), "utf8");
 const series = { id: "series-1", lineup_verification_status: "verified", verified_variant_count: 6, released: true };
 
 function listing(overrides = {}) {
@@ -180,4 +181,8 @@ test("parent page renders an isolated reference card and keeps aggregate and fav
   assert.match(page, /market\.type_stats\?\.complete_set/);
   assert.match(page, /formatCompleteSetAggregate/);
   assert.doesNotMatch(page, /PriceTrendChart|TrackedMarketLink|application\/ld\+json/);
+});
+
+test("parent detail cache is versioned for the complete-set reference data shape", () => {
+  assert.match(seriesModule, /gacha-parent-series-detail-v2/);
 });
