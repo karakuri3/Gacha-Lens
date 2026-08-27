@@ -11,7 +11,6 @@ import { buildParentSeriesStructuredData } from "@/lib/domain/public-detail-stru
 import {
   formatSchedule,
   formatScore,
-  formatMarketEvidenceValue,
   formatYen,
   opportunityScore,
   stockStatusLabel,
@@ -43,6 +42,8 @@ export default async function ParentSeriesDetailPage({ params }) {
   const released = Boolean(item.is_released);
   const variants = item.variants ?? [];
   const market = item.market_summary ?? {};
+  const completeSetEvidence = market.type_stats?.complete_set ?? {};
+  const completeSetReference = item.complete_set_reference;
   const detailUrl = absoluteSiteUrl(seriesHref(item));
   const structuredData = buildParentSeriesStructuredData({
     name: item.name,
@@ -96,7 +97,7 @@ export default async function ParentSeriesDetailPage({ params }) {
             <div className="metric-grid" style={{ marginTop: 22 }}>
               {released ? (
                 <>
-                  <Metric label={item.market_evidence?.label || "セット価格データ不足"} value={formatMarketEvidenceValue(item.market_evidence)} meta={item.market_evidence?.explanation} tone="highlight" />
+                  <Metric label={completeSetEvidence.label || "コンプセット価格データ不足"} value={formatCompleteSetAggregate(completeSetEvidence)} meta={completeSetEvidence.explanation} tone="highlight" />
                   <Metric label={market.type_stats?.partial_set?.label || "セット価格データ不足"} value={formatYen(market.partial_set)} />
                   <Metric label="売れた数" value={`${market.sold_count ?? 0}件`} />
                   <Metric label="在庫状況" value={stockStatusLabel(item.stock_summary)} />
@@ -121,13 +122,32 @@ export default async function ParentSeriesDetailPage({ params }) {
                 series_name: "シリーズ",
                 image_url: item.image_url,
                 is_released: released,
-                primary_label: released ? item.market_evidence?.label : "発売",
-                primary_value: released ? formatMarketEvidenceValue(item.market_evidence) : formatSchedule(item),
+                primary_label: released ? completeSetEvidence.label || "コンプセット価格データ不足" : "発売",
+                primary_value: released ? formatCompleteSetAggregate(completeSetEvidence) : formatSchedule(item),
               }} />
               {item.official_url ? <Link href={item.official_url} className="button-link" target="_blank" rel="noreferrer">公式ページ</Link> : null}
             </div>
           </div>
         </section>
+
+        {completeSetReference ? (
+          <section className="card panel" style={{ marginTop: 24 }} aria-labelledby="complete-set-reference-title">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">COMPLETE SET</p>
+                <h2 id="complete-set-reference-title" className="section-title">コンプリートセット参考価格</h2>
+                <p className="section-sub">{completeSetReference.note}</p>
+              </div>
+            </div>
+            <div className="metric-grid">
+              <Metric label={completeSetReference.lineup_label} value={formatYen(completeSetReference.price)} tone="highlight" />
+              <Metric label="出品先" value={completeSetReference.provider_label} />
+            </div>
+            <div className="detail-actions">
+              <a href={completeSetReference.source_url} className="button-link" target="_blank" rel="noopener noreferrer">出品ページを見る</a>
+            </div>
+          </section>
+        ) : null}
 
         <section className="card panel" style={{ marginTop: 24 }}>
           <div className="section-head">
@@ -171,4 +191,8 @@ function Metric({ label, value, tone = "", meta = "" }) {
       {meta ? <small>{meta}</small> : null}
     </div>
   );
+}
+
+function formatCompleteSetAggregate(evidence = {}) {
+  return evidence.tier === "insufficient" ? "データ不足" : formatYen(evidence.primary_price);
 }
