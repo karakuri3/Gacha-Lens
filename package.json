@@ -68,6 +68,9 @@
     "test:market-bounded-selection": "node --test tests/market-bounded-selection.test.mjs",
     "test:market-bounded-coverage": "node --test tests/market-bounded-coverage.test.mjs",
     "test:market-series-complete-set": "node --test tests/market-series-complete-set.test.mjs",
+    "test:market-series-complete-set-canary": "node --test tests/market-series-complete-set-canary.test.mjs",
+    "market:series-complete-set-readiness": "node scripts/market-series-complete-set-readiness.mjs",
+    "market:series-complete-set-canary": "node scripts/market-series-complete-set-bounded-canary.mjs",
     "test:manual-market-bounded": "node --test tests/manual-market-bounded-execution.test.mjs"
   },
   "dependencies": {
