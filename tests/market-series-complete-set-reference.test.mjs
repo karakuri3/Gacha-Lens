@@ -180,6 +180,8 @@ test("parent page renders an isolated reference card and keeps aggregate and fav
   assert.match(page, /target="_blank" rel="noopener noreferrer"/);
   assert.match(page, /market\.type_stats\?\.complete_set/);
   assert.match(page, /formatCompleteSetAggregate/);
+  assert.match(page, /completeSetAggregateLabel/);
+  assert.match(page, /セット価格データ不足/);
   assert.doesNotMatch(page, /PriceTrendChart|TrackedMarketLink|application\/ld\+json/);
 });
 
