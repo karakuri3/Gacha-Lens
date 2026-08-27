@@ -138,6 +138,51 @@ test("prewrite fails closed on duplicate identity, URL, unknown storefront, and 
   for (const key of ["listingIdConflicts", "observationIdConflicts", "sourceIdentityConflicts", "sourceUrlConflicts"]) assert.throws(() => assertMarketP2BoundedPrewrite({ ...base, [key]: [{ id: "conflict" }] }));
   assert.throws(() => assertMarketP2BoundedPrewrite({ ...base, existingActiveListings: [] }));
   assert.throws(() => assertMarketP2BoundedPrewrite({ ...base, existingActiveListings: [existing, { ...existing, id: "existing-2" }] }));
+  assert.throws(() => assertMarketP2BoundedPrewrite({ ...base, existingActiveListings: [{ ...existing, raw: { provider: "rakuten_ichiba", shopName: "Display name only" } }] }));
+});
+
+test("fresh prewrite recovers a legacy Rakuten storefront and accepts a different trusted storefront", () => {
+  const value = candidate(30, { storefront: "realize-store" });
+  const existing = legacyRakutenListing({ sourceListingId: "auc-toysanta:10381220" });
+  const selected = selectedEntry(value, existing);
+  const rows = buildMarketP2BoundedRows({ selected: [selected], workflow: { run_id: "130", head_sha: sha } });
+  assert.equal(assertMarketP2BoundedPrewrite({ rows, selected: [selected], existingActiveListings: [existing] }), true);
+});
+
+test("fresh prewrite blocks a stale true independence claim for the same legacy Rakuten storefront", () => {
+  const value = candidate(31, { storefront: "auc-toysanta", independent: true });
+  const existing = legacyRakutenListing({ sourceListingId: "auc-toysanta:10381220" });
+  const selected = selectedEntry(value, existing);
+  const rows = buildMarketP2BoundedRows({ selected: [selected], workflow: { run_id: "131", head_sha: sha } });
+  assert.throws(() => assertMarketP2BoundedPrewrite({ rows, selected: [selected], existingActiveListings: [existing] }), /storefront or coverage state changed/);
+});
+
+test("fresh prewrite blocks malformed and unknown legacy storefront identities", () => {
+  const value = candidate(32, { storefront: "realize-store" });
+  for (const existing of [
+    legacyRakutenListing({ sourceListingId: "malformed-item-code" }),
+    { ...legacyRakutenListing({ sourceListingId: "" }), raw: { provider: "rakuten_ichiba", shopName: "Toy Santa" } },
+  ]) {
+    const selected = selectedEntry(value, existing);
+    const rows = buildMarketP2BoundedRows({ selected: [selected], workflow: { run_id: "132", head_sha: sha } });
+    assert.throws(() => assertMarketP2BoundedPrewrite({ rows, selected: [selected], existingActiveListings: [existing] }));
+  }
+});
+
+test("fresh prewrite accepts current persisted storefront metadata and preserves cross-provider merchant unknown", () => {
+  const current = candidate(33, { storefront: "new-rakuten" });
+  const currentExisting = existingListing({ provider: "rakuten", storefront: "old-rakuten" });
+  const currentSelected = selectedEntry(current, currentExisting);
+  const currentRows = buildMarketP2BoundedRows({ selected: [currentSelected], workflow: { run_id: "133", head_sha: sha } });
+  assert.equal(assertMarketP2BoundedPrewrite({ rows: currentRows, selected: [currentSelected], existingActiveListings: [currentExisting] }), true);
+
+  const cross = candidate(34, { provider: "yahoo_shopping", storefront: "yahoo-store" });
+  const legacyExisting = legacyRakutenListing({ sourceListingId: "auc-toysanta:10381220" });
+  const crossSelected = selectedEntry(cross, legacyExisting);
+  const crossRows = buildMarketP2BoundedRows({ selected: [crossSelected], workflow: { run_id: "134", head_sha: sha } });
+  assert.equal(assertMarketP2BoundedPrewrite({ rows: crossRows, selected: [crossSelected], existingActiveListings: [legacyExisting] }), true);
+  assert.equal(crossSelected.evidence.merchant_identity, null);
+  assert.equal(crossSelected.evidence.merchant_identity_status, "unknown");
 });
 
 test("bounded persistence inserts exactly one listing and observation then verifies active evidence 1 to 2", async () => {
@@ -267,6 +312,23 @@ function existingListing({ variant = "v1", provider = "rakuten", storefront = "o
     last_observed_at: new Date().toISOString(),
     review_required: false,
     raw: { provider: normalizedProvider, storefront_id: storefront, storefront_name: `Store ${storefront}`, storefront_identity_source: provider === "rakuten" ? "rakuten_item_search_shop_code" : "yahoo_shopping_item_search_storefront_id" },
+  };
+}
+
+function legacyRakutenListing({ variant = "v1", sourceListingId = "auc-toysanta:10381220" } = {}) {
+  return {
+    id: `legacy-${variant}-${sourceListingId || "unknown"}`,
+    variant_id: variant,
+    matched_variant_id: variant,
+    listing_type: "single",
+    market_review_type: "single",
+    price: 568,
+    status: "active",
+    source: "rakuten",
+    source_url: "https://item.rakuten.co.jp/auc-toysanta/10381220/",
+    last_observed_at: new Date().toISOString(),
+    review_required: false,
+    raw: { provider: "rakuten_ichiba", source_listing_id: sourceListingId },
   };
 }
 
