@@ -103,6 +103,7 @@ for (const [name, options] of [
   ["mismatched persisted reason", { safety: { reason: "explicit_listing_type" } }],
   ["persisted variant ID", { variant_id: "variant-1" }],
   ["mismatched persisted review type", { market_review_type: "single" }],
+  ["mismatched raw safety review type", { safety: { market_review_type: "single" } }],
   ["persisted review requirement", { review_required: true }],
   ["low persisted confidence", { classification_confidence: 0.79, safety: { confidence: 0.79 } }],
   ["generic explicit listing type", { raw: { provider: "yahoo_shopping" } }],
