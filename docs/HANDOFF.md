@@ -413,6 +413,18 @@ Model-cost discipline is important:
 
 Do not tell the user to wait when another non-overlapping revenue-relevant task can be advanced.
 
+### Agent OS v1
+
+Repository-level autonomous development rules live in:
+
+- `AGENTS.md` for the mandatory entry point and hard boundaries
+- `docs/AGENT_OS.md` for the detailed lifecycle, task contract, roles, worktree protocol, Done Gate, GitHub queue, and future non-Production automation design
+- `.github/ISSUE_TEMPLATE/agent-task.yml` and `.github/pull_request_template.md` for executable task/PR evidence contracts
+
+Agent OS applies only to safe, reversible, non-Production work. The approval boundaries in section 11 and `docs/DECISIONS.md` remain stricter and take precedence. A new Agent must read all canonical docs before creating a dedicated task branch/worktree from verified `origin/main`.
+
+The explicit Agent OS infrastructure request is separate from the product priority in section 14 and does not approve the pending F3-C1 workflow dispatch or any other Production-connected action.
+
 ## 13. Completed milestones that should not be reopened without evidence
 
 - Production safety/gating architecture
