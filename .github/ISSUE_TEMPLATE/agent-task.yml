@@ -1,0 +1,94 @@
+name: Agent task
+description: Define a bounded, safe task for autonomous Agent execution.
+title: "[Agent] "
+labels: []
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this contract for work that may proceed from investigation through a Draft PR.
+        Production operations, workflow dispatches, merges, Secrets / Variables changes,
+        paid operations, and destructive actions require explicit human approval.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: State one measurable outcome.
+      placeholder: What must be true when this task is complete?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Include relevant product state, evidence, prior decisions, and links.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: List included files/systems and explicit out-of-scope work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Use observable, testable checklist items.
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Record safety, compatibility, ownership, cost, and repository boundaries.
+      placeholder: Include every Production, secrets, workflow, and destructive-action boundary.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: Specify focused tests, regression, lint, typecheck status, build, diff, and review.
+    validations:
+      required: true
+
+  - type: textarea
+    id: stop_conditions
+    attributes:
+      label: Stop Conditions
+      description: Add task-specific stops to the repository Agent OS conditions.
+    validations:
+      required: true
+
+  - type: textarea
+    id: done_definition
+    attributes:
+      label: Done Definition
+      description: Define required artifacts, evidence, documentation, and Draft PR state.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: readiness
+    attributes:
+      label: Ready for Agent
+      description: Confirm the task is safe to enter the queue.
+      options:
+        - label: The task is bounded and its acceptance criteria are testable.
+          required: true
+        - label: No Production operation, workflow dispatch, secret change, paid action, or destructive action is authorized by this Issue.
+          required: true
+        - label: Major product decisions are resolved or explicitly listed as stop conditions.
+          required: true

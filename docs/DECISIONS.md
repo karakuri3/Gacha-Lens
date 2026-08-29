@@ -180,6 +180,19 @@ Default choices:
 
 Do not spend Codex quota on live-state reads that connected tools can perform directly.
 
+### D-053 — Agent OS v1 governs autonomous non-Production development
+
+Gacha Lens uses `AGENTS.md` and `docs/AGENT_OS.md` as the operating contract for bounded Agent work.
+
+- one task uses one dedicated branch/worktree
+- safe implementation failures enter an autonomous diagnose/repair/revalidate loop
+- a Lead integrates work and applies the Agent Done Gate
+- Scout, Builder, Verifier, and Reviewer responsibilities remain explicit
+- GitHub Issues hold task contracts and Draft PRs hold validation/review evidence
+- repository-specific approval boundaries override general autonomy
+
+Agent OS does not authorize Production writes/deploys/migrations, workflow dispatches, Secrets / Variables changes, destructive cleanup, paid operations, direct `main` pushes, or merges. Those boundaries remain human-controlled.
+
 ## Business priority
 
 ### D-060 — Revenue-relevant work outranks more infrastructure

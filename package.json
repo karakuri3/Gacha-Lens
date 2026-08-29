@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --test",
+    "test:agent-os": "node --test tests/agent-os-policy.test.mjs",
     "dev": "next dev",
     "build": "next build",
     "fetch:official": "node scripts/collect-official-data.mjs",

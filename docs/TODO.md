@@ -93,3 +93,14 @@ Before the next long-thread transition:
 - [ ] update `docs/DECISIONS.md` for any durable policy change
 - [ ] update this TODO order
 - [ ] use a docs-only PR rather than silently editing Production code during handoff
+
+## Agent OS validation sequence
+
+This sequence is operational infrastructure work and does not reorder the product priorities above.
+
+- [ ] Run one long-duration, documentation-only 1-Agent task using the Agent Task Contract and Done Gate.
+- [ ] Record interventions, repair loops, elapsed time, validation coverage, and ambiguous stop conditions.
+- [ ] If successful, run one bounded non-Production code task with no external-system dependency.
+- [ ] Then trial isolated Scout / Builder / Verifier / Reviewer roles with one worktree per editing task.
+- [ ] Propose Issue triage, CI diagnosis, PR review, docs drift, or maintenance automation only in separate Draft PRs.
+- [ ] Do not connect the experiment sequence to Production writes, deploys, migrations, workflow dispatches, secrets, paid operations, or destructive cleanup.

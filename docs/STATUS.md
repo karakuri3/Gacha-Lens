@@ -126,3 +126,7 @@ The main remaining business bottlenecks are:
 4. later AdSense readiness
 
 Avoid broad infrastructure expansion unless it clearly supports these.
+
+## Development operating baseline
+
+Agent OS v1 is defined by `AGENTS.md` and `docs/AGENT_OS.md` for safe, reversible, non-Production tasks. It standardizes task contracts, isolated branch/worktree ownership, autonomous repair loops, independent verification/review, a Done Gate, and Draft PR evidence. It does not change the Production snapshot, automatic ingestion lanes, or existing approval boundaries above.
