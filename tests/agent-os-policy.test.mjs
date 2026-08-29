@@ -31,6 +31,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     "MULTI-AGENT AND WORKTREE RULES",
     "Any GitHub Actions `workflow_dispatch`",
     "Never touch `supabase/.temp/cli-latest`",
+    "docs/AUTO_MERGE_POLICY.md",
   ]) {
     assert.match(agents, new RegExp(requiredText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
@@ -78,6 +79,28 @@ test("Agent OS defines the complete operating contract", async () => {
   }
 });
 
+test("Auto-Merge Policy allows routine safe merges while preserving hard stops", async () => {
+  const agents = await readRepositoryFile("AGENTS.md");
+  const policy = await readRepositoryFile("docs/AUTO_MERGE_POLICY.md");
+
+  assert.ok(agents.includes("Marking an eligible PR ready and merging it to `main`"));
+
+  for (const requiredText of [
+    "## Auto-Merge Gate",
+    "required GitHub status checks",
+    "Production actions: 0",
+    "workflow dispatches: 0",
+    "Secrets / Variables changes: 0",
+    "paid operations: 0",
+    "destructive or irreversible actions: 0",
+    "direct `main` pushes: 0",
+    "## Always require human approval",
+    "changes to Agent OS safety/approval boundaries",
+  ]) {
+    assert.ok(policy.includes(requiredText), `Missing auto-merge policy text: ${requiredText}`);
+  }
+});
+
 test("Issue and PR templates require the Agent contract and Done Gate evidence", async () => {
   const issueTemplate = await readRepositoryFile(".github/ISSUE_TEMPLATE/agent-task.yml");
   const prTemplate = await readRepositoryFile(".github/pull_request_template.md");
@@ -109,6 +132,7 @@ test("Issue and PR templates require the Agent contract and Done Gate evidence",
     "Paid operations are 0",
     "No unresolved major reviewer findings",
     "No material conflict with canonical docs",
+    "Auto-Merge Gate",
   ]) {
     assert.ok(prTemplate.includes(gate), `Missing PR gate ${gate}`);
   }
