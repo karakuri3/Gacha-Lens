@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-08-27 JST
+Updated: 2026-08-30 JST
 
 This file records decisions that should survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -68,7 +68,7 @@ When accepted:
 - `variant_id=null`
 - `matched_variant_id=null`
 
-F3-C1 is diagnostic-only at this handoff. Persistence requires a later separate phase and approval.
+F3-C1 began as diagnostic-only. The later approved F3-C2 bounded canary persisted exactly one series-level candidate, and F3-C3 added a truthful series-level reference presentation. This does not authorize automatic or broad complete-set persistence; every further Production dispatch/write remains separately approval-gated.
 
 ### D-015 — Complete-set classifier is fail closed
 
@@ -143,11 +143,13 @@ Require explicit approval for:
 - workflow dispatches
 - migrations
 - cleanup/deletes
-- Production merges
+- Production deployments, promotions, and gate changes
 - Repository Variables/Secrets
-- Production gate changes
+- merges excluded by `docs/AUTO_MERGE_POLICY.md`
 
 Read-only investigation is allowed.
+
+Safe, reversible, non-Production PRs are the narrow exception: they may be marked ready and merged autonomously only when every Auto-Merge Gate item passes. Direct pushes to `main` remain prohibited.
 
 ### D-041 — Hard repository constraints
 
@@ -191,7 +193,7 @@ Gacha Lens uses `AGENTS.md` and `docs/AGENT_OS.md` as the operating contract for
 - GitHub Issues hold task contracts and Draft PRs hold validation/review evidence
 - repository-specific approval boundaries override general autonomy
 
-Agent OS does not authorize Production writes/deploys/migrations, workflow dispatches, Secrets / Variables changes, destructive cleanup, paid operations, direct `main` pushes, or merges. Those boundaries remain human-controlled.
+Agent OS does not authorize Production writes/deploys/migrations, workflow dispatches, Secrets / Variables changes, destructive cleanup, paid operations, direct `main` pushes, or ineligible merges. Eligible safe, reversible, non-Production PRs may use the explicit gated exception in `docs/AUTO_MERGE_POLICY.md`.
 
 ## Business priority
 

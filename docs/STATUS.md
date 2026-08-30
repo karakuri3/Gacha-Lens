@@ -1,30 +1,35 @@
 # Gacha Lens Status
 
-Updated: 2026-08-27 JST
+Updated: 2026-08-30 JST
 
-This is the compact live-state companion to `docs/HANDOFF.md`.
+This is the compact live-state companion to `docs/HANDOFF.md`. “Current” below means verified Git/GitHub development state unless a dated Production/GSC snapshot is explicitly named.
 
 ## Repository
 
 - repo: `karakuri3/Gacha-Lens`
-- current verified main: `b6f702152a5e65c54738390455e4663cdf9c593c`
-- latest merged PR: #91 `F3-C1: add series complete-set market evidence diagnostic`
-- open implementation PRs at handoff: none
+- current verified `origin/main`: `a79e8f72151cdb1eff94d6971e1544f751d7ed2f`
+- latest merged PR: #106 `F3-E1B2: resolve normalized affiliate provenance`
+- open PRs at refresh: 0
+- Agent OS v1: merged via PR #105
+- gated autonomous merge policy: merged via PR #107
 
-## Vercel
+## Evidence boundary
 
-- project: `gachalens`
-- project ID: `prj_8Yelkn1wM7JGoA2WCMCGGhRt3o8x`
-- PR #91 merge Production deployment: READY
-- aliases include `gachalens.com` and `www.gachalens.com`
+This documentation refresh used read-only Git and GitHub evidence. It did not read Vercel, Supabase Production, or GSC live state.
 
-## Supabase Production
+Therefore:
 
-Project: `vxbrnvfhmzcxehuuzzum`
+- current `main` deployment/alias state: requires separate live verification
+- current Production row counts: requires separate live verification
+- current GSC sitemap/performance state: requires separate live verification
 
-Verified counts:
+The previous Production/GSC values below are dated 2026-08-27 snapshots and must not be presented as current.
 
-| Metric | Count |
+## Last verified Production snapshot — 2026-08-27
+
+Supabase Production project: `vxbrnvfhmzcxehuuzzum`
+
+| Metric | Historical count |
 | --- | ---: |
 | series | 10,221 |
 | variants | 23,708 |
@@ -32,13 +37,15 @@ Verified counts:
 | market_listing_observations | 58 |
 | restock_events | 0 |
 | import_issues | 133 |
-| review_required variants | 7,535 |
+| review-required variants | 7,535 |
 | provisional variants | 7,535 |
 | single listings | 58 |
-| complete_set listings | 0 |
+| complete-set listings | 0 |
 | Qualia series | 1 |
 
-## GSC
+Approved canaries and scheduled lanes ran after this snapshot, so the table is intentionally not called current.
+
+## Last verified GSC snapshot — 2026-08-27
 
 Property: `sc-domain:gachalens.com`
 
@@ -50,83 +57,82 @@ Property: `sc-domain:gachalens.com`
 
 Do not interpret sitemap-summary `indexed=0` as whole-site unindexed without URL/performance evidence.
 
-## Completed current phases
+## Completed development phases
 
-- F3-A Series-first discovery UX: complete / merged
-- F2-E1 Qualia series-only plumbing: complete / merged
-- Qualia read-only readiness audit: success
-- Qualia one-series Production canary: success
-- F3-B1 Series-first Indexation Observability: complete / merged
-- GSC series/variant sitemap submission: complete
-- F3-C1 Series Complete-Set read-only classifier/diagnostic: complete / merged
+- F3-A Series-first discovery UX
+- F2-E1 Qualia series-only plumbing
+- F3-B1 series/variant sitemap observability
+- F3-C1 complete-set classifier and read-only diagnostic
+- F3-C1.1 query-context repair
+- F3-C2 exact-main readiness and one-series bounded canary plumbing
+- F3-C3 truthful series-level complete-set reference UI
+- F3-D1B Priority 2 distinct-evidence diagnostic
+- F3-D1C/D1D provider-scoped storefront evidence and safe legacy recovery
+- F3-D2 bounded Priority 2 manual persistence
+- F3-D3 bounded Priority 1 manual persistence and cooldown hotfix
+- F3-E1A observed marketplace listing comparison
+- F3-E1B1 future P3 affiliate-provenance persistence
+- F3-E1B2 normalized persisted-provenance display repair
+- Agent OS v1 and gated autonomous merge policy
+
+## Completed GitHub operational evidence
+
+The following are historical GitHub Actions results, not fresh database reads:
+
+- complete-set diagnostic run `33040022146`: success, zero writes, four accepted candidates
+- complete-set readiness run `33041537662`: success, zero writes
+- complete-set canary run `33042192598`: success, guarded one-candidate persistence step completed
+- P2 dry-run `33099434093`: success, two candidates, zero writes
+- P2 canary `33100892547`: success, one candidate, one listing plus one observation written
+- P1 initial dry-run `33193441127`: failed safely on the inherited cooldown contract; PR #101 repaired it
+- P1 repaired dry-run `33195641268`: success, one candidate, zero writes
+- P1 canary `33196152911`: success, one candidate, one listing plus one observation written
+
+Do not rerun these canaries without a new explicit task-specific approval.
 
 ## Automatic lanes
 
-### F0 Official
+### F0 official
 
-- bounded automatic Production path exists and has succeeded
-- leave unchanged unless a verified defect requires work
+- bounded automatic path exists
+- recent scheduled GitHub runs completed successfully
+- current Production content/count effects require separate live verification
 
-### P3 V2 Market
+### P3 V2 market
 
-- automatic Production path is active and working
-- Production currently has 58 single listings / observations
-- do not weaken single-item matcher
+- primary scheduled market lane remains active in GitHub
+- run `33310192748` completed successfully on 2026-08-30
+- strict single-item matcher and planner remain unchanged
 
 ### Kitan
 
-- manual canary succeeded
-- auto gate remains NOT APPROVED
+- historical manual canary succeeded
+- automatic gate remains false by default
+- run `33301787139` resolved the false gate and skipped audit/planning/write steps
 
 ### Qualia
 
-- one series-only Production canary succeeded
-- auto rollout remains NOT APPROVED
+- historical one-series canary succeeded
+- series-only boundary remains
+- automatic rollout remains unapproved
 
-## F3-C1 state
+## Market presentation and monetization
 
-The code exists on `main`, but the new workflow has **not been dispatched**.
+- exact-variant observed listings may be shown only when active, review-free, direct-single, safe-host, and exact-target checks pass
+- complete-set reference remains series-level and separate from variant prices
+- future validated P3 Rakuten/Yahoo rows may retain allowlisted affiliate provenance
+- normalized persisted provenance is readable by the display layer after PR #106
+- historical backfills and Yahoo Secret/Variable activation remain separate approval-gated work
 
-Workflow intent:
+## Current next boundary
 
-- read-only
-- workflow_dispatch only
-- Priority 3
-- max 25 variants
-- one variant per series
-- planner APIs only
-- zero database writes
+Do not repeat the old F3-C1 diagnostic/canary sequence. Before any new Production-connected action, perform a separately allowed live verification of deployment, database counts/canary rows, affiliate rendering, and GSC state. For ordinary development, continue from `docs/TODO.md` under Agent OS v1.
 
-Accepted complete-set evidence is series-level only:
+## Current business bottlenecks
 
-- `listing_type=complete_set`
-- `market_review_type=full_set`
-- `variant_id=null`
-- `matched_variant_id=null`
-
-Production complete-set listings remain 0 until a later separately approved persistence phase.
-
-## Immediate next boundary
-
-Explicit approval is required to dispatch:
-
-**Gacha Market Series Complete-Set Read-Only Diagnostic**
-
-After dispatch, inspect the sanitized artifact and independently verify DB zero-delta before deciding the next implementation.
-
-## Current business bottleneck
-
-The platform, safety system, basic UX, official ingestion, and market-ingestion framework are largely built.
-
-The main remaining business bottlenecks are:
-
-1. market-evidence density
+1. useful market-evidence density
 2. organic/indexed traffic growth
 3. affiliate conversion volume
 4. later AdSense readiness
 
-Avoid broad infrastructure expansion unless it clearly supports these.
-
-## Development operating baseline
-
-Agent OS v1 is defined by `AGENTS.md` and `docs/AGENT_OS.md` for safe, reversible, non-Production tasks. It standardizes task contracts, isolated branch/worktree ownership, autonomous repair loops, independent verification/review, a Done Gate, and Draft PR evidence. It does not change the Production snapshot, automatic ingestion lanes, or existing approval boundaries above.
+Avoid broad infrastructure expansion unless it directly supports these outcomes.

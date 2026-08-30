@@ -1,18 +1,19 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-08-27 JST
+Updated: 2026-08-30 JST
 
-This is the canonical operational handoff for resuming Gacha Lens work in a fresh ChatGPT/Codex thread. Do not treat older chat summaries or `docs/CURRENT_STATE.md` as newer than this file without re-verifying live state.
+This is the canonical operational handoff for resuming Gacha Lens work in a fresh ChatGPT/Codex task. Do not treat older chat summaries or `docs/CURRENT_STATE.md` as newer than this file without re-verifying live state.
 
-## 1. Resume instruction
+## 1. Resume instruction and evidence boundary
 
 When resuming:
 
-1. Read this file, `docs/STATUS.md`, `docs/DECISIONS.md`, and `docs/TODO.md`.
-2. Verify GitHub `main`, open PRs, Vercel Production, Supabase Production counts, and GSC sitemaps before making current-state claims.
-3. Do not repeat already-completed diagnostics or canaries.
-4. Respect all approval boundaries below.
-5. Continue from the first unchecked item in `docs/TODO.md`, unless live evidence clearly changes priority.
+1. Read this file, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `AGENTS.md`, `docs/AGENT_OS.md`, and `docs/AUTO_MERGE_POLICY.md`.
+2. Fetch and verify GitHub `origin/main`, open PRs, and worktrees before starting a task.
+3. Treat the Git/GitHub development baseline below as verified on 2026-08-30 JST.
+4. Treat Production, Vercel, Supabase, and GSC values as dated snapshots until separately re-read through an allowed live-verification path.
+5. Do not repeat completed diagnostics or canaries.
+6. Continue from the first applicable unchecked item in `docs/TODO.md`, unless newer evidence changes priority.
 
 Repository: `karakuri3/Gacha-Lens`
 
@@ -20,13 +21,21 @@ Preferred local path: `C:\dev\Gacha-Lens`
 
 Production domain: `https://gachalens.com`
 
-Current verified `main` after PR #91 merge:
+Current verified GitHub `main`:
 
-`b6f702152a5e65c54738390455e4663cdf9c593c`
+`a79e8f72151cdb1eff94d6971e1544f751d7ed2f`
 
-PR #91 merge title:
+Latest merged PR at refresh:
 
-`F3-C1: add series complete-set market evidence diagnostic`
+- PR #106 — `F3-E1B2: resolve normalized affiliate provenance`
+
+GitHub state observed during the refresh:
+
+- open PRs: 0
+- Agent OS v1: merged in PR #105
+- gated autonomous merge policy: merged in PR #107
+
+No live Vercel, Supabase, or GSC read was performed for this documentation-only refresh. Do not infer that the latest Git SHA is deployed or that the dated counts below are still current.
 
 ## 2. Product purpose
 
@@ -43,7 +52,7 @@ Monetization is primarily:
 - Yahoo Shopping / ValueCommerce
 - Google AdSense after traffic/content readiness improves
 
-Do not optimize for infrastructure elegance at the expense of traffic, market-data density, or monetization. The project is now past the “build the basic platform” stage.
+Do not optimize for infrastructure elegance at the expense of traffic, market-data density, or monetization. The project is past the basic-platform stage.
 
 ## 3. Technology and core model
 
@@ -54,7 +63,7 @@ Stack:
 - Supabase
 - Vercel
 - GitHub Actions
-- Node.js scripts for ingestion/diagnostics
+- Node.js scripts for ingestion and diagnostics
 
 Core tables/concepts:
 
@@ -68,172 +77,130 @@ Core tables/concepts:
 - `import_issues`
 - `outbound_clicks`
 
-Public product model is **Series-first for discovery, Variant-first for price evidence**.
+Public product behavior is **Series-first for discovery, Variant-first for price evidence**.
 
 Discovery flow:
 
 `browse/search -> series -> lineup -> variant detail`
 
-Variant-first remains appropriate for:
+Variant-first remains appropriate for market evidence, price history, expensive/rising/rare views. Image truthfulness must be preserved; never present an image as variant-specific unless evidence proves it.
 
-- market evidence
-- price history
-- expensive/rising/rare views
+## 4. Dated Production and GSC snapshots
 
-Image truthfulness must be preserved. Do not present an image as variant-specific unless evidence proves it.
-
-## 4. Production snapshot at handoff
+The values in this section were last verified during the 2026-08-27 handoff around PR #91. They are historical reference points, not current live assertions. Subsequent approved canaries and scheduled lanes mean several counts are expected to have changed.
 
 Supabase Production project:
 
 `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
 
-Verified counts after PR #91 merge:
+Last verified historical counts:
 
-- series: **10,221**
-- variants: **23,708**
-- market_listings: **58**
-- market_listing_observations: **58**
-- restock_events: **0**
-- import_issues: **133**
-- review_required variants: **7,535**
-- provisional variants: **7,535**
-- `listing_type='single'`: **58**
-- `listing_type='complete_set'`: **0**
-- Qualia series in Production: **1**
+| Metric | 2026-08-27 snapshot |
+| --- | ---: |
+| series | 10,221 |
+| variants | 23,708 |
+| market_listings | 58 |
+| market_listing_observations | 58 |
+| restock_events | 0 |
+| import_issues | 133 |
+| review-required variants | 7,535 |
+| provisional variants | 7,535 |
+| single listings | 58 |
+| complete-set listings | 0 |
+| Qualia series | 1 |
 
 There is no `variants.provisional` column. “Provisional” means `variant_type='provisional'`.
 
-The old inactive Supabase project is:
+The old inactive Supabase project is `ihcudkfspzuixsqsvoku` (`gacha-site-start`). Do not confuse it with Production.
 
-`ihcudkfspzuixsqsvoku` (`gacha-site-start`)
-
-Do not confuse it with Production.
-
-## 5. Vercel state
-
-Vercel project:
+Stable Vercel project identity from the prior handoff:
 
 - team/project context: `karakuri3s-projects/gachalens`
 - project ID: `prj_8Yelkn1wM7JGoA2WCMCGGhRt3o8x`
 
-PR #91 merge deployment for `b6f7021...` reached **READY** and is aliased to:
+These identifiers are retained for future verification; they do not prove the current deployment state.
 
-- `gachalens.com`
-- `www.gachalens.com`
+Last verified GSC snapshot:
 
-PR #90 Production was also verified with no recent deployment-specific 5xx/error/fatal issue.
+| Sitemap | Submitted | Pending | Warnings | Errors |
+| --- | ---: | --- | ---: | ---: |
+| `/series-sitemap.xml` | 2,703 | false | 0 | 0 |
+| `/variant-sitemap.xml` | 16,173 | false | 0 | 0 |
+| `/sitemap.xml` | 19,177 | false | 1 | 0 |
 
-## 6. SEO / GSC state
+The latest known downloads in that snapshot were 2026-08-26. Re-read GSC before making current indexation claims. Never treat sitemap-summary `indexed=0` as proof that the whole site is unindexed; use URL inspection and performance evidence before pruning.
 
-GSC property:
+The last documented deployment evidence was the READY Production deployment after PR #91. Deployment of current `main` and the current aliases require separate live verification.
 
-`sc-domain:gachalens.com`
+## 5. Development completed after the old PR #91 baseline
 
-F3-B1 Series-first Indexation Observability is complete and merged in PR #90.
+The previous handoff stopped at F3-C1. Git/GitHub evidence now shows these merged development outcomes:
 
-Current submitted sitemaps:
+### Complete-set evidence: F3-C1.1 through F3-C3
 
-### `/series-sitemap.xml`
+- PR #93 repaired complete-set diagnostic query context without weakening fail-closed matching.
+- PR #94 added read-only readiness and an exact-main, one-series bounded canary path.
+- GitHub run `33040022146` completed the read-only diagnostic successfully with `database_writes=0` and four accepted complete-set candidates.
+- GitHub run `33041537662` completed readiness successfully with `database_writes=0`.
+- GitHub run `33042192598` completed the approved bounded canary; its guarded persistence step for exactly one approved series candidate succeeded.
+- PR #95 added truthful series-level complete-set reference presentation.
 
-- submitted: **2,703** URLs
-- pending: false
-- warnings: 0
-- errors: 0
-- latest known Google download at handoff: 2026-08-26T15:20:40Z
+Complete-set evidence remains series-scoped:
 
-### `/variant-sitemap.xml`
+- `listing_type=complete_set`
+- `market_review_type=full_set`
+- `variant_id=null`
+- `matched_variant_id=null`
 
-- submitted: **16,173** URLs
-- pending: false
-- warnings: 0
-- errors: 0
-- latest known Google download at handoff: 2026-08-26T15:21:03Z
+This lane must remain separate from single-variant prices. The historical 0 complete-set count is no longer a safe current claim, and no automatic or broad complete-set persistence is approved.
 
-### `/sitemap.xml`
+### Distinct market evidence: F3-D1 through F3-D3
 
-- submitted: **19,177** URLs
-- pending: false
-- warnings: 1
-- errors: 0
-- last known download: 2026-08-26T04:46:25Z
+- PR #96 added the Priority 2 distinct-listing read-only diagnostic.
+- PRs #97 and #98 added provider-scoped storefront evidence and safe legacy Rakuten identity recovery; cross-provider merchant equivalence remains unknown.
+- PR #99 added a workflow-dispatch-only Priority 2 bounded persistence path.
+- GitHub run `33099434093` completed a Priority 2 dry-run with two selected candidates and zero writes.
+- GitHub run `33100892547` completed the approved Priority 2 canary with one selected candidate and two database writes: one listing plus one observation.
+- PR #100 added the analogous Priority 1 bounded path for moving safe evidence from two to three active listings.
+- PR #101 repaired the manual P1 planner's default cooldown after a safe failed dry-run.
+- GitHub run `33195641268` completed the repaired P1 dry-run with one selected candidate and zero writes.
+- GitHub run `33196152911` completed the approved P1 canary with one selected candidate and two database writes: one listing plus one observation.
 
-Important interpretation rule:
+These are bounded manual paths, not blanket authorization for additional dispatches or writes. The strict single-item matcher and evidence thresholds remain unchanged.
 
-Do **not** treat sitemap-summary `indexed=0` as proof that the whole site is unindexed. Earlier URL-level inspection already showed indexed pages / impressions. Use URL inspection/performance data before pruning.
+### User-facing offers and affiliate provenance: F3-E1
 
-F3-B1 implementation guarantees:
+- PR #102 added a fail-closed observed-listing comparison for exact variants. It shows safe active direct single-item offers before generic marketplace searches.
+- PR #103 preserves already-verified Rakuten/Yahoo affiliate provenance for future P3 V2 inserts. It does not backfill existing rows.
+- PR #106 resolves verified affiliate provenance after normalized persisted rows pass through the display layer. Strict host, provider, contract, documentation, and target checks remain authoritative.
 
-- existing root sitemap semantics retained
-- `/series-sitemap.xml` added at site root
-- `/variant-sitemap.xml` added at site root
-- robots publishes all three
-- series observer includes parents with public non-provisional variants plus safe recent/upcoming series-only rows
-- image is not required for safe series-only publication
-- 50,000 URL cap is fail-closed, with bounded pagination and overflow detection
-- `/series?page=2` and other indexable pagination are self-canonical
-- `q` and category-query noindex behavior is retained
+Do not infer affiliate provenance, merchant equivalence, completed-sale status, or ranking evidence. Existing historical-row backfills and Yahoo Secret/Variable activation remain separate approval-gated work.
 
-A real Qualia series-only page was verified in the Production series sitemap after the pagination repair.
+## 6. Automatic lanes observed in GitHub
 
-## 7. Official ingestion / manufacturer state
+### F0 official
 
-### F0 official bounded auto
+The bounded automatic official path exists and recent scheduled GitHub runs completed successfully. Do not redesign its semantics or gates during unrelated work. A fresh Production content/count assertion still requires a separate allowed live read.
 
-Existing automatic official Production workflow is working and should not be redesigned casually.
+### P3 V2 market
 
-Known successful scheduled Production execution inserted official data with bounded deltas and no deletes.
-
-Do not change its semantics/gates while working on unrelated phases.
+The scheduled bounded P3 V2 path remains the primary automatic market-data lane. GitHub run `33310192748` completed successfully on 2026-08-30. Keep its planner and strict matcher unchanged unless evidence proves a defect.
 
 ### Kitan
 
-Kitan manual Production canary already succeeded:
+Kitan manual canary already succeeded historically. Kitan automatic plumbing is false by default. In scheduled GitHub run `33301787139`, the gate resolution succeeded but all setup, audit, planning, and write steps were skipped; this is not evidence that Kitan auto is enabled or that a Production write occurred.
 
-- inserted 1 series
-- inserted 7 variants
-- no unintended writes
-
-Kitan auto plumbing exists, but **Kitan auto ON is not approved**.
-
-Do not rerun the manual canary.
+Do not rerun the manual canary or enable Kitan automatic writes without explicit approval.
 
 ### Qualia
 
-F2-E1 PR #89 is merged.
+The one-series Qualia Production canary already succeeded historically. Qualia remains series-only, insert-only, and conservative; variant writes are prohibited in this phase. Do not rerun the canary or enable automatic rollout without explicit approval.
 
-Read-only readiness audit succeeded.
+The historical canary target remains `official:qualia:series:a192bb6aadb74c8703ac13e9` (`https://www.qualia-45.jp/product/view/2024`). Preserve it as an audit reference, not as proof of current live content.
 
-One-series Production canary succeeded for:
+## 7. Market and SEO safety contracts
 
-`むぎゅっ鳥® マスコットボールチェーン`
-
-Stable ID:
-
-`official:qualia:series:a192bb6aadb74c8703ac13e9`
-
-Official URL:
-
-`https://www.qualia-45.jp/product/view/2024`
-
-Canary result:
-
-- series +1
-- variants +0
-- all other protected deltas 0
-
-Qualia series-only rules are intentionally conservative:
-
-- variants are prohibited in this phase
-- image may be null if series-scope evidence is not proven
-- insert-only contract
-- existing-row factual differences become manual-update blockers, not automatic updates
-
-**Qualia auto rollout is not approved.**
-
-## 8. Market data state
-
-Approved market-source policy:
+Approved market sources:
 
 1. Yahoo Shopping API
 2. Rakuten Ichiba API
@@ -241,216 +208,68 @@ Approved market-source policy:
 
 Do not scrape Mercari or Amazon.
 
-Evidence semantics must remain:
+Evidence thresholds remain:
 
 - active >= 3 -> `LISTING_GUIDE`
 - completed >= 3 -> `REFERENCE`
 - completed >= 5 -> `SOLD`
 
-Never mix sold/completed evidence into active asking-price evidence.
+Never mix completed/sold evidence into active asking-price evidence. Do not weaken the strict single-item matcher to increase coverage. Recall V5 increased raw recall but did not improve safe accepted unique coverage; do not promote it into P3 V2 as-is.
 
-### P3 V2 Automatic Production
+SEO observer separation remains:
 
-P3 V2 is the existing Production market-data lane and is working.
+- `/sitemap.xml`
+- `/series-sitemap.xml`
+- `/variant-sitemap.xml`
 
-It already prioritizes recently released items without market evidence and rotates one variant per series. Do not replace the planner casually.
+Preserve self-canonical indexable pagination and existing noindex behavior for search/filter combinations. Do not mass-noindex or remove pages without current GSC evidence.
 
-At handoff, Production contains 58 single listings / observations.
+## 8. Agent OS v1 development baseline
 
-A review of three recent Production P3 runs found the real bottleneck:
+Agent OS v1 is now merged and active:
 
-- 75 selected variants
-- 49 variants (~65%) produced no marketplace candidate
-- 61 candidates were returned across the runs
-- 31 were rejected primarily as `not_single_item` (often genuine full/complete sets)
-- existing strict single matcher successfully accepted genuine single-item evidence
+- `AGENTS.md`: mandatory entry point and hard stops
+- `docs/AGENT_OS.md`: lifecycle, task contract, roles, worktrees, Done Gate, and queue conventions
+- `docs/AUTO_MERGE_POLICY.md`: authoritative exception for eligible safe, reversible, non-Production PRs
+- `.github/ISSUE_TEMPLATE/agent-task.yml`: task contract
+- `.github/pull_request_template.md`: implementation and gate evidence
 
-Therefore **do not weaken the single matcher** to increase coverage.
+One task uses one dedicated `codex/` branch and worktree from verified `origin/main`. Ordinary safe failures enter the diagnose/repair/revalidate loop. A PR may be marked ready and merged autonomously only when the complete Auto-Merge Gate passes; otherwise stop at the smallest real approval boundary.
 
-### Recall V5 diagnostic decision
+Issue #108 is the first measured documentation-only, one-Agent experiment. Its PR/result is the authoritative record for elapsed time, interventions, repair loops, validation runs, review findings, stop-condition ambiguities, and merge disposition.
 
-A Production read-only Recall V5 diagnostic already ran successfully.
+## 9. Approval and safety boundaries
 
-It increased “variants with any search result” from roughly 4 to 8 in the sample, but safe accepted unique variants stayed at 3. V5-only candidates were noisy and produced no additional safe accepted variants, with truncation pressure.
+Always require explicit approval for:
 
-Decision: **do not promote Recall V5 into Production P3 just because it finds more results.**
+- Production DB writes, migrations, backfills, cleanup, schema operations, or seeds
+- GitHub Actions `workflow_dispatch`
+- Production deployments, promotions, or gate changes
+- Repository or service Secrets / Variables changes
+- paid operations
+- destructive or irreversible actions
+- direct pushes to `main`
+- any PR merge excluded by `docs/AUTO_MERGE_POLICY.md`
 
-## 9. F3-C1 Series Complete-Set Market Evidence
-
-PR #91 is merged into `main`.
-
-Purpose:
-
-Take genuine marketplace full-set listings that the single-item matcher correctly rejects as `not_single_item`, and evaluate them in a **separate series-level lane** without contaminating variant prices.
-
-Important: **F3-C1 currently provides classifier + read-only diagnostic only. There is no Production complete-set persistence yet.**
-
-Production `complete_set` listing count at handoff: **0**.
-
-Classifier safety contract includes:
-
-- independent from existing single matcher
-- parent series must exist
-- at least 2 formal non-provisional variants
-- allowed providers only (Rakuten / Yahoo planner APIs)
-- positive finite price
-- preorder rejected
-- strong complete-set signal required
-- explicit set count must equal formal lineup count
-- generic `セット`, `まとめ`, partial subsets are not complete-set evidence
-- duplicate exact parent-series names in catalog fail closed (`parent_series_catalog_identity_ambiguous`)
-- complete-set words are removed only for parent identity analysis so they are not misread as edition tails
-- real edition markers such as `Vol.2` still fail closed
-- `全種のうち1種`, `全種から1種`, `全種類のうち1種類`, random-one, `単品`, `バラ売り` fail closed
-- accepted complete-set contract is series-level:
-  - `listing_type=complete_set`
-  - `market_review_type=full_set`
-  - `variant_id=null`
-  - `matched_variant_id=null`
-
-Workflow added:
-
-`Gacha Market Series Complete-Set Read-Only Diagnostic`
-
-It is:
-
-- `workflow_dispatch` only
-- bounded (Priority 3 / max 25 / one variant per series)
-- planner API read-only
-- Production DB write 0
-- zero-delta count verification
-- sanitized artifact output
-
-### Critical next boundary
-
-**The F3-C1 read-only diagnostic has NOT been dispatched yet.**
-
-The next operational step requires explicit workflow-dispatch approval.
-
-Do not interpret PR #91 merge as approval to dispatch it.
-
-If the user explicitly approves, dispatch only the read-only diagnostic, then inspect:
-
-- workflow conclusion
-- sanitized JSON/Markdown artifact
-- selected count
-- raw candidate count
-- existing `not_single_item` count
-- complete-set evaluated count
-- accepted complete-set count
-- unique accepted series
-- reject-reason counts
-- DB before/after counts proving zero writes
-
-Only after that evidence should a later phase consider bounded persistence or UI display.
-
-## 10. Monetization state and priority
-
-Affiliate plumbing already exists; lack of monetization is primarily a traffic/data-density problem, not a missing CTA problem.
-
-Known affiliate integrations include Amazon, Rakuten, and Yahoo/ValueCommerce.
-
-Amazon Associates tag:
-
-`gachalens-22`
-
-AdSense publisher known in project state:
-
-`pub-4545829296798690`
-
-AdSense was previously “not ready”; exact current reason should be rechecked before acting.
-
-Priority is:
-
-1. indexation observability (already installed; gather data)
-2. increase useful market evidence density
-3. use GSC evidence for selective SEO pruning rather than mass noindex
-4. increase organic traffic and affiliate clicks/sales
-5. revisit AdSense when content/traffic are stronger
-
-Do not spend long phases polishing infrastructure that does not move these metrics.
-
-## 11. Approval and safety boundaries
-
-Always preserve these boundaries:
-
-- Production DB write: explicit user approval
-- workflow dispatch: explicit user approval
-- migration: explicit user approval
-- cleanup/delete: explicit user approval
-- Production merge: explicit user approval
-- Repository Variable/Secret changes: explicit user approval
-- Production gate changes: explicit user approval
+Eligible safe, reversible, non-Production PRs are the narrow merge exception defined by `docs/AUTO_MERGE_POLICY.md`.
 
 Hard repository rules:
 
 - never touch `supabase/.temp/cli-latest`
-- `.github/workflows/gacha-ingestion.yml` remains `disabled_manually`
-- do not casually modify existing F0 official auto
-- do not casually modify existing P3 V2 auto
-- do not enable Kitan auto without explicit approval
-- do not enable Qualia auto without explicit approval
-- do not rerun already-completed manual Kitan/Qualia canaries
+- keep `.github/workflows/gacha-ingestion.yml` disabled
+- do not casually modify F0 official auto or P3 V2 auto
+- do not enable Kitan or Qualia auto without explicit approval
+- do not rerun completed Kitan, Qualia, complete-set, P2, or P1 canaries without a new task-specific approval
 
-Read-only investigation is allowed.
+## 10. Current resume point
 
-## 12. Codex / ChatGPT working style
+The old “dispatch F3-C1 diagnostic” boundary is complete and must not be repeated.
 
-Development operating model:
+Before the next Production-connected decision, separately verify:
 
-- ChatGPT = product/requirements/prioritization/review
-- Codex = repository inspection, implementation, tests, lint/build, self-repair, Git branch/commit/push/Draft PR
-- prefer one outcome/phase per Codex instruction, not tiny edits
-- when Codex finishes, review the actual latest PR/diff independently
-- do not restart a partially completed Codex task from scratch; inspect existing worktree/branch first
+1. whether current `main` is deployed and READY
+2. current Supabase counts and the persisted outcomes of the complete-set, P2, and P1 canaries
+3. current observed-listing and affiliate-link behavior after PRs #102, #103, and #106
+4. current GSC series/variant/root sitemap and performance state
 
-Model-cost discipline is important:
-
-- normal work: Terra / Medium / Standard
-- light narrow repair: Luna / Low-Medium or Medium / Standard
-- Sol / High only for genuinely hard/ambiguous/safety-critical design
-- do not burn Codex quota on work that can be verified/read directly with connected tools
-
-Do not tell the user to wait when another non-overlapping revenue-relevant task can be advanced.
-
-### Agent OS v1
-
-Repository-level autonomous development rules live in:
-
-- `AGENTS.md` for the mandatory entry point and hard boundaries
-- `docs/AGENT_OS.md` for the detailed lifecycle, task contract, roles, worktree protocol, Done Gate, GitHub queue, and future non-Production automation design
-- `.github/ISSUE_TEMPLATE/agent-task.yml` and `.github/pull_request_template.md` for executable task/PR evidence contracts
-
-Agent OS applies only to safe, reversible, non-Production work. The approval boundaries in section 11 and `docs/DECISIONS.md` remain stricter and take precedence. A new Agent must read all canonical docs before creating a dedicated task branch/worktree from verified `origin/main`.
-
-The explicit Agent OS infrastructure request is separate from the product priority in section 14 and does not approve the pending F3-C1 workflow dispatch or any other Production-connected action.
-
-## 13. Completed milestones that should not be reopened without evidence
-
-- Production safety/gating architecture
-- F0 official automatic bounded path
-- Kitan manual canary
-- Qualia read-only audit + one-series Production canary
-- Series-first discovery UX (PR #87)
-- F3-B1 independent series/variant sitemap observability (PR #90)
-- F3-C1 complete-set read-only classifier/diagnostic plumbing (PR #91)
-- strict single-item market matcher semantics
-
-These can be improved later if live evidence shows a defect, but they are not the current bottleneck.
-
-## 14. Immediate resume point
-
-The immediate next task is **not another Codex implementation**.
-
-It is the approval boundary for running the newly merged F3-C1 read-only diagnostic.
-
-Expected conversation:
-
-1. Confirm `main`, Production deploy, and workflow still match this handoff.
-2. Explain that dispatch is read-only but still requires explicit approval.
-3. If user approves, run/guide dispatch of `Gacha Market Series Complete-Set Read-Only Diagnostic` only.
-4. Inspect artifact and zero-write proof.
-5. Decide from evidence whether F3-C2 should be bounded persistence, classifier repair, or abandonment.
-6. Continue monitoring GSC series/variant sitemap performance in parallel; do not stop other revenue-relevant work while GSC data accumulates.
-
-See `docs/TODO.md` for ordered tasks and `docs/DECISIONS.md` for durable decisions.
+Do not use this documentation task as authorization for those live reads or any write. Until fresh evidence exists, continue safe non-Production work from `docs/TODO.md`, prioritizing market-evidence density, organic/indexed traffic, affiliate conversion volume, and later AdSense readiness.

@@ -1,106 +1,100 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-08-27 JST
+Updated: 2026-08-30 JST
 
-Work top-to-bottom unless new live evidence changes priority.
+Work top-to-bottom unless newer evidence changes priority. Git/GitHub development state is current as of this date; Production, deployment, Supabase, and GSC facts remain dated until separately re-verified.
 
-## P0 — Immediate next approval boundary
+## P0 — Re-establish live operational truth before Production decisions
 
-- [ ] Verify `main` is still at/after `b6f702152a5e65c54738390455e4663cdf9c593c` and no newer PR changed F3-C1.
-- [ ] Verify the Production deployment is READY.
-- [ ] Obtain explicit user approval to dispatch **Gacha Market Series Complete-Set Read-Only Diagnostic**.
-- [ ] Dispatch the read-only diagnostic only. Do not perform any persistence/write action.
-- [ ] Inspect workflow conclusion, sanitized artifact, selected targets, raw candidates, existing `not_single_item`, complete-set evaluated/accepted counts, unique accepted series, reject reasons, and DB zero-delta proof.
-- [ ] Independently re-read Production counts after the diagnostic to confirm database writes remain 0.
+Use a separately allowed read-only/live-verification task. This documentation refresh is not authorization for Production access or a workflow dispatch.
 
-## P1 — Decide F3-C2 from diagnostic evidence
+- [ ] Verify current `main` deployment and aliases after `a79e8f72151cdb1eff94d6971e1544f751d7ed2f`.
+- [ ] Re-read current Supabase counts instead of reusing the 2026-08-27 snapshot.
+- [ ] Confirm the persisted complete-set, P2, and P1 canary rows remain consistent with their sanitized GitHub run evidence.
+- [ ] Verify current observed-listing and affiliate rendering after PRs #102, #103, and #106.
+- [ ] Re-read current GSC series/variant/root sitemap and performance state.
+- [ ] Record the timestamp and evidence source for every refreshed live claim.
 
-Only after the read-only artifact exists:
+Do not rerun any completed diagnostic or canary merely to refresh documentation.
 
-### If classifier precision/coverage is useful
+## P1 — Grow useful market evidence safely
 
-- [ ] Design a bounded complete-set persistence contract.
-- [ ] Keep persistence series-level only (`variant_id=null`, `matched_variant_id=null`).
-- [ ] Add a separate approval-gated canary/readiness path before Production writes.
-- [ ] After safe persistence is proven, add truthful series-page UI such as “コンプリートセット参考価格”.
-- [ ] Keep single-item price UI/evidence completely separate.
+- [ ] Keep the existing P3 V2 automatic path unchanged while GitHub and live evidence remain healthy.
+- [ ] Monitor listing/observation growth and unique covered variants/series using an allowed evidence path.
+- [ ] Diagnose “candidate 0” separately from strict-matcher rejection.
+- [ ] Use the bounded P2/P1 contracts only through a new explicitly approved dispatch/write task.
+- [ ] Keep complete-set evidence series-level and separate from variant prices.
+- [ ] Do not promote Recall V5 as-is or weaken the strict single-item matcher.
 
-### If diagnostic shows false positives / ambiguity
+Completed foundations that must not be reopened without evidence:
 
-- [ ] Repair classifier with focused tests and rerun read-only diagnostic after separate dispatch approval.
+- [x] complete-set read-only diagnostic, readiness, bounded one-series canary, and truthful reference UI
+- [x] Priority 2 distinct/storefront diagnostics and bounded one-candidate canary
+- [x] Priority 1 bounded one-candidate canary and cooldown repair
+- [x] observed exact-variant marketplace comparison
 
-### If diagnostic yields little/no useful coverage
+## P2 — Convert verified evidence into monetization
 
-- [ ] Do not force the feature into Production.
-- [ ] Reassess another evidence-density path instead of weakening safety.
-
-## P2 — Continue market evidence growth
-
-- [ ] Keep P3 V2 Automatic Production running unchanged while healthy.
-- [ ] Periodically monitor market listing/observation growth and unique covered variants/series.
-- [ ] Diagnose “candidate 0” separately from matcher rejection; they are different bottlenecks.
-- [ ] Do not promote Recall V5 as-is.
-- [ ] Do not weaken the strict single-item matcher.
+- [ ] Measure outbound affiliate clicks by provider after live state is safely re-verified.
+- [ ] Confirm new P3 rows retain only strictly validated Rakuten/Yahoo affiliate provenance.
+- [ ] Treat any historical-row affiliate backfill as a separate Production-write task requiring explicit approval.
+- [ ] Treat Yahoo affiliate Secret/Variable activation as a separate explicit-approval task.
+- [ ] Preserve direct safe item links and generic marketplace searches when affiliate provenance is absent or invalid.
 
 ## P3 — GSC observer monitoring
 
-The observer sitemaps are already submitted.
-
-- [ ] Track `/series-sitemap.xml` and `/variant-sitemap.xml` separately as data accumulates.
+- [ ] Track `/series-sitemap.xml` and `/variant-sitemap.xml` separately after fresh GSC verification.
 - [ ] Measure URLs with impressions/clicks and page/query distribution.
-- [ ] Compare series vs variant discovery/indexation.
-- [ ] Investigate the root sitemap warning separately; do not assume it explains all indexation behavior.
-- [ ] Avoid conclusions from sitemap `indexed=0` summary alone.
+- [ ] Compare series versus variant discovery and indexation.
+- [ ] Investigate the root sitemap warning separately.
+- [ ] Avoid conclusions from sitemap-summary `indexed=0` alone.
 
-## P4 — F3-B2 Evidence-based SEO pruning
+## P4 — Evidence-based SEO pruning
 
 Do not start with mass noindex.
 
-After enough GSC evidence exists:
-
-- [ ] Identify pages with no impressions, weak content, old/stale value, or duplicate intent.
-- [ ] Identify pages already receiving impressions and protect them from accidental pruning.
-- [ ] Decide selective sitemap exclusion/noindex/consolidation based on evidence.
-- [ ] Preserve Series-first canonical/pagination rules.
+- [ ] Identify pages with no impressions, weak content, stale value, or duplicate intent using current GSC evidence.
+- [ ] Protect pages already receiving impressions.
+- [ ] Decide selective sitemap exclusion/noindex/consolidation from evidence.
+- [ ] Preserve Series-first canonical and pagination rules.
 
 ## P5 — Traffic and monetization
 
-- [ ] Increase coverage of pages that combine official product truth + useful market evidence.
-- [ ] Track outbound affiliate clicks by provider.
-- [ ] Focus on queries with commercial intent: product name + 相場 / 高い / レア / 発売 / 再販.
-- [ ] Improve internal discovery only when it supports traffic/conversion, not cosmetic churn.
+- [ ] Increase coverage of pages combining official product truth with useful market evidence.
+- [ ] Focus on commercial-intent queries: product name + 相場 / 高い / レア / 発売 / 再販.
+- [ ] Improve internal discovery when it supports traffic or conversion, not cosmetic churn.
 - [ ] Recheck Amazon Associates qualifying-sale progress when traffic rises.
-- [ ] Recheck AdSense “not ready” reason and reapply after content/indexation/traffic quality improves.
+- [ ] Recheck the current AdSense “not ready” reason and reapply after content/indexation/traffic quality improves.
+
+## Agent OS experiment sequence
+
+This sequence validates development operations and does not reorder the business priorities above.
+
+- [x] Establish Agent OS v1 and the gated autonomous merge policy.
+- [x] Run the first documentation-only, one-Agent experiment under Issue #108; its PR/result is authoritative for final metrics and disposition.
+- [ ] If experiment #1 succeeds, run one bounded non-Production code task with no external-system dependency.
+- [ ] Then trial isolated Scout / Builder / Verifier / Reviewer roles with one worktree per editing task.
+- [ ] Propose queue/CI/docs-maintenance automation only in separate PRs.
+- [ ] Keep experiments disconnected from Production writes, deploys, migrations, workflow dispatches, secrets, paid operations, and destructive cleanup.
 
 ## Hold / do not do without explicit decision
 
-- [ ] Do NOT enable Kitan auto.
-- [ ] Do NOT enable Qualia auto.
-- [ ] Do NOT rerun Kitan manual canary.
-- [ ] Do NOT rerun Qualia one-series canary.
+- [ ] Do NOT enable Kitan automatic writes.
+- [ ] Do NOT enable Qualia automatic rollout.
+- [ ] Do NOT rerun Kitan or Qualia manual canaries.
+- [ ] Do NOT rerun the completed complete-set, P2, or P1 canaries without a new approval.
 - [ ] Do NOT replace P3 V2 with Recall V5.
-- [ ] Do NOT mass-prune 7k+ series-only pages without GSC evidence.
-- [ ] Do NOT introduce Mercari/Amazon scraping.
+- [ ] Do NOT mass-prune thousands of pages without current GSC evidence.
+- [ ] Do NOT introduce Mercari or Amazon scraping.
 - [ ] Do NOT touch `supabase/.temp/cli-latest`.
 - [ ] Do NOT re-enable `.github/workflows/gacha-ingestion.yml`.
 
-## Thread / handoff hygiene
+## Handoff hygiene
 
 Before the next long-thread transition:
 
-- [ ] update `docs/STATUS.md` with live SHA/deploy/counts/GSC state
-- [ ] update `docs/HANDOFF.md` with newly completed phases and the next approval boundary
-- [ ] update `docs/DECISIONS.md` for any durable policy change
+- [ ] update `docs/STATUS.md` with evidence timestamps and current Git/GitHub state
+- [ ] update `docs/HANDOFF.md` with completed phases and the next real boundary
+- [ ] update `docs/DECISIONS.md` only for durable policy/product decisions
 - [ ] update this TODO order
-- [ ] use a docs-only PR rather than silently editing Production code during handoff
-
-## Agent OS validation sequence
-
-This sequence is operational infrastructure work and does not reorder the product priorities above.
-
-- [ ] Run one long-duration, documentation-only 1-Agent task using the Agent Task Contract and Done Gate.
-- [ ] Record interventions, repair loops, elapsed time, validation coverage, and ambiguous stop conditions.
-- [ ] If successful, run one bounded non-Production code task with no external-system dependency.
-- [ ] Then trial isolated Scout / Builder / Verifier / Reviewer roles with one worktree per editing task.
-- [ ] Propose Issue triage, CI diagnosis, PR review, docs drift, or maintenance automation only in separate Draft PRs.
-- [ ] Do not connect the experiment sequence to Production writes, deploys, migrations, workflow dispatches, secrets, paid operations, or destructive cleanup.
+- [ ] use a docs-only PR instead of mixing handoff edits with unrelated product changes
