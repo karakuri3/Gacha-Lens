@@ -7,7 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- BEGIN:agent-os-v1 -->
 # Gacha Lens Agent OS v1
 
-Read `docs/AGENT_OS.md` before planning or changing this repository. Also read `docs/AUTO_MERGE_POLICY.md` and the canonical project state in `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, and `docs/TODO.md`. Repository-specific safety decisions in those files override general autonomy below. For merge decisions, `docs/AUTO_MERGE_POLICY.md` is the explicit repository exception and overrides older lower-precedence statements that require a human to perform every safe merge.
+Read `docs/AGENT_OS.md` before planning or changing this repository. Also read `docs/AUTO_MERGE_POLICY.md`, `docs/PRODUCTION_RELEASE_POLICY.md`, and the canonical project state in `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, and `docs/TODO.md`. Repository-specific safety decisions in those files override general autonomy below. For merge/release decisions, the Auto-Merge and Production Release policies are the explicit repository exceptions and override older lower-precedence statements that require a human to perform every safe merge or routine Vercel release.
 
 ## AUTONOMOUSLY ALLOWED
 
@@ -19,30 +19,32 @@ Read `docs/AGENT_OS.md` before planning or changing this repository. Also read `
 - Failure diagnosis, bounded self-repair, re-validation, diff inspection, and self-review.
 - Creating and updating a Draft PR for the task branch.
 - Marking an eligible PR ready and merging it to `main` only when every condition in `docs/AUTO_MERGE_POLICY.md` passes.
+- Allowing the normal Vercel Production deployment triggered by an eligible merge only when every condition in `docs/PRODUCTION_RELEASE_POLICY.md` also passes.
 
 ## HUMAN APPROVAL REQUIRED
 
 - Direct push to `main` or history rewriting of a shared branch.
 - Any merge that is not eligible under `docs/AUTO_MERGE_POLICY.md`.
-- Production deploys, Production DB writes, Production migrations, or Production gate changes.
+- Any Production deployment/release that is not eligible under `docs/PRODUCTION_RELEASE_POLICY.md`.
+- Production DB writes, Production migrations, Production gate changes, or other direct Production mutation outside the eligible normal Vercel release.
 - Any GitHub Actions `workflow_dispatch`, including read-only diagnostics.
 - Repository or hosting Secrets / Variables changes.
 - External-service paid operations.
 - Repository, data, worktree, or external-state cleanup/delete unless explicitly and narrowly approved in the task; irreversible or destructive actions.
 - Major product or specification changes.
-- Changes to Agent OS safety/approval boundaries unless the current human request explicitly authorizes that policy change.
+- Changes to Agent OS, Auto-Merge, or Production Release safety/approval boundaries unless the current human request explicitly authorizes that policy change.
 
 ## AUTONOMOUS CONTINUATION
 
-For a safe failure such as a test, lint, build, ordinary implementation, or review failure, do not stop merely because it failed. Investigate the cause, form an evidence-based repair, make the smallest safe correction, and re-run the relevant validation. Repeat while each iteration is safe and provides a new reasonable path. Separate regressions caused by the task from known baseline or environment failures and record the evidence.
+For a safe failure such as a test, lint, build, ordinary implementation, Preview, or review failure, do not stop merely because it failed. Investigate the cause, form an evidence-based repair, make the smallest safe correction, and re-run the relevant validation. Repeat while each iteration is safe and provides a new reasonable path. Separate regressions caused by the task from known baseline or environment failures and record the evidence.
 
 ## STOP CONDITIONS
 
-Return to the human only when Production access, a destructive operation, a Secrets / Variables change, a paid operation, an ineligible merge, or a major product decision is required; requirements are materially ambiguous and no safe assumption exists; specifications conflict in a way that changes product direction; or reasonable safe self-repair paths have been exhausted with evidence.
+Return to the human only when an ineligible Production action, a destructive operation, a Secrets / Variables change, a paid operation, an ineligible merge/release, or a major product decision is required; requirements are materially ambiguous and no safe assumption exists; specifications conflict in a way that changes product direction; or reasonable safe self-repair paths have been exhausted with evidence.
 
 ## AGENT DONE GATE
 
-Before claiming completion, apply the gate in `docs/AGENT_OS.md`: confirm acceptance criteria, focused and regression tests, lint, applicable typecheck, build, `git diff --check`, expected diff only, secret and Production safety, no destructive actions, no unresolved major review findings, and no material conflict with canonical docs. A check may be `N/A` only with a concrete reason. Never collapse a known baseline/environment limitation into an unexplained “failed”. If the task is eligible for autonomous merge, also apply the Auto-Merge Gate in `docs/AUTO_MERGE_POLICY.md`.
+Before claiming completion, apply the gate in `docs/AGENT_OS.md`: confirm acceptance criteria, focused and regression tests, lint, applicable typecheck, build, `git diff --check`, expected diff only, secret and Production safety, no destructive actions, no unresolved major review findings, and no material conflict with canonical docs. A check may be `N/A` only with a concrete reason. Never collapse a known baseline/environment limitation into an unexplained “failed”. If the task is eligible for autonomous merge, also apply `docs/AUTO_MERGE_POLICY.md`. If that merge triggers Vercel Production, also apply `docs/PRODUCTION_RELEASE_POLICY.md`.
 
 ## AGENT TASK CONTRACT
 
@@ -59,7 +61,8 @@ Every agent task must state: Goal, Context, Scope, Acceptance Criteria, Constrai
 ## REPOSITORY HARD STOPS
 
 - Never touch `supabase/.temp/cli-latest`.
-- Do not dispatch workflows, deploy, migrate, change Secrets / Variables, or perform Production writes in autonomous work.
-- Never bypass the Auto-Merge Gate or use direct `main` pushes as a substitute for PR merge.
+- Do not dispatch workflows, migrate Production data/schema, change Secrets / Variables, or perform direct Production writes in autonomous work.
+- Do not manually invoke or bypass release controls for Production; only the normal Vercel deployment caused by an eligible merge may proceed under `docs/PRODUCTION_RELEASE_POLICY.md`.
+- Never bypass the Auto-Merge or Production Release Gate or use direct `main` pushes as a substitute for PR merge.
 - Keep `.github/workflows/gacha-ingestion.yml` disabled and do not casually change existing Production-capable workflows or automatic ingestion semantics.
 <!-- END:agent-os-v1 -->

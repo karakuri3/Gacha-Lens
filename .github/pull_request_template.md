@@ -18,13 +18,15 @@ Describe the completed outcome, not only the files changed.
 
 - Base SHA:
 - Branch / worktree:
-- Production actions: 0
+- Production actions before merge: 0
+- Production DB actions: 0
 - destructive actions: 0
 - secrets changes: 0
 - paid operations: 0
 - workflow dispatches: 0
 - direct main pushes: 0
 - Existing Production-capable workflows changed: no
+- Normal Vercel Production release expected after merge: yes / no
 - Rollback:
 
 ## Validation
@@ -39,7 +41,8 @@ Describe the completed outcome, not only the files changed.
 | Diff whitespace |  | `git diff --check origin/main...HEAD` |
 | Unexpected changes |  | status + name/status + full diff reviewed |
 | Secret scan |  | added lines reviewed; values not printed |
-| Canonical docs |  | AGENTS / AUTO_MERGE_POLICY / HANDOFF / STATUS / DECISIONS / TODO checked |
+| Canonical docs |  | AGENTS / AUTO_MERGE_POLICY / PRODUCTION_RELEASE_POLICY / HANDOFF / STATUS / DECISIONS / TODO checked |
+| Vercel Preview |  | exact head-SHA Preview successful when Production release is expected |
 | Required GitHub checks |  | all required head-SHA checks successful |
 
 ## Failure classification / known issues
@@ -66,7 +69,8 @@ For each non-pass result, classify it as task regression, baseline issue, enviro
 - [ ] `git diff --check` passes
 - [ ] No unexpected changes
 - [ ] No secrets are included
-- [ ] Production actions are 0
+- [ ] Production actions before merge are 0
+- [ ] Production DB actions are 0
 - [ ] Destructive actions are 0
 - [ ] Secrets / Variables changes are 0
 - [ ] Paid operations are 0
@@ -75,7 +79,9 @@ For each non-pass result, classify it as task regression, baseline issue, enviro
 - [ ] No unresolved major reviewer findings
 - [ ] No material conflict with canonical docs
 
-## Merge disposition
+## Merge / release disposition
 
-- [ ] Auto-Merge Gate in `docs/AUTO_MERGE_POLICY.md` passes in full; Agent may mark ready and merge without routine human acknowledgement
-- [ ] OR human approval is required because an Auto-Merge Gate exclusion/stop condition applies
+- [ ] Auto-Merge Gate in `docs/AUTO_MERGE_POLICY.md` passes in full
+- [ ] If merge triggers Vercel Production, Standing Production Release Gate in `docs/PRODUCTION_RELEASE_POLICY.md` also passes in full
+- [ ] Agent may mark ready, squash merge, and allow the normal Vercel Production release without routine human acknowledgement
+- [ ] OR human approval is required because a merge/release exclusion or Stop Condition applies
