@@ -3,6 +3,11 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { getEditorialGuideSlugs } from "../lib/domain/editorial-guides.js";
+import {
+  getRakutenAffiliateDestination,
+  RAKUTEN_AFFILIATE_PROVENANCE_CONTRACT,
+  RAKUTEN_ITEM_SEARCH_DOCUMENTATION,
+} from "../lib/domain/rakuten-affiliate-link.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CONTACT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -67,6 +72,46 @@ function invalidSiteUrlReason(value) {
 
 function hasEvery(sourceText, fragments) {
   return fragments.every((fragment) => sourceText.includes(fragment));
+}
+
+export function isRakutenAffiliateLinkBehaviorReady() {
+  const affiliateUrl = "https://hb.afl.rakuten.co.jp/hgc/launch-readiness";
+  const listing = {
+    id: "launch-readiness-rakuten-listing",
+    variant_id: "launch-readiness-variant",
+    source: "rakuten_ichiba",
+    source_url: "https://item.rakuten.co.jp/launch-readiness/item-1/",
+    listing_type: "single",
+    status: "active",
+    review_required: false,
+    raw: {
+      provider: "rakuten_ichiba",
+      itemCode: "launch-readiness:item-1",
+      raw: {
+        affiliate_url: affiliateUrl,
+        affiliate_url_source: "rakuten_api",
+        affiliate_url_contract: RAKUTEN_AFFILIATE_PROVENANCE_CONTRACT,
+        source_documentation: RAKUTEN_ITEM_SEARCH_DOCUMENTATION,
+      },
+    },
+  };
+  const destination = getRakutenAffiliateDestination({ market_listings: [listing] });
+  const unsafeDestination = getRakutenAffiliateDestination({
+    market_listings: [{ ...listing, review_required: true }],
+  });
+  const invalidContractDestination = getRakutenAffiliateDestination({
+    market_listings: [{
+      ...listing,
+      raw: {
+        ...listing.raw,
+        raw: { ...listing.raw.raw, affiliate_url_contract: "unexpected_contract" },
+      },
+    }],
+  });
+  return destination?.href === affiliateUrl
+    && destination.listingId === listing.id
+    && unsafeDestination === null
+    && invalidContractDestination === null;
 }
 
 export function isSitemapSourceReady(sourceText) {
@@ -210,8 +255,8 @@ function buildStaticChecks(root) {
           "selectRakutenAffiliateListing",
           "sanitizeRakutenAffiliateProvenance",
           "RAKUTEN_AFFILIATE_PROVENANCE_CONTRACT",
-          "affiliateUrl: listing.raw?.affiliate_url",
         ])
+        && isRakutenAffiliateLinkBehaviorReady()
         && marketCandidateAudit.includes("affiliate_destination: affiliateDestination")
         && hasEvery(marketBoundedWrite, ["affiliate_url: affiliateProvenance.url", "affiliate_url_contract: affiliateProvenance.contract", "public_url: sourceUrl"])
         && hasEvery(marketLinks, ["getRakutenAffiliateDestination", "isAffiliate: true", "isAffiliate: false"])

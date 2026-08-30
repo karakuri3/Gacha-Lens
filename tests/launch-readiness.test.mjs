@@ -8,6 +8,7 @@ import {
   auditLaunchReadiness,
   formatLaunchReadiness,
   isObserverSitemapSourceReady,
+  isRakutenAffiliateLinkBehaviorReady,
   isSitemapSourceReady,
   parseLaunchReadinessArgs,
 } from "../scripts/launch-readiness.mjs";
@@ -134,6 +135,10 @@ test("affiliate and ranking safety check passes", () => {
 
 test("Rakuten affiliate code readiness check passes", () => {
   assert.equal(check(audit(), "rakuten_affiliate_code_readiness").status, "pass");
+});
+
+test("Rakuten affiliate readiness exercises normalized fail-closed link behavior", () => {
+  assert.equal(isRakutenAffiliateLinkBehaviorReady(), true);
 });
 
 test("Yahoo affiliate code readiness check passes", () => {
