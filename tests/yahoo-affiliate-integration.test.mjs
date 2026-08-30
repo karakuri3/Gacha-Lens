@@ -6,7 +6,7 @@ import { buildMarketBoundedRows } from "../lib/domain/market-bounded-write.js";
 import { buildMarketBoundedCoverageSnapshot } from "../lib/domain/market-bounded-coverage.js";
 import { buildSanitizedMarketCandidateAudit } from "../lib/domain/market-candidate-audit.js";
 import { buildMarketCandidateKey } from "../lib/domain/market-candidate-key.js";
-import { buildMarketplaceLinks } from "../lib/domain/market-links.js";
+import { buildMarketplaceLinks, hasAffiliateMarketplaceLinks } from "../lib/domain/market-links.js";
 import { findAutomaticIngestionRolloutSecretLeaks } from "../lib/domain/automatic-ingestion-rollout.js";
 import {
   fetchYahooShoppingListingsRaw,
@@ -375,7 +375,10 @@ test("Yahoo affiliate integration remains independent from ranking and forecast 
 test("Yahoo public read and sponsored link semantics reuse the existing raw field", () => {
   assert.match(source("lib/data/supabase-gacha-repository.js"), /marketListings: "[^"]*review_required,raw,created_at/);
   assert.match(source("components/TrackedMarketLink.js"), /sponsored noopener noreferrer/);
-  assert.match(source("components/MarketplaceLinks.js"), /links\.some\(\(link\) => link\.isAffiliate\)/);
+  assert.equal(hasAffiliateMarketplaceLinks([{ isAffiliate: true }], [{ isAffiliate: false }]), true);
+  assert.equal(hasAffiliateMarketplaceLinks([{ isAffiliate: false }], [{ isAffiliate: true }]), true);
+  assert.equal(hasAffiliateMarketplaceLinks([{ isAffiliate: false }], [{ isAffiliate: false }]), false);
+  assert.match(source("components/MarketplaceLinks.js"), /hasAffiliateMarketplaceLinks\(observed, links\)/);
 });
 
 async function fetchOne(overrides = {}) {

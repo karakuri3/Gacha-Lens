@@ -1,4 +1,4 @@
-import { buildMarketplaceLinks } from "@/lib/domain/market-links";
+import { buildMarketplaceLinks, hasAffiliateMarketplaceLinks } from "@/lib/domain/market-links";
 import { buildObservedListingLinks } from "@/lib/domain/market-observed-listings";
 import TrackedMarketLink from "@/components/TrackedMarketLink";
 
@@ -6,7 +6,7 @@ export default function MarketplaceLinks({ item }) {
   const observed = item.is_released ? buildObservedListingLinks(item, { limit: 5 }) : [];
   const links = item.is_released ? buildMarketplaceLinks(item) : [];
   if (!observed.length && !links.length && !item.official_url) return null;
-  const hasAffiliate = [...observed, ...links].some((link) => link.isAffiliate);
+  const hasAffiliate = hasAffiliateMarketplaceLinks(observed, links);
 
   return (
     <div className="marketplace-panel">
