@@ -6,7 +6,7 @@ import { buildMarketCandidateKey } from "../lib/domain/market-candidate-key.js";
 import { buildSanitizedMarketCandidateAudit } from "../lib/domain/market-candidate-audit.js";
 import { buildMarketBoundedRows } from "../lib/domain/market-bounded-write.js";
 import { buildMarketBoundedCoverageSnapshot } from "../lib/domain/market-bounded-coverage.js";
-import { buildMarketplaceLinks } from "../lib/domain/market-links.js";
+import { buildMarketplaceLinks, hasAffiliateMarketplaceLinks } from "../lib/domain/market-links.js";
 import { selectRakutenAffiliateListing } from "../lib/domain/rakuten-affiliate-link.js";
 import { compactMarketRawPayload } from "../lib/domain/market-raw.js";
 import { fetchRakutenMarketListingsRaw } from "../lib/fetchers/rakuten-market-fetcher.js";
@@ -337,7 +337,10 @@ test("public read mapping includes raw provenance without changing DB schema", (
 
 test("Rakuten sponsored semantics, disclosure, and official Developers credit remain visible", () => {
   assert.match(source("components/TrackedMarketLink.js"), /sponsored noopener noreferrer/);
-  assert.match(source("components/MarketplaceLinks.js"), /links\.some\(\(link\) => link\.isAffiliate\)/);
+  assert.equal(hasAffiliateMarketplaceLinks([{ isAffiliate: true }], [{ isAffiliate: false }]), true);
+  assert.equal(hasAffiliateMarketplaceLinks([{ isAffiliate: false }], [{ isAffiliate: true }]), true);
+  assert.equal(hasAffiliateMarketplaceLinks([{ isAffiliate: false }], [{ isAffiliate: false }]), false);
+  assert.match(source("components/MarketplaceLinks.js"), /hasAffiliateMarketplaceLinks\(observed, links\)/);
   const footer = source("components/Footer.js");
   assert.match(footer, /<a href="https:\/\/developers\.rakuten\.com\/" target="_blank">Supported by Rakuten Developers<\/a>/);
   assert.doesNotMatch(footer, /href="https:\/\/developers\.rakuten\.com\/"[^>]*rel=/);
