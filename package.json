@@ -39,6 +39,7 @@
     "start": "next start",
     "lint": "eslint",
     "launch:check": "node scripts/launch-readiness.mjs",
+    "image:audit": "node scripts/variant-image-quality-audit.mjs",
     "test:data-source": "node --test tests/data-source-policy.test.mjs",
     "test:foundation-baseline": "node --test tests/foundation-baseline.test.mjs",
     "test:publication": "node --test tests/provisional-publication.test.mjs",

@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "records": [
+    {
+      "variant": {
+        "id": "bandai-variant",
+        "image": "https://images.example/bandai-variant.jpg",
+        "variant_type": "normal"
+      },
+      "parent": {
+        "id": "bandai-series",
+        "brand": "バンダイ",
+        "image_url": "https://images.example/bandai-series.jpg"
+      },
+      "sibling_count": 4
+    },
+    {
+      "variant": {
+        "id": "tarts-y099762-a",
+        "image": "https://images.example/Y099762_b.jpg",
+        "variant_type": "normal"
+      },
+      "parent": {
+        "id": "tarts-series",
+        "brand": "タカラトミーアーツ",
+        "image_url": "https://images.example/tarts-series.jpg"
+      },
+      "sibling_count": 4
+    },
+    {
+      "variant": {
+        "id": "shared-image",
+        "image": "http://images.example/shared.jpg/?cache=fixture",
+        "variant_type": "normal"
+      },
+      "parent": {
+        "id": "shared-series",
+        "brand": "バンダイ",
+        "image_url": "https://images.example/shared.jpg"
+      },
+      "sibling_count": 2
+    },
+    {
+      "variant": {
+        "id": "missing",
+        "image": "",
+        "variant_type": "normal"
+      },
+      "parent": {
+        "id": "missing-series"
+      },
+      "sibling_count": 1
+    },
+    {
+      "variant": {
+        "id": "generated",
+        "image": "data:image/svg+xml;charset=UTF-8,%3Csvg%3E",
+        "variant_type": "normal"
+      },
+      "parent": {
+        "id": "generated-series"
+      },
+      "sibling_count": 1
+    },
+    {
+      "variant": {
+        "id": "provisional",
+        "image": "https://images.example/provisional.jpg",
+        "variant_type": "provisional"
+      },
+      "parent": {
+        "id": "provisional-series"
+      },
+      "sibling_count": 1
+    }
+  ]
+}
