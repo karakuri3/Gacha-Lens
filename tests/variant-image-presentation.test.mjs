@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   buildVariantImagePresentation,
+  normalizeImageUrl,
   resolvePresentationImage,
   resolveTrustedVariantImage,
 } from "../lib/domain/variant-image-presentation.js";
@@ -137,10 +138,74 @@ test("a broken trusted image moves once to a distinct series fallback before the
   });
 });
 
+test("normalized-equivalent image URLs do not trigger a redundant fallback", () => {
+  const cases = [
+    {
+      name: "HTTP and HTTPS",
+      primarySrc: "http://images.example/shared.jpg",
+      fallbackSrc: "https://images.example/shared.jpg",
+    },
+    {
+      name: "query and fragment",
+      primarySrc: "https://images.example/shared.jpg?v=1#hero",
+      fallbackSrc: "https://images.example/shared.jpg",
+    },
+    {
+      name: "trailing slash",
+      primarySrc: "https://images.example/shared.jpg/",
+      fallbackSrc: "https://images.example/shared.jpg",
+    },
+  ];
+
+  for (const { name, primarySrc, fallbackSrc } of cases) {
+    assert.equal(normalizeImageUrl(primarySrc), normalizeImageUrl(fallbackSrc), `${name} should share one image identity`);
+    assert.deepEqual(resolvePresentationImage({
+      primarySrc,
+      fallbackSrc,
+      imageScope: "variant",
+      primaryFailed: true,
+    }), {
+      src: "",
+      can_fallback: false,
+      uses_fallback: false,
+      is_series_fallback: false,
+    }, `${name} should terminate without retrying the same image`);
+  }
+});
+
+test("a series-only fallback remains truthfully labeled and terminates at the neutral placeholder", () => {
+  const seriesFallback = resolvePresentationImage({
+    primarySrc: "",
+    fallbackSrc: "https://images.example/series.jpg",
+    imageScope: "series_fallback",
+  });
+  const exhausted = resolvePresentationImage({
+    primarySrc: "",
+    fallbackSrc: "https://images.example/series.jpg",
+    imageScope: "series_fallback",
+    fallbackFailed: true,
+  });
+
+  assert.deepEqual(seriesFallback, {
+    src: "https://images.example/series.jpg",
+    can_fallback: false,
+    uses_fallback: true,
+    is_series_fallback: true,
+  });
+  assert.deepEqual(exhausted, {
+    src: "",
+    can_fallback: false,
+    uses_fallback: true,
+    is_series_fallback: false,
+  });
+});
+
 test("ProductImage exposes a one-way client-side series fallback and neutral placeholder", () => {
   const component = source("components/ProductImage.js");
   assert.match(component, /^"use client";/);
   assert.match(component, /resolvePresentationImage/);
+  assert.match(component, /normalizeImageUrl\(primarySrc\)/);
+  assert.match(component, /normalizeImageUrl\(safeFallbackSrc\)/);
   assert.match(component, /onError=\{\(\) =>/);
   assert.match(component, /product-image__scope/);
   assert.match(component, />シリーズ画像</);

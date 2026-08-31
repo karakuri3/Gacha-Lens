@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { resolvePresentationImage } from "@/lib/domain/variant-image-presentation";
+import { normalizeImageUrl, resolvePresentationImage } from "@/lib/domain/variant-image-presentation";
 
 export default function ProductImage({
   item,
@@ -20,7 +20,7 @@ export default function ProductImage({
 
   return (
     <ResolvedProductImage
-      key={`${primarySrc}\u001f${safeFallbackSrc}\u001f${scope}`}
+      key={`${normalizeImageUrl(primarySrc)}\u001f${normalizeImageUrl(safeFallbackSrc)}\u001f${scope}`}
       primarySrc={primarySrc}
       fallbackSrc={safeFallbackSrc}
       imageScope={scope}
