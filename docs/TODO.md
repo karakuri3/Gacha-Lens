@@ -1,6 +1,6 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-02 JST — post-PR #162 checkpoint
+Updated: 2026-09-02 JST — post-PR #170 checkpoint
 
 Work top-to-bottom unless newer verified evidence changes priority. Current umbrella program: Issue #119 Data Scale. Three active listings is a presentation threshold only.
 
@@ -11,7 +11,7 @@ Work top-to-bottom unless newer verified evidence changes priority. Current umbr
 - [x] Trace blocker to month-precision rerelease canonical-year loss.
 - [x] Create Issue #137 and repair PR #142.
 - [x] Verify #142 full tests / lint / diff check / Vercel Preview pass.
-- [ ] Obtain any still-required independent collection-semantics review for #142.
+- [ ] Obtain any still-required collection-semantics review/approval for #142.
 - [ ] Obtain explicit approval before merging #142 because it changes code used by the scheduled Production-capable F0 lane.
 - [ ] Do not manually rerun/dispatch F0 without separate `workflow_dispatch` approval.
 
@@ -24,7 +24,9 @@ Work top-to-bottom unless newer verified evidence changes priority. Current umbr
 - [x] Prevent stale observations from rolling current snapshot backward.
 - [x] #153 / #135: merge exact persisted Rakuten/Yahoo provider rereads without keyword rediscovery.
 - [x] Restrict credential-bearing requests to reviewed official host + exact path and reject redirects/custom destinations.
-- [ ] Do **not** execute live Production-connected provider reads or persist re-observations without the separate required approval.
+- [x] #169 / #166: fail closed on equal-timestamp conflicting price/status and invalid null/blank observation time.
+- [x] Preserve equal-time unchanged same-key deterministic retry behavior.
+- [ ] Do **not** execute live Production-connected provider reads or persist re-observations without separate required approval.
 
 ## P0-C — Multi-listing Depth Collector — complete code-only milestone
 
@@ -46,115 +48,151 @@ Work top-to-bottom unless newer verified evidence changes priority. Current umbr
 - [x] Exclude review-required stock/restock/social rows.
 - [x] Keep outbound clicks provider+variant scoped.
 - [x] Separate Production DB ingestion-run evidence from GitHub workflow-run evidence.
-- [x] Re-read Production at the checkpoint: 10,241 series / 23,808 variants / 107 listings / 107 observations.
-- [x] Confirm all 107 listings still had exactly one observation and completed `sold` remained 0.
-- [x] Confirm clicks 0 / 21 / 38 at 24h / 7d / 30d at that validation time.
+- [x] Re-read Production checkpoint: 10,241 series / 23,808 variants / 107 listings / 107 observations.
+- [x] Confirm all 107 listings still had exactly one observation and completed `sold` remained 0 at the dated checkpoint.
 - [ ] Use the Scoreboard after every approved rollout; never treat its merge as Production collection authorization.
 
 ## P0-E — Lawful source capability matrix — complete
 
-Issue #123 / clean replacement PR #162; old Draft #145 superseded/closed.
-
-- [x] Revalidate old #145 against current official/provider documentation.
-- [x] Clean-replace from current main instead of merging stale history.
-- [x] Preserve durable source states: `active`, `planned`, `partnership_required`, `paid_access_required`, `manual_only`, `unavailable`.
-- [x] Keep Rakuten/Yahoo as current active marketplace-programmatic sources.
-- [x] Record Aucfan as `paid_access_required` and commercial/data-rights diligence only.
+- [x] #162 / #123: merge current lawful source capability matrix.
+- [x] Keep Rakuten/Yahoo current active marketplace-programmatic sources.
+- [x] Record Aucfan as `paid_access_required` and diligence-only before any payment/credential use.
 - [x] Keep Mercari C2C `partnership_required`; no scraping.
-- [x] Distinguish Mercari Shops seller-scoped Public API from broad C2C market intelligence; broad market capability is unavailable through that seller scope.
-- [x] Keep X `paid_access_required`; current price/quota/search facts are dated and must be rechecked before activation.
-- [x] Record eBay Browse as lower-priority planned with current Japan/historical limitations.
-- [x] Keep Surugaya/Mandarake/AmiAmi automation partnership/permission-gated.
+- [x] Distinguish Mercari Shops seller scope from broad C2C market intelligence.
+- [x] Keep X `paid_access_required`; recheck current prices/quotas/search before activation.
+- [x] Keep eBay lower-priority planned with current Japan/historical limitations.
+- [x] Keep Surugaya/Mandarake/AmiAmi automation permission/partnership-gated.
 - [x] Record current GSC Wizard reporting path as unavailable due subscription/payment state, not zero traffic.
-- [x] Add reusable source-adapter identity/provenance/fail-closed contract.
-- [x] Keep all paid/API/credential/scraping/contract/Production activation outside the PR.
-- [x] Pass exact-head CI, Preview, one-file full-diff/source-claim review.
-- [x] Merge #162 as `94ea0d8aac95e76e657326bc6c6df515f8603f22`.
-- [x] Confirm Production `dpl_Bp4p6evfsMsqideLzDg39uPmdzqA` READY.
-- [x] Confirm Issue #123 closed and old #145 closed superseded.
 
-## P0-F — Post-#162 canonical sync — current gate
+## P0-F — Production history/depth rollout planning — complete
 
-Issue #163.
+Issue #165 / PR #170. Companion safety repair Issue #166 / PR #169.
 
-- [x] Confirm #162 merged and Production READY.
-- [x] Confirm #123 completed and old #145 superseded/closed.
+- [x] Re-fetch `main`, Issue #119, Production counts and provider-health evidence.
+- [x] Confirm dated baseline: 10,241 series / 23,808 variants / 107 listings / 107 observations / 0 re-observed.
+- [x] Separate P3 breadth vs re-observation history vs depth collection.
+- [x] Define R1 exact-provider read-only canary: 6 known listings, 3 Rakuten + 3 Yahoo, serial, <=18 HTTP attempts, 0 DB writes.
+- [x] Define R2 Production re-observation persistence canary: 4 known listings, 2+2 provider split, bounded transaction, exact before/after and reread.
+- [x] Define R3 depth read-only canary: 2 explicit variants, one Rakuten-first + one Yahoo-first, <=10 accepted total, <=6 planner requests / <=18 HTTP attempts, 0 DB writes.
+- [x] Define R4 depth persistence canary: only frozen strict-safe R3 subset, <=10 listing+initial-observation insert pairs.
+- [x] Define deterministic idempotency, transaction boundaries, post-write verification, rollback evidence and circuit breakers.
+- [x] Define Scoreboard success/failure metrics and separate approval checklist.
+- [x] Merge #169 safety repair and #170 plan.
+- [x] Confirm Issue #166 and #165 closed completed.
+- [x] Confirm #169 Production deployment `dpl_3vMxWwP89osNcjZdLKTbUBscQWHR` READY.
+- [x] Confirm #170 Production deployment `dpl_DiuYPDViLe25wLjgeEXkpdeozgcg` READY.
+- [x] Perform zero Production DB writes, live provider executions, workflow dispatches/schedule changes, Secrets/Variables changes, paid actions or destructive actions during planning.
+
+## P0-G — Post-#170 canonical sync — current gate
+
+Branch: `docs/canonical-sync-post-170`.
+
 - [x] Refresh `docs/HANDOFF.md`.
 - [x] Refresh `docs/STATUS.md`.
-- [x] Refresh `docs/DECISIONS.md` with durable source-scope/access decisions.
+- [x] Refresh `docs/DECISIONS.md` with #169/#170 durable contracts and one-workstream review exception.
 - [x] Refresh this ordered TODO.
+- [ ] Create docs-only canonical-sync PR.
+- [ ] Pass exact-head full tests / lint / diff check and Vercel Preview.
+- [ ] Merge only if normal docs-only Auto-Merge/Production Release gates pass.
+- [ ] Confirm normal Vercel Production deployment READY.
 
-Completion rule: when the Issue #163 docs-only PR is exact-head green, merged to `main`, and its normal Vercel Production deployment is READY, the canonical-sync gate is complete. Until then, do not start the next major phase.
+Completion rule: do not start R1 live execution until this canonical gate is merged and Production READY.
 
-## P0-G — Production history/depth rollout plan — next safe phase
+## P1 — R1 exact-provider read-only re-observation canary — next approval-bound phase
 
-No dedicated rollout-planning Issue existed at the #162 checkpoint. After P0-F completes:
+Do not execute automatically merely because planning is complete.
 
-- [ ] Re-fetch `main`, Issue #119, open PRs, Production counts, and current provider-health evidence.
-- [ ] Confirm no newer dedicated rollout Issue already exists.
-- [ ] Create one bounded child Issue under #119 for **read-only Production history/depth rollout planning**.
-- [ ] Reconcile #150 re-observation, #153 exact provider reads, #156 Depth Collector, #159 Scoreboard, and #162 source priorities.
-- [ ] Define lane responsibilities: P3 breadth seeding vs depth collection vs re-observation.
-- [ ] Re-read current Production listing/observation depth and provider split before sizing any canary.
-- [ ] Quantify current provider request health/rate-limit evidence read-only where available.
-- [ ] Define proposed first canary targets, candidate counts, request budgets, pacing, timeouts, retry limits and stop conditions — proposal only.
-- [ ] Define deterministic idempotency, transaction boundaries and post-write verification required before any write-capable run.
-- [ ] Define exact rollback/failure behavior for identity mismatch, stale evidence, throttling, partial writes and verification failure.
-- [ ] Define Scoreboard before/after success metrics: new observations, listings with 2+ observations, depth buckets, provider errors, no false `sold`.
-- [ ] Produce an explicit approval checklist separating:
-  - live Production-connected provider read canary
-  - Production DB observation/listing persistence canary
-  - workflow/schedule activation or changes
-  - `workflow_dispatch`
-  - Secrets/Variables changes
-  - paid/licensed access
-- [ ] Stop at the approval boundary. The planning task itself must perform **zero** Production DB writes, live approval-bound provider execution, workflow dispatch, schedule changes, Secrets/Variables changes, or paid actions.
+### Preparation allowed before approval
 
-## P1 — Approved Production history/depth rollout — approval-bound future phase
+- [ ] Re-fetch current `main`, #119, open PRs, Production Scoreboard counts and provider-health evidence.
+- [ ] Confirm the dated 107/107 baseline has not materially drifted.
+- [ ] Select exactly 6 known listings that satisfy the merged exact-identity/review-safe/due contract.
+- [ ] Freeze provider split: 3 Rakuten + 3 Yahoo.
+- [ ] Verify current official endpoints/access rules have not materially changed.
+- [ ] Verify normal requests <=6, retry <=3 only for reviewed retryable conditions, worst-case HTTP attempts <=18.
+- [ ] Verify Rakuten spacing >=1200ms and Yahoo >=1000ms.
+- [ ] Verify DB persistence path disabled and no keyword fallback.
+- [ ] Present exact six-listing cohort and request budget to the user.
 
-Do not start automatically merely because P0-G planning is complete.
+### Execution boundary
 
-- [ ] Obtain the required explicit approval for the exact bounded Production action being proposed.
-- [ ] Verify live counts/provider state have not materially drifted since planning.
-- [ ] Execute only the approved canary scope.
-- [ ] Verify transaction/idempotency/post-write invariants.
-- [ ] Stop immediately on defined fail-closed conditions.
-- [ ] Re-run Scoreboard read-only and compare actual DATA gain.
-- [ ] Require a separate decision before scaling cadence/schedule/budget.
+- [ ] Obtain explicit approval for the exact live Production-connected provider-read R1 run.
+- [ ] Execute only the approved six-listing scope.
+- [ ] Confirm DB writes 0 and failed checks do not advance `last_observed_at`.
+- [ ] Record provider success/throttle/error/identity outcomes separately.
+- [ ] Stop on redirect, credential destination drift, identity mismatch, unexpected lifecycle, payload leakage, material API-contract drift or budget overrun.
+- [ ] Re-run Scoreboard read-only after the run if useful for evidence; R1 itself should not change DB counts.
 
-## P2 — Licensed completed-sale / source expansion
+R1 approval does **not** authorize R2.
 
-- [ ] Maintain the canonical matrix in `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`.
-- [ ] Recheck provider documentation immediately before acting; prices/quotas/tiers/support change.
-- [ ] Perform Aucfan commercial diligence before any payment or credentials: exact fields, included markets, retention, display/derived-data rights, rates, sandbox/evaluation access and price.
-- [ ] Build Mercari partnership dossier from catalog quality, matching safety, traffic, outbound purchase intent and exact desired data fields.
+## P2 — R2 tiny Production re-observation persistence — future separate approval
+
+- [ ] After successful R1/newer reviewed evidence, re-read exact current state.
+- [ ] Freeze 4 known listings: 2 Rakuten + 2 Yahoo.
+- [ ] Verify each approved target's current observation count and expected delta.
+- [ ] Freeze deterministic observation keys/IDs and protected identity values.
+- [ ] Define bounded transaction and exact before/after count package.
+- [ ] Define post-write reread and rollback evidence.
+- [ ] Obtain explicit Production DB write approval for the exact cohort.
+- [ ] If approved, expect +4 observations / +4 re-observed listings only when baseline assumptions still hold; listing count unchanged; false `sold` 0.
+- [ ] Stop on any unknown partial state or verification mismatch.
+- [ ] Re-run Scoreboard and measure actual history gain.
+
+R2 approval does **not** authorize R3/R4 or schedule activation.
+
+## P3 — R3/R4 depth rollout — future separately approved phases
+
+### R3 read-only
+
+- [ ] Freeze 2 explicit target variants, one Rakuten-first + one Yahoo-first.
+- [ ] Max accepted safe offers: 5 each / 10 total.
+- [ ] Max planner requests: 6; worst-case HTTP attempts: 18.
+- [ ] Affiliate enrichment disabled for proof canary.
+- [ ] Obtain explicit live provider/search approval before execution.
+- [ ] Persist 0 rows in R3.
+
+### R4 persistence
+
+- [ ] Freeze only strict-safe R3 subset.
+- [ ] <=10 total new listing+initial-observation pairs.
+- [ ] Insert-only; no existing-row updates/deletes.
+- [ ] Obtain separate explicit Production DB approval.
+- [ ] Verify exact deltas and post-write state.
+- [ ] Re-run Scoreboard and scale only from measured DATA gain.
+
+## P4 — Licensed completed-sale / source expansion
+
+- [ ] Maintain `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`.
+- [ ] Recheck provider docs immediately before acting; prices/quotas/tiers/support change.
+- [ ] Perform Aucfan commercial diligence before payment/credentials: exact fields, included markets, retention, display/derived-data rights, rates, sandbox/evaluation access and price.
+- [ ] Build Mercari partnership dossier from catalog quality, matching safety, traffic, outbound purchase intent and desired data fields.
 - [ ] Never scrape Mercari or Amazon.
 - [ ] Evaluate each other lawful API/feed/partner source as an isolated task.
 
-## P3 — Non-price signals
+## P5 — Non-price signals
 
 - [ ] Model stock/inventory observations as timestamped provenance-bearing evidence.
 - [ ] Keep official restock/re-release events separate from inferred market unavailability.
 - [ ] Add preorder/reservation demand only at exact verified scope.
 - [ ] Add X/social only with authorized reviewed paid access and a bounded budget.
-- [ ] Combine supply, demand, click/search, and event-window evidence transparently.
+- [ ] Combine supply, demand, click/search and event-window evidence transparently.
 - [ ] Never fabricate expectation/popularity from one weak proxy.
 
-## P4 — Traffic / affiliate / GSC
+## P6 — Traffic / affiliate / GSC
 
-- [ ] Restore/re-read authorized GSC reporting before current performance claims; current GSC Wizard path was subscription-unavailable at #162 verification.
+- [ ] Restore/re-read authorized GSC reporting before current performance claims; connected GSC Wizard path was subscription-unavailable at #162 verification.
 - [ ] Preserve root/series/variant sitemap separation.
 - [ ] Measure query/page impressions and clicks before SEO pruning decisions.
 - [ ] Measure outbound affiliate clicks only at supported attribution scope.
 - [ ] Keep affiliate provenance strict.
-- [ ] Recheck Amazon Associates and AdSense readiness only as traffic/content quality rises.
+- [ ] Recheck Amazon Associates and AdSense readiness as traffic/content quality rises.
 
 ## Hold — do not do without explicit approval/new evidence
 
 - [ ] Do NOT merge #142 or manually dispatch F0 while its approval/review boundary remains.
-- [ ] Do NOT run #153 against Production credentials/data without the separate approved action.
-- [ ] Do NOT persist #150/#153/#156 projected observation/listing changes to Production without approval.
-- [ ] Do NOT interpret #159 or #162 as Production collection authorization.
+- [ ] Do NOT execute R1 before exact live provider-read approval.
+- [ ] Do NOT persist #150/#153/#156/#169 projected changes to Production without the exact approved R2/R4 action.
+- [ ] Do NOT interpret #159/#162/#170 as Production execution authorization.
 - [ ] Do NOT enable Kitan automatic writes.
 - [ ] Do NOT enable Qualia automatic rollout.
 - [ ] Do NOT rerun completed Kitan/Qualia/complete-set/P2/P1 canaries without new task-specific approval.
