@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-02 JST — post-PR #156 checkpoint
+Updated: 2026-09-02 JST — post-PR #159 checkpoint
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -243,6 +243,26 @@ Issue #129 required an independent Reviewer. GitHub Copilot Code Review was unav
 - targeted regression tests covering the collection-semantics findings discovered during review
 
 This was a task-contract exception for PR #156 only. It does **not** amend `AGENT_OS`, `AUTO_MERGE_POLICY`, `PRODUCTION_RELEASE_POLICY`, or future task review requirements. Future tasks must satisfy their own current review gate or obtain a separate explicit exception when a true stop boundary exists.
+
+### D-057 — Scoreboard truthfulness and evidence-source separation are durable contracts
+
+PR #159 / Issue #126 defines the read-only Data Scale Scoreboard contract.
+
+Required behavior:
+
+- product progress is evaluated through `DATA -> TRAFFIC -> CLICK -> REVENUE`, not PR count or agent activity
+- measured-state vocabulary stays distinct: `available`, `unavailable`, `not_instrumented`
+- source capability uses a separate vocabulary: `active`, `planned`, `partnership_required`, `paid_access_required`, `manual_only`, `unavailable`
+- `supported_source_count` counts only active capabilities; total capability inventory is reported separately
+- X without reviewed authorized collection is capability `paid_access_required` and measured social state `not_instrumented`; do not convert either to zero interest
+- Mercari remains `partnership_required`; Scoreboard visibility does not authorize scraping
+- only actual completed `status=sold` evidence counts as completed sale; `sold_out` remains ordinary availability/lifecycle evidence
+- review-required stock/restock/social rows are excluded from trusted coverage inside the domain contract
+- current outbound click evidence is provider+variant scoped and must not be represented as listing-level conversion or revenue attribution
+- Production database `ingestion_runs` and GitHub Actions workflow execution are separate evidence sources; zero database run rows do not prove zero workflow runs
+- missing workflow evidence must fail closed as `not_instrumented` instead of manufacturing a global run count
+- raw provider payloads, credentials, and untrusted issue notes are not emitted by the Scoreboard
+- #159 is read-only measurement infrastructure; it does not authorize Production history/depth persistence, provider execution, paid access, workflow activation, or Secrets changes
 
 ## Business priority
 
