@@ -1,6 +1,6 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-02 JST — post-PR #156 checkpoint
+Updated: 2026-09-02 JST — post-PR #159 checkpoint
 
 Work top-to-bottom unless newer verified evidence changes priority. Current umbrella program: Issue #119 Data Scale. Three active listings is a presentation threshold only.
 
@@ -65,47 +65,73 @@ Work top-to-bottom unless newer verified evidence changes priority. Current umbr
 - [x] Confirm Issue #129 closed and old Draft #132 closed superseded.
 - [ ] Keep Production depth persistence/automatic activation separately approval-gated.
 
-## P0-D — Post-#156 canonical sync — current gate
+## P0-D — Post-#156 canonical sync — complete
 
-Issue #157.
+Issue #157 / PR #158.
 
-- [x] Confirm #156 merged and Production READY.
-- [x] Confirm #129 completed and old #132 superseded/closed.
-- [x] Refresh `docs/HANDOFF.md`.
-- [x] Refresh `docs/STATUS.md`.
-- [x] Refresh `docs/DECISIONS.md` with Depth Collector and PR-specific review-exception decisions.
+- [x] Refresh `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`.
+- [x] Merge docs-only PR #158.
+- [x] Confirm main `99948dbb1273aefcf398654f72b8fce193f38fe5` Production READY.
+- [x] Confirm Issue #157 closed.
+
+## P0-E — Data Scale Scoreboard — complete code/read-only milestone
+
+Issue #126 / clean replacement PR #159; old Draft #134 superseded/closed.
+
+- [x] Re-fetch current main, Issue #126, and old Draft #134 after P0-D.
+- [x] Clean-replace stale #134 from current main instead of merging old history.
+- [x] Preserve measured states: `available`, `unavailable`, `not_instrumented`.
+- [x] Separate source capability states from measured signal availability.
+- [x] Count only active capability entries in `supported_source_count`; keep capability inventory count separate.
+- [x] Keep Mercari `partnership_required` and X `paid_access_required` until reviewed authorized activation.
+- [x] Track catalog breadth, market depth buckets, observation history, re-observation, provider split, affiliate provenance, stock/restock/social state, clicks, collection health, and deltas.
+- [x] Count only actual completed `sold` as completed-sale evidence; keep `sold_out` separate.
+- [x] Exclude `review_required=true` stock/restock/social rows inside the domain contract.
+- [x] Keep outbound-click attribution provider+variant scoped; do not claim listing-level conversion/revenue.
+- [x] Separate Production DB `ingestion_runs` from GitHub Actions workflow-run evidence; missing workflow evidence remains `not_instrumented`.
+- [x] Keep Production reads sequential/read-only and output sanitized; do not emit raw provider payloads or credentials.
+- [x] Revalidate Production schema/select fields read-only.
+- [x] Re-read Production data for truthfulness and record 10,241 series / 23,808 variants / 107 listings / 107 observations at the checkpoint.
+- [x] Confirm 107 listings still had exactly one observation each and completed `sold` evidence remained 0.
+- [x] Confirm measured clicks 0 / 21 / 38 at 24h / 7d / 30d at validation time.
+- [x] Pass exact-head full tests / lint / diff check / Vercel Preview and full-diff review.
+- [x] Merge #159 as `3b0fea45a63800fdc052d007484727f9ed07e999`.
+- [x] Confirm Production deployment `dpl_BBV9gV6d5a7ftCihMPfc8v8oo4S7` reached `READY`.
+- [x] Confirm Issue #126 closed and old Draft #134 closed superseded.
+- [ ] Use the Scoreboard as the operating measurement layer; do **not** treat its merge as authorization for Production history/depth persistence.
+
+## P0-F — Post-#159 canonical sync — current gate
+
+Issue #160.
+
+- [x] Confirm #159 merged and Production READY.
+- [x] Confirm #126 completed and old #134 superseded/closed.
+- [x] Refresh `docs/HANDOFF.md` with #159 checkpoint and next P0.
+- [x] Refresh `docs/STATUS.md` with current main, Production state, and read-only metrics.
+- [x] Refresh `docs/DECISIONS.md` with durable Scoreboard truthfulness/evidence-source rules.
 - [x] Refresh this ordered TODO.
 
-Completion rule: when the Issue #157 docs-only PR containing this checkpoint is exact-head green, merged to `main`, and its normal Vercel Production deployment is READY, the canonical-sync gate is complete. Until then, do not begin the next major implementation.
+Completion rule: when the Issue #160 docs-only PR containing this checkpoint is exact-head green, merged to `main`, and its normal Vercel Production deployment is READY, the canonical-sync gate is complete. Until then, do not begin the next major implementation.
 
-## P0-E — Settle the Data Scale Scoreboard (Issue #126 / old PR #134) — next implementation
+## P0-G — Revalidate lawful source capability matrix (Issue #123 / old PR #145) — next implementation
 
-- [ ] Re-fetch current main, Issue #126, and old Draft PR #134 after P0-D completes.
-- [ ] Inspect the exact stale-branch diff against current main; do not blindly merge old history.
-- [ ] Prefer a clean current-main replacement when that yields the smallest reviewable truthful diff.
-- [ ] Preserve truthful availability states: `available`, `unavailable`, `not_instrumented`.
-- [ ] Track catalog breadth, market depth buckets, observation history depth, re-observation rate, provider split, affiliate provenance, stock/restock/social state, clicks, collection health, and reproducible deltas.
-- [ ] Count only actual completed `sold` evidence as completed sale; `sold_out` is not a transaction.
-- [ ] Keep Mercari `partnership_required` and X paid-access/uninstrumented state truthful.
-- [ ] Keep Production reads read-only and outputs sanitized.
-- [ ] Run exact-head full tests / lint / diff check / Vercel Preview and required review gate.
-- [ ] Merge only if all Auto-Merge + Standing Release gates pass.
-- [ ] Close old Draft #134 as superseded if a clean replacement is used.
-- [ ] Use the Scoreboard as the operating DATA -> TRAFFIC -> CLICK -> REVENUE measurement after integration.
-
-## P0-F — Revalidate lawful source capability matrix (Issue #123 / old PR #145)
-
-- [ ] Re-fetch #145 after #134 settles unless newer evidence changes priority.
-- [ ] Revalidate/rebase or clean-replace the docs-only work from current main.
+- [ ] Re-fetch current main, Issue #123, and old Draft PR #145 after P0-F completes.
+- [ ] Inspect the stale docs diff against current main; do not blindly merge old history.
+- [ ] Prefer a clean current-main replacement when it yields the smallest truthful diff.
+- [ ] Preserve source capability states: `active`, `planned`, `partnership_required`, `paid_access_required`, `manual_only`, `unavailable`.
 - [ ] Keep Yahoo/Rakuten as current approved programmatic marketplace sources.
 - [ ] Keep Mercari partnership-only; no scraping.
 - [ ] Keep X authorized/paid-access only; no scraping substitution.
-- [ ] Treat any new paid API/licensed source as a separate approval/diligence task.
-- [ ] Do not let source expansion outrank using already-approved Rakuten/Yahoo paths for depth/history without evidence.
+- [ ] Revalidate Aucfan as commercial/paid-access diligence rather than treating consumer-plan pricing as API licensing.
+- [ ] Record eBay/public API limitations and any other source state conservatively.
+- [ ] Treat any new paid API/licensed source, contract, credential, or data-rights activation as a separate explicit approval/diligence task.
+- [ ] Do not let source expansion outrank using already-approved Rakuten/Yahoo paths for history/depth without evidence.
+- [ ] Run exact-head CI / Vercel Preview / docs review gate.
+- [ ] Close old Draft #145 as superseded if a clean replacement is used.
 
 ## P1 — Production history/depth rollout only after code-only lanes are reviewed
 
-The existence of #150, #153, and #156 does **not** authorize Production-connected execution or persistence.
+The existence of #150, #153, #156, and #159 does **not** authorize Production-connected history/depth execution or persistence.
 
 - [ ] Define a separately approval-gated Production rollout for repeated observations/depth collection.
 - [ ] Re-read live Production counts and provider health before rollout sizing.
@@ -114,6 +140,7 @@ The existence of #150, #153, and #156 does **not** authorize Production-connecte
 - [ ] Add/verify DB idempotency and transaction/post-write verification before any write-capable automation.
 - [ ] Require explicit approval for Production DB writes, new/material workflow/schedule changes, Secrets/Variables, `workflow_dispatch`, or paid access.
 - [ ] Verify the first bounded rollout before any scaling.
+- [ ] Measure actual movement with the Scoreboard after each approved rollout.
 
 ## P2 — Source capability expansion
 
@@ -145,6 +172,7 @@ The existence of #150, #153, and #156 does **not** authorize Production-connecte
 - [ ] Do NOT merge #142 or manually dispatch F0 while its approval/review boundary remains.
 - [ ] Do NOT run #153's provider dry-run against Production credentials/data without a separate approved rollout.
 - [ ] Do NOT persist #150/#153/#156 projected observation/listing changes to Production without approval.
+- [ ] Do NOT interpret #159 Scoreboard integration as Production collection authorization.
 - [ ] Do NOT enable Kitan automatic writes.
 - [ ] Do NOT enable Qualia automatic rollout.
 - [ ] Do NOT rerun completed Kitan/Qualia/complete-set/P2/P1 Production canaries without new task-specific approval.
@@ -153,6 +181,7 @@ The existence of #150, #153, and #156 does **not** authorize Production-connecte
 - [ ] Do NOT mix completed/sold evidence with active asking-price evidence.
 - [ ] Do NOT mass-prune pages without current GSC evidence.
 - [ ] Do NOT scrape Mercari or Amazon.
+- [ ] Do NOT purchase/activate X, Aucfan, or other paid/licensed sources without explicit approval.
 - [ ] Do NOT touch `supabase/.temp/cli-latest`.
 - [ ] Do NOT re-enable `.github/workflows/gacha-ingestion.yml`.
 
