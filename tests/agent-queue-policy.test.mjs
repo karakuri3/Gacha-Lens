@@ -211,7 +211,7 @@ test("missing or invalid mandatory normalization fields fail closed", () => {
     { number: 103, open: true, queueState: "done", activeClaims: [], blockedBy: [], dependencyUnblocking: false, contractComplete: true, safety: "eligible", todoRank: 8 },
   ]);
 
-  assert.equal(plan.outcome, "queue-exhausted");
+  assert.equal(plan.outcome, "repository-ambiguous");
   assert.deepEqual(plan.orderedIssues, []);
   assert.deepEqual(plan.deferred, [
     { number: 95, reason: "missing-open-state" },
@@ -225,4 +225,10 @@ test("missing or invalid mandatory normalization fields fail closed", () => {
 
   assert.throws(() => planRawAgentQueue([], { completedIssues: ["1"] }), /completedIssues/);
   assert.throws(() => planRawAgentQueue([], { explicitIssues: "1" }), /explicitIssues/);
+
+  const terminal = planRawAgentQueue([
+    { number: 104, open: false, queueState: "ready", activeClaims: [], blockedBy: [], dependencyUnblocking: false },
+    { number: 105, open: true, queueState: "done", activeClaims: [], blockedBy: [], dependencyUnblocking: false },
+  ]);
+  assert.equal(terminal.outcome, "queue-exhausted");
 });

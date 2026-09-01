@@ -10,6 +10,11 @@ const QUEUE_STATES = new Set(["backlog", "ready", "working", "verification", "do
 const AMBIGUOUS_DEFER_REASONS = new Set([
   "active-state-without-durable-claim",
   "ambiguous-multiple-claims",
+  "invalid-dependency-state",
+  "invalid-dependency-unblocking-state",
+  "invalid-queue-state",
+  "missing-active-claims-state",
+  "missing-open-state",
   "unclassified-or-ambiguous-safety",
 ]);
 const BOUNDARY_REASONS = new Set([
