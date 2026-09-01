@@ -104,6 +104,12 @@ test("Production scoreboard loader uses only the injected read interface in dete
     assert.equal(snapshot.panels.data.history.observations_total.value, 1);
     assert.equal(snapshot.panels.data.signals.stock.value.total, 0, "review-required stock rows are excluded by the domain contract");
     assert.equal(snapshot.panels.data.signals.social.state, "not_instrumented");
+    assert.equal(snapshot.panels.collection_health.database_market_runs_24h.value, 1);
+    assert.equal(snapshot.panels.collection_health.database_market_run_success_24h.value, 1);
+    assert.equal(snapshot.panels.collection_health.database_market_run_failed_24h.value, 0);
+    assert.equal(snapshot.panels.collection_health.workflow_market_runs_24h.state, "not_instrumented");
+    assert.equal(snapshot.panels.collection_health.workflow_market_run_success_24h.state, "not_instrumented");
+    assert.equal(snapshot.panels.collection_health.workflow_market_run_failed_24h.state, "not_instrumented");
     assert.equal(snapshot.panels.traffic.state, "unavailable");
     assert.equal(snapshot.panels.revenue.state, "unavailable");
   } finally {
