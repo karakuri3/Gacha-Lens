@@ -1,38 +1,41 @@
 # Gacha Lens Status
 
-Updated: 2026-09-02 JST — post-PR #162 checkpoint
+Updated: 2026-09-02 JST — post-PR #170 checkpoint
 
 This is the compact operational companion to `docs/HANDOFF.md`. Re-fetch live GitHub/Vercel/Supabase/provider state before acting; counts and provider terms below are dated unless explicitly re-read.
 
 ## Repository / release
 
 - repo: `karakuri3/Gacha-Lens`
-- current merged checkpoint: `94ea0d8aac95e76e657326bc6c6df515f8603f22`
-- latest merged milestone: #162 `P0 Data Scale: refresh lawful source capability matrix`
-- #162 Vercel Production deployment: `dpl_Bp4p6evfsMsqideLzDg39uPmdzqA` — `READY`
-- #162 exact head: `b7d3a2215fe420e88a47eddc32b32c03be4a945e`
-- #162 PR Code Quality run `33531641763`: full tests / lint / diff whitespace PASS
-- #162 exact-head Preview `dpl_DxzDWG9jdYkRVac3ZTADsamhYgjg`: READY
-- #162 diff: exactly one new docs file
-- Issue #123: closed completed
-- old Draft #145: closed superseded by #162
+- current merged checkpoint before this canonical-sync PR: `def36cbc1dfe57da8c35faa0577490bc4ab5866c`
+- latest merged safety milestone: #169 `P0 Data Scale: harden equal-time re-observation safety`
+- #169 merged main: `d8921839491ce1e544c9bb3db92525831418f67b`
+- #169 Production deployment `dpl_3vMxWwP89osNcjZdLKTbUBscQWHR`: READY
+- Issue #166: closed completed
+- latest merged planning milestone: #170 `P0 Data Scale: finalize Production history/depth rollout plan`
+- #170 merged main: `def36cbc1dfe57da8c35faa0577490bc4ab5866c`
+- #170 Production deployment `dpl_DiuYPDViLe25wLjgeEXkpdeozgcg`: READY
+- Issue #165: closed completed
+- Draft #167/#168: closed superseded by non-Draft #169/#170 due the connected Draft→Ready GraphQL `fullDatabaseId` failure
 - generic PR Code Quality remains the default non-Production validation lane
 - Auto-Merge + Standing Production Release policies remain authoritative
 
-PR #156 Reviewer note remains historical and narrow: the user approved a **#156-only** substitution of independent CI + strengthened Lead self-review + regression tests when Copilot Code Review was unavailable. This is not a global policy change.
+Review exception note: the user explicitly approved the #167/#168 workstream only to substitute exact-head CI + Vercel Preview + strengthened Lead/self-review + regression tests for independent Verifier/Reviewer. This is not a global policy change and does not authorize Production execution.
 
 ## Current P0
 
 Issue #119 — **Data Scale Program**.
 
-Current ordering after post-#162 canonical sync:
+Current ordering after this canonical sync:
 
-1. create and complete a dedicated **read-only Production history/depth rollout plan** under #119
-2. separately request approval for any live Production provider-read canary / DB persistence canary / workflow or schedule activation
-3. use the Scoreboard to verify actual history/depth improvement after any approved rollout
-4. pursue licensed completed-sale evidence, with Aucfan currently the strongest identified commercial candidate
-5. continue stock/restock/non-price and explainable demand/social work only from authorized evidence
-6. DATA -> TRAFFIC -> CLICK -> REVENUE
+1. prepare exact R1 read-only re-observation cohort/preflight
+2. obtain explicit approval before any live Production-connected provider read
+3. execute only the approved R1 scope, then measure provider outcomes and zero DB writes
+4. separately request approval for R2 Production re-observation persistence
+5. after measured history gain, separately prepare/approve R3 depth read-only and R4 depth persistence
+6. use the Scoreboard after each approved rollout
+7. pursue licensed completed-sale evidence, with Aucfan currently the strongest identified commercial candidate
+8. DATA -> TRAFFIC -> CLICK -> REVENUE
 
 Three active listings is a presentation threshold only, never a collection-completion target.
 
@@ -46,62 +49,28 @@ Three active listings is a presentation threshold only, never a collection-compl
 - #153 — hardened exact provider re-observation dry-run: merged
 - #156 — hardened dry-run Depth Collector: merged
 - #159 — truthful read-only Data Scale Scoreboard: merged
-- #162 — current lawful source capability matrix: merged; #123 closed; old #145 superseded/closed
+- #162 — current lawful source capability matrix: merged
+- #169 — equal-time/null-time re-observation safety hardening: merged
+- #170 — Production history/depth rollout plan: merged
 
-## Source capability checkpoint after #162
-
-Canonical source contract: `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`.
-
-Current verified source posture, dated 2026-09-02:
-
-- Rakuten Ichiba API: `active`
-- Yahoo Shopping API / ValueCommerce: `active`
-- Bandai / Takara Tomy Arts official catalog: active inside existing repository contracts
-- Kitan Club official: capability exists, bounded/manual canary history; auto remains off
-- Qualia official: limited conservative capability; broad variant/auto rollout unapproved
-- Aucfan API/MCP: `paid_access_required`; best current licensed candidate for completed-sale/history, but commercial fields/rights/pricing remain unverified until diligence
-- Yahoo Auctions broad public market API: `unavailable` through the reviewed current public path
-- Mercari C2C broad market data: `partnership_required`; no scraping
-- Mercari Shops Public API: official seller/shop API exists, but broad market-intelligence capability is unavailable through that authenticated-shop scope
-- X API: `paid_access_required`; prices/quotas/search products are time-sensitive and must be rechecked before any activation
-- eBay Browse: lower-priority `planned`; current Buy API marketplace support did not include Japan at verification and historical Marketplace Insights access was restricted
-- Surugaya / Mandarake / AmiAmi broad automation: partnership/permission diligence before automation
-- Gacha Lens outbound clicks: active first-party provider+variant intent evidence, not transaction evidence
-- current GSC Wizard reporting path: `unavailable` because the connected read returned subscription/payment-required; this is not a zero-traffic claim and not a claim that Search Console itself is unavailable
-
-No paid source, API credit, credential, partnership, scraping path, or Production collector was activated by #162.
-
-Provider prices, quotas, supported markets and commercial terms are dated facts. Recheck official sources immediately before purchase, credential use, implementation or external commitment.
-
-## Scoreboard foundation after #159
-
-The Scoreboard is the standard repository-side read-only measurement view for **DATA -> TRAFFIC -> CLICK -> REVENUE**.
-
-Truthfulness contract:
-
-- `available`, `unavailable`, `not_instrumented` remain distinct
-- source capability state is separate from metric availability
-- only actual `status=sold` counts as completed-sale evidence
-- `sold_out` is not a transaction
-- review-required stock/restock/social evidence is excluded
-- outbound-click evidence is provider+variant scoped, not listing-level conversion/revenue attribution
-- Production DB ingestion-run evidence and GitHub workflow-run evidence remain separate
-- Scoreboard does not authorize Production collection/persistence
-
-## Re-observation / depth foundations
-
-After #150 + #153:
+## Re-observation foundation after #169
 
 - append-only repeated observation planning
-- retry-safe observation IDs
+- retry-safe deterministic observation IDs
 - exact persisted Rakuten/Yahoo item reads without keyword rediscovery
 - credential destinations restricted to reviewed official host/path
 - redirects refused
-- only ordinary `active` / `sold_out` live states; no fabricated `sold`
+- ordinary states only `active` / `sold_out`; no fabricated `sold`
 - positive price + explicit availability required
-- stale observations cannot roll current snapshot backward
+- older stale observations cannot roll current snapshot backward
+- equal timestamp + conflicting price/status fails closed
+- equal timestamp + unchanged same-key retry remains deterministic
+- null/undefined/blank/whitespace observation time is invalid
+- failed provider attempts do not advance `last_observed_at`
 
-After #156:
+Merged code remains dormant with respect to Production persistence until separately approved.
+
+## Depth foundation after #156
 
 - explicit target variant + parent series
 - strict P3 matcher/set/ambiguity safety reused unchanged
@@ -111,36 +80,104 @@ After #156:
 - insert-only projected-write contract
 - default budget 50 / hard max 200 are safety bounds, not product targets
 
-All three remain code/dry-run foundations. Live Production-connected provider execution and DB persistence remain unapproved.
+Production depth persistence/automatic activation remains unapproved.
+
+## Production history/depth rollout plan after #170
+
+Canonical plan: `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`.
+
+### R1 proposed read-only canary — next approval point
+
+Not yet approved/executed.
+
+- 6 known listings
+- 3 Rakuten + 3 Yahoo
+- serial exact-provider reads
+- no keyword fallback
+- normal request count <=6
+- retry limit <=3 only for reviewed retryable conditions
+- worst-case HTTP attempt envelope <=18
+- Rakuten pacing >=1200ms / Yahoo >=1000ms
+- Production DB writes 0
+
+### R2 proposed Production history persistence
+
+Separate explicit Production DB approval required later.
+
+- 4 known listings
+- 2 Rakuten + 2 Yahoo
+- expected +4 observations and +4 re-observed listings if baseline still has one observation each
+- listing count unchanged
+- bounded transaction + exact before/after + post-write reread
+- no false `sold`
+
+### R3 proposed depth read-only
+
+Separate live-provider approval required later.
+
+- 2 explicit target variants
+- one Rakuten-first + one Yahoo-first
+- max 5 accepted each / 10 total
+- max 6 planner requests / max 18 HTTP attempts
+- 0 DB writes
+
+### R4 proposed depth persistence
+
+Separate Production DB approval required later.
+
+- only frozen strict-safe R3 subset
+- <=10 total new listing+initial-observation pairs
+- insert-only
+- no existing-row updates/deletes
+
+No automatic schedule/budget scaling is authorized by #170.
 
 ## Dated Production data evidence
 
 Supabase Production: `vxbrnvfhmzcxehuuzzum`.
 
-Read-only validation during #159 measured:
+Issue #165 read-only baseline at 2026-09-02 01:49 JST:
 
 - series: 10,241
 - variants: 23,808
 - market listings: 107
-- active safe singles: 106
-- variants with safe active market evidence: 104
-- fresh <30d depth: 96 variants ×1, 1 variant ×2, 0 variants ×3+
 - observations: 107
-- listings with exactly one observation: 107
-- listings with 2+ observations: 0
+- re-observed listings: 0
+- depth: 96 variants ×1, 1 variant ×2, 0 variants ×3+
 - completed `sold`: 0
-- verified affiliate provenance: 3
-- review-safe stock/restock/X: 0 / 0 / 0
-- outbound clicks: 0 / 21 / 38 at 24h / 7d / 30d at validation time
+- Scoreboard bottleneck: `history_not_enabled`
 
-Treat these as dated until re-read. The measurable bottleneck remained repeated history: every known listing still had only one observation.
+Treat these as dated until re-read. The measurable bottleneck remained repeated history.
+
+## Source capability checkpoint
+
+Canonical source contract: `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`.
+
+Current verified posture, dated 2026-09-02:
+
+- Rakuten Ichiba API: `active`
+- Yahoo Shopping API / ValueCommerce: `active`
+- Bandai / Takara Tomy Arts: active official catalog sources
+- Kitan Club: capability exists, auto remains off
+- Qualia: conservative/limited, broad/auto rollout unapproved
+- Aucfan: `paid_access_required`; best current licensed completed-sale/history candidate, commercial rights/pricing still require diligence
+- Mercari C2C: `partnership_required`; no scraping
+- Mercari Shops Public API: seller/shop scoped, not broad C2C market intelligence
+- X API: `paid_access_required`; recheck current pricing/quota/search before activation
+- eBay Browse: lower-priority `planned`; recheck Japan/historical limitations
+- Surugaya / Mandarake / AmiAmi broad automation: permission/partnership first
+- Gacha Lens outbound clicks: active provider+variant intent evidence, not transactions
+- connected GSC Wizard reporting path: unavailable at verification due subscription/payment state, not zero traffic
 
 ## Current open work
 
 Re-fetch before acting.
 
-- Issue #119 — Data Scale umbrella. No dedicated Production history/depth rollout-planning child Issue existed at the #162 checkpoint; create one only after canonical-sync #163 closes.
-- PR #142 / Issue #137 — F0 rerelease canonical-year repair; explicit Production-impact review/approval boundary, do not auto-merge or manually dispatch F0.
+- Issue #119 — Data Scale umbrella: open
+- PR #142 / Issue #137 — F0 rerelease canonical-year repair: explicit Production-impact review/approval boundary; do not auto-merge or manually dispatch F0
+- Issue #165/#166: completed
+- #167/#168: superseded/closed
+- next history/depth work begins only after this canonical-sync gate completes
 
 ## F0 official automatic incident
 
@@ -169,16 +206,16 @@ PR #142 contains the repair; approval remains required before merge and any manu
 
 ## Exact next step
 
-Canonical-sync Issue #163 is the current gate.
+This canonical-sync PR is the current gate.
 
-After its docs-only PR is exact-head green, merged, and Production READY:
+After it is exact-head green, merged, and Production READY:
 
-1. re-fetch #119, `main`, Production counts and open PRs
-2. confirm no newer dedicated rollout-planning Issue exists
-3. create one bounded child Issue for **read-only Production history/depth rollout planning**
-4. reconcile #150/#153/#156/#159/#162 into exact canary, idempotency, transaction, rollback, provider-budget and Scoreboard-success requirements
-5. re-read Production/provider health read-only before sizing anything
-6. stop at the explicit boundary before any live Production provider request, DB write, workflow dispatch/schedule change, Secrets/Variables change, or paid action
+1. re-fetch #119, `main`, open PRs, Production Scoreboard counts and current provider-health evidence
+2. freeze the exact R1 six-listing cohort: 3 Rakuten + 3 Yahoo, exact-identity complete, review-safe and due
+3. verify the max-18-attempt budget and current official endpoint contract
+4. present the exact R1 cohort to the user for explicit live provider-read approval
+5. do not execute R1 until approved
+6. keep R2/R3/R4 separately approval-gated
 7. keep #142 approval-bound
 
 Business bottleneck remains **Data Scale first**.
