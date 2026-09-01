@@ -1,17 +1,19 @@
 # Gacha Lens Status
 
-Updated: 2026-08-30 JST
+Updated: 2026-09-01 JST
 
 This is the compact live-state companion to `docs/HANDOFF.md`. “Current” below means verified Git/GitHub development state unless a dated Production/GSC snapshot is explicitly named.
 
 ## Repository
 
 - repo: `karakuri3/Gacha-Lens`
-- current verified `origin/main`: `a79e8f72151cdb1eff94d6971e1544f751d7ed2f`
-- latest merged PR: #106 `F3-E1B2: resolve normalized affiliate provenance`
+- current verified `origin/main` before Queue v1 work: `3e633b1fe591aadd5e02e409104aa0214457c527`
+- latest merged PR before Queue v1 work: #120 `Image foundation: harden fallback and add offline audit`
 - open PRs at refresh: 0
+- open Issues at refresh: #80, #119, #121
 - Agent OS v1: merged via PR #105
 - gated autonomous merge policy: merged via PR #107
+- standing normal Vercel Production release gate: present on `origin/main`
 
 ## Evidence boundary
 
@@ -74,6 +76,8 @@ Do not interpret sitemap-summary `indexed=0` as whole-site unindexed without URL
 - F3-E1B1 future P3 affiliate-provenance persistence
 - F3-E1B2 normalized persisted-provenance display repair
 - Agent OS v1 and gated autonomous merge policy
+- Agent OS experiments #108, #112, #114, and #118, including independent verification/review and two disjoint Builders
+- Queue / Orchestrator v1 operating policy and offline deterministic planner (#121; completed by the merge containing this document)
 
 ## Completed GitHub operational evidence
 
@@ -126,7 +130,7 @@ Do not rerun these canaries without a new explicit task-specific approval.
 
 ## Current next boundary
 
-Do not repeat the old F3-C1 diagnostic/canary sequence. Before any new Production-connected action, perform a separately allowed live verification of deployment, database counts/canary rows, affiliate rendering, and GSC state. For ordinary development, continue from `docs/TODO.md` under Agent OS v1.
+Do not repeat the old F3-C1 diagnostic/canary sequence. Before any new Production-connected action, perform a separately allowed live verification of deployment, database counts/canary rows, affiliate rendering, and GSC state. For ordinary development, a fresh session may use the one-shot entry in `docs/AGENT_QUEUE.md`; it still follows `docs/TODO.md` and every existing safety boundary.
 
 ## Current business bottlenecks
 

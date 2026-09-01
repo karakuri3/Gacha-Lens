@@ -33,6 +33,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     "Never touch `supabase/.temp/cli-latest`",
     "docs/AUTO_MERGE_POLICY.md",
     "docs/PRODUCTION_RELEASE_POLICY.md",
+    "docs/AGENT_QUEUE.md",
+    "QUEUE / ORCHESTRATOR ENTRY",
   ]) {
     assert.match(agents, new RegExp(requiredText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
@@ -78,6 +80,9 @@ test("Agent OS defines the complete operating contract", async () => {
   ]) {
     assert.ok(agentOs.includes(queueState), `Missing queue state ${queueState}`);
   }
+
+  assert.ok(agentOs.includes("docs/AGENT_QUEUE.md"));
+  assert.ok(agentOs.includes("Queue / Orchestrator v1"));
 });
 
 test("Auto-Merge Policy allows routine safe merges while preserving hard stops", async () => {
@@ -174,4 +179,9 @@ test("package scripts provide focused and aggregate Agent validation entry point
     packageJson.scripts["test:agent-os"],
     "node --test tests/agent-os-policy.test.mjs",
   );
+  assert.equal(
+    packageJson.scripts["test:agent-queue"],
+    "node --test tests/agent-queue-policy.test.mjs",
+  );
+  assert.equal(packageJson.scripts["agent:queue-plan"], "node scripts/agent-queue-planner.mjs");
 });
