@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-08-30 JST
+Updated: 2026-09-01 JST
 
 This file records decisions that should survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -222,3 +222,13 @@ Prioritize:
 4. AdSense readiness later
 
 Do not keep expanding ingestion manufacturers, safety framework, or architecture indefinitely when the current bottleneck is traffic/data density.
+
+### D-061 — Data Scale is the current P0 program
+
+Issue #119 is the current product program. Gacha Lens must build comprehensive lawful data coverage over time across independent listings, repeated observations, provider/source breadth, inventory/restock evidence, and explainable demand signals.
+
+Three active listings is only the current truthful presentation threshold. It is not a collection target or completion condition.
+
+Keep breadth seeding, multi-listing depth collection, and repeated re-observation as separate responsibilities. Preserve exact matching, listing/observation identity separation, provider provenance, and fail-closed evidence semantics while scaling.
+
+Evaluate new work by expected movement through `DATA -> TRAFFIC -> CLICK -> REVENUE`. Mercari remains `partnership_required` and X/social requires authorized API or licensing access; lack of access does not authorize scraping or fabricated signals.

@@ -2,141 +2,156 @@
 
 Updated: 2026-09-01 JST
 
-This is the compact live-state companion to `docs/HANDOFF.md`. “Current” below means verified Git/GitHub development state unless a dated Production/GSC snapshot is explicitly named.
+This is the compact operational companion to `docs/HANDOFF.md`. Re-fetch live GitHub state before acting; Production/Supabase/GSC values are dated unless explicitly re-read.
 
 ## Repository
 
 - repo: `karakuri3/Gacha-Lens`
-- current verified `origin/main` before Queue v1 work: `3e633b1fe591aadd5e02e409104aa0214457c527`
-- latest merged PR before Queue v1 work: #120 `Image foundation: harden fallback and add offline audit`
-- open PRs at refresh: 0
-- open Issues at refresh: #80, #119, #121
-- Agent OS v1: merged via PR #105
-- gated autonomous merge policy: merged via PR #107
-- standing normal Vercel Production release gate: present on `origin/main`
+- verified `main` at this checkpoint: `11db0433a8493704acb9935b6f5c48c747788273`
+- latest merged PR: #122 `Agent Queue: add bounded one-shot orchestrator`
+- PR #141 normal Vercel Production deployment: success
+- generic PR validation now runs full `npm test`, `npm run lint`, and `git diff --check` for PRs targeting `main`
+- Agent OS v1 / Queue v1 / Auto-Merge / Standing Production Release policies remain authoritative
 
-## Evidence boundary
+## Current P0
 
-This documentation refresh used read-only Git and GitHub evidence. It did not read Vercel, Supabase Production, or GSC live state.
+Issue #119 — **Data Scale Program**.
 
-Therefore:
+Goal: build comprehensive lawful market/signal coverage over time, not stop at an arbitrary three-listing threshold.
 
-- current `main` deployment/alias state: requires separate live verification
-- current Production row counts: requires separate live verification
-- current GSC sitemap/performance state: requires separate live verification
+Priority order:
 
-The previous Production/GSC values below are dated 2026-08-27 snapshots and must not be presented as current.
+1. repeated observations / price-history depth
+2. multiple distinct listings per variant
+3. scalable source/provider architecture
+4. stock/restock/non-price signal coverage
+5. explainable demand/expectation signals and authorized X/social access
+6. DATA -> TRAFFIC -> CLICK -> REVENUE measurement
 
-## Last verified Production snapshot — 2026-08-27
+Three active listings remain a presentation threshold only.
+
+## Dated Production scale evidence — Issue #119, 2026-09-01 JST
 
 Supabase Production project: `vxbrnvfhmzcxehuuzzum`
 
-| Metric | Historical count |
+| Metric | Snapshot |
 | --- | ---: |
-| series | 10,221 |
-| variants | 23,708 |
-| market_listings | 58 |
-| market_listing_observations | 58 |
-| restock_events | 0 |
-| import_issues | 133 |
-| review-required variants | 7,535 |
-| provisional variants | 7,535 |
-| single listings | 58 |
-| complete-set listings | 0 |
-| Qualia series | 1 |
+| series | 10,241 |
+| variants | 23,808 |
+| market listings | 96 |
+| market listing observations | 96 |
+| active safe single listings | 95 |
+| Yahoo / Rakuten | 51 / 45 |
+| listings with 2+ observations | 0 |
+| completed/sold evidence | 0 |
+| fresh variants with 1 / 2 / 3+ listings | 85 / 1 / 0 |
 
-Approved canaries and scheduled lanes ran after this snapshot, so the table is intentionally not called current.
+These are dated Issue #119 evidence, not a perpetual live assertion.
 
-## Last verified GSC snapshot — 2026-08-27
+## Open implementation queue at this checkpoint
 
-Property: `sc-domain:gachalens.com`
+Re-fetch before acting.
 
-| Sitemap | Submitted | Pending | Warnings | Errors |
-| --- | ---: | --- | ---: | ---: |
-| `/series-sitemap.xml` | 2,703 | false | 0 | 0 |
-| `/variant-sitemap.xml` | 16,173 | false | 0 | 0 |
-| `/sitemap.xml` | 19,177 | false | 1 | 0 |
+- #131 — dry-run re-observation engine
+- #132 — dry-run multi-listing depth collector
+- #133 — evidence-backed upcoming forecast truthfulness
+- #134 — read-only Data Scale Scoreboard
+- #136 — stacked exact Rakuten/Yahoo provider re-observation dry-run
+- #142 — F0 rerelease canonical-year repair; current Production-affecting approval boundary
 
-Do not interpret sitemap-summary `indexed=0` as whole-site unindexed without URL/performance evidence.
+Closed replacement PRs from connector Draft→Ready workaround:
 
-## Completed development phases
+- #138 replaced by #142, unmerged
+- #140 replaced by merged #141, unmerged
 
-- F3-A Series-first discovery UX
-- F2-E1 Qualia series-only plumbing
-- F3-B1 series/variant sitemap observability
-- F3-C1 complete-set classifier and read-only diagnostic
-- F3-C1.1 query-context repair
-- F3-C2 exact-main readiness and one-series bounded canary plumbing
-- F3-C3 truthful series-level complete-set reference UI
-- F3-D1B Priority 2 distinct-evidence diagnostic
-- F3-D1C/D1D provider-scoped storefront evidence and safe legacy recovery
-- F3-D2 bounded Priority 2 manual persistence
-- F3-D3 bounded Priority 1 manual persistence and cooldown hotfix
-- F3-E1A observed marketplace listing comparison
-- F3-E1B1 future P3 affiliate-provenance persistence
-- F3-E1B2 normalized persisted-provenance display repair
-- Agent OS v1 and gated autonomous merge policy
-- Agent OS experiments #108, #112, #114, and #118, including independent verification/review and two disjoint Builders
-- Queue / Orchestrator v1 operating policy and offline deterministic planner (#121; completed by the merge containing this document)
+## F0 official automatic incident
 
-## Completed GitHub operational evidence
+Run `33484450472` on 2026-09-01 failed safely.
 
-The following are historical GitHub Actions results, not fresh database reads:
+- audit: `OFFICIAL_READ_ONLY_PLAN_READY`
+- formal lineups: 4
+- proposed new series / variants: 4 / 19
+- proposed restock event: 1
+- Production transaction: `not_started`
+- database writes: 0
+- deletes: 0
+- blocker: `official_bounded_rerelease_canonical_release_mismatch`
 
-- complete-set diagnostic run `33040022146`: success, zero writes, four accepted candidates
-- complete-set readiness run `33041537662`: success, zero writes
-- complete-set canary run `33042192598`: success, guarded one-candidate persistence step completed
-- P2 dry-run `33099434093`: success, two candidates, zero writes
-- P2 canary `33100892547`: success, one candidate, one listing plus one observation written
-- P1 initial dry-run `33193441127`: failed safely on the inherited cooldown contract; PR #101 repaired it
-- P1 repaired dry-run `33195641268`: success, one candidate, zero writes
-- P1 canary `33196152911`: success, one candidate, one listing plus one observation written
+Root cause: month-precision rerelease original year (`2020年10月`) was retained at candidate level but lost when restock-event generation reinterpreted the same resolved fetch record as persisted catalog state. The downstream guard correctly blocked the run.
 
-Do not rerun these canaries without a new explicit task-specific approval.
+Issue #137 / PR #142 contain the repair.
+
+PR #142 exact head at this checkpoint:
+
+`9e901e012e3a5dc776250ccc72923830aed6b1de`
+
+Validation:
+
+- full `npm test`: PASS
+- lint: PASS
+- `git diff --check`: PASS
+- Vercel Preview: PASS
+- Production actions by PR: 0
+- workflow/schedule changes: 0
+- safety guard weakening: 0
+
+Do **not** merge PR #142 or manually rerun/dispatch F0 merely because these checks pass. Merging changes code used by the scheduled Production-capable F0 lane. Independent collection-semantics review and the required explicit approval remain outstanding at this checkpoint.
+
+Connected attempts to register GitHub Copilot as reviewer did not persist a requested reviewer; the Vercel Agent review page required interactive login. Do not claim independent review has passed.
 
 ## Automatic lanes
 
 ### F0 official
 
-- bounded automatic path exists
-- recent scheduled GitHub runs completed successfully
-- current Production content/count effects require separate live verification
+- latest investigated schedule: failed safely as above
+- fix pending PR #142 review/approval
+- zero writes occurred in the failed run
 
 ### P3 V2 market
 
-- primary scheduled market lane remains active in GitHub
-- run `33310192748` completed successfully on 2026-08-30
-- strict single-item matcher and planner remain unchanged
+- scheduled breadth-seeding lane remains active
+- run `33488346438` succeeded on 2026-09-01
+- strict matcher/provenance unchanged
 
 ### Kitan
 
 - historical manual canary succeeded
-- automatic gate remains false by default
-- run `33301787139` resolved the false gate and skipped audit/planning/write steps
+- automatic gate remains false by default unless newer evidence proves otherwise
+- workflow run `33484658907` succeeded on 2026-09-01
+- do not enable writes or rerun manual canary without approval
 
 ### Qualia
 
 - historical one-series canary succeeded
-- series-only boundary remains
+- series-only / insert-only boundary remains
 - automatic rollout remains unapproved
 
-## Market presentation and monetization
+## Existing product/safety contracts
 
-- exact-variant observed listings may be shown only when active, review-free, direct-single, safe-host, and exact-target checks pass
-- complete-set reference remains series-level and separate from variant prices
-- future validated P3 Rakuten/Yahoo rows may retain allowlisted affiliate provenance
-- normalized persisted provenance is readable by the display layer after PR #106
-- historical backfills and Yahoo Secret/Variable activation remain separate approval-gated work
+- Series-first discovery; Variant-first market evidence
+- image truthfulness is mandatory
+- complete sets remain series-level evidence, separate from variant prices
+- strict single-item matcher stays strict
+- Yahoo/Rakuten/approved feeds are current allowed marketplace programmatic sources
+- no Mercari or Amazon scraping
+- Mercari remains strategic `partnership_required`
+- X/social requires authorized access
+- active >= 3 / completed >= 3 / completed >= 5 remain evidence-presentation thresholds, not Data Scale completion targets
 
-## Current next boundary
+## GSC
 
-Do not repeat the old F3-C1 diagnostic/canary sequence. Before any new Production-connected action, perform a separately allowed live verification of deployment, database counts/canary rows, affiliate rendering, and GSC state. For ordinary development, a fresh session may use the one-shot entry in `docs/AGENT_QUEUE.md`; it still follows `docs/TODO.md` and every existing safety boundary.
+The previous documented GSC snapshot is dated 2026-08-27. Re-read before current indexation/performance claims. Preserve separate root/series/variant sitemaps and do not mass-prune from sitemap-summary intuition alone.
 
-## Current business bottlenecks
+Do not repeat the old F3-C1 diagnostic/canary sequence. Before any new Production-connected action, use a separately authorized live-verification path. Ordinary development may use the one-shot entry in `docs/AGENT_QUEUE.md`; it still follows `docs/TODO.md` and every existing safety boundary.
 
-1. useful market-evidence density
-2. organic/indexed traffic growth
-3. affiliate conversion volume
-4. later AdSense readiness
+## Current boundary
 
-Avoid broad infrastructure expansion unless it directly supports these outcomes.
+Before doing more major implementation:
+
+1. keep canonical docs synchronized via Issue #143
+2. leave PR #142 at independent-review + explicit Production-impact approval boundary
+3. continue safe non-Production verification/integration work on Data Scale PRs under #119
+4. prefer completing existing PRs over duplicating them
+5. after the next major Production/recovery/release milestone, update the canonical four files before moving on
+
+Business bottleneck: **Data Scale first**, then traffic, clicks/conversion, and revenue.
