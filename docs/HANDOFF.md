@@ -1,8 +1,8 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-01 JST — post-PR #150 checkpoint
+Updated: 2026-09-01 JST — post-PR #153 checkpoint
 
-This is the canonical operational handoff for resuming Gacha Lens in a fresh ChatGPT/Codex task. Prefer newer live GitHub/Vercel/Supabase evidence over dated values in this file. Historical detail remains available in Git history and the linked Issues/PRs; this file is intentionally optimized for safe continuation from the current state.
+This is the canonical operational handoff for resuming Gacha Lens in a fresh ChatGPT/Codex task. Prefer newer live GitHub/Vercel/Supabase evidence over dated values in this file. Historical detail remains in Git history and linked Issues/PRs; this file is optimized for safe continuation from the current state.
 
 ## 1. Resume protocol
 
@@ -12,7 +12,7 @@ If a fresh thread receives only **「Gacha Lens続けて」**:
 2. Re-fetch `main`, open PRs, relevant Issues, recent Actions, and Vercel deployment state before implementation.
 3. Prefer existing durable Issue/branch/PR work over creating duplicates.
 4. Do not repeat completed Production canaries/diagnostics only to refresh context.
-5. Do not perform Production DB writes, migrations/backfills/cleanup, `workflow_dispatch`, Secrets/Variables changes, paid actions, destructive actions, direct pushes to `main`, or ineligible merges/releases without the required approval.
+5. Do not perform Production DB writes, migrations/backfills/cleanup, `workflow_dispatch`, Secrets/Variables changes, paid actions, destructive actions, direct pushes to `main`, or ineligible merges/releases without required approval.
 6. Safe reversible PRs may use `docs/AUTO_MERGE_POLICY.md`; their normal Git-triggered Vercel release may use `docs/PRODUCTION_RELEASE_POLICY.md` only when every gate passes.
 7. After a major Production/recovery/security/release milestone, synchronize the canonical four files before starting the next major implementation phase. Do not rely on chat-length warnings.
 
@@ -34,20 +34,21 @@ Vercel project ID: `prj_8Yelkn1wM7JGoA2WCMCGGhRt3o8x`
 
 Verified `main` before this canonical-sync PR:
 
-`53cbfabb8916e6647dde3d18423d855899df80d0`
+`af5356148cb75975f13383d095e01a805e7120db`
 
 Latest merged implementation PR:
 
-- PR #150 — `P0 Data Scale: add safe dry-run re-observation engine`
+- PR #153 — `P0 Data Scale: harden exact provider re-observation dry-run`
 
-PR #150 normal Git-triggered Vercel Production deployment:
+PR #153 normal Git-triggered Vercel Production deployment:
 
-- deployment: `dpl_3Wo9ToRQVUDWwftN58NzUbbi4q7F`
+- deployment: `dpl_9srsV4znx24SK7mmC9AX2Vkds7Pw`
 - state: `READY`
-- commit: `53cbfabb8916e6647dde3d18423d855899df80d0`
-- aliases include `gachalens.com` and `www.gachalens.com`
+- commit: `af5356148cb75975f13383d095e01a805e7120db`
 
-PR #150 exact-head validation passed full Node tests, lint, diff whitespace, and Vercel Preview before merge. Production DB writes, workflow dispatches, Secrets/Variables changes, paid/API activation, destructive actions, and external writes performed by the PR: **0**.
+PR #153 exact-head validation passed full Node tests, lint, diff whitespace, Vercel Preview, and independent security/collection review before merge. Production DB writes, workflow dispatches, Secrets/Variables changes, paid/API activation, destructive actions, and live provider execution performed by this milestone: **0**.
+
+Issue #135 is closed completed. Old stacked Draft PR #136 is closed as superseded by #153.
 
 ## 3. Product purpose and current P0
 
@@ -57,7 +58,7 @@ Gacha Lens is a gachapon market-intelligence product whose customer promise is:
 
 Current umbrella program: Issue #119 — **Data Scale Program**.
 
-The product is not complete when three listings exist. Three active listings remain only a truthful presentation threshold. The actual objective is compounding lawful data coverage:
+Three active listings remain only a truthful presentation threshold, not a completion target. The actual objective is compounding lawful data coverage:
 
 - broad official/catalog coverage
 - multiple independent market listings per variant where available
@@ -71,90 +72,88 @@ The product is not complete when three listings exist. Three active listings rem
 
 Mercari remains `partnership_required`; do not scrape it. Do not scrape Amazon. X/social must use authorized API/licensing access.
 
-## 4. Data Scale work completed in this checkpoint sequence
+## 4. Current Data Scale foundation
 
-### PR #144 — recovery canonical sync
+### #146 — throughput audit
 
-Recovered the project after the prior thread hit its limit and refreshed the canonical state around Issue #119 and the F0 incident.
+Merged. Established that the immediate bottleneck is data depth/history throughput rather than agent/PR activity.
 
-### PR #145 — source capability matrix
+### #147 — market history architecture
 
-Still open Draft at this checkpoint; docs-only work identifying lawful source expansion paths. Treat its facts as proposal/evidence until the PR is revalidated/rebased/merged.
+Merged. Defines append-only observation history, listing-vs-observation identity, re-observation cadence/failure semantics, and a no-migration-first approach.
 
-### PR #146 — throughput audit
+### #148 — market signal architecture
 
-Merged. Quantified the current collection bottleneck and established that the problem is data depth/history throughput, not merely code/agent activity.
+Merged. Defines evidence/provenance boundaries for stock/restock/demand/expectation/social signals.
 
-### PR #147 — market history architecture
+### #149 — forecast truthfulness
 
-Merged. `docs/MARKET_HISTORY_ARCHITECTURE.md` defines append-only observation history, listing-vs-observation identity, re-observation cadence principles, failure semantics, and a no-migration-first approach.
+Merged; Issue #130 closed. Metadata-only heuristics cannot create a public upcoming expectation score. Insufficient evidence fails closed.
 
-### PR #148 — evidence-backed market signal architecture
+### #150 — re-observation engine v1
 
-Merged. `docs/MARKET_SIGNAL_ARCHITECTURE.md` defines truthful component/provenance boundaries for future demand/expectation signals.
-
-### PR #149 — forecast truthfulness repair
-
-Merged; Issue #130 closed. Metadata-only heuristics can no longer produce a public upcoming expectation score. Insufficient evidence fails closed to `null` / `算出待ち`. Old Draft #133 was superseded and closed.
-
-### PR #150 — re-observation engine v1
-
-Merged; Issue #128 closed. Old Draft #131 was superseded and closed.
-
-Current reusable domain contract:
+Merged; Issue #128 closed; old #131 closed. Durable behavior:
 
 - one known listing can accumulate repeated append-only observations
-- deterministic observation identity is retry-safe per listing/provider/logical bucket
-- persisted and fetched marketplace identity must match exactly
-- ordinary live states are only `active` / `sold_out`; this lane cannot fabricate completed `sold`
-- unchanged observations are valid time evidence
+- deterministic observation IDs are retry-safe per listing/provider/logical bucket
+- persisted and fetched marketplace identity must match
+- ordinary live states are only `active` / `sold_out`; no fabricated completed `sold`
+- unchanged observations remain valid time evidence
 - price/status changes plan only allowlisted current-snapshot fields
 - not-found/throttled/provider-error create no lifecycle mutation
 - unknown provider availability fails closed
 - missing/zero/negative/invalid prices fail closed
-- an observation older than `last_observed_at` fails closed with `stale_observation_time` so the current snapshot cannot roll backward
+- stale observations cannot roll the current snapshot backward
 - dry-run summaries expose projected writes while `production_actions` remains `0`
+
+### #153 — exact provider re-observation read v1
+
+Merged; Issue #135 closed; old #136 closed. The code can re-read already-persisted Rakuten/Yahoo listing identities through exact provider requests and feed #150 without keyword rediscovery.
+
+Security and truthfulness contract:
+
+- Rakuten exact reads use the reviewed official `openapi.rakuten.co.jp` API destination and exact path
+- Yahoo exact reads use the reviewed official `shopping.yahooapis.jp` `itemLookup` destination and exact path
+- arbitrary HTTPS hosts are rejected; TLS alone does not authorize credential delivery
+- HTTP, embedded username/password, pre-supplied query strings, and fragments fail closed
+- provider requests use `redirect: error`
+- invalid durable listing identity fails before provider request
+- Rakuten `accessKey` stays header-only in this lane; Yahoo `appid` remains confined to the reviewed request destination
+- provider response identity must remain exact
+- positive integer price and explicit availability are required
+- provider failure/not-found never fabricates `sold`
+- runner is bounded, serial, sanitized, and read-only
+- live Production-connected provider execution and DB persistence are **not authorized** by this merge
 
 ## 5. Current open work
 
 Re-fetch before acting because state can change.
 
-### PR #136 — exact provider re-observation read
+### PR #132 / Issue #129 — multi-listing Depth Collector — next implementation
 
-Open Draft, originally stacked on the old #131 branch. It should **not** be merged as-is.
+Open old-base Draft. This is the first implementation after the post-#153 canonical sync completes.
 
-Positive design already present:
+Purpose:
 
-- exact persisted Rakuten/Yahoo item identity reads
-- no keyword rediscovery
-- bounded retries/timeouts
-- serial provider pacing
-- sanitized diagnostics
-- dry-run/read-only runner
-- no DB persistence authorization
+- move beyond 0->1 breadth seeding
+- retain many legitimate distinct offers for the same variant
+- dedupe by durable listing/provider item/canonical URL identity, not price/title
+- preserve strict matcher, target variant/series scope, and affiliate provenance
+- treat request limits as operational safety budgets, not completion targets
 
-Independent review after #150 found an additional security boundary:
+Do not merge old branch as-is. Re-fetch its diff against current main and prefer a clean current-main replacement or narrowly justified rebase. Keep Production persistence/automation separately approval-gated.
 
-- the old code permits a configurable arbitrary HTTPS `options.endpoint`
-- Rakuten requests carry `accessKey` in a header
-- Yahoo requests carry `appid` in the query
-- therefore a misconfigured/untrusted custom HTTPS endpoint could receive provider credentials/identifiers
+### PR #134 / Issue #126 — Data Scale Scoreboard
 
-**Required next repair:** create a clean replacement from current `main`, port only the five #135 files, and lock outbound provider requests to the reviewed official API host + path (or an equivalently strict allowlist) before merge consideration. Tests must prove an arbitrary HTTPS host is rejected. Keep the lane code-only/dry-run; do not execute live Production-connected provider reads or persist observations without the separate required approval.
+Open old-base Draft. Read-only measurement for catalog breadth, market depth, observation history, provider split, affiliate provenance, stock/restock/social availability, clicks, and DATA -> TRAFFIC -> CLICK -> REVENUE health.
 
-### PR #132 — multi-listing depth collector
+Settle after #132 unless new verified evidence changes priority. Keep `sold` distinct from `sold_out`; unavailable/uninstrumented states must not be invented as zero.
 
-Open Draft on an old base. Purpose is to retain many legitimate distinct offers per variant under strict existing matcher/provenance rules. Revalidate/rebase or clean-replace after the provider-read step; do not preserve the old one-listing/three-listing stopping habit.
+### PR #145 / Issue #123 — source capability matrix
 
-### PR #134 — Data Scale Scoreboard
+Open old-base docs-only Draft. Revalidate after higher-priority data-generation/measurement lanes. It must not authorize paid access, scraping, Secrets changes, or Production integration.
 
-Open Draft on an old base. Read-only measurement for breadth, depth, history, providers, signals, clicks, and DATA -> TRAFFIC -> CLICK -> REVENUE. Revalidate/rebase or clean-replace before merge.
-
-### PR #145 — source capability matrix
-
-Open Draft docs-only source research. Revalidate against current main before merge. It must not authorize paid access, scraping, Secrets changes, or Production integrations.
-
-### PR #142 — F0 rerelease canonical-year repair
+### PR #142 / Issue #137 — F0 rerelease canonical-year repair
 
 Open, non-Draft, **human/approval-bound**. Do not auto-merge merely because tests/Preview pass. Merging changes code used by the scheduled Production-capable F0 official lane and can allow a future scheduled write path to proceed past the current blocker.
 
@@ -167,21 +166,19 @@ Issue #119 earlier 2026-09-01 snapshot recorded:
 - series: 10,241
 - variants: 23,808
 - market listings: 96
-- market listing observations: 96
+- observations: 96
 - listings with 2+ observations: 0
 - completed/sold evidence: 0
 
-Issue #128 later recorded a 2026-09-01 baseline of **101 market listings / 101 observations**, again with one observation per known listing at that time.
+Issue #128 later recorded 101 market listings / 101 observations, still one observation per known listing at that checkpoint.
 
-A later read in the same recovery session found `outbound_clicks` had 68 rows while `stock_reports`, `restock_events`, and `x_reactions` were still 0. Treat those as dated evidence unless freshly re-read.
+A later same-day read found `outbound_clicks` 68 while `stock_reports`, `restock_events`, and `x_reactions` were 0. Treat these as dated evidence until freshly re-read.
 
-The key bottleneck remains: market breadth is thin and history depth is nearly nonexistent. #150 supplies the reusable re-observation contract, but no Production history-writing rollout has been authorized yet.
+#150 and #153 provide code contracts for history generation, but no live Production history-writing rollout has been authorized.
 
 ## 7. F0 official automatic incident
 
-Scheduled `Gacha Official Bounded Automatic Production` run `33484450472` failed safely on 2026-09-01.
-
-Verified:
+Scheduled `Gacha Official Bounded Automatic Production` run `33484450472` failed safely on 2026-09-01:
 
 - read-only audit: success / `OFFICIAL_READ_ONLY_PLAN_READY`
 - formal lineups: 4
@@ -193,9 +190,7 @@ Verified:
 - deletes: 0
 - blocker: `official_bounded_rerelease_canonical_release_mismatch`
 
-Affected rerelease candidate retained original release `2020年10月`, but restock-event generation lost the original year for month-precision canonical release. The downstream guard correctly blocked writes.
-
-Issue #137 / PR #142 contain the repair. Keep the safety guard intact. Do not manually rerun/dispatch F0 without separate `workflow_dispatch` approval.
+Issue #137 / PR #142 contain the repair. Keep the safety guard intact. Do not merge #142 or manually rerun/dispatch F0 without the required explicit approvals.
 
 ## 8. Automatic lanes and hard repository rules
 
@@ -203,13 +198,12 @@ F0 official:
 
 - schedule exists
 - latest investigated run failed safely as above
-- repair pending PR #142 review/approval
+- repair pending PR #142 approval/review
 
 P3 V2 market:
 
-- bounded breadth-seeding schedule remains active unless newer evidence says otherwise
+- bounded breadth-seeding schedule remains separate from depth collection/re-observation
 - strict matcher/provenance must remain unchanged
-- do not confuse breadth seeding with depth collection/re-observation
 
 Kitan:
 
@@ -241,19 +235,20 @@ Hard rules:
 
 If merge causes only the repository's normal Vercel Production deployment, `docs/PRODUCTION_RELEASE_POLICY.md` must also pass in full.
 
-Always stop for the explicit approval boundary when work includes Production DB mutation/migration, workflow dispatch, Secrets/Variables changes, new/material Production-capable workflows, paid actions, destructive operations, direct main push, major product/security decisions, or an ineligible release.
+Always stop for explicit approval when work includes Production DB mutation/migration, workflow dispatch, Secrets/Variables changes, new/material Production-capable workflow/schedule/cron/automatic ingestion, paid actions, destructive operations, direct main push, major unresolved product/security decisions, or an ineligible release.
 
 ## 10. Exact next step after this canonical sync
 
-After the canonical-sync PR from Issue #151 is green and merged:
+After Issue #154's docs-only PR is exact-head green, merged, and its normal Vercel Production deployment is READY:
 
-1. Re-fetch `main` and PR #136.
-2. Create a **clean current-main replacement** for #136/#135 rather than merging the old stacked branch.
-3. Port only the provider-read/runner/docs/tests work.
-4. Repair the credential-routing boundary by accepting only reviewed official Rakuten/Yahoo API host+path destinations; arbitrary HTTPS custom hosts must fail closed before any request.
-5. Run full exact-head tests, lint, diff check, Vercel Preview, and independent review.
-6. Merge only if Auto-Merge + Standing Release gates pass.
-7. Do **not** execute live Production-connected provider re-observation or persist observations. That rollout remains a separate approval-gated task.
-8. Then proceed to clean validation/integration of #132 depth collector and #134 Scoreboard, preferring existing work over duplicates.
+1. Re-fetch `main`, Issue #129, and old Draft PR #132.
+2. Inspect its exact diff against current main; do not blindly merge stale history.
+3. Build a clean current-main replacement if needed, preserving only the Depth Collector contract and tests.
+4. Verify many distinct legitimate offers for one target variant remain retained while duplicate/unsafe/set/ambiguous identities fail closed.
+5. Preserve strict matcher/provenance; do not make `3 listings` a stopping target.
+6. Run exact-head full tests, lint, diff check, Vercel Preview, and independent collection-semantics review.
+7. Merge only if Auto-Merge + Standing Release gates pass.
+8. Keep Production depth persistence/automatic activation as a separate approval-gated rollout.
+9. Then settle #134 Scoreboard, followed by #145 source capability matrix unless newer evidence changes priority.
 
 Business priority remains **DATA first**, then TRAFFIC, CLICK/conversion, and REVENUE.
