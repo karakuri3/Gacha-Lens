@@ -23,7 +23,7 @@ Do not collapse these panels into a single vanity score.
 
 ## Truthfulness contract
 
-Every metric has an availability state.
+Every measured metric has an availability state.
 
 - `available`: the value was actually measured.
 - `unavailable`: the source/report was not available to this run.
@@ -31,11 +31,22 @@ Every metric has an availability state.
 
 `0`, `unavailable` and `not_instrumented` are different facts and must never be converted into each other.
 
+Source capability state is a separate concept. Capability entries use the durable Data Scale vocabulary:
+
+- `active`
+- `planned`
+- `partnership_required`
+- `paid_access_required`
+- `manual_only`
+- `unavailable`
+
+Do not confuse a capability state such as `paid_access_required` with a measured signal state such as `not_instrumented`.
+
 Examples:
 
 - `stock_reports = 0` after reading the table means an available measured zero.
 - disconnected Search Console means Traffic is `unavailable`, not zero impressions.
-- X collection disabled means social signals are `not_instrumented`, not zero interest.
+- X without reviewed/authorized collection means the social signal metric is `not_instrumented`, not zero interest, while its source capability remains `paid_access_required`.
 - affiliate-provider revenue without a connected provider report is `unavailable`, not zero revenue.
 
 ## DATA panel
@@ -44,7 +55,11 @@ Examples:
 
 - total series
 - total variants
-- source capability inventory
+- active supported source count
+- total source capability inventory count
+- source capability inventory with explicit per-source state
+
+`supported_source_count` counts only `active` capability entries. Partnership-only, paid-access-required and merely planned sources are not counted as active support.
 
 ### Market breadth
 
@@ -91,8 +106,10 @@ Known listings with zero observations must remain visible. Omitting them would m
 
 - review-safe stock reports
 - review-safe restock/re-release events
-- X/social only after reviewed activation
+- X/social only after reviewed authorized activation
 - expectation-score provenance coverage only after instrumentation exists
+
+`review_required=true` stock/restock/social rows are excluded by the domain Scoreboard contract, not merely by one CLI caller.
 
 ## TRAFFIC panel
 
@@ -194,28 +211,35 @@ It reads `market_listings.raw` only because the current verified affiliate-prove
 
 It does not read `import_issues.note` or arbitrary issue text into the output. Reason reporting uses the sanitized issue type available to the read-only report.
 
+The current Production schema was re-checked read-only before the clean #126 settlement; the selected `review_required`, timestamp and identity columns used by this CLI exist on the relevant tables.
+
 ## Source capability states in v1
+
+Current conservative built-in inventory:
 
 - official catalog/release facts: `active`
 - Rakuten market listings: `active`
 - Yahoo Shopping market listings: `active`
-- X social signals: `active` only when reviewed X fetching is enabled; otherwise `not_configured`
+- X social signals: `active` only after reviewed authorized fetching is enabled; otherwise `paid_access_required`
 - Mercari market history/completed-sale data: `partnership_required`
 
-Mercari is intentionally retained in the strategic source model even before authorized access exists.
+Mercari is intentionally retained in the strategic source model even before authorized access exists. The Scoreboard must never turn partnership-required or paid-access-required into active support merely because a provider is strategically valuable.
+
+The broader source matrix may add more capability entries later; that does not itself authorize scraping, paid access, credentials, or Production integration.
 
 ## Current P0 interpretation
 
-At the 2026-09-01 baseline, the dominant evidence was:
+At the dated 2026-09-01 baseline, the dominant evidence was:
 
 - catalog: ~23.8k variants
-- market listings: only ~100
+- market listings: only ~100, later measured at 107
 - nearly all covered variants had one fresh listing
-- known listings had only one observation each
+- known listings had only one observation each at the 107/107 checkpoint
 - stock/restock were measured zero
 - X was not activated
+- first-party outbound clicks were present
 
-Therefore engineering work should be judged by actual changes in breadth, depth and history after #128/#129 activation, not by the number of PRs created.
+#150, #153 and #156 established code-only history/depth foundations. They did not authorize Production persistence. Engineering work should therefore be judged by actual breadth, depth, history and conversion movement once separately approved rollouts occur, not by the number of PRs created.
 
 ## Safety boundaries
 
@@ -232,5 +256,7 @@ Scoreboard v1 must not:
 - call active listing prices completed sales
 - treat `sold_out` as completed-sale evidence
 - treat three listings as collection completion
+- count partnership-required or paid-access-required sources as active support
+- surface review-required stock/restock/social rows as trusted signal coverage
 
 Any future write, schedule, paid-service or Production activation remains a separate approval boundary.
