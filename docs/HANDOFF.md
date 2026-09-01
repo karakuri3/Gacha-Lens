@@ -1,8 +1,8 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-01 JST — post-PR #153 checkpoint
+Updated: 2026-09-02 JST — post-PR #156 checkpoint
 
-This is the canonical operational handoff for resuming Gacha Lens in a fresh ChatGPT/Codex task. Prefer newer live GitHub/Vercel/Supabase evidence over dated values in this file. Historical detail remains in Git history and linked Issues/PRs; this file is optimized for safe continuation from the current state.
+This is the canonical operational handoff for resuming Gacha Lens in a fresh ChatGPT/Codex task. Prefer newer live GitHub/Vercel/Supabase evidence over dated values here. Historical detail remains in Git history and linked Issues/PRs; this file is optimized for safe continuation from the current state.
 
 ## 1. Resume protocol
 
@@ -32,23 +32,32 @@ Vercel project ID: `prj_8Yelkn1wM7JGoA2WCMCGGhRt3o8x`
 
 ## 2. Verified checkpoint
 
-Verified `main` before this canonical-sync PR:
+Current merged `main` / Production code checkpoint before this canonical-sync PR:
 
-`af5356148cb75975f13383d095e01a805e7120db`
+`f7fb7b10f2ff8a791e439446958581ee42c3eeb9`
 
 Latest merged implementation PR:
 
-- PR #153 — `P0 Data Scale: harden exact provider re-observation dry-run`
+- PR #156 — `P0 Data Scale: add hardened dry-run depth collector`
+- Issue #129: closed completed
+- old Draft PR #132: closed as superseded by #156
 
-PR #153 normal Git-triggered Vercel Production deployment:
+PR #156 normal Git-triggered Vercel Production deployment:
 
-- deployment: `dpl_9srsV4znx24SK7mmC9AX2Vkds7Pw`
+- deployment: `dpl_43UEfvXeNsfwBKmuMm4J64Y9xL9s`
 - state: `READY`
-- commit: `af5356148cb75975f13383d095e01a805e7120db`
+- commit: `f7fb7b10f2ff8a791e439446958581ee42c3eeb9`
+- aliases include `gachalens.com`, `www.gachalens.com`, and `gachalens.vercel.app`
 
-PR #153 exact-head validation passed full Node tests, lint, diff whitespace, Vercel Preview, and independent security/collection review before merge. Production DB writes, workflow dispatches, Secrets/Variables changes, paid/API activation, destructive actions, and live provider execution performed by this milestone: **0**.
+PR #156 exact-head validation:
 
-Issue #135 is closed completed. Old stacked Draft PR #136 is closed as superseded by #153.
+- exact head: `d6d0922825f296944df0a117d29d1b87f3ae0c50`
+- PR Code Quality run `33523845575`: full Node tests PASS, lint PASS, diff whitespace PASS
+- exact-head Vercel Preview `dpl_8g3Yt2GiukaCG6GfMqFnxXHfM77y`: READY
+- branch was behind main by 0; diff was exactly 2 new files
+- Production DB writes, workflow dispatches, Secrets/Variables changes, paid/API activation, destructive actions, and live Production depth execution: **0**
+
+Issue #129 originally required an independent Reviewer. Copilot Code Review was unavailable on the current GitHub plan, and the user explicitly approved a **PR-#156-only** substitution: independent CI verification + strengthened Lead self-review + regression tests. This is not a global policy change and must not be generalized to future tasks without a separate basis.
 
 ## 3. Product purpose and current P0
 
@@ -118,40 +127,48 @@ Security and truthfulness contract:
 - HTTP, embedded username/password, pre-supplied query strings, and fragments fail closed
 - provider requests use `redirect: error`
 - invalid durable listing identity fails before provider request
-- Rakuten `accessKey` stays header-only in this lane; Yahoo `appid` remains confined to the reviewed request destination
 - provider response identity must remain exact
 - positive integer price and explicit availability are required
 - provider failure/not-found never fabricates `sold`
 - runner is bounded, serial, sanitized, and read-only
 - live Production-connected provider execution and DB persistence are **not authorized** by this merge
 
+### #156 — Depth Collector v1
+
+Merged; Issue #129 closed; old #132 closed superseded. This is the code-only/dry-run-first multi-listing depth foundation.
+
+Durable behavior:
+
+- explicit target variant + parent series are required
+- current strict `isEligibleP3BoundedSeedCandidate()` matcher/single/set/ambiguity safety is reused unchanged
+- a target variant can retain 10+ genuinely distinct legitimate offers under the operational budget; there is no `3 listings = done` rule
+- same price/title does not collapse distinct marketplace identities
+- dedupe uses durable listing ID, provider + native source listing ID, and canonical public URL
+- duplicate candidate keys are all rejected rather than arbitrarily selecting one
+- same-provider distinct storefront/listing and cross-provider distinct offers remain eligible when identity is genuinely distinct
+- already-known listing identities can be excluded
+- verified affiliate provenance sanitizer is reused
+- selection binds target, candidate keys, listing IDs, provider/source identities, canonical URLs, and a SHA-256 fingerprint of row-relevant candidate evidence
+- target/URL/price/title/marketplace identity/selection drift after selection fails closed
+- selected candidates are re-run through strict market safety before row generation
+- dry-run generation uses the same selection-integrity gate
+- projected writes are insert-only; insert counts must match accepted selection and any update/delete/count drift fails closed
+- default operational budget is 50, hard max 200; this is a safety/request bound, not a product completion target
+- Production persistence/automatic activation remains separately approval-gated
+
 ## 5. Current open work
 
 Re-fetch before acting because state can change.
 
-### PR #132 / Issue #129 — multi-listing Depth Collector — next implementation
-
-Open old-base Draft. This is the first implementation after the post-#153 canonical sync completes.
-
-Purpose:
-
-- move beyond 0->1 breadth seeding
-- retain many legitimate distinct offers for the same variant
-- dedupe by durable listing/provider item/canonical URL identity, not price/title
-- preserve strict matcher, target variant/series scope, and affiliate provenance
-- treat request limits as operational safety budgets, not completion targets
-
-Do not merge old branch as-is. Re-fetch its diff against current main and prefer a clean current-main replacement or narrowly justified rebase. Keep Production persistence/automation separately approval-gated.
-
-### PR #134 / Issue #126 — Data Scale Scoreboard
+### PR #134 / Issue #126 — Data Scale Scoreboard — next P0 settlement
 
 Open old-base Draft. Read-only measurement for catalog breadth, market depth, observation history, provider split, affiliate provenance, stock/restock/social availability, clicks, and DATA -> TRAFFIC -> CLICK -> REVENUE health.
 
-Settle after #132 unless new verified evidence changes priority. Keep `sold` distinct from `sold_out`; unavailable/uninstrumented states must not be invented as zero.
+Do not merge the stale branch blindly. Re-fetch exact diff against current main and prefer a clean current-main replacement if that is safer/smaller. Preserve truthful `available` / `unavailable` / `not_instrumented` states and keep actual completed `sold` distinct from `sold_out`.
 
 ### PR #145 / Issue #123 — source capability matrix
 
-Open old-base docs-only Draft. Revalidate after higher-priority data-generation/measurement lanes. It must not authorize paid access, scraping, Secrets changes, or Production integration.
+Open old-base docs-only Draft. Revalidate after Scoreboard unless newer evidence changes priority. It must not authorize paid access, scraping, Secrets changes, or Production integration.
 
 ### PR #142 / Issue #137 — F0 rerelease canonical-year repair
 
@@ -170,11 +187,9 @@ Issue #119 earlier 2026-09-01 snapshot recorded:
 - listings with 2+ observations: 0
 - completed/sold evidence: 0
 
-Issue #128 later recorded 101 market listings / 101 observations, still one observation per known listing at that checkpoint.
+Issue #128 later recorded 101 market listings / 101 observations. A later read found 107 listings / 107 observations with 0 listings having 2+ observations, 106 safe active listings, and one variant reaching 3 active listings. Another same-day read found `outbound_clicks` 68 while `stock_reports`, `restock_events`, and `x_reactions` were 0.
 
-A later same-day read found `outbound_clicks` 68 while `stock_reports`, `restock_events`, and `x_reactions` were 0. Treat these as dated evidence until freshly re-read.
-
-#150 and #153 provide code contracts for history generation, but no live Production history-writing rollout has been authorized.
+Treat these as dated evidence until freshly re-read. #150/#153/#156 are code foundations only; no Production history/depth persistence rollout has been authorized.
 
 ## 7. F0 official automatic incident
 
@@ -237,18 +252,20 @@ If merge causes only the repository's normal Vercel Production deployment, `docs
 
 Always stop for explicit approval when work includes Production DB mutation/migration, workflow dispatch, Secrets/Variables changes, new/material Production-capable workflow/schedule/cron/automatic ingestion, paid actions, destructive operations, direct main push, major unresolved product/security decisions, or an ineligible release.
 
+The PR #156 Reviewer substitution was a one-task explicit human exception caused by unavailable Copilot Code Review. It does not amend the standing merge/review policies.
+
 ## 10. Exact next step after this canonical sync
 
-After Issue #154's docs-only PR is exact-head green, merged, and its normal Vercel Production deployment is READY:
+After Issue #157's docs-only PR is exact-head green, merged, and its normal Vercel Production deployment is READY:
 
-1. Re-fetch `main`, Issue #129, and old Draft PR #132.
-2. Inspect its exact diff against current main; do not blindly merge stale history.
-3. Build a clean current-main replacement if needed, preserving only the Depth Collector contract and tests.
-4. Verify many distinct legitimate offers for one target variant remain retained while duplicate/unsafe/set/ambiguous identities fail closed.
-5. Preserve strict matcher/provenance; do not make `3 listings` a stopping target.
-6. Run exact-head full tests, lint, diff check, Vercel Preview, and independent collection-semantics review.
-7. Merge only if Auto-Merge + Standing Release gates pass.
-8. Keep Production depth persistence/automatic activation as a separate approval-gated rollout.
-9. Then settle #134 Scoreboard, followed by #145 source capability matrix unless newer evidence changes priority.
+1. Re-fetch `main`, Issue #126, and old Draft PR #134.
+2. Inspect #134 against current main; do not blindly merge stale history.
+3. Clean-replace the Scoreboard from current main when that yields the smallest truthful diff.
+4. Preserve truthful source/signal availability states and `sold` vs `sold_out` semantics.
+5. Run exact-head full tests, lint, diff check, Vercel Preview, and the required review gate.
+6. Merge only if Auto-Merge + Standing Release gates pass.
+7. Then revalidate/settle #145 source capability matrix.
+8. Keep #142 at its explicit F0 Production-impact approval boundary.
+9. Keep Production depth/history execution and persistence as a separately approval-gated rollout.
 
 Business priority remains **DATA first**, then TRAFFIC, CLICK/conversion, and REVENUE.
