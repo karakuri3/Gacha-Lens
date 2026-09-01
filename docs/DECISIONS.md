@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-01 JST — post-PR #153 checkpoint
+Updated: 2026-09-02 JST — post-PR #156 checkpoint
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -114,7 +114,27 @@ They do **not** authorize:
 
 Those remain separate approval-gated rollout decisions even when the code is on `main` and normal Vercel Production is READY.
 
-## Official ingestion
+### D-019 — Depth Collector is multi-offer, identity-driven, and dry-run first
+
+PR #156 / Issue #129 defines the durable Depth Collector contract.
+
+Required behavior:
+
+- collection target is an explicit variant + parent series
+- reuse the existing strict P3 single-item/matcher/set/ambiguity predicate unchanged unless a separate reviewed change explicitly revises it
+- allow many genuinely distinct legitimate offers for one variant under an operational budget; never encode `3 listings = done`
+- price/title similarity is not listing identity
+- dedupe by durable listing ID, provider + native source listing identity, and canonical public URL
+- duplicate candidate keys are ambiguous and fail closed rather than selecting an arbitrary winner
+- preserve same-provider distinct storefront/listing offers and cross-provider offers when marketplace identity is genuinely distinct
+- preserve verified affiliate provenance only through the reviewed sanitizer
+- bind selected candidates to target, keys, listing/source identity, canonical URL and row-relevant evidence with a collision-resistant digest; PR #156 uses SHA-256
+- target, URL, price, title, marketplace identity, or bound evidence drift after selection must fail closed
+- re-run strict market safety before row generation
+- dry-run reporting must use the same selection-integrity gate
+- projected writes are insert-only for this lane; insert counts must match accepted selection and update/delete/count drift fails closed
+- default budget 50 / hard max 200 are operational safety bounds, not product completion targets
+- Production persistence, workflow integration, schedules, and automatic activation remain separately approval-gated
 
 ### D-020 — Production official writes remain bounded/gated
 
@@ -178,7 +198,7 @@ Eligible safe/reversible PRs may use `docs/AUTO_MERGE_POLICY.md`. Their normal G
 
 ### D-050 — One bounded outcome/phase per Codex instruction
 
-ChatGPT owns direction, requirements, prioritization, approval boundaries, and review. Codex owns repository inspection, implementation, tests, lint/build, repair, branch/commit/PR work.
+ChatGPT owns direction, requirements, prioritization, approval boundaries, and review. Codex owns repository inspection, implementation, tests, lint/build, repair, branch/commit/PR work when Codex is available.
 
 Avoid unnecessary tiny prompts when one bounded phase can be completed end-to-end.
 
@@ -213,6 +233,16 @@ After a major Production/recovery/security/release milestone:
 5. validate/merge the docs-only canonical sync before starting the next major implementation phase
 
 This gate applies even when the user says 「続けて」.
+
+### D-056 — PR #156 review substitution was one-task-only
+
+Issue #129 required an independent Reviewer. GitHub Copilot Code Review was unavailable on the user's current GitHub plan. On 2026-09-02 JST, the user explicitly approved proceeding for PR #156 only with:
+
+- exact-head independent CI verification
+- strengthened Lead full-diff self-review
+- targeted regression tests covering the collection-semantics findings discovered during review
+
+This was a task-contract exception for PR #156 only. It does **not** amend `AGENT_OS`, `AUTO_MERGE_POLICY`, `PRODUCTION_RELEASE_POLICY`, or future task review requirements. Future tasks must satisfy their own current review gate or obtain a separate explicit exception when a true stop boundary exists.
 
 ## Business priority
 
