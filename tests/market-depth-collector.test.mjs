@@ -256,12 +256,15 @@ test("dry-run reports retrieval, accepted/rejected, storefront and projected-wri
   assert.equal(report.selection.distinct_listing_count, 2);
   assert.equal(report.projected_writes.listing_inserts, 2);
   assert.equal(report.projected_writes.observation_inserts, 2);
+  assert.equal(report.projected_writes.listing_updates, 0);
+  assert.equal(report.projected_writes.observation_updates, 0);
+  assert.equal(report.projected_writes.deletes, 0);
   assert.equal(report.contract.three_listings_is_done, false);
   assert.equal(report.production_actions, 0);
 });
 
-test("dry-run projected write output is sanitized to non-negative integer counts", () => {
-  const report = buildMarketDepthCollectorDryRun({
+test("dry-run rejects any projected update or delete instead of sanitizing it away", () => {
+  assert.throws(() => buildMarketDepthCollectorDryRun({
     selection: {
       selected_count: 1,
       operational_budget: 50,
@@ -271,19 +274,48 @@ test("dry-run projected write output is sanitized to non-negative integer counts
       projected_writes: {
         listing_inserts: 1,
         observation_inserts: 1,
-        listing_updates: -10,
-        observation_updates: "bad",
-        deletes: 4.5,
+        listing_updates: 1,
+        observation_updates: 0,
+        deletes: 0,
       },
     },
-  });
-  assert.deepEqual(report.projected_writes, {
-    listing_inserts: 1,
-    observation_inserts: 1,
-    listing_updates: 0,
-    observation_updates: 0,
-    deletes: 0,
-  });
+  }), /projected write contract is invalid/);
+
+  assert.throws(() => buildMarketDepthCollectorDryRun({
+    selection: {
+      selected_count: 1,
+      operational_budget: 50,
+      raw_candidate_count: 1,
+    },
+    rows: {
+      projected_writes: {
+        listing_inserts: 1,
+        observation_inserts: 1,
+        listing_updates: 0,
+        observation_updates: 0,
+        deletes: 1,
+      },
+    },
+  }), /projected write contract is invalid/);
+});
+
+test("dry-run rejects insert-count drift from the accepted selection", () => {
+  assert.throws(() => buildMarketDepthCollectorDryRun({
+    selection: {
+      selected_count: 2,
+      operational_budget: 50,
+      raw_candidate_count: 2,
+    },
+    rows: {
+      projected_writes: {
+        listing_inserts: 1,
+        observation_inserts: 2,
+        listing_updates: 0,
+        observation_updates: 0,
+        deletes: 0,
+      },
+    },
+  }), /projected write contract is invalid/);
 });
 
 test("verified affiliate provenance is preserved in planned rows when present", () => {
