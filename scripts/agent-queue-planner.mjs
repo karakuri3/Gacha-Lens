@@ -46,12 +46,26 @@ function issueSet(value, field, { optional = false } = {}) {
 }
 
 function normalizedPaths(paths = []) {
-  return [...new Set(paths.map((value) => String(value).replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/$/, "")).filter(Boolean))].sort();
+  if (!Array.isArray(paths)) return [];
+  const normalized = [];
+  for (const value of paths) {
+    const raw = String(value ?? "").trim().replaceAll("\\", "/");
+    if (!raw) continue;
+    if (raw.includes("\0") || raw.startsWith("/") || /^[a-z]:\//i.test(raw)) {
+      throw new TypeError("ownedPaths must contain only repository-relative paths.");
+    }
+    const canonical = path.posix.normalize(raw.replace(/^\.\/+/, "")).replace(/\/$/, "");
+    if (canonical === ".." || canonical.startsWith("../")) {
+      throw new TypeError("ownedPaths cannot escape the repository root.");
+    }
+    normalized.push(canonical || ".");
+  }
+  return [...new Set(normalized)].sort();
 }
 
 function pathsOverlap(leftPaths, rightPaths) {
   return leftPaths.some((left) => rightPaths.some(
-    (right) => left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`),
+    (right) => left === "." || right === "." || left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`),
   ));
 }
 
