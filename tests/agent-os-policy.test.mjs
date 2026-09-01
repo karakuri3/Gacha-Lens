@@ -181,7 +181,7 @@ test("package scripts provide focused and aggregate Agent validation entry point
   );
   assert.equal(
     packageJson.scripts["test:agent-queue"],
-    "node --test tests/agent-queue-policy.test.mjs",
+    "node --test tests/agent-queue-policy.test.mjs tests/agent-queue-path-safety.test.mjs",
   );
   assert.equal(packageJson.scripts["agent:queue-plan"], "node scripts/agent-queue-planner.mjs");
 });

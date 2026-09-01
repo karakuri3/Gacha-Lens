@@ -29,6 +29,16 @@ test("owned-path aliases are canonicalized before Builder overlap checks", () =>
   assert.deepEqual(plan.builderSlots[0].ownedPaths, ["AGENTS.md"]);
 });
 
+test("Windows case aliases are serialized before Builder allocation", () => {
+  const plan = planAgentQueue([
+    task(4, ["AGENTS.md"], 0),
+    task(5, ["agents.md"], 1),
+    task(6, ["tests/safe.test.mjs"], 2),
+  ]);
+
+  assert.deepEqual(plan.builderSlots.map(({ number }) => number), [4, 6]);
+});
+
 test("repository-root ownership serializes every other Builder", () => {
   const plan = planAgentQueue([
     task(10, ["docs/.."], 0),
@@ -39,11 +49,23 @@ test("repository-root ownership serializes every other Builder", () => {
   assert.deepEqual(plan.builderSlots[0].ownedPaths, ["."]);
 });
 
-test("owned paths cannot escape the repository or become absolute", () => {
-  for (const ownedPath of ["../outside", "docs/../../outside", "/etc/passwd", "C:\\repo\\file.txt", "\\\\server\\share\\file.txt"] ) {
+test("owned paths cannot escape the repository, alias Win32 names, or become absolute", () => {
+  for (const ownedPath of [
+    "../outside",
+    "docs/../../outside",
+    "/etc/passwd",
+    "C:\\repo\\file.txt",
+    "C:drive-relative.txt",
+    "\\\\server\\share\\file.txt",
+    "docs/file.",
+    "docs/.hidden.",
+    "docs/file ",
+    "docs/NUL.txt",
+    "docs/a:b.txt",
+  ]) {
     assert.throws(
       () => planAgentQueue([task(20, [ownedPath], 0)]),
-      /repository-relative|escape the repository root/,
+      /repository-relative|escape the repository root|whitespace|Windows-safe|device names/,
       ownedPath,
     );
   }

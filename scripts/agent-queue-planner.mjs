@@ -49,14 +49,26 @@ function normalizedPaths(paths = []) {
   if (!Array.isArray(paths)) return [];
   const normalized = [];
   for (const value of paths) {
-    const raw = String(value ?? "").trim().replaceAll("\\", "/");
+    const input = String(value ?? "");
+    if (input !== input.trim()) {
+      throw new TypeError("ownedPaths cannot have leading or trailing whitespace.");
+    }
+    const raw = input.replaceAll("\\", "/");
     if (!raw) continue;
-    if (raw.includes("\0") || raw.startsWith("/") || /^[a-z]:\//i.test(raw)) {
+    if (raw.startsWith("/") || /^[a-z]:/i.test(raw)) {
       throw new TypeError("ownedPaths must contain only repository-relative paths.");
     }
-    const canonical = path.posix.normalize(raw.replace(/^\.\/+/, "")).replace(/\/$/, "");
+    const canonical = path.posix.normalize(raw.replace(/^\.\/+/, "")).replace(/\/$/, "").normalize("NFC");
     if (canonical === ".." || canonical.startsWith("../")) {
       throw new TypeError("ownedPaths cannot escape the repository root.");
+    }
+    for (const segment of canonical.split("/")) {
+      if ((segment !== "." && /[. ]$/.test(segment)) || /[<>:"|?*\u0000-\u001f]/.test(segment)) {
+        throw new TypeError("ownedPaths must use Windows-safe repository path segments.");
+      }
+      if (/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(segment)) {
+        throw new TypeError("ownedPaths cannot use reserved Windows device names.");
+      }
     }
     normalized.push(canonical || ".");
   }
@@ -64,9 +76,12 @@ function normalizedPaths(paths = []) {
 }
 
 function pathsOverlap(leftPaths, rightPaths) {
-  return leftPaths.some((left) => rightPaths.some(
-    (right) => left === "." || right === "." || left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`),
-  ));
+  return leftPaths.some((left) => rightPaths.some((right) => {
+    const leftKey = left.toLowerCase();
+    const rightKey = right.toLowerCase();
+    return leftKey === "." || rightKey === "." || leftKey === rightKey
+      || leftKey.startsWith(`${rightKey}/`) || rightKey.startsWith(`${leftKey}/`);
+  }));
 }
 
 function queueRank(task) {
