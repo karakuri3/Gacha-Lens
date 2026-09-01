@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-02 JST — post-PR #162 checkpoint
+Updated: 2026-09-02 JST — post-PR #170 checkpoint
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -8,11 +8,7 @@ This file records decisions that must survive thread changes. Reopen them only w
 
 ### D-001 — Series-first discovery
 
-Public discovery remains:
-
-`search/browse -> series -> lineup -> variant detail`
-
-Variant-first remains appropriate for price evidence/history and expensive/rising/rare views.
+Public discovery remains `search/browse -> series -> lineup -> variant detail`. Variant-first remains appropriate for price evidence/history and expensive/rising/rare views.
 
 ### D-002 — Image truthfulness
 
@@ -22,25 +18,11 @@ Do not show an image as variant-specific unless evidence proves variant scope. M
 
 ### D-010 — Approved marketplace programmatic sources
 
-Current approved primary market-programmatic sources remain:
-
-1. Yahoo Shopping API
-2. Rakuten Ichiba API
-3. explicitly approved JSON/CSV feeds
-
-Do not scrape Mercari or Amazon.
+Current approved primary market-programmatic sources remain Yahoo Shopping API, Rakuten Ichiba API, and explicitly approved JSON/CSV feeds. Do not scrape Mercari or Amazon.
 
 ### D-011 — Evidence semantics stay separated
 
-Presentation thresholds:
-
-- active >= 3 -> `LISTING_GUIDE`
-- completed >= 3 -> `REFERENCE`
-- completed >= 5 -> `SOLD`
-
-These are display/evidence thresholds, not Data Scale completion targets.
-
-Never mix completed/sold evidence with active asking-price evidence.
+Presentation thresholds remain active >=3 -> `LISTING_GUIDE`, completed >=3 -> `REFERENCE`, completed >=5 -> `SOLD`. These are presentation/evidence thresholds, not Data Scale completion targets. Never mix completed/sold evidence with active asking-price evidence.
 
 ### D-012 — Single-item matcher stays strict
 
@@ -52,15 +34,7 @@ Higher raw recall without higher safe accepted unique coverage does not justify 
 
 ### D-014 — Complete sets are series-level evidence
 
-Accepted complete/full sets use series scope and must not contaminate variant prices:
-
-- `listing_type=complete_set`
-- `market_review_type=full_set`
-- `series_id=parent`
-- `variant_id=null`
-- `matched_variant_id=null`
-
-Broad automatic complete-set persistence remains unapproved.
+Accepted complete/full sets remain series-scoped with `variant_id=null` / `matched_variant_id=null`. Broad automatic complete-set persistence remains unapproved.
 
 ### D-015 — Complete-set classification fails closed
 
@@ -68,42 +42,40 @@ Reject incomplete/ambiguous identity, unsupported source, invalid price, preorde
 
 ### D-016 — Re-observation is append-only, identity-stable, and fail closed
 
-PR #150 / Issue #128 defines the durable re-observation contract:
+PR #150 / Issue #128 defines the base contract:
 
 - listing identity and matching provenance are immutable in ordinary re-observation
 - every successful later check may create a new observation even when price/status are unchanged
 - observation identity is deterministic and retry-safe for the same listing/provider/logical bucket
-- only ordinary current states `active` / `sold_out` are allowed in this lane
-- disappearance/provider failure must never fabricate completed `sold`
+- only ordinary current states `active` / `sold_out` are allowed
+- disappearance/provider failure never fabricates completed `sold`
 - positive integer price is required
 - provider availability must be explicit
-- fetched provider identity mismatch fails closed
+- fetched identity mismatch fails closed
 - stale observations must not roll the current snapshot backward
 - Production persistence remains separately approval-gated
 
+PR #169 / Issue #166 adds durable timestamp safety:
+
+- `observedAt < last_observed_at` remains fail-closed stale evidence
+- equal timestamp + conflicting price/status fails closed with `conflicting_equal_observation_time`
+- equal timestamp + unchanged price/status + same logical key remains deterministic/retry-safe
+- null/undefined/blank/whitespace observation time is invalid and must not be coerced through JavaScript `Date`
+
 ### D-017 — Provider credentials may only be sent to reviewed official endpoints
 
-Implemented for exact Rakuten/Yahoo re-observation in PR #153 and applicable to future equivalent adapters.
-
-Required behavior:
-
-- credential-bearing requests only to reviewed official HTTPS host + exact path / equivalently strict allowlist
-- arbitrary custom HTTPS hosts fail closed
-- HTTP, embedded URL credentials, pre-supplied query strings, and fragments fail closed
-- redirects must not expand credential scope; current exact-read requests use `redirect: error`
-- persisted durable listing identity validates before provider request
-- testability uses injected fetch/fixtures, not destination-validation weakening
+Implemented for exact Rakuten/Yahoo re-observation in PR #153 and applicable to future equivalent adapters. Credential-bearing requests must stay on reviewed official HTTPS host + exact path/equivalent allowlist; arbitrary hosts, HTTP, embedded URL credentials, pre-supplied query strings/fragments, and redirects fail closed. Persisted durable identity validates before provider request.
 
 ### D-018 — Merged dry-run/provider-read code does not authorize Production-connected execution
 
-PRs #150 and #153 establish reusable code contracts only. They do **not** authorize live Production-connected provider reads, Production observation INSERTs/listing UPDATEs, new/material workflow/schedule activation, `workflow_dispatch`, Secrets/Variables changes, or paid entitlement activation.
+PRs #150, #153, #156 and #169 establish code contracts only. They do not authorize live Production-connected provider reads, Production observation/listing persistence, workflow/schedule activation, `workflow_dispatch`, Secrets/Variables changes, or paid entitlement activation.
 
 ### D-019 — Depth Collector is multi-offer, identity-driven, and dry-run first
 
 PR #156 / Issue #129 defines the durable Depth Collector contract:
 
 - explicit variant + parent-series target
-- reuse strict P3 single-item/matcher/set/ambiguity safety
+- strict P3 single-item/matcher/set/ambiguity safety reused
 - many distinct legitimate offers may be retained; never encode `3 listings = done`
 - price/title similarity is not listing identity
 - dedupe by durable listing ID, provider/native source identity, and canonical URL
@@ -112,9 +84,9 @@ PR #156 / Issue #129 defines the durable Depth Collector contract:
 - verified affiliate provenance only through the reviewed sanitizer
 - SHA-256-bound selection integrity
 - post-selection target/URL/price/title/identity/evidence drift fails closed
-- re-run strict market safety before row generation
+- strict market safety re-runs before row generation
 - projected writes remain insert-only/count-bound
-- default budget 50 / hard max 200 are safety bounds, not completion targets
+- default budget 50 / hard max 200 are safety ceilings, not completion targets
 - Production persistence/workflow/schedule activation remains separately approval-gated
 
 ### D-020 — Production official writes remain bounded/gated
@@ -136,44 +108,48 @@ PR #162 / Issue #123 and `docs/DATA_SOURCE_CAPABILITY_MATRIX.md` define the dura
 Rules:
 
 - capability state vocabulary remains `active`, `planned`, `partnership_required`, `paid_access_required`, `manual_only`, `unavailable`
-- state applies to the **stated capability/scope**, not the provider brand globally
-- a seller/admin API does not imply broad marketplace intelligence access
+- state applies to the stated capability/scope, not the provider brand globally
+- seller/admin APIs do not imply broad marketplace intelligence access
 - public pages do not imply permission for automated collection
-- absence of a verified public API does not imply a provider can never license data; use partnership/licensing posture when appropriate
-- paid/commercial access does not become authorized merely because pricing or documentation is public
-- provider prices, quotas, supported markets, product tiers and licensing terms are dated facts and must be rechecked immediately before activation/implementation/purchase/commitment
+- paid/commercial access is not authorized merely because documentation/pricing is public
+- prices, quotas, supported markets, tiers and licensing terms are dated and must be rechecked immediately before activation/implementation/purchase/commitment
 - source research never overrides Production, paid, credential, workflow or contractual approval gates
 
-Current durable posture from the 2026-09-02 verification:
+Current posture from 2026-09-02 verification:
 
-- Rakuten Ichiba API: `active` for the reviewed market capability
-- Yahoo Shopping API / ValueCommerce: `active` for the reviewed market capability
-- Aucfan API/MCP: `paid_access_required`; strongest identified licensed candidate for completed-sale/history, pending commercial/data-rights diligence
-- Yahoo Auctions broad public market-history API: `unavailable` through the reviewed current public path
+- Rakuten Ichiba API: `active`
+- Yahoo Shopping API / ValueCommerce: `active`
+- Aucfan: `paid_access_required`; strongest identified licensed completed-sale/history candidate pending diligence
+- Yahoo Auctions broad public market-history API: unavailable through reviewed current public path
 - Mercari C2C broad market data: `partnership_required`; no scraping
-- Mercari Shops seller API exists, but broad C2C market-intelligence capability is `unavailable` through that seller-scoped path
+- Mercari Shops seller API does not provide broad C2C market intelligence
 - X API: `paid_access_required`; authorized paid path only
-- eBay Browse: lower-priority `planned`; current Japan/historical constraints must be rechecked before implementation
-- broad Surugaya/Mandarake/AmiAmi automation requires an explicit API/feed/permission/partnership path before implementation
-- current connected GSC Wizard reporting path was `unavailable` at verification due subscription/payment state; unavailable reporting is not zero traffic and is not a claim that Search Console itself is unavailable
+- eBay Browse: lower-priority `planned`; Japan/historical constraints require recheck
+- broad Surugaya/Mandarake/AmiAmi automation requires explicit API/feed/permission/partnership
+- connected GSC Wizard reporting path was unavailable at verification due subscription/payment state; unavailable reporting is not zero traffic
 
 ### D-024 — Use existing Rakuten/Yahoo depth/history capability before provider-count expansion
 
-At the #159 Production checkpoint, 107 listings had 107 observations and zero listings with 2+ observations. Therefore the near-term DATA multiplier is to safely activate repeated observation/depth on already-reviewed Rakuten/Yahoo paths before prioritizing another general live-listing provider.
+At the #159/#165 Production checkpoints, 107 listings still had 107 observations and zero re-observed listings. Therefore the near-term DATA multiplier is safe repeated observation/depth on already-reviewed Rakuten/Yahoo paths before prioritizing another general live-listing provider. This is a priority decision, not Production authorization.
 
-This is a priority decision, **not Production authorization**. Any live provider-read canary, DB persistence, workflow/schedule activation, Secrets/Variables change, or `workflow_dispatch` still requires its own approval where applicable.
+### D-025 — Production history/depth rollout uses separately approved stages
 
-Aucfan diligence remains strategically important because completed-sale/history is a different evidence family that Rakuten/Yahoo do not currently provide.
+PR #170 / Issue #165 and `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md` define the rollout contract.
+
+Durable stage separation:
+
+- R1: proposed exact-provider read-only re-observation canary — 6 known listings, 3 Rakuten + 3 Yahoo, serial, max 18 HTTP attempts, zero DB writes
+- R2: proposed Production re-observation persistence canary — 4 known listings, 2+2 provider split, expected +4 observations if baseline remains one observation each, bounded transaction + exact reread
+- R3: proposed depth read-only canary — 2 explicit target variants, one Rakuten-first + one Yahoo-first, max 5 accepted each / 10 total, max 6 planner requests / 18 HTTP attempts, zero writes
+- R4: proposed depth persistence — only frozen strict-safe R3 subset, <=10 insert-only listing+initial-observation pairs
+
+Approval for one stage never authorizes another. No schedule/budget scaling is automatic. After each Production-impacting canary, re-run the truthful Scoreboard and scale only from measured provider health and DATA gain.
 
 ## SEO
 
 ### D-030 — Preserve observer separation
 
-Keep separate root/series/variant sitemap observers:
-
-- `/sitemap.xml`
-- `/series-sitemap.xml`
-- `/variant-sitemap.xml`
+Keep separate `/sitemap.xml`, `/series-sitemap.xml`, and `/variant-sitemap.xml` observers.
 
 ### D-031 — No mass SEO pruning without evidence
 
@@ -187,7 +163,7 @@ Indexable page 2+ URLs canonicalize to themselves. Preserve intended noindex beh
 
 ### D-040 — Explicit approval boundaries
 
-Explicit approval remains required for actions excluded by the standing policies, including:
+Explicit approval remains required for actions excluded by standing policies, including:
 
 - Production DB writes/migrations/backfills/cleanup/schema/seed/reset
 - live Production-connected provider execution when approval-bound
@@ -214,17 +190,17 @@ Eligible safe/reversible PRs may use `docs/AUTO_MERGE_POLICY.md`; normal Git-tri
 
 ## Development workflow
 
-### D-050 — One bounded outcome/phase per Codex instruction
+### D-050 — One bounded outcome/phase per Codex instruction when Codex is available
 
-ChatGPT owns direction, requirements, prioritization, approval boundaries, and review. Codex owns repository inspection, implementation, tests, lint/build, repair, branch/commit/PR work when Codex is available.
+ChatGPT owns direction, requirements, prioritization, approval boundaries, and review. Codex may own repository inspection/implementation/testing/PR work when available. Codex unavailability must not block safe connected-tool work that can be completed directly.
 
 ### D-051 — Preserve partially completed work
 
-If Codex/session quota interrupts work, inspect the existing branch/worktree/PR and continue. Do not restart from scratch.
+If Codex/session quota interrupts work, inspect existing durable branch/worktree/PR/Issue evidence and continue. Do not restart from scratch when recoverable state exists. If local-only work is unreachable, reconstruct only from canonical durable contracts and clearly label the recovery as reconstruction rather than byte-for-byte recovery.
 
 ### D-052 — Conserve Codex quota
 
-Use connected tools for live state reads when available. Reserve higher reasoning/coding capacity for difficult implementation or safety-critical design.
+Use connected tools for live state reads and safe repository operations when available. Reserve coding-agent capacity for difficult implementation/safety-critical work.
 
 ### D-053 — Agent OS v1 governs bounded autonomous development
 
@@ -236,19 +212,11 @@ Use connected tools for live state reads when available. Reserve higher reasonin
 
 ### D-055 — Canonical sync is a phase gate
 
-After a major Production/recovery/security/release milestone:
-
-1. update `docs/HANDOFF.md`
-2. update `docs/STATUS.md`
-3. update `docs/DECISIONS.md` when durable rules changed
-4. update `docs/TODO.md`
-5. validate/merge the docs-only canonical sync before starting the next major implementation phase
-
-Do not rely on chat-limit detection. This gate applies even when the user says 「続けて」.
+After a major Production/recovery/security/release milestone, update `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md` when durable rules changed, and `docs/TODO.md`; validate/merge the docs-only canonical sync before starting the next major implementation phase. Do not rely on chat-limit detection.
 
 ### D-056 — PR #156 review substitution was one-task-only
 
-The user explicitly approved PR #156 only to proceed with exact-head independent CI + strengthened Lead self-review + targeted regression tests when Copilot Code Review was unavailable. This does not amend standing review/merge/release policies for future tasks.
+The user explicitly approved PR #156 only to proceed with exact-head independent CI + strengthened Lead self-review + targeted regression tests when Copilot Code Review was unavailable. This is not a global policy change.
 
 ### D-057 — Scoreboard truthfulness and evidence-source separation are durable contracts
 
@@ -264,6 +232,14 @@ PR #159 / Issue #126 defines the read-only Data Scale Scoreboard contract:
 - missing evidence fails closed rather than becoming zero
 - Scoreboard does not authorize Production collection/persistence
 
+### D-058 — #167/#168 review substitution is a one-workstream exception only
+
+On 2026-09-02 the user explicitly allowed #167 and #168 only to replace independent Verifier/Reviewer with exact-head CI, Vercel Preview, strengthened self-review and regression tests. Because the connected Draft→Ready mutation was broken, non-Draft replacement PRs #169/#170 inherited this exact task-specific exception. It does not apply to unrelated future PRs and does not relax Production/provider/workflow/credential/paid approval boundaries.
+
+### D-059 — Draft→Ready connector failure uses clean non-Draft replacement, not unsafe bypass
+
+The connected GitHub Draft→Ready mutation currently fails on `fullDatabaseId`. When that bug blocks an otherwise eligible PR, close the Draft as superseded and create a clean non-Draft replacement from the correct current main/head contract. Re-run exact-head validation as appropriate; do not claim the Draft itself became Ready or merge a Draft through an unsafe bypass.
+
 ## Business priority
 
 ### D-060 — Revenue-relevant work outranks infrastructure for its own sake
@@ -272,10 +248,6 @@ Prioritize useful data density, organic traffic, affiliate clicks/sales, then Ad
 
 ### D-061 — Data Scale is the current P0 program
 
-Issue #119 remains the current program. Build comprehensive lawful coverage across independent listings, repeated observations, providers, inventory/restock, completed-sale evidence where authorized, and explainable signals.
+Issue #119 remains the current program. Build comprehensive lawful coverage across independent listings, repeated observations, providers, inventory/restock, completed-sale evidence where authorized, and explainable signals. Keep breadth seeding, depth collection, and re-observation as separate responsibilities. Preserve exact matching, provider provenance, listing-vs-observation identity, and fail-closed evidence semantics.
 
-Keep breadth seeding, depth collection, and re-observation as separate responsibilities. Preserve exact matching, provider provenance, listing-vs-observation identity, and fail-closed evidence semantics.
-
-Evaluate work by expected movement through:
-
-**DATA -> TRAFFIC -> CLICK -> REVENUE**
+Evaluate work by expected movement through **DATA -> TRAFFIC -> CLICK -> REVENUE**.
