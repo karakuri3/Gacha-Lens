@@ -231,6 +231,15 @@ test("row builder rejects selection metadata tampering", () => {
   }), /selection identity binding/);
 });
 
+test("row builder fingerprint rejects row-relevant price drift after selection", () => {
+  const selection = selectionFor([candidate(93)]);
+  selection.selected[0].listing.price = 601;
+  assert.throws(() => buildMarketDepthCollectorRows(selection, {
+    runKey: "price-tamper",
+    observedAt: "2026-09-01T10:00:00.000Z",
+  }), /selection identity binding/);
+});
+
 test("dry-run reports retrieval, accepted/rejected, storefront and projected-write metrics", () => {
   const selection = selectionFor([
     candidate(100),
@@ -264,58 +273,52 @@ test("dry-run reports retrieval, accepted/rejected, storefront and projected-wri
 });
 
 test("dry-run rejects any projected update or delete instead of sanitizing it away", () => {
+  const selection = selectionFor([candidate(103)]);
+  const rows = buildMarketDepthCollectorRows(selection, {
+    runKey: "dry-run-write-contract",
+    observedAt: "2026-09-01T11:00:00.000Z",
+  });
+
   assert.throws(() => buildMarketDepthCollectorDryRun({
-    selection: {
-      selected_count: 1,
-      operational_budget: 50,
-      raw_candidate_count: 1,
-    },
+    selection,
     rows: {
-      projected_writes: {
-        listing_inserts: 1,
-        observation_inserts: 1,
-        listing_updates: 1,
-        observation_updates: 0,
-        deletes: 0,
-      },
+      ...rows,
+      projected_writes: { ...rows.projected_writes, listing_updates: 1 },
     },
   }), /projected write contract is invalid/);
 
   assert.throws(() => buildMarketDepthCollectorDryRun({
-    selection: {
-      selected_count: 1,
-      operational_budget: 50,
-      raw_candidate_count: 1,
-    },
+    selection,
     rows: {
-      projected_writes: {
-        listing_inserts: 1,
-        observation_inserts: 1,
-        listing_updates: 0,
-        observation_updates: 0,
-        deletes: 1,
-      },
+      ...rows,
+      projected_writes: { ...rows.projected_writes, deletes: 1 },
     },
   }), /projected write contract is invalid/);
 });
 
 test("dry-run rejects insert-count drift from the accepted selection", () => {
+  const selection = selectionFor([candidate(104), candidate(105)]);
+  const rows = buildMarketDepthCollectorRows(selection, {
+    runKey: "dry-run-insert-drift",
+    observedAt: "2026-09-01T11:00:00.000Z",
+  });
   assert.throws(() => buildMarketDepthCollectorDryRun({
-    selection: {
-      selected_count: 2,
-      operational_budget: 50,
-      raw_candidate_count: 2,
-    },
+    selection,
     rows: {
-      projected_writes: {
-        listing_inserts: 1,
-        observation_inserts: 2,
-        listing_updates: 0,
-        observation_updates: 0,
-        deletes: 0,
-      },
+      ...rows,
+      projected_writes: { ...rows.projected_writes, listing_inserts: 1 },
     },
   }), /projected write contract is invalid/);
+});
+
+test("dry-run rejects candidate drift using the same selection binding as row generation", () => {
+  const selection = selectionFor([candidate(106)]);
+  const rows = buildMarketDepthCollectorRows(selection, {
+    runKey: "dry-run-selection-drift",
+    observedAt: "2026-09-01T11:00:00.000Z",
+  });
+  selection.selected[0].listing.title = "tampered title";
+  assert.throws(() => buildMarketDepthCollectorDryRun({ selection, rows }), /selection identity binding/);
 });
 
 test("verified affiliate provenance is preserved in planned rows when present", () => {
