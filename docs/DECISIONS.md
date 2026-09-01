@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-01 JST — post-PR #150 checkpoint
+Updated: 2026-09-01 JST — post-PR #153 checkpoint
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -83,17 +83,36 @@ PR #150 / Issue #128 defines the durable re-observation contract:
 
 ### D-017 — Provider credentials may only be sent to reviewed official endpoints
 
-Provider adapters that carry credentials/identifiers must not accept arbitrary HTTPS destinations merely because TLS is present.
+This security boundary is implemented for exact Rakuten/Yahoo re-observation in PR #153 and applies to future equivalent adapters.
 
-For the #135/#136 exact re-observation provider lane and future equivalent adapters:
+TLS alone is not authorization to receive provider credentials or identifiers.
 
-- Rakuten `accessKey`/application identity must only be sent to the reviewed official Rakuten API host+path or an equivalently strict explicit allowlist
-- Yahoo `appid` must only be sent to the reviewed official Yahoo API host+path or an equivalently strict explicit allowlist
+Required behavior:
+
+- Rakuten `accessKey` / application identity may only be sent to the reviewed official Rakuten HTTPS API host + exact path or an equivalently strict explicit allowlist
+- Yahoo `appid` may only be sent to the reviewed official Yahoo HTTPS API host + exact path or an equivalently strict explicit allowlist
 - arbitrary custom HTTPS hosts fail closed before request execution
-- testability should come from injected `fetchImpl`/fixtures, not by weakening destination validation
-- redirects or endpoint configurability must not expand credential scope silently
+- HTTP, embedded URL credentials, pre-supplied query strings, and fragments fail closed
+- redirects must not silently expand credential scope; current exact-read requests use `redirect: error`
+- testability comes from injected fetch implementations/fixtures, not destination-validation weakening
+- persisted durable listing identity must validate before any provider request
 
-This is a security boundary, not merely a convenience preference.
+Do not weaken this boundary merely for development convenience.
+
+### D-018 — Merged dry-run/provider-read code does not authorize Production-connected execution
+
+PRs #150 and #153 establish reusable code contracts only.
+
+They do **not** authorize:
+
+- live Production-connected provider re-observation execution
+- Production observation INSERTs or listing UPDATEs
+- new/material workflow or schedule activation
+- `workflow_dispatch`
+- Secrets/Variables changes
+- paid API entitlement activation
+
+Those remain separate approval-gated rollout decisions even when the code is on `main` and normal Vercel Production is READY.
 
 ## Official ingestion
 
