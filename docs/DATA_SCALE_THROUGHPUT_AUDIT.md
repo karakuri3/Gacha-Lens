@@ -2,7 +2,7 @@
 
 Verified: 2026-09-01 JST
 
-Parent program: Issue #119  
+Parent program: Issue #119
 Audit contract: Issue #124
 
 ## Executive result
@@ -344,7 +344,7 @@ Proposed basis:
 - Issue #128 / PR #131,
 - Issue #135 / PR #136 exact provider reader.
 
-The reviewed code-only cadence proposal in PR #131 is:
+The current code-only cadence proposal in PR #131 is:
 
 - hot: 6h,
 - active: 24h,
