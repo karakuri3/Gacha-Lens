@@ -1,7 +1,7 @@
 # Exact Provider Re-observation Read Contract
 
-Issue: #135  
-Parent: #119  
+Issue: #135
+Parent: #119
 Depends on: #128 / PR #150
 
 ## Purpose
