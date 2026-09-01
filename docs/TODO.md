@@ -1,6 +1,6 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-01 JST — post-PR #153 checkpoint
+Updated: 2026-09-02 JST — post-PR #156 checkpoint
 
 Work top-to-bottom unless newer verified evidence changes priority. Current umbrella program: Issue #119 Data Scale. Three active listings is a presentation threshold only.
 
@@ -29,77 +29,83 @@ Work top-to-bottom unless newer verified evidence changes priority. Current umbr
 
 ### #153 / #135
 
-- [x] Re-fetch old #136 and clean-replace it from current main.
-- [x] Port only exact provider adapter / dry-run runner / docs / tests.
+- [x] Clean-replace old #136 from current main.
 - [x] Preserve exact persisted Rakuten/Yahoo item identity reads; no keyword rediscovery.
 - [x] Preserve bounded retries/timeouts and serial provider pacing.
-- [x] Reject arbitrary HTTPS custom endpoints before credentials/identifiers can reach fetch.
-- [x] Restrict credential-bearing requests to reviewed official HTTPS host + exact path destinations.
-- [x] Reject HTTP, embedded URL credentials, pre-supplied query strings/fragments, and redirects.
+- [x] Restrict credential-bearing requests to reviewed official HTTPS host + exact path.
+- [x] Reject arbitrary HTTPS custom endpoints, HTTP, embedded credentials, query/fragment injection, and redirects.
 - [x] Validate durable listing ID before provider request.
 - [x] Keep strict availability/price normalization and sanitized diagnostics.
-- [x] Pass exact-head full tests / lint / diff check / Vercel Preview / independent review.
-- [x] Merge #153 as `af5356148cb75975f13383d095e01a805e7120db`.
-- [x] Confirm normal Vercel Production deployment `dpl_9srsV4znx24SK7mmC9AX2Vkds7Pw` reached `READY`.
-- [x] Confirm Issue #135 closed and old Draft #136 closed superseded.
+- [x] Pass exact-head full tests / lint / diff check / Vercel Preview / review gate.
+- [x] Merge #153 and confirm Production READY.
+- [x] Close Issue #135 and old Draft #136 superseded.
 - [ ] Do **not** execute live Production-connected provider reads or persist re-observations without the separate required approval.
 
-## P0-C — Post-#153 canonical sync
+## P0-C — Multi-listing Depth Collector — complete code-only milestone
 
-Issue #154.
+### #156 / #129
 
-- [x] Confirm #153 merged and Production READY.
-- [x] Confirm #135 completed and old #136 superseded/closed.
+- [x] Re-fetch current main / Issue #129 / old Draft #132.
+- [x] Clean-replace old #132 from current main rather than merging stale history.
+- [x] Preserve 10+ legitimate distinct offers for one target variant under operational budget.
+- [x] Keep strict single-item matcher / set / ambiguity / exact target safety unchanged.
+- [x] Deduplicate by durable listing identity, provider/native item identity, and canonical URL rather than price/title.
+- [x] Preserve same-provider distinct storefront/listing and cross-provider distinct offers when identity is genuinely distinct.
+- [x] Reject duplicate candidate keys fail-closed.
+- [x] Bind target / IDs / canonical URL / row-relevant evidence with SHA-256 selection fingerprint.
+- [x] Reject target / URL / price / title / identity / selection drift after selection.
+- [x] Re-run strict safety before row generation.
+- [x] Keep dry-run on the same selection-integrity gate.
+- [x] Enforce insert-only projected-write contract; reject update/delete/count drift.
+- [x] Keep budget 50 / max 200 as operational safety bounds, never product completion targets.
+- [x] Pass exact-head PR Code Quality run `33523845575` and exact-head Vercel Preview.
+- [x] User explicitly approved #156-only substitution of independent CI + strengthened Lead review + regression tests because Copilot Code Review was unavailable on the current GitHub plan.
+- [x] Merge #156 as `f7fb7b10f2ff8a791e439446958581ee42c3eeb9`.
+- [x] Confirm Production deployment `dpl_43UEfvXeNsfwBKmuMm4J64Y9xL9s` reached `READY`.
+- [x] Confirm Issue #129 closed and old Draft #132 closed superseded.
+- [ ] Keep Production depth persistence/automatic activation separately approval-gated.
+
+## P0-D — Post-#156 canonical sync — current gate
+
+Issue #157.
+
+- [x] Confirm #156 merged and Production READY.
+- [x] Confirm #129 completed and old #132 superseded/closed.
 - [x] Refresh `docs/HANDOFF.md`.
 - [x] Refresh `docs/STATUS.md`.
-- [x] Refresh `docs/DECISIONS.md` with implemented provider credential/destination and execution-approval boundaries.
+- [x] Refresh `docs/DECISIONS.md` with Depth Collector and PR-specific review-exception decisions.
 - [x] Refresh this ordered TODO.
 
-Completion rule: when the Issue #154 docs-only PR containing this checkpoint is exact-head green, merged to `main`, and its normal Vercel Production deployment is READY, the canonical-sync gate is complete. Until then, do not begin the next major implementation.
+Completion rule: when the Issue #157 docs-only PR containing this checkpoint is exact-head green, merged to `main`, and its normal Vercel Production deployment is READY, the canonical-sync gate is complete. Until then, do not begin the next major implementation.
 
-## P0-D — Settle the multi-listing Depth Collector (Issue #129 / old PR #132) — next implementation
+## P0-E — Settle the Data Scale Scoreboard (Issue #126 / old PR #134) — next implementation
 
-- [ ] Re-fetch current `main`, Issue #129, and old Draft PR #132 after P0-C completes.
-- [ ] Inspect the exact old-branch diff against current main; do not blindly merge stale history.
-- [ ] Prefer a clean current-main replacement when that gives a smaller, reviewable diff.
-- [ ] Confirm many legitimate distinct offers for one target variant remain retained under the operational budget.
-- [ ] Confirm dedupe uses durable listing identity / provider item ID / canonical URL, not price/title.
-- [ ] Preserve strict single-item matcher, exact target variant/series scope, and affiliate provenance rules.
-- [ ] Preserve same-provider distinct storefront and cross-provider legitimate offers when identity is genuinely distinct.
-- [ ] Keep operational limits as safety/request budgets, never collection-completion targets.
-- [ ] Keep the lane code-only/dry-run-first; do not modify existing P1/P2/P3 Production lanes merely to integrate it.
-- [ ] Run exact-head full tests / lint / diff check / Vercel Preview.
-- [ ] Complete independent collection-semantics review with no blocking/major finding.
-- [ ] Merge only if Auto-Merge + Standing Release gates pass.
-- [ ] Close old Draft #132 as superseded if a clean replacement is used.
-- [ ] Keep Production persistence/automatic activation as a separate approval-gated rollout.
-
-## P0-E — Settle the Data Scale Scoreboard (Issue #126 / old PR #134)
-
-- [ ] Re-fetch #134 on current main after #132 settles unless newer evidence changes priority.
-- [ ] Clean-replace/rebase only after exact diff review.
+- [ ] Re-fetch current main, Issue #126, and old Draft PR #134 after P0-D completes.
+- [ ] Inspect the exact stale-branch diff against current main; do not blindly merge old history.
+- [ ] Prefer a clean current-main replacement when that yields the smallest reviewable truthful diff.
 - [ ] Preserve truthful availability states: `available`, `unavailable`, `not_instrumented`.
-- [ ] Track breadth, depth buckets, history depth, re-observation rate, providers, affiliate provenance, stock/restock/social state, clicks, collection health, and reproducible deltas.
+- [ ] Track catalog breadth, market depth buckets, observation history depth, re-observation rate, provider split, affiliate provenance, stock/restock/social state, clicks, collection health, and reproducible deltas.
 - [ ] Count only actual completed `sold` evidence as completed sale; `sold_out` is not a transaction.
-- [ ] Keep Mercari `partnership_required` and X uninstrumented/paid-access state truthful.
+- [ ] Keep Mercari `partnership_required` and X paid-access/uninstrumented state truthful.
 - [ ] Keep Production reads read-only and outputs sanitized.
-- [ ] Run exact-head full tests / lint / diff check / Vercel Preview and independent review.
-- [ ] Merge only if all safe gates pass.
+- [ ] Run exact-head full tests / lint / diff check / Vercel Preview and required review gate.
+- [ ] Merge only if all Auto-Merge + Standing Release gates pass.
+- [ ] Close old Draft #134 as superseded if a clean replacement is used.
 - [ ] Use the Scoreboard as the operating DATA -> TRAFFIC -> CLICK -> REVENUE measurement after integration.
 
 ## P0-F — Revalidate lawful source capability matrix (Issue #123 / old PR #145)
 
-- [ ] Re-fetch #145 after higher-priority data-generation/measurement lanes settle.
+- [ ] Re-fetch #145 after #134 settles unless newer evidence changes priority.
 - [ ] Revalidate/rebase or clean-replace the docs-only work from current main.
 - [ ] Keep Yahoo/Rakuten as current approved programmatic marketplace sources.
 - [ ] Keep Mercari partnership-only; no scraping.
 - [ ] Keep X authorized/paid-access only; no scraping substitution.
 - [ ] Treat any new paid API/licensed source as a separate approval/diligence task.
-- [ ] Do not let source expansion outrank using the already-approved Rakuten/Yahoo paths for depth/history without evidence.
+- [ ] Do not let source expansion outrank using already-approved Rakuten/Yahoo paths for depth/history without evidence.
 
 ## P1 — Production history/depth rollout only after code-only lanes are reviewed
 
-The existence of #150 and #153 does **not** authorize Production-connected execution or persistence.
+The existence of #150, #153, and #156 does **not** authorize Production-connected execution or persistence.
 
 - [ ] Define a separately approval-gated Production rollout for repeated observations/depth collection.
 - [ ] Re-read live Production counts and provider health before rollout sizing.
@@ -138,7 +144,7 @@ The existence of #150 and #153 does **not** authorize Production-connected execu
 
 - [ ] Do NOT merge #142 or manually dispatch F0 while its approval/review boundary remains.
 - [ ] Do NOT run #153's provider dry-run against Production credentials/data without a separate approved rollout.
-- [ ] Do NOT persist #150/#153 projected observation/listing changes to Production without approval.
+- [ ] Do NOT persist #150/#153/#156 projected observation/listing changes to Production without approval.
 - [ ] Do NOT enable Kitan automatic writes.
 - [ ] Do NOT enable Qualia automatic rollout.
 - [ ] Do NOT rerun completed Kitan/Qualia/complete-set/P2/P1 Production canaries without new task-specific approval.
