@@ -1,6 +1,6 @@
 # Gacha Lens Data Scale Scoreboard
 
-Issue: #126  
+Issue: #126
 Parent program: #119
 
 ## Purpose
