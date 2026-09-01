@@ -1,36 +1,35 @@
 # Gacha Lens Status
 
-Updated: 2026-09-02 JST — post-PR #156 checkpoint
+Updated: 2026-09-02 JST — post-PR #159 checkpoint
 
 This is the compact operational companion to `docs/HANDOFF.md`. Re-fetch live GitHub/Vercel/Supabase state before acting; counts below are dated unless explicitly re-read.
 
 ## Repository / release
 
 - repo: `karakuri3/Gacha-Lens`
-- current merged implementation checkpoint: `f7fb7b10f2ff8a791e439446958581ee42c3eeb9`
-- latest merged implementation PR: #156 `P0 Data Scale: add hardened dry-run depth collector`
-- #156 Vercel Production deployment: `dpl_43UEfvXeNsfwBKmuMm4J64Y9xL9s` — `READY`
-- #156 exact-head PR Code Quality run `33523845575`: full tests / lint / diff whitespace PASS
-- #156 exact-head Preview `dpl_8g3Yt2GiukaCG6GfMqFnxXHfM77y`: READY
-- Issue #129: closed completed
-- old Draft #132: closed superseded
+- current merged implementation checkpoint: `3b0fea45a63800fdc052d007484727f9ed07e999`
+- latest merged implementation PR: #159 `P0 Data Scale: add truthful read-only Scoreboard`
+- #159 Vercel Production deployment: `dpl_BBV9gV6d5a7ftCihMPfc8v8oo4S7` — `READY`
+- #159 exact-head PR Code Quality: full tests / lint / diff whitespace PASS
+- #159 exact-head Vercel Preview for `1b81b16226d4ad87bed2adaab476b81d4cf01daa`: READY
+- Issue #126: closed completed
+- old Draft #134: closed superseded by #159
 - generic PR Code Quality remains the default non-Production validation lane
 - Auto-Merge + Standing Production Release policies remain authoritative
 
-PR #156 Reviewer note: Copilot Code Review was unavailable on the current GitHub plan. The user explicitly approved a **#156-only** substitution of independent CI + strengthened Lead self-review + regression tests. This is not a global policy change.
+PR #156 Reviewer note remains historical and narrow: Copilot Code Review was unavailable on the current GitHub plan, and the user explicitly approved a **#156-only** substitution of independent CI + strengthened Lead self-review + regression tests. This is not a global policy change.
 
 ## Current P0
 
 Issue #119 — **Data Scale Program**.
 
-Current ordering:
+Current ordering after the post-#159 canonical-sync gate:
 
-1. settle read-only Data Scale Scoreboard (#134 / #126)
-2. revalidate lawful source capability matrix (#145 / #123)
-3. separately approval-gated Production history/depth rollout
-4. stock/restock/non-price signals
-5. explainable authorized demand/social signals
-6. DATA -> TRAFFIC -> CLICK -> REVENUE
+1. revalidate lawful source capability matrix (#145 / #123)
+2. separately approval-gated Production history/depth rollout
+3. stock/restock/non-price signals
+4. explainable authorized demand/social signals
+5. DATA -> TRAFFIC -> CLICK -> REVENUE
 
 Three active listings is a presentation threshold only, never a collection-completion target.
 
@@ -43,6 +42,32 @@ Three active listings is a presentation threshold only, never a collection-compl
 - #150 — safe dry-run re-observation engine: merged; #128 closed; old #131 superseded/closed
 - #153 — hardened exact provider re-observation dry-run: merged; #135 closed; old #136 superseded/closed
 - #156 — hardened dry-run Depth Collector: merged; #129 closed; old #132 superseded/closed
+- #159 — truthful read-only Data Scale Scoreboard: merged; #126 closed; old #134 superseded/closed
+
+## Scoreboard foundation after #159
+
+The Scoreboard is now the standard repository-side read-only view for measuring whether Gacha Lens is improving through **DATA -> TRAFFIC -> CLICK -> REVENUE** rather than PR/agent activity.
+
+Truthfulness contract:
+
+- measured metric states remain distinct: `available`, `unavailable`, `not_instrumented`
+- source capability state is separate: `active`, `planned`, `partnership_required`, `paid_access_required`, `manual_only`, `unavailable`
+- `supported_source_count` counts only `active` capability entries
+- capability inventory count remains separate from active support count
+- X is `paid_access_required` unless reviewed authorized collection is enabled; absent social evidence is `not_instrumented`, not zero interest
+- Mercari remains `partnership_required`
+- only actual `status=sold` counts as completed-sale evidence; `sold_out` is not a transaction
+- `review_required=true` stock/restock/social rows are excluded from trusted signal coverage
+- current outbound-click evidence supports provider+variant eligibility only; it is not listing-level conversion/revenue attribution
+- database `ingestion_runs` and GitHub Actions execution are separate evidence lanes; zero DB rows must not be presented as zero workflow runs
+- raw provider payloads and secrets are not emitted
+- Scoreboard integration is read-only and does not authorize Production history/depth persistence or automatic collection activation
+
+CLI/spec:
+
+- `docs/DATA_SCALE_SCOREBOARD.md`
+- `lib/domain/data-scale-scoreboard.js`
+- `scripts/data-scale-scoreboard-report.mjs`
 
 ## Re-observation foundation after #150 + #153
 
@@ -80,27 +105,37 @@ Three active listings is a presentation threshold only, never a collection-compl
 
 Re-fetch before acting.
 
-- #134 — Data Scale Scoreboard; old-base Draft, **next P0 settlement**, requires current-main clean validation/replacement
-- #145 — lawful source capability matrix; old-base docs-only Draft, revalidate after #134 unless newer evidence changes priority
+- #145 — lawful source capability matrix; old-base docs-only Draft, **next P0 settlement after canonical sync #160**; revalidate or clean-replace from current main rather than blindly merging stale history
 - #142 — F0 rerelease canonical-year repair; explicit review/approval boundary, do not auto-merge
 
 ## Dated Production data evidence
 
 Supabase Production: `vxbrnvfhmzcxehuuzzum`.
 
-Earlier 2026-09-01 reads recorded:
+Read-only validation performed during #159 settlement measured:
 
-- series 10,241
-- variants 23,808
-- market listings / observations: first 96 / 96, later 101 / 101, then 107 / 107
-- listings with 2+ observations: 0 at the 107/107 checkpoint
-- safe active listings: 106 at that checkpoint
-- one variant had reached 3 active listings
-- completed/sold evidence: 0
-- `outbound_clicks`: 68
-- `stock_reports`, `restock_events`, `x_reactions`: 0
+- series: 10,241
+- variants: 23,808
+- market listings: 107
+- active safe single listings: 106
+- distinct variants with market evidence: 104
+- fresh <30d depth: 96 variants at depth 1, 1 variant at depth 2, 0 at depth 3-4 / 5-9 / 10+
+- market listing observations: 107
+- listings with 0 observations: 0
+- listings with exactly 1 observation: 107
+- listings with 2+ observations: 0
+- completed `sold` evidence: 0
+- verified affiliate provenance rows: 3
+- review-safe stock reports: 0
+- review-safe restock events: 0
+- review-safe X reactions: 0
+- outbound clicks: 0 / 21 / 38 at 24h / 7d / 30d at validation time
+- new listings / observations in the measured 24h window: 11 / 11
+- Production database `ingestion_runs` market rows in that 24h window: 0; this does **not** claim GitHub Actions runs were zero
 
 Treat all counts as dated until re-read. #150/#153/#156 are code foundations only; no Production history/depth persistence rollout has been authorized.
+
+The dominant measured data bottleneck remains history: 107 known listings still had only one observation each at this checkpoint.
 
 ## F0 official automatic incident
 
@@ -132,16 +167,17 @@ Issue #137 / PR #142 repair month-precision rerelease canonical-year loss. Expli
 
 ## Exact next step
 
-Canonical-sync Issue #157 is the gate before more implementation.
+Canonical-sync Issue #160 is the gate before more implementation.
 
 After its docs-only PR is exact-head validated, merged, and Production READY:
 
-1. re-fetch Issue #126 / PR #134 on current main
-2. inspect the exact stale-branch diff and clean-replace when safer
-3. preserve truthful source/signal availability and `sold` vs `sold_out` semantics
-4. run exact-head CI + Preview + required review gate
-5. keep Production persistence/automatic activation separate and approval-gated
-6. then settle #145 source matrix unless newer evidence changes priority
-7. leave #142 at its explicit F0 Production-impact approval boundary
+1. re-fetch Issue #123 / Draft PR #145 on current main
+2. inspect the stale docs diff and clean-replace when safer
+3. preserve durable capability states and current lawful-access truthfulness
+4. keep Mercari partnership-only, X authorized/paid-access only, and avoid scraping substitutions
+5. treat Aucfan/API licensing or any other paid source as separate diligence + explicit approval, not implicit activation
+6. run exact-head CI + Preview + normal docs review gate
+7. keep Production history/depth persistence/automatic activation separate and approval-gated
+8. leave #142 at its explicit F0 Production-impact approval boundary
 
 Business bottleneck remains **Data Scale first**.
