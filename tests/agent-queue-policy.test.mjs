@@ -59,10 +59,11 @@ test("existing owned work resumes before verification repair and new work", () =
     { number: 30, contractComplete: true, safety: "eligible", queuePriority: 0, ownedPaths: ["docs/new.md"] },
     { number: 20, contractComplete: true, safety: "eligible", queueState: "verification", activeClaims: ["pr:20"], ownedPaths: ["tests/repair.test.mjs"] },
     { number: 10, contractComplete: true, safety: "eligible", queueState: "working", activeClaims: ["branch:codex/10"], ownedPaths: ["scripts/resume.mjs"] },
+    { number: 5, contractComplete: true, safety: "eligible", queueState: "ready", needsRepair: true, activeClaims: ["pr:5"], ownedPaths: ["docs/repair.md"] },
   ]);
 
   assert.equal(plan.outcome, "resume-existing");
-  assert.deepEqual(plan.orderedIssues, [10, 20, 30]);
+  assert.deepEqual(plan.orderedIssues, [10, 5, 20, 30]);
   assert.equal(plan.builderSlots[0].number, 10);
 });
 

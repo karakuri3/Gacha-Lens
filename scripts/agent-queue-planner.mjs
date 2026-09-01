@@ -39,7 +39,9 @@ function pathsOverlap(leftPaths, rightPaths) {
 
 function queueRank(task) {
   const hasClaim = task.activeClaims.length === 1;
-  const isResume = task.queueState === "working" || (hasClaim && task.queueState !== "verification");
+  const isResume = task.queueState === "working" || (
+    hasClaim && task.queueState !== "verification" && task.needsRepair !== true
+  );
   const isRepair = task.queueState === "verification" || task.needsRepair === true;
   const queuePriority = asFiniteRank(task.queuePriority);
   const authoritativeRank = asFiniteRank(task.todoRank) ?? asFiniteRank(task.parentRank);
