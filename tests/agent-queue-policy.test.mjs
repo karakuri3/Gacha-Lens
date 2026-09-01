@@ -6,12 +6,16 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
-  planAgentQueue,
+  planAgentQueue as planRawAgentQueue,
   QUEUE_BUILDER_CAP,
   QUEUE_ITEM_CAP,
 } from "../scripts/agent-queue-planner.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+function planAgentQueue(tasks, options) {
+  return planRawAgentQueue(tasks.map((task) => ({ open: true, queueState: "ready", ...task })), options);
+}
 
 async function readRepositoryFile(relativePath) {
   return (await readFile(path.join(repositoryRoot, relativePath), "utf8")).replaceAll("\r\n", "\n");
@@ -185,4 +189,22 @@ test("offline planning input is bounded and human-bound reason output is allowli
     { number: 94, contractComplete: true, safety: "human-bound", boundaryReason: "untrusted free text", todoRank: 0 },
   ]);
   assert.deepEqual(plan.humanBound, [{ number: 94, reason: "human-approval-required" }]);
+});
+
+test("missing or invalid mandatory normalization fields fail closed", () => {
+  const plan = planRawAgentQueue([
+    { number: 95, queueState: "ready", contractComplete: true, safety: "eligible", todoRank: 0 },
+    { number: 96, open: true, contractComplete: true, safety: "eligible", todoRank: 1 },
+    { number: 97, open: true, queueState: "invented", contractComplete: true, safety: "eligible", todoRank: 2 },
+    { number: 98, open: false, queueState: "ready", contractComplete: true, safety: "eligible", todoRank: 3 },
+    { number: 99, open: true, queueState: "done", contractComplete: true, safety: "eligible", todoRank: 4 },
+  ]);
+
+  assert.equal(plan.outcome, "queue-exhausted");
+  assert.deepEqual(plan.orderedIssues, []);
+  assert.deepEqual(plan.deferred, [
+    { number: 95, reason: "missing-open-state" },
+    { number: 96, reason: "invalid-queue-state" },
+    { number: 97, reason: "invalid-queue-state" },
+  ]);
 });

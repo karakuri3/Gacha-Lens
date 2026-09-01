@@ -6,6 +6,7 @@ export const QUEUE_ITEM_CAP = 500;
 export const QUEUE_STDIN_BYTE_CAP = 1_000_000;
 
 const ACTIVE_STATES = new Set(["working", "verification"]);
+const QUEUE_STATES = new Set(["backlog", "ready", "working", "verification", "done"]);
 const AMBIGUOUS_DEFER_REASONS = new Set([
   "active-state-without-durable-claim",
   "ambiguous-multiple-claims",
@@ -71,7 +72,7 @@ function normalizeTask(task) {
     activeClaims: Array.isArray(task.activeClaims) ? [...new Set(task.activeClaims.filter(Boolean).map(String))].sort() : [],
     blockedBy: Array.isArray(task.blockedBy) ? [...new Set(task.blockedBy)] : [],
     ownedPaths: normalizedPaths(task.ownedPaths),
-    queueState: task.queueState ?? "ready",
+    queueState: task.queueState,
     safety: task.safety ?? "ambiguous",
   };
 }
@@ -99,7 +100,16 @@ export function planAgentQueue(tasks, options = {}) {
     }
     seenIssues.add(task.number);
 
-    if (task.open === false || task.queueState === "done") continue;
+    if (task.open === false) continue;
+    if (task.open !== true) {
+      deferred.push({ number: task.number, reason: "missing-open-state" });
+      continue;
+    }
+    if (!QUEUE_STATES.has(task.queueState)) {
+      deferred.push({ number: task.number, reason: "invalid-queue-state" });
+      continue;
+    }
+    if (task.queueState === "done") continue;
     if (explicitIssues && !explicitIssues.has(task.number)) {
       deferred.push({ number: task.number, reason: "outside-explicit-scope" });
       continue;
