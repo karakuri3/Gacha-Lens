@@ -1,8 +1,8 @@
 # Gacha Lens Production History / Depth Rollout Plan
 
-Verified planning baseline: 2026-09-02 JST  
-Parent program: Issue #119  
-Planning issue: #165  
+Verified planning baseline: 2026-09-02 JST
+Parent program: Issue #119
+Planning issue: #165
 Companion pre-persistence safety repair: #166 / PR #167
 
 ## Executive decision
