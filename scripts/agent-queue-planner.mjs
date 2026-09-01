@@ -28,6 +28,18 @@ function asFiniteRank(value) {
   return Number.isInteger(value) && value >= 0 ? value : null;
 }
 
+function isIssueNumber(value) {
+  return Number.isInteger(value) && value > 0;
+}
+
+function issueSet(value, field, { optional = false } = {}) {
+  if (optional && value === undefined) return null;
+  if (!Array.isArray(value) || value.some((number) => !isIssueNumber(number))) {
+    throw new TypeError(`${field} must be an array of positive integer Issue numbers.`);
+  }
+  return new Set(value);
+}
+
 function normalizedPaths(paths = []) {
   return [...new Set(paths.map((value) => String(value).replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/$/, "")).filter(Boolean))].sort();
 }
@@ -63,14 +75,17 @@ function compareRanks(left, right) {
 }
 
 function normalizeTask(task) {
-  if (!Number.isInteger(task.number) || task.number <= 0) {
+  if (!isIssueNumber(task.number)) {
     throw new TypeError("Every queue item requires a positive integer Issue number.");
   }
 
   return {
     ...task,
+    hasActiveClaimsState: Array.isArray(task.activeClaims),
+    hasDependencyState: Array.isArray(task.blockedBy)
+      && task.blockedBy.every((number) => isIssueNumber(number)),
     activeClaims: Array.isArray(task.activeClaims) ? [...new Set(task.activeClaims.filter(Boolean).map(String))].sort() : [],
-    blockedBy: Array.isArray(task.blockedBy) ? [...new Set(task.blockedBy)] : [],
+    blockedBy: Array.isArray(task.blockedBy) ? [...new Set(task.blockedBy)].sort((left, right) => left - right) : [],
     ownedPaths: normalizedPaths(task.ownedPaths),
     queueState: task.queueState,
     safety: task.safety ?? "ambiguous",
@@ -86,8 +101,8 @@ export function planAgentQueue(tasks, options = {}) {
     throw new RangeError(`maxBuilders must be between 1 and ${QUEUE_BUILDER_CAP}.`);
   }
 
-  const completedIssues = new Set(options.completedIssues ?? []);
-  const explicitIssues = options.explicitIssues === undefined ? null : new Set(options.explicitIssues);
+  const completedIssues = issueSet(options.completedIssues ?? [], "completedIssues");
+  const explicitIssues = issueSet(options.explicitIssues, "explicitIssues", { optional: true });
   const seenIssues = new Set();
   const candidates = [];
   const humanBound = [];
@@ -110,6 +125,18 @@ export function planAgentQueue(tasks, options = {}) {
       continue;
     }
     if (task.queueState === "done") continue;
+    if (!task.hasActiveClaimsState) {
+      deferred.push({ number: task.number, reason: "missing-active-claims-state" });
+      continue;
+    }
+    if (!task.hasDependencyState) {
+      deferred.push({ number: task.number, reason: "invalid-dependency-state" });
+      continue;
+    }
+    if (typeof task.dependencyUnblocking !== "boolean") {
+      deferred.push({ number: task.number, reason: "invalid-dependency-unblocking-state" });
+      continue;
+    }
     if (explicitIssues && !explicitIssues.has(task.number)) {
       deferred.push({ number: task.number, reason: "outside-explicit-scope" });
       continue;

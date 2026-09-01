@@ -39,7 +39,7 @@ Each candidate is normalized before ranking with at least:
 - dependency and dependency-unblocking status; and
 - proposed owned paths when parallel editing is considered.
 
-Normalization is evidence gathering, not authority creation. Missing metadata may be derived only from an explicit human instruction, a complete Issue contract, canonical TODO order, an active parent Issue, or durable existing work. Otherwise the item remains deferred.
+Normalization is evidence gathering, not authority creation. Open state, lifecycle state, active-claim state, blocked dependencies, and dependency-unblocking status must be explicit; missing values must not imply `open`, `ready`, no claim, or no dependency. Other missing metadata may be derived only from an explicit human instruction, a complete Issue contract, canonical TODO order, an active parent Issue, or durable existing work. Otherwise the item remains deferred.
 
 The pure helper `scripts/agent-queue-planner.mjs` consumes already-normalized, sanitized offline JSON (at most 500 items and 1 MB of stdin). It does not call GitHub, mutate labels, start agents, write files, merge, deploy, or access Production. The Lead remains responsible for validating the normalization against live repository evidence.
 

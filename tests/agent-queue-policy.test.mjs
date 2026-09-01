@@ -14,7 +14,14 @@ import {
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function planAgentQueue(tasks, options) {
-  return planRawAgentQueue(tasks.map((task) => ({ open: true, queueState: "ready", ...task })), options);
+  return planRawAgentQueue(tasks.map((task) => ({
+    open: true,
+    queueState: "ready",
+    activeClaims: [],
+    blockedBy: [],
+    dependencyUnblocking: false,
+    ...task,
+  })), options);
 }
 
 async function readRepositoryFile(relativePath) {
@@ -193,11 +200,15 @@ test("offline planning input is bounded and human-bound reason output is allowli
 
 test("missing or invalid mandatory normalization fields fail closed", () => {
   const plan = planRawAgentQueue([
-    { number: 95, queueState: "ready", contractComplete: true, safety: "eligible", todoRank: 0 },
-    { number: 96, open: true, contractComplete: true, safety: "eligible", todoRank: 1 },
-    { number: 97, open: true, queueState: "invented", contractComplete: true, safety: "eligible", todoRank: 2 },
-    { number: 98, open: false, queueState: "ready", contractComplete: true, safety: "eligible", todoRank: 3 },
-    { number: 99, open: true, queueState: "done", contractComplete: true, safety: "eligible", todoRank: 4 },
+    { number: 95, queueState: "ready", activeClaims: [], blockedBy: [], dependencyUnblocking: false, contractComplete: true, safety: "eligible", todoRank: 0 },
+    { number: 96, open: true, activeClaims: [], blockedBy: [], dependencyUnblocking: false, contractComplete: true, safety: "eligible", todoRank: 1 },
+    { number: 97, open: true, queueState: "invented", activeClaims: [], blockedBy: [], dependencyUnblocking: false, contractComplete: true, safety: "eligible", todoRank: 2 },
+    { number: 98, open: true, queueState: "ready", blockedBy: [], dependencyUnblocking: false, contractComplete: true, safety: "eligible", todoRank: 3 },
+    { number: 99, open: true, queueState: "ready", activeClaims: [], dependencyUnblocking: false, contractComplete: true, safety: "eligible", todoRank: 4 },
+    { number: 100, open: true, queueState: "ready", activeClaims: [], blockedBy: ["99"], dependencyUnblocking: false, contractComplete: true, safety: "eligible", todoRank: 5 },
+    { number: 101, open: true, queueState: "ready", activeClaims: [], blockedBy: [], contractComplete: true, safety: "eligible", todoRank: 6 },
+    { number: 102, open: false, queueState: "ready", activeClaims: [], blockedBy: [], dependencyUnblocking: false, contractComplete: true, safety: "eligible", todoRank: 7 },
+    { number: 103, open: true, queueState: "done", activeClaims: [], blockedBy: [], dependencyUnblocking: false, contractComplete: true, safety: "eligible", todoRank: 8 },
   ]);
 
   assert.equal(plan.outcome, "queue-exhausted");
@@ -206,5 +217,12 @@ test("missing or invalid mandatory normalization fields fail closed", () => {
     { number: 95, reason: "missing-open-state" },
     { number: 96, reason: "invalid-queue-state" },
     { number: 97, reason: "invalid-queue-state" },
+    { number: 98, reason: "missing-active-claims-state" },
+    { number: 99, reason: "invalid-dependency-state" },
+    { number: 100, reason: "invalid-dependency-state" },
+    { number: 101, reason: "invalid-dependency-unblocking-state" },
   ]);
+
+  assert.throws(() => planRawAgentQueue([], { completedIssues: ["1"] }), /completedIssues/);
+  assert.throws(() => planRawAgentQueue([], { explicitIssues: "1" }), /explicitIssues/);
 });
