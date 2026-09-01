@@ -1,135 +1,131 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-01 JST
+Updated: 2026-09-01 JST — post-PR #150 checkpoint
 
-Work top-to-bottom unless newer verified evidence changes priority. The current product program is Issue #119 Data Scale. Three active listings is a presentation threshold, not a collection target.
+Work top-to-bottom unless newer verified evidence changes priority. Current umbrella program: Issue #119 Data Scale. Three active listings is a presentation threshold only.
 
-## P0-A — Close the 2026-09-01 F0 recovery boundary safely
+## P0-A — Keep F0 recovery at the real approval boundary
 
-- [x] Identify the failed F0 scheduled run `33484450472` and prove fail-closed behavior.
-- [x] Verify Production transaction `not_started`, database writes 0, deletes 0.
-- [x] Identify blocker `official_bounded_rerelease_canonical_release_mismatch`.
-- [x] Trace root cause to new month-precision rerelease canonical-year loss during restock-event generation.
-- [x] Create repair Issue #137 and code/test repair branch.
-- [x] Run exact-head full tests, lint, diff check, and Vercel Preview successfully.
-- [ ] Obtain an independent Reviewer for the collection-semantics repair. Connected Copilot reviewer registration did not persist; Vercel Agent review required interactive login at the 2026-09-01 checkpoint.
-- [ ] Obtain the required explicit approval before merging current repair PR #142 because merge changes code used by the scheduled Production-capable F0 lane.
-- [ ] After an approved merge, observe the normal Git-triggered Vercel release.
-- [ ] Do **not** manually rerun/dispatch F0 merely to prove the fix unless a separate explicit `workflow_dispatch` approval exists.
-- [ ] On the next normal scheduled F0 run, verify outcome read-only when tooling permits; keep fail-closed gates intact.
+- [x] Prove scheduled F0 run `33484450472` failed closed.
+- [x] Verify Production transaction `not_started`, DB writes 0, deletes 0.
+- [x] Trace blocker to month-precision rerelease canonical-year loss.
+- [x] Create Issue #137 and repair PR #142.
+- [x] Verify #142 full tests / lint / diff check / Vercel Preview pass.
+- [ ] Obtain independent collection-semantics review for #142.
+- [ ] Obtain explicit approval before merging #142 because it changes code used by the scheduled Production-capable F0 lane.
+- [ ] Do not manually rerun/dispatch F0 without separate `workflow_dispatch` approval.
+- [ ] After an approved merge, observe the normal Vercel release and later verify the next normal scheduled run read-only when tooling permits.
 
-## P0-B — Finish canonical recovery sync
+## P0-B — Complete the post-#150 canonical sync
 
-- [x] Merge generic non-Production PR CI via PR #141.
-- [x] Verify PR #141 exact-head tests/lint/diff/Preview and successful normal Vercel release.
-- [x] Refresh `docs/HANDOFF.md` on Issue #143 branch.
-- [x] Refresh `docs/STATUS.md` on Issue #143 branch.
-- [x] Refresh this TODO order on Issue #143 branch.
-- [x] Refresh durable decisions on Issue #143 branch.
-- [ ] Run PR Code Quality + Vercel Preview for canonical-sync PR.
-- [ ] Merge the docs-only canonical-sync PR when every safe Auto-Merge/Standing Release gate passes.
+Issue #151.
 
-## P0-C — Data Scale: validate and integrate existing work before creating duplicates
+- [x] Confirm PR #150 merged as `53cbfabb8916e6647dde3d18423d855899df80d0`.
+- [x] Confirm #150 Production deployment `dpl_3Wo9ToRQVUDWwftN58NzUbbi4q7F` reached `READY`.
+- [x] Confirm Issue #128 closed and old PR #131 superseded/closed.
+- [x] Refresh `docs/HANDOFF.md`.
+- [x] Refresh `docs/STATUS.md`.
+- [x] Refresh `docs/DECISIONS.md` with re-observation + provider-endpoint security decisions.
+- [x] Refresh this ordered TODO.
+- [ ] Open the docs-only canonical-sync PR.
+- [ ] Run exact-head PR Code Quality + Vercel Preview.
+- [ ] Merge when Auto-Merge + Standing Production Release gates pass.
+- [ ] Do not begin the next major implementation until this sync is merged.
 
-Umbrella: Issue #119.
+## P0-C — Clean-replace exact provider re-observation read (#135 / old PR #136)
 
-### Re-observation / history
+This is the next implementation after P0-B.
 
-- [ ] Re-fetch PR #131 and validate it under generic PR CI.
-- [ ] Confirm the repaired positive-price invariant remains present; 0 / `"0"` must fail closed.
-- [ ] Obtain independent Verifier/Reviewer evidence because observation semantics affect collection truth.
-- [ ] Keep Production persistence/automatic activation separate from code-only merge approval when it changes future write behavior.
+- [ ] Re-fetch current `main` and old PR #136.
+- [ ] Create a clean current-main branch rather than merging the old stack on superseded #131.
+- [ ] Port only the five #135 files: provider adapter, dry-run runner, docs, and focused tests.
+- [ ] Preserve exact persisted Rakuten/Yahoo item identity reads; no keyword rediscovery.
+- [ ] Preserve bounded retries/timeouts, serial provider pacing, strict availability/price normalization, and sanitized diagnostics.
+- [ ] **Repair credential routing:** arbitrary HTTPS custom endpoints must be rejected; credentials/identifiers may be sent only to reviewed official provider host+path allowlists.
+- [ ] Add regression tests proving an arbitrary HTTPS endpoint cannot receive Rakuten `accessKey` or Yahoo `appid`.
+- [ ] Keep the runner dry-run/read-only; no observation/listing persistence.
+- [ ] Do not execute live Production-connected provider reads or consume a new paid API entitlement without the separate required approval.
+- [ ] Run full exact-head tests / lint / diff check / Vercel Preview.
+- [ ] Complete independent Verifier/Reviewer with no blocking/major finding.
+- [ ] Merge only if Auto-Merge + Standing Release gates pass.
+- [ ] Close old PR #136 as superseded after the replacement is safely merged.
 
-### Exact provider re-read
+## P0-D — Settle the multi-listing depth collector (old PR #132)
 
-- [ ] Re-fetch stacked PR #136 after #131 state is settled.
-- [ ] Validate exact Rakuten/Yahoo identity reads, pacing, timeout/retry sanitization, and no keyword rediscovery.
-- [ ] Preserve read-only/dry-run boundary until a separate Production persistence task is approved.
+- [ ] Re-fetch #132 after #135/#136 replacement settles.
+- [ ] Prefer clean replacement/rebase from current main over preserving stale branch history.
+- [ ] Confirm many legitimate distinct offers for one variant remain retained under the operational budget.
+- [ ] Confirm dedupe uses durable listing identity / provider item ID / canonical URL, not price/title.
+- [ ] Preserve strict single-item matcher, exact target variant/series scope, and affiliate provenance rules.
+- [ ] Keep operational limits as safety/request budgets, never collection-completion targets.
+- [ ] Run exact-head CI + Preview + independent collection-semantics review.
+- [ ] Keep Production persistence/automatic activation as a separate approval-gated rollout.
 
-### Multi-listing depth
+## P0-E — Settle the Data Scale Scoreboard (old PR #134)
 
-- [ ] Re-fetch PR #132 and validate it under generic PR CI.
-- [ ] Confirm many legitimate distinct offers per variant remain retained under operational budget.
-- [ ] Confirm dedupe is by real listing identity/canonical URL, not price/title.
-- [ ] Preserve strict single-item matcher and provenance rules.
+- [ ] Re-fetch #134 on current main.
+- [ ] Clean-replace/rebase as needed.
+- [ ] Preserve truthful availability states: `available`, `unavailable`, `not_instrumented`.
+- [ ] Track breadth, depth buckets, history depth, re-observation rate, providers, affiliate provenance, stock/restock/social state, clicks, collection health, and reproducible deltas.
+- [ ] Count only actual completed `sold` evidence as completed sale; `sold_out` is not a transaction.
+- [ ] Keep Mercari `partnership_required` and X uninstrumented/paid-access state truthful.
+- [ ] Run exact-head CI + Preview and merge if all safe gates pass.
+- [ ] Use the Scoreboard as the operating DATA -> TRAFFIC -> CLICK -> REVENUE measurement after integration.
 
-### Data Scale Scoreboard
+## P0-F — Revalidate lawful source capability matrix (old PR #145)
 
-- [ ] Re-fetch PR #134 and validate full exact-head tests/lint/Preview under generic CI.
-- [ ] Preserve truthful availability states (`available`, `unavailable`, `not_instrumented`).
-- [ ] Keep three listings as display threshold only.
-- [ ] Keep Mercari `partnership_required`; do not hide missing X instrumentation.
-- [ ] Use the scoreboard as the operating measurement for DATA -> TRAFFIC -> CLICK -> REVENUE after integration.
+- [ ] Re-fetch and rebase/clean-replace docs-only PR #145 after higher-priority data-generation lanes settle.
+- [ ] Keep Yahoo/Rakuten as current approved programmatic marketplace sources.
+- [ ] Keep Mercari partnership-only; no scraping.
+- [ ] Keep X authorized/paid-access only; no scraping substitution.
+- [ ] Treat any new paid API/licensed source as a separate approval/diligence task.
 
-### Forecast truthfulness
+## P1 — Production history rollout only after code-only lanes are reviewed
 
-- [ ] Re-fetch PR #133 and validate it under generic PR CI.
-- [ ] Preserve rule that metadata alone cannot produce a public expectation score.
-- [ ] Require multiple independent evidence families and component-level provenance.
-- [ ] Keep unavailable/insufficient evidence as `null` / `算出待ち`, not fabricated numbers.
+The existence of #150 and future #135 provider-read code does **not** authorize Production execution/persistence.
 
-## P1 — Build the scalable Data Scale architecture after existing PRs settle
-
-- [ ] Keep breadth seeding, depth collection, and re-observation as separate responsibilities.
-- [ ] Persist repeated observations so one listing can accumulate history over time.
-- [ ] Separate listing identity from observation identity.
-- [ ] Separate provider storefront identity from merchant identity unless equivalence is proven.
-- [ ] Size rate limits/request budgets from provider evidence, not a global 25-row product target.
-- [ ] Prefer batch/upsert/queue architecture where justified by measured throughput.
-- [ ] Build reproducible daily/week deltas: new listings/day, observations/day, re-observation rate, freshness, provider split, depth distribution, rejection reasons, rate-limit/error metrics.
+- [ ] Define a separately approval-gated Production rollout for repeated observations.
+- [ ] Re-read live Production counts and provider health before rollout sizing.
+- [ ] Decide cadence/request budget from measured provider limits and data value, not an arbitrary global target.
+- [ ] Preserve append-only observation identity and allowlisted current-snapshot updates.
+- [ ] Add DB idempotency/transaction verification before any write-capable automation.
+- [ ] Require explicit approval for Production DB writes, new/material workflow/schedule changes, Secrets/Variables, or paid access.
+- [ ] Verify first bounded rollout before any scaling.
 
 ## P2 — Source capability expansion
 
-- [ ] Maintain a source capability matrix: `active`, `planned`, `partnership_required`, `paid_access_required`, `manual_only`, `unavailable`.
-- [ ] Keep Yahoo Shopping and Rakuten as approved current programmatic marketplace sources.
+- [ ] Maintain source states: `active`, `planned`, `partnership_required`, `paid_access_required`, `manual_only`, `unavailable`.
 - [ ] Evaluate additional lawful APIs/feeds one isolated source at a time.
-- [ ] Keep Mercari as a strategic future authorized/licensed partner; do not scrape it.
-- [ ] Do not scrape Amazon.
-- [ ] Treat X/social as an authorized API/licensing track; if commercial access is required, record `paid_access_required` instead of substituting scraping.
-- [ ] Build future partnership evidence around Gacha Lens traffic, matching quality, purchase intent, catalog coverage, and outbound clicks.
+- [ ] Build future Mercari/licensed-provider partnership evidence from traffic, matching quality, catalog coverage, purchase intent, and outbound clicks.
+- [ ] Do not scrape Mercari or Amazon.
 
-## P3 — Non-price signal model
+## P3 — Non-price signals
 
 - [ ] Model stock/inventory observations as timestamped provenance-bearing evidence.
-- [ ] Preserve official restock/re-release events separately from inferred market unavailability.
-- [ ] Add preorder/reservation/set-demand evidence only with exact scope and provenance.
-- [ ] Add authorized X/social reaction/velocity evidence only when access is available and reviewed.
-- [ ] Combine supply-side, demand-side, click/search, and event-window evidence into explainable components.
+- [ ] Keep official restock/re-release events separate from inferred market unavailability.
+- [ ] Add preorder/reservation demand only at exact verified scope.
+- [ ] Add X/social only with authorized reviewed access.
+- [ ] Combine supply, demand, click/search, and event-window evidence transparently.
 - [ ] Never fabricate expectation/popularity from one weak proxy.
 
 ## P4 — Traffic / affiliate / GSC
 
-- [ ] Re-read current GSC before making current indexation/performance claims.
-- [ ] Track root/series/variant sitemaps separately.
-- [ ] Measure pages and queries with impressions/clicks.
-- [ ] Preserve pages already receiving impressions; do not mass-noindex from intuition.
-- [ ] Measure outbound affiliate clicks by provider.
-- [ ] Confirm newly persisted Rakuten/Yahoo rows retain affiliate provenance only when strictly validated.
-- [ ] Keep historical affiliate backfills and Yahoo Secrets/Variables as separate explicit-approval Production tasks.
-- [ ] Increase pages that combine official product truth with useful market evidence.
-- [ ] Focus on commercial-intent queries such as product name + 相場 / 高い / レア / 発売 / 再販.
-- [ ] Recheck Amazon Associates progress as traffic rises.
-- [ ] Recheck AdSense readiness only after content/indexation/traffic quality improves.
+- [ ] Re-read current GSC before current indexation/performance claims.
+- [ ] Preserve root/series/variant sitemap separation.
+- [ ] Measure query/page impressions and clicks before SEO pruning decisions.
+- [ ] Measure outbound affiliate clicks by provider and variant/listing scope where instrumentation permits.
+- [ ] Keep affiliate provenance strict.
+- [ ] Recheck Amazon Associates and AdSense readiness only as traffic/content quality rises.
 
-## P5 — Agent OS / queue work only when it helps business throughput
+## Hold — do not do without explicit approval/new evidence
 
-- [x] Agent OS v1 established.
-- [x] Gated Auto-Merge and Standing Production Release policy established.
-- [x] Generic non-Production PR Code Quality workflow merged in PR #141.
-- [x] Queue / Orchestrator v1 merged in PR #122.
-- [ ] Record the result of the first fresh-session one-shot Queue run after Issue #143 reaches a terminal disposition.
-- [ ] Use independent Verifier/Reviewer for higher-risk collection semantics.
-- [ ] Do not optimize agent activity metrics as a substitute for DATA/TRAFFIC/CLICK/REVENUE movement.
-
-## Hold / do not do without explicit approval or new evidence
-
-- [ ] Do NOT manually dispatch F0 official ingestion while PR #142 is pending.
+- [ ] Do NOT merge #142 or manually dispatch F0 while its approval/review boundary remains.
 - [ ] Do NOT enable Kitan automatic writes.
 - [ ] Do NOT enable Qualia automatic rollout.
-- [ ] Do NOT rerun Kitan or Qualia manual canaries.
-- [ ] Do NOT rerun completed complete-set, P2, or P1 canaries without a new task-specific approval.
+- [ ] Do NOT rerun completed Kitan/Qualia/complete-set/P2/P1 Production canaries without new task-specific approval.
 - [ ] Do NOT replace P3 V2 with Recall V5 merely for higher raw recall.
 - [ ] Do NOT weaken the strict single-item matcher.
+- [ ] Do NOT mix completed/sold evidence with active asking-price evidence.
 - [ ] Do NOT mass-prune pages without current GSC evidence.
 - [ ] Do NOT scrape Mercari or Amazon.
 - [ ] Do NOT touch `supabase/.temp/cli-latest`.
@@ -137,13 +133,13 @@ Umbrella: Issue #119.
 
 ## Forced handoff hygiene
 
-Do not rely on detecting chat limits.
+After every major Production/recovery/security/release milestone:
 
-After any major Production/recovery/security/release milestone, before the next major implementation phase:
-
-- [ ] update `docs/STATUS.md` with timestamped evidence and current Git/GitHub state
-- [ ] update `docs/HANDOFF.md` with completed work, active PRs, approval boundary, and exact next step
-- [ ] update `docs/DECISIONS.md` for any new durable rule
+- [ ] update `docs/STATUS.md`
+- [ ] update `docs/HANDOFF.md`
+- [ ] update `docs/DECISIONS.md` when durable rules changed
 - [ ] update this TODO order
-- [ ] use a docs-only PR instead of mixing canonical state with unrelated implementation
-- [ ] do not proceed merely because the user says “続けて” until the canonical sync gate is complete
+- [ ] use a docs-only PR
+- [ ] merge the canonical sync before starting the next major implementation phase
+
+Do not wait for chat-limit warnings and do not bypass this gate merely because the user says 「続けて」.
