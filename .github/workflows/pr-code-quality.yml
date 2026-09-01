@@ -1,0 +1,50 @@
+name: PR Code Quality
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: pr-code-quality-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact pull request head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run full Node test suite
+        run: npm test
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Verify diff whitespace against base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
