@@ -61,6 +61,10 @@ test("new month-precision rerelease keeps the official original year in event ev
   });
 
   assert.equal(rerelease.blocker, null);
+  assert.equal(rerelease.event.series_id, record.id);
+  assert.deepEqual(rerelease.event.raw.canonical_release, resolved.canonical);
+  assert.equal(rerelease.event.raw.canonical_source, "official_original_release_evidence");
+
   const sanitized = sanitizeOfficialRereleaseEvent(rerelease.event, "insert");
   assert.deepEqual(sanitized.evidence.canonical_release, resolved.canonical);
   assert.equal(sanitized.evidence.canonical_source, "official_original_release_evidence");
