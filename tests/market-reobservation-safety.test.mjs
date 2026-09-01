@@ -55,6 +55,25 @@ test("missing or zero provider price cannot become a synthetic zero-price observ
   }
 });
 
+test("missing or blank observation time fails the required-input contract", () => {
+  const listing = listingFixture();
+  for (const observedAt of [undefined, null, "", "   "]) {
+    assert.throws(() => planMarketReobservation({
+      listing,
+      providerResult: {
+        outcome: "seen",
+        provider: "rakuten_ichiba",
+        source_listing_id: listing.raw.source_listing_id,
+        public_url: listing.source_url,
+        price: 500,
+        status: "active",
+      },
+      observedAt,
+      observationKey: "missing-observed-at",
+    }), /requires listing, observedAt, and observationKey/);
+  }
+});
+
 test("Rakuten unknown or missing availability fails closed instead of becoming active", () => {
   for (const availability of [undefined, null, "", 2, "2", "unknown"]) {
     const result = normalizeRakutenReobservationResponse({
@@ -131,6 +150,50 @@ test("an out-of-order observation cannot roll the current listing snapshot backw
 
   assert.equal(plan.outcome, "provider_error");
   assert.equal(plan.reason, "stale_observation_time");
+  assert.equal(plan.writes.observation_insert, null);
+  assert.equal(plan.writes.listing_update, null);
+});
+
+test("equal observation timestamp with conflicting price fails closed", () => {
+  const listing = listingFixture({ last_observed_at: "2026-09-03T00:00:00.000Z" });
+  const plan = planMarketReobservation({
+    listing,
+    providerResult: {
+      outcome: "seen",
+      provider: "rakuten_ichiba",
+      source_listing_id: listing.raw.source_listing_id,
+      public_url: listing.source_url,
+      price: 650,
+      status: "active",
+    },
+    observedAt: "2026-09-03T00:00:00.000Z",
+    observationKey: "equal-time-price-conflict",
+  });
+
+  assert.equal(plan.outcome, "provider_error");
+  assert.equal(plan.reason, "conflicting_equal_observation_time");
+  assert.equal(plan.writes.observation_insert, null);
+  assert.equal(plan.writes.listing_update, null);
+});
+
+test("equal observation timestamp with conflicting status fails closed", () => {
+  const listing = listingFixture({ last_observed_at: "2026-09-03T00:00:00.000Z" });
+  const plan = planMarketReobservation({
+    listing,
+    providerResult: {
+      outcome: "seen",
+      provider: "rakuten_ichiba",
+      source_listing_id: listing.raw.source_listing_id,
+      public_url: listing.source_url,
+      price: 500,
+      status: "sold_out",
+    },
+    observedAt: "2026-09-03T00:00:00.000Z",
+    observationKey: "equal-time-status-conflict",
+  });
+
+  assert.equal(plan.outcome, "provider_error");
+  assert.equal(plan.reason, "conflicting_equal_observation_time");
   assert.equal(plan.writes.observation_insert, null);
   assert.equal(plan.writes.listing_update, null);
 });
