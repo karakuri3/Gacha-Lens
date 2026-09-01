@@ -14,6 +14,14 @@ Describe the completed outcome, not only the files changed.
 
 -
 
+## Queue ledger (when applicable)
+
+- Selection / resume outcome:
+- Ranked Issues and skipped reasons:
+- Durable claim / frozen commit:
+- Builder ownership and concurrency:
+- Next safe action or terminal outcome:
+
 ## Safety
 
 - Base SHA:
@@ -41,7 +49,7 @@ Describe the completed outcome, not only the files changed.
 | Diff whitespace |  | `git diff --check origin/main...HEAD` |
 | Unexpected changes |  | status + name/status + full diff reviewed |
 | Secret scan |  | added lines reviewed; values not printed |
-| Canonical docs |  | AGENTS / AUTO_MERGE_POLICY / PRODUCTION_RELEASE_POLICY / HANDOFF / STATUS / DECISIONS / TODO checked |
+| Canonical docs |  | AGENTS / AGENT_OS / AGENT_QUEUE / AUTO_MERGE_POLICY / PRODUCTION_RELEASE_POLICY / HANDOFF / STATUS / DECISIONS / TODO checked |
 | Vercel Preview |  | exact head-SHA Preview successful when Production release is expected |
 | Required GitHub checks |  | all required head-SHA checks successful |
 

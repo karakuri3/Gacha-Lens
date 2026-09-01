@@ -116,7 +116,8 @@ Umbrella: Issue #119.
 - [x] Agent OS v1 established.
 - [x] Gated Auto-Merge and Standing Production Release policy established.
 - [x] Generic non-Production PR Code Quality workflow merged in PR #141.
-- [ ] Keep PR #122 Agent Queue work separate from Data Scale integration and review its policy/safety impact before any merge.
+- [x] Queue / Orchestrator v1 merged in PR #122.
+- [ ] Record the result of the first fresh-session one-shot Queue run after Issue #143 reaches a terminal disposition.
 - [ ] Use independent Verifier/Reviewer for higher-risk collection semantics.
 - [ ] Do not optimize agent activity metrics as a substitute for DATA/TRAFFIC/CLICK/REVENUE movement.
 

@@ -2,7 +2,7 @@
 
 Status: repository operating policy
 
-Agent OS v1 is the safe, reviewable development loop for Gacha Lens. It allows an agent to carry a bounded, non-Production task from investigation through a Draft PR without asking for approval at every ordinary engineering step. It does not authorize Production work, workflow dispatches, merges, secrets changes, paid operations, or destructive work.
+Agent OS v1 is the safe, reviewable development loop for Gacha Lens. It allows an agent to carry a bounded, non-Production task through validation and a Draft PR without asking for approval at every ordinary engineering step. Agent OS alone does not authorize a merge or release: an autonomous merge must pass `docs/AUTO_MERGE_POLICY.md`, and its normal Git-triggered Vercel release must also pass `docs/PRODUCTION_RELEASE_POLICY.md`. Production DB actions, workflow dispatches, Secrets / Variables changes, paid operations, destructive work, and other standing exclusions remain unauthorized.
 
 ## 1. Instruction and source precedence
 
@@ -21,7 +21,7 @@ General autonomy never weakens a repository-specific approval boundary. In parti
 
 Before implementation, the Lead / Orchestrator must:
 
-1. Read `AGENTS.md`, this file, `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, and the task contract.
+1. Read `AGENTS.md`, this file, `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, and the task contract. For a queue run, also read `docs/AGENT_QUEUE.md`.
 2. Inspect `package.json`, relevant tests, `.github/`, and the validation commands that currently exist.
 3. Run read-only Git checks for the current branch, status, remotes, and all worktrees.
 4. Fetch `origin/main` without checking it out over another task, record the verified base SHA, and inspect recent changes relevant to the task.
@@ -57,8 +57,8 @@ The disposable-artifact exception exists so reviewed tests can manage their own 
 
 Stop before performing any of the following:
 
-- direct push or merge to `main`, or marking a Draft PR ready for merge
-- Production deployment or promotion
+- direct push to `main`, history rewriting, or any PR readiness/merge excluded by `docs/AUTO_MERGE_POLICY.md`
+- manual Production deployment/promotion, gate change, or any release excluded by `docs/PRODUCTION_RELEASE_POLICY.md`
 - Production database write, migration, reset, seed, backfill, cleanup, or schema operation
 - GitHub Actions `workflow_dispatch`
 - Repository, Vercel, Supabase, or other service Secrets / Variables changes
@@ -290,7 +290,9 @@ The Reviewer receives the task contract, base SHA, head SHA, changed-file list, 
 
 ## 11. GitHub as the task queue
 
-Agent OS uses Issues for task contracts and Draft PRs for execution evidence. The repository currently has no Agent queue labels; the following names are conventions to bootstrap later without changing current repository settings:
+Agent OS uses Issues for task contracts and Draft PRs for execution evidence. `docs/AGENT_QUEUE.md` is the single authoritative Queue / Orchestrator v1 policy for discovery, deterministic selection, duplicate prevention, two-Builder concurrency, continuation, terminal outcomes, and durable resume. That policy is an operating procedure inside the autonomy boundary above and grants no new authority.
+
+Queue labels are optional conventions; Queue v1 must work without them:
 
 | State | Proposed label | Entry condition | Exit condition |
 | --- | --- | --- | --- |
@@ -298,15 +300,15 @@ Agent OS uses Issues for task contracts and Draft PRs for execution evidence. Th
 | Ready for Agent | `agent:ready` | bounded contract and safety boundary exist | Agent claims the task and records branch/worktree |
 | Agent Working | `agent:working` | dedicated branch/worktree exists | implementation reaches frozen verification commit |
 | Verification | `agent:verification` | Builder handoff and focused tests exist | Verifier/Reviewer finish with no blocking findings |
-| Ready for Human | `agent:human-ready` | Done Gate complete and Draft PR updated | human merges, rejects, or requests changes |
-| Done | `agent:done` | human-approved merge or explicit closure | terminal |
+| Ready for Human | `agent:human-ready` | A real human-only boundary remains | human authorizes, rejects, or redirects |
+| Done | `agent:done` | eligible gated merge or explicit closure completes | terminal |
 
 Rules:
 
 - Exactly one queue-state label should apply to an Agent task.
 - Existing product labels such as `bug`, `documentation`, or `enhancement` may coexist.
 - The Issue remains the task contract; the Draft PR links it and contains validation/review evidence.
-- Agents may advance only reversible working states for their assigned task. Only a human advances a Draft PR to merge readiness or performs the merge.
+- Agents may advance only reversible working states for their assigned task. A Draft PR may advance to merge readiness and merge without a routine human acknowledgement only when `docs/AUTO_MERGE_POLICY.md` passes; a resulting normal Vercel release also requires `docs/PRODUCTION_RELEASE_POLICY.md` to pass.
 - A requested change moves the task back to `Agent Working`; a validation failure moves it no further than `Verification` until repaired.
 - Label creation/project-board setup is a separate repository-administration action. Agent OS v1 defines the convention but does not mutate repository settings.
 
@@ -316,6 +318,9 @@ PRs should remain Draft through autonomous repair. Use a `codex/` branch, link t
 
 - `AGENTS.md`: mandatory entry point and hard boundaries
 - `docs/AGENT_OS.md`: detailed Agent OS operating policy
+- `docs/AGENT_QUEUE.md`: authoritative bounded queue selection, continuation, and durable-resume procedure
+- `docs/AUTO_MERGE_POLICY.md`: sole standing route for an eligible autonomous PR merge
+- `docs/PRODUCTION_RELEASE_POLICY.md`: sole standing route for the normal Git-triggered Vercel Production release
 - `docs/DECISIONS.md`: durable product and operating decisions
 - `docs/HANDOFF.md`: fresh-thread operational handoff and live approval boundary
 - `docs/STATUS.md`: compact live-state snapshot
@@ -327,7 +332,7 @@ When docs disagree, do not silently choose whichever permits more autonomy. Appl
 
 ## 13. Future non-Production automation extension points
 
-Agent OS v1 creates conventions, not Production automation. Future automations may be proposed as separate reviewed changes:
+Queue / Orchestrator v1 is a bounded procedure executed by a live Codex session plus a pure offline planner. It is not a daemon, hosted service, workflow chain, or persistent background process. Future automations may be proposed as separate reviewed changes:
 
 - **Issue triage:** validate contract completeness, suggest labels/state, and never auto-start ambiguous work.
 - **CI failure diagnosis:** read CI artifacts, classify regression/baseline/environment, and post a proposed repair plan.
@@ -335,15 +340,17 @@ Agent OS v1 creates conventions, not Production automation. Future automations m
 - **Docs drift check:** compare AGENTS, Agent OS, canonical decisions, task templates, and current validation commands.
 - **Maintenance:** identify dependency/docs/test debt and create bounded backlog Issues; no automatic dependency upgrade or paid action.
 
-Every future automation must have least-privilege permissions, bounded inputs, idempotent/reversible outputs, a dry-run mode, sanitized logs/artifacts, concurrency controls, and an explicit kill switch. Production credentials, Production writes, deployments, merges, workflow dispatch chaining, secret mutation, and destructive cleanup remain outside autonomous automation.
+Every future automation must have least-privilege permissions, bounded inputs, idempotent/reversible outputs, a dry-run mode, sanitized logs/artifacts, concurrency controls, and an explicit kill switch. Queue v1 does not alter the existing merge/release gates. Production credentials, Production DB actions, workflow dispatch chaining, secret mutation, paid actions, and destructive cleanup remain outside autonomous automation.
 
 ## 14. Long-running experiment progression
 
-After Agent OS v1 merges, validate it in increasing risk order:
+The increasing-risk Agent OS experiments are complete through Queue / Orchestrator v1 design:
 
-1. one long-running documentation-only Agent task
-2. one long-running 1-Agent code task with focused tests and no external systems
-3. one read-only Scout + Builder + independent Verifier/Reviewer task using isolated worktrees
-4. only after evidence, propose non-Production queue/CI automation in a separate Draft PR
+1. completed: long-running documentation-only task (#108)
+2. completed: bounded non-Production code task (#112)
+3. completed: Scout / Builder / independent Verifier and Reviewer task (#114)
+4. completed: two disjoint parallel Builders with Lead integration (#118)
+5. current phase: bounded, offline-tested Queue / Orchestrator v1 (#121)
+6. next experiment: start a fresh session with only the documented one-shot instruction and observe selection through a true terminal outcome
 
 Record elapsed time, interventions, repair loops, validation coverage, review findings, and any stop-condition ambiguity. Do not progress to Production-connected automation through this experiment sequence.

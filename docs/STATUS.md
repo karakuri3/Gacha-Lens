@@ -7,11 +7,11 @@ This is the compact operational companion to `docs/HANDOFF.md`. Re-fetch live Gi
 ## Repository
 
 - repo: `karakuri3/Gacha-Lens`
-- verified `main` at this checkpoint: `be4da14b1e01a241b15e71ef1c7863032cb2493f`
-- latest merged PR: #141 `Agent OS: add generic non-Production PR test/lint CI`
+- verified `main` at this checkpoint: `11db0433a8493704acb9935b6f5c48c747788273`
+- latest merged PR: #122 `Agent Queue: add bounded one-shot orchestrator`
 - PR #141 normal Vercel Production deployment: success
 - generic PR validation now runs full `npm test`, `npm run lint`, and `git diff --check` for PRs targeting `main`
-- Agent OS v1 / Auto-Merge / Standing Production Release policies remain authoritative
+- Agent OS v1 / Queue v1 / Auto-Merge / Standing Production Release policies remain authoritative
 
 ## Current P0
 
@@ -52,7 +52,6 @@ These are dated Issue #119 evidence, not a perpetual live assertion.
 
 Re-fetch before acting.
 
-- #122 — Agent Queue bounded orchestrator; separate safety/Agent-OS work
 - #131 — dry-run re-observation engine
 - #132 — dry-run multi-listing depth collector
 - #133 — evidence-backed upcoming forecast truthfulness
@@ -142,6 +141,8 @@ Connected attempts to register GitHub Copilot as reviewer did not persist a requ
 ## GSC
 
 The previous documented GSC snapshot is dated 2026-08-27. Re-read before current indexation/performance claims. Preserve separate root/series/variant sitemaps and do not mass-prune from sitemap-summary intuition alone.
+
+Do not repeat the old F3-C1 diagnostic/canary sequence. Before any new Production-connected action, use a separately authorized live-verification path. Ordinary development may use the one-shot entry in `docs/AGENT_QUEUE.md`; it still follows `docs/TODO.md` and every existing safety boundary.
 
 ## Current boundary
 

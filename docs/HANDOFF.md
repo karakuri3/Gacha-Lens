@@ -8,12 +8,13 @@ This is the canonical operational handoff for resuming Gacha Lens in a fresh Cha
 
 On every fresh thread/task:
 
-1. Read this file, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
+1. Read this file, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AGENT_QUEUE.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
 2. Re-fetch `origin/main`, open PRs, relevant Issues, Actions, and active worktrees before starting implementation.
 3. Prefer newer live GitHub evidence over stale chat summaries.
 4. Do not repeat completed diagnostics/canaries merely to refresh context.
 5. Do not perform a Production write, `workflow_dispatch`, Secrets/Variables change, destructive action, paid action, or ineligible merge without the required explicit approval.
-6. After a major Production/recovery/security/release milestone, update these canonical files before starting the next major phase. Do not wait for chat-length warnings.
+6. Resume a single durable claim before creating duplicate work, then follow the first applicable unchecked item in `docs/TODO.md` unless newer evidence changes priority.
+7. After a major Production/recovery/security/release milestone, update these canonical files before starting the next major phase. Do not wait for chat-length warnings.
 
 Repository: `karakuri3/Gacha-Lens`
 
@@ -23,11 +24,11 @@ Production domain: `https://gachalens.com`
 
 Verified `main` at this checkpoint:
 
-`be4da14b1e01a241b15e71ef1c7863032cb2493f`
+`11db0433a8493704acb9935b6f5c48c747788273`
 
 Latest merged PR at this checkpoint:
 
-- PR #141 — `Agent OS: add generic non-Production PR test/lint CI`
+- PR #122 — `Agent Queue: add bounded one-shot orchestrator`
 
 PR #141 added `.github/workflows/pr-code-quality.yml`, a `pull_request`-only, `contents: read` validation lane that runs `npm ci`, the full `npm test` suite, `npm run lint`, and `git diff --check`. It has no schedule, no `workflow_dispatch`, no Production credentials, no ingestion command, and no repository write. Exact-head CI and Vercel Preview passed before merge; the normal Git-triggered Vercel Production deployment for merge SHA `be4da14...` also reached success.
 
@@ -173,12 +174,6 @@ The following PRs were open during the 2026-09-01 recovery. Re-fetch before acti
 - tracks breadth, depth, history, providers, provenance, signal states, clicks, deltas, and bottlenecks
 - Mercari remains `partnership_required`; X remains not instrumented unless reviewed access exists
 
-### PR #122 — Agent Queue orchestrator
-
-- separate from Data Scale implementation
-- touches Agent OS/queue orchestration semantics
-- do not allow it to distract from P0 Data Scale work or bypass safety-review requirements
-
 Independent Verifier + Reviewer remain mandatory for changes that affect collection semantics under Issue #119.
 
 ## 6. F0 official automatic incident — 2026-09-01
@@ -290,12 +285,17 @@ The last older GSC snapshot in the previous handoff was dated 2026-08-27 and mus
 
 Authoritative operating files:
 
-- `AGENTS.md`
-- `docs/AGENT_OS.md`
-- `docs/AUTO_MERGE_POLICY.md`
-- `docs/PRODUCTION_RELEASE_POLICY.md`
+- `AGENTS.md`: mandatory entry point and hard stops
+- `docs/AGENT_OS.md`: lifecycle, task contract, roles, worktrees, Done Gate, and queue conventions
+- `docs/AGENT_QUEUE.md`: authoritative one-shot selection, duplicate prevention, two-Builder cap, continuation, terminal outcomes, and durable resume
+- `docs/AUTO_MERGE_POLICY.md`: authoritative exception for eligible safe, reversible, non-Production PRs
+- `docs/PRODUCTION_RELEASE_POLICY.md`: authoritative exception for the normal Vercel Production release triggered by an eligible merge
+- `.github/ISSUE_TEMPLATE/agent-task.yml`: task contract
+- `.github/pull_request_template.md`: implementation and gate evidence
 
-One bounded task uses one dedicated `codex/` branch/worktree. Safe failures enter diagnose -> repair -> revalidate. Safe, reversible, non-Production PRs may use the gated auto-merge exception only when every gate passes.
+One task uses one dedicated `codex/` branch and worktree from verified `origin/main`. Ordinary safe failures enter the diagnose/repair/revalidate loop. A PR may be marked ready and merged autonomously only when the complete Auto-Merge Gate passes. Its normal Git-triggered Vercel release may proceed only when the Standing Production Release Gate also passes; otherwise stop at the smallest real approval boundary.
+
+Measured Agent OS experiments #108, #112, #114, and #118 proved the documentation-only run, bounded code run, independent roles, and two disjoint Builders. Queue / Orchestrator v1 merged in PR #122; a fresh one-shot run must use `docs/AGENT_QUEUE.md` and durable GitHub state rather than chat memory.
 
 As of PR #141, ordinary PRs targeting `main` now have generic non-Production CI for:
 
@@ -313,14 +313,16 @@ Explicit approval remains required for:
 
 - Production DB writes/migrations/backfills/cleanup/schema/seed/reset outside already-approved normal behavior
 - GitHub Actions `workflow_dispatch`
-- Secrets / Variables changes
+- Production deployments, promotions, or gate changes excluded by `docs/PRODUCTION_RELEASE_POLICY.md`
+- Repository or service Secrets / Variables changes
 - new/materially changed Production-capable workflow, schedule, cron, ingestion lane, or gate
-- Production promotion/deployment not covered by the standing normal-Vercel release policy
 - paid operations
 - destructive/irreversible actions
 - direct pushes to `main`
-- major product/specification decisions
-- ineligible PR merges
+- any PR merge excluded by `docs/AUTO_MERGE_POLICY.md`
+- auth/security-boundary changes or major product decisions
+
+Eligible safe, reversible, non-Production PRs are the narrow merge exception defined by `docs/AUTO_MERGE_POLICY.md`. Only their normal Git-triggered Vercel Production release may use the separate narrow exception in `docs/PRODUCTION_RELEASE_POLICY.md`.
 
 Hard repository rules:
 
