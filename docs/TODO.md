@@ -16,7 +16,7 @@ Work top-to-bottom unless newer verified evidence changes priority. Current umbr
 - [ ] Do not manually rerun/dispatch F0 without separate `workflow_dispatch` approval.
 - [ ] After an approved merge, observe the normal Vercel release and later verify the next normal scheduled run read-only when tooling permits.
 
-## P0-B — Complete the post-#150 canonical sync
+## P0-B — Post-#150 canonical sync
 
 Issue #151.
 
@@ -27,14 +27,12 @@ Issue #151.
 - [x] Refresh `docs/STATUS.md`.
 - [x] Refresh `docs/DECISIONS.md` with re-observation + provider-endpoint security decisions.
 - [x] Refresh this ordered TODO.
-- [ ] Open the docs-only canonical-sync PR.
-- [ ] Run exact-head PR Code Quality + Vercel Preview.
-- [ ] Merge when Auto-Merge + Standing Production Release gates pass.
-- [ ] Do not begin the next major implementation until this sync is merged.
+
+Completion rule: when the Issue #151 docs-only PR containing this checkpoint is merged to `main`, the canonical-sync gate is complete. Until then, do not begin the next major implementation.
 
 ## P0-C — Clean-replace exact provider re-observation read (#135 / old PR #136)
 
-This is the next implementation after P0-B.
+This is the next implementation after P0-B reaches `main`.
 
 - [ ] Re-fetch current `main` and old PR #136.
 - [ ] Create a clean current-main branch rather than merging the old stack on superseded #131.
