@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-02 JST — post-PR #159 checkpoint
+Updated: 2026-09-02 JST — post-PR #162 checkpoint
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -22,7 +22,7 @@ Do not show an image as variant-specific unless evidence proves variant scope. M
 
 ### D-010 — Approved marketplace programmatic sources
 
-Current approved primary sources:
+Current approved primary market-programmatic sources remain:
 
 1. Yahoo Shopping API
 2. Rakuten Ichiba API
@@ -75,66 +75,47 @@ PR #150 / Issue #128 defines the durable re-observation contract:
 - observation identity is deterministic and retry-safe for the same listing/provider/logical bucket
 - only ordinary current states `active` / `sold_out` are allowed in this lane
 - disappearance/provider failure must never fabricate completed `sold`
-- positive integer price is required; missing/zero/negative/invalid price fails closed
-- provider availability must be explicit; unknown/missing availability fails closed
+- positive integer price is required
+- provider availability must be explicit
 - fetched provider identity mismatch fails closed
-- an `observedAt` older than persisted `last_observed_at` fails closed so current snapshot state cannot roll backward
-- Production observation/listing persistence remains a separate approval-gated rollout
+- stale observations must not roll the current snapshot backward
+- Production persistence remains separately approval-gated
 
 ### D-017 — Provider credentials may only be sent to reviewed official endpoints
 
-This security boundary is implemented for exact Rakuten/Yahoo re-observation in PR #153 and applies to future equivalent adapters.
-
-TLS alone is not authorization to receive provider credentials or identifiers.
+Implemented for exact Rakuten/Yahoo re-observation in PR #153 and applicable to future equivalent adapters.
 
 Required behavior:
 
-- Rakuten `accessKey` / application identity may only be sent to the reviewed official Rakuten HTTPS API host + exact path or an equivalently strict explicit allowlist
-- Yahoo `appid` may only be sent to the reviewed official Yahoo HTTPS API host + exact path or an equivalently strict explicit allowlist
-- arbitrary custom HTTPS hosts fail closed before request execution
+- credential-bearing requests only to reviewed official HTTPS host + exact path / equivalently strict allowlist
+- arbitrary custom HTTPS hosts fail closed
 - HTTP, embedded URL credentials, pre-supplied query strings, and fragments fail closed
-- redirects must not silently expand credential scope; current exact-read requests use `redirect: error`
-- testability comes from injected fetch implementations/fixtures, not destination-validation weakening
-- persisted durable listing identity must validate before any provider request
-
-Do not weaken this boundary merely for development convenience.
+- redirects must not expand credential scope; current exact-read requests use `redirect: error`
+- persisted durable listing identity validates before provider request
+- testability uses injected fetch/fixtures, not destination-validation weakening
 
 ### D-018 — Merged dry-run/provider-read code does not authorize Production-connected execution
 
-PRs #150 and #153 establish reusable code contracts only.
-
-They do **not** authorize:
-
-- live Production-connected provider re-observation execution
-- Production observation INSERTs or listing UPDATEs
-- new/material workflow or schedule activation
-- `workflow_dispatch`
-- Secrets/Variables changes
-- paid API entitlement activation
-
-Those remain separate approval-gated rollout decisions even when the code is on `main` and normal Vercel Production is READY.
+PRs #150 and #153 establish reusable code contracts only. They do **not** authorize live Production-connected provider reads, Production observation INSERTs/listing UPDATEs, new/material workflow/schedule activation, `workflow_dispatch`, Secrets/Variables changes, or paid entitlement activation.
 
 ### D-019 — Depth Collector is multi-offer, identity-driven, and dry-run first
 
-PR #156 / Issue #129 defines the durable Depth Collector contract.
+PR #156 / Issue #129 defines the durable Depth Collector contract:
 
-Required behavior:
-
-- collection target is an explicit variant + parent series
-- reuse the existing strict P3 single-item/matcher/set/ambiguity predicate unchanged unless a separate reviewed change explicitly revises it
-- allow many genuinely distinct legitimate offers for one variant under an operational budget; never encode `3 listings = done`
+- explicit variant + parent-series target
+- reuse strict P3 single-item/matcher/set/ambiguity safety
+- many distinct legitimate offers may be retained; never encode `3 listings = done`
 - price/title similarity is not listing identity
-- dedupe by durable listing ID, provider + native source listing identity, and canonical public URL
-- duplicate candidate keys are ambiguous and fail closed rather than selecting an arbitrary winner
-- preserve same-provider distinct storefront/listing offers and cross-provider offers when marketplace identity is genuinely distinct
-- preserve verified affiliate provenance only through the reviewed sanitizer
-- bind selected candidates to target, keys, listing/source identity, canonical URL and row-relevant evidence with a collision-resistant digest; PR #156 uses SHA-256
-- target, URL, price, title, marketplace identity, or bound evidence drift after selection must fail closed
+- dedupe by durable listing ID, provider/native source identity, and canonical URL
+- ambiguous duplicate candidate keys fail closed
+- preserve legitimate same-provider and cross-provider distinct offers
+- verified affiliate provenance only through the reviewed sanitizer
+- SHA-256-bound selection integrity
+- post-selection target/URL/price/title/identity/evidence drift fails closed
 - re-run strict market safety before row generation
-- dry-run reporting must use the same selection-integrity gate
-- projected writes are insert-only for this lane; insert counts must match accepted selection and update/delete/count drift fails closed
-- default budget 50 / hard max 200 are operational safety bounds, not product completion targets
-- Production persistence, workflow integration, schedules, and automatic activation remain separately approval-gated
+- projected writes remain insert-only/count-bound
+- default budget 50 / hard max 200 are safety bounds, not completion targets
+- Production persistence/workflow/schedule activation remains separately approval-gated
 
 ### D-020 — Production official writes remain bounded/gated
 
@@ -144,9 +125,45 @@ Keep read-only readiness, bounded write, verification, canonical consistency, an
 
 The manual canary already succeeded. Do not rerun it or enable automatic writes without explicit approval.
 
-### D-022 — Qualia remains series-only until separately expanded
+### D-022 — Qualia remains conservative/limited until separately expanded
 
-Current boundary is conservative series metadata insertion only. Variant writes and automatic rollout remain unapproved.
+Current boundary remains conservative official metadata/lineup handling. Broad variant writes and automatic rollout remain unapproved.
+
+### D-023 — Lawful source capability states are explicit and scope-specific
+
+PR #162 / Issue #123 and `docs/DATA_SOURCE_CAPABILITY_MATRIX.md` define the durable source-access contract.
+
+Rules:
+
+- capability state vocabulary remains `active`, `planned`, `partnership_required`, `paid_access_required`, `manual_only`, `unavailable`
+- state applies to the **stated capability/scope**, not the provider brand globally
+- a seller/admin API does not imply broad marketplace intelligence access
+- public pages do not imply permission for automated collection
+- absence of a verified public API does not imply a provider can never license data; use partnership/licensing posture when appropriate
+- paid/commercial access does not become authorized merely because pricing or documentation is public
+- provider prices, quotas, supported markets, product tiers and licensing terms are dated facts and must be rechecked immediately before activation/implementation/purchase/commitment
+- source research never overrides Production, paid, credential, workflow or contractual approval gates
+
+Current durable posture from the 2026-09-02 verification:
+
+- Rakuten Ichiba API: `active` for the reviewed market capability
+- Yahoo Shopping API / ValueCommerce: `active` for the reviewed market capability
+- Aucfan API/MCP: `paid_access_required`; strongest identified licensed candidate for completed-sale/history, pending commercial/data-rights diligence
+- Yahoo Auctions broad public market-history API: `unavailable` through the reviewed current public path
+- Mercari C2C broad market data: `partnership_required`; no scraping
+- Mercari Shops seller API exists, but broad C2C market-intelligence capability is `unavailable` through that seller-scoped path
+- X API: `paid_access_required`; authorized paid path only
+- eBay Browse: lower-priority `planned`; current Japan/historical constraints must be rechecked before implementation
+- broad Surugaya/Mandarake/AmiAmi automation requires an explicit API/feed/permission/partnership path before implementation
+- current connected GSC Wizard reporting path was `unavailable` at verification due subscription/payment state; unavailable reporting is not zero traffic and is not a claim that Search Console itself is unavailable
+
+### D-024 — Use existing Rakuten/Yahoo depth/history capability before provider-count expansion
+
+At the #159 Production checkpoint, 107 listings had 107 observations and zero listings with 2+ observations. Therefore the near-term DATA multiplier is to safely activate repeated observation/depth on already-reviewed Rakuten/Yahoo paths before prioritizing another general live-listing provider.
+
+This is a priority decision, **not Production authorization**. Any live provider-read canary, DB persistence, workflow/schedule activation, Secrets/Variables change, or `workflow_dispatch` still requires its own approval where applicable.
+
+Aucfan diligence remains strategically important because completed-sale/history is a different evidence family that Rakuten/Yahoo do not currently provide.
 
 ## SEO
 
@@ -173,9 +190,11 @@ Indexable page 2+ URLs canonicalize to themselves. Preserve intended noindex beh
 Explicit approval remains required for actions excluded by the standing policies, including:
 
 - Production DB writes/migrations/backfills/cleanup/schema/seed/reset
+- live Production-connected provider execution when approval-bound
 - GitHub Actions `workflow_dispatch`
 - Secrets / Variables changes
-- paid actions
+- paid actions / API credits / subscriptions
+- contractual commitments or marketplace data agreements
 - destructive/irreversible actions
 - direct `main` pushes
 - new/materially changed Production-capable workflow/schedule/cron/automatic ingestion
@@ -183,14 +202,13 @@ Explicit approval remains required for actions excluded by the standing policies
 - ineligible merges
 - major unresolved product/security decisions
 
-Eligible safe/reversible PRs may use `docs/AUTO_MERGE_POLICY.md`. Their normal Git-triggered Vercel Production release separately requires `docs/PRODUCTION_RELEASE_POLICY.md`.
+Eligible safe/reversible PRs may use `docs/AUTO_MERGE_POLICY.md`; normal Git-triggered Vercel release separately requires `docs/PRODUCTION_RELEASE_POLICY.md`.
 
 ### D-041 — Hard repository constraints
 
 - never touch `supabase/.temp/cli-latest`
 - keep `.github/workflows/gacha-ingestion.yml` disabled
-- do not casually modify F0 official auto
-- do not casually modify P3 V2 auto
+- do not casually modify F0 official auto or P3 V2 auto
 - do not enable Kitan/Qualia auto without approval
 - do not rerun completed Production canaries without a new task-specific approval
 
@@ -200,15 +218,13 @@ Eligible safe/reversible PRs may use `docs/AUTO_MERGE_POLICY.md`. Their normal G
 
 ChatGPT owns direction, requirements, prioritization, approval boundaries, and review. Codex owns repository inspection, implementation, tests, lint/build, repair, branch/commit/PR work when Codex is available.
 
-Avoid unnecessary tiny prompts when one bounded phase can be completed end-to-end.
-
 ### D-051 — Preserve partially completed work
 
 If Codex/session quota interrupts work, inspect the existing branch/worktree/PR and continue. Do not restart from scratch.
 
 ### D-052 — Conserve Codex quota
 
-Use connected tools for live state reads when available. Reserve higher reasoning/coding capacity for genuinely difficult implementation or safety-critical design.
+Use connected tools for live state reads when available. Reserve higher reasoning/coding capacity for difficult implementation or safety-critical design.
 
 ### D-053 — Agent OS v1 governs bounded autonomous development
 
@@ -216,13 +232,9 @@ Use connected tools for live state reads when available. Reserve higher reasonin
 
 ### D-054 — Queue / Orchestrator v1 is bounded and resumable
 
-`docs/AGENT_QUEUE.md` governs one-shot queue selection. Resume durable claims before duplicates, allow at most two disjoint Builders, and persist state in GitHub/repository records rather than chat memory.
-
-Queue position never grants Production authority.
+`docs/AGENT_QUEUE.md` governs one-shot queue selection. Resume durable claims before duplicates, allow at most two disjoint Builders, and persist state in GitHub/repository records rather than chat memory. Queue position never grants Production authority.
 
 ### D-055 — Canonical sync is a phase gate
-
-Do not rely on detecting conversation limits.
 
 After a major Production/recovery/security/release milestone:
 
@@ -232,37 +244,25 @@ After a major Production/recovery/security/release milestone:
 4. update `docs/TODO.md`
 5. validate/merge the docs-only canonical sync before starting the next major implementation phase
 
-This gate applies even when the user says 「続けて」.
+Do not rely on chat-limit detection. This gate applies even when the user says 「続けて」.
 
 ### D-056 — PR #156 review substitution was one-task-only
 
-Issue #129 required an independent Reviewer. GitHub Copilot Code Review was unavailable on the user's current GitHub plan. On 2026-09-02 JST, the user explicitly approved proceeding for PR #156 only with:
-
-- exact-head independent CI verification
-- strengthened Lead full-diff self-review
-- targeted regression tests covering the collection-semantics findings discovered during review
-
-This was a task-contract exception for PR #156 only. It does **not** amend `AGENT_OS`, `AUTO_MERGE_POLICY`, `PRODUCTION_RELEASE_POLICY`, or future task review requirements. Future tasks must satisfy their own current review gate or obtain a separate explicit exception when a true stop boundary exists.
+The user explicitly approved PR #156 only to proceed with exact-head independent CI + strengthened Lead self-review + targeted regression tests when Copilot Code Review was unavailable. This does not amend standing review/merge/release policies for future tasks.
 
 ### D-057 — Scoreboard truthfulness and evidence-source separation are durable contracts
 
-PR #159 / Issue #126 defines the read-only Data Scale Scoreboard contract.
+PR #159 / Issue #126 defines the read-only Data Scale Scoreboard contract:
 
-Required behavior:
-
-- product progress is evaluated through `DATA -> TRAFFIC -> CLICK -> REVENUE`, not PR count or agent activity
-- measured-state vocabulary stays distinct: `available`, `unavailable`, `not_instrumented`
-- source capability uses a separate vocabulary: `active`, `planned`, `partnership_required`, `paid_access_required`, `manual_only`, `unavailable`
-- `supported_source_count` counts only active capabilities; total capability inventory is reported separately
-- X without reviewed authorized collection is capability `paid_access_required` and measured social state `not_instrumented`; do not convert either to zero interest
-- Mercari remains `partnership_required`; Scoreboard visibility does not authorize scraping
-- only actual completed `status=sold` evidence counts as completed sale; `sold_out` remains ordinary availability/lifecycle evidence
-- review-required stock/restock/social rows are excluded from trusted coverage inside the domain contract
-- current outbound click evidence is provider+variant scoped and must not be represented as listing-level conversion or revenue attribution
-- Production database `ingestion_runs` and GitHub Actions workflow execution are separate evidence sources; zero database run rows do not prove zero workflow runs
-- missing workflow evidence must fail closed as `not_instrumented` instead of manufacturing a global run count
-- raw provider payloads, credentials, and untrusted issue notes are not emitted by the Scoreboard
-- #159 is read-only measurement infrastructure; it does not authorize Production history/depth persistence, provider execution, paid access, workflow activation, or Secrets changes
+- evaluate progress through `DATA -> TRAFFIC -> CLICK -> REVENUE`
+- preserve `available`, `unavailable`, `not_instrumented`
+- keep source capability vocabulary separate
+- only actual `status=sold` is completed-sale evidence
+- review-required stock/restock/social rows are excluded
+- outbound click evidence remains provider+variant scoped unless stronger instrumentation exists
+- Production DB ingestion-run and GitHub workflow-run evidence remain separate
+- missing evidence fails closed rather than becoming zero
+- Scoreboard does not authorize Production collection/persistence
 
 ## Business priority
 
@@ -272,7 +272,7 @@ Prioritize useful data density, organic traffic, affiliate clicks/sales, then Ad
 
 ### D-061 — Data Scale is the current P0 program
 
-Issue #119 is the current program. Build comprehensive lawful coverage across independent listings, repeated observations, providers, inventory/restock, and explainable signals.
+Issue #119 remains the current program. Build comprehensive lawful coverage across independent listings, repeated observations, providers, inventory/restock, completed-sale evidence where authorized, and explainable signals.
 
 Keep breadth seeding, depth collection, and re-observation as separate responsibilities. Preserve exact matching, provider provenance, listing-vs-observation identity, and fail-closed evidence semantics.
 
