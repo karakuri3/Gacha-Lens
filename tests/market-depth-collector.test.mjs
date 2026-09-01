@@ -114,23 +114,29 @@ test("same target variant and series legitimately appear in every planned listin
   assert.equal(rows.projected_writes.listing_inserts, 10);
 });
 
-test("true duplicate source identity, listing identity and canonical URL fail closed", () => {
+test("duplicate and conflicting marketplace identities fail closed", () => {
   const first = candidate(50);
-  const duplicateSource = candidate(51, {
+  const exactDuplicate = candidate(51, {
+    shop: "shop-50",
+    source_listing_id: first.source.listing_id,
+    public_url: first.source.public_url,
+  });
+  const conflictingSource = candidate(52, {
     source_listing_id: first.source.listing_id,
     public_url: "https://item.rakuten.co.jp/different-shop/different-item/",
   });
-  const duplicateUrl = candidate(52, {
-    source_listing_id: "shop-52:unique-item",
+  const duplicateUrl = candidate(53, {
+    source_listing_id: "shop-53:unique-item",
     public_url: `${first.source.public_url}?utm_source=test#fragment`,
   });
-  const selection = selectMarketDepthCandidates([first, duplicateSource, duplicateUrl], {
+  const selection = selectMarketDepthCandidates([first, exactDuplicate, conflictingSource, duplicateUrl], {
     targetVariantId: VARIANT_ID,
     targetSeriesId: SERIES_ID,
   });
 
   assert.equal(selection.selected_count, 1);
-  assert.equal(selection.rejection_reason_counts.duplicate_or_existing_source_identity, 1);
+  assert.equal(selection.rejection_reason_counts.duplicate_or_existing_listing_id, 1);
+  assert.equal(selection.rejection_reason_counts.invalid_marketplace_identity, 1);
   assert.equal(selection.rejection_reason_counts.duplicate_or_existing_public_url, 1);
 });
 
