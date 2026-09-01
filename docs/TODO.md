@@ -1,6 +1,6 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-08-30 JST
+Updated: 2026-09-01 JST
 
 Work top-to-bottom unless newer evidence changes priority. Git/GitHub development state is current as of this date; Production, deployment, Supabase, and GSC facts remain dated until separately re-verified.
 
@@ -72,10 +72,12 @@ This sequence validates development operations and does not reorder the business
 
 - [x] Establish Agent OS v1 and the gated autonomous merge policy.
 - [x] Run the first documentation-only, one-Agent experiment under Issue #108; its PR/result is authoritative for final metrics and disposition.
-- [ ] If experiment #1 succeeds, run one bounded non-Production code task with no external-system dependency.
-- [ ] Then trial isolated Scout / Builder / Verifier / Reviewer roles with one worktree per editing task.
-- [ ] Propose queue/CI/docs-maintenance automation only in separate PRs.
-- [ ] Keep experiments disconnected from Production writes, deploys, migrations, workflow dispatches, secrets, paid operations, and destructive cleanup.
+- [x] Run the bounded non-Production code experiment under Issue #112.
+- [x] Run isolated Scout / Builder / independent Verifier and Reviewer roles under Issue #114.
+- [x] Run two disjoint parallel Builders with Lead integration under Issue #118.
+- [x] Define and behavior-test the bounded Queue / Orchestrator v1 under Issue #121.
+- [ ] Run the next manual experiment from a fresh session using only the one-shot instruction documented in `docs/AGENT_QUEUE.md`.
+- [ ] Keep Queue/Agent experiments disconnected from Production DB actions, manual deployments, migrations, workflow dispatches, Secrets / Variables, paid operations, destructive cleanup, and auth/security changes.
 
 ## Hold / do not do without explicit decision
 

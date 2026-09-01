@@ -1,6 +1,6 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-08-30 JST
+Updated: 2026-09-01 JST
 
 This is the canonical operational handoff for resuming Gacha Lens work in a fresh ChatGPT/Codex task. Do not treat older chat summaries or `docs/CURRENT_STATE.md` as newer than this file without re-verifying live state.
 
@@ -8,9 +8,9 @@ This is the canonical operational handoff for resuming Gacha Lens work in a fres
 
 When resuming:
 
-1. Read this file, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `AGENTS.md`, `docs/AGENT_OS.md`, and `docs/AUTO_MERGE_POLICY.md`.
+1. Read this file, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AGENT_QUEUE.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
 2. Fetch and verify GitHub `origin/main`, open PRs, and worktrees before starting a task.
-3. Treat the Git/GitHub development baseline below as verified on 2026-08-30 JST.
+3. Treat the Git/GitHub development baseline below as verified on 2026-09-01 JST.
 4. Treat Production, Vercel, Supabase, and GSC values as dated snapshots until separately re-read through an allowed live-verification path.
 5. Do not repeat completed diagnostics or canaries.
 6. Continue from the first applicable unchecked item in `docs/TODO.md`, unless newer evidence changes priority.
@@ -23,17 +23,19 @@ Production domain: `https://gachalens.com`
 
 Current verified GitHub `main`:
 
-`a79e8f72151cdb1eff94d6971e1544f751d7ed2f`
+`3e633b1fe591aadd5e02e409104aa0214457c527`
 
 Latest merged PR at refresh:
 
-- PR #106 — `F3-E1B2: resolve normalized affiliate provenance`
+- PR #120 — `Image foundation: harden fallback and add offline audit`
 
 GitHub state observed during the refresh:
 
 - open PRs: 0
+- open Issues: #80, #119, #121
 - Agent OS v1: merged in PR #105
 - gated autonomous merge policy: merged in PR #107
+- standing normal Vercel Production release gate: present on `origin/main`
 
 No live Vercel, Supabase, or GSC read was performed for this documentation-only refresh. Do not infer that the latest Git SHA is deployed or that the dated counts below are still current.
 
@@ -230,13 +232,15 @@ Agent OS v1 is now merged and active:
 
 - `AGENTS.md`: mandatory entry point and hard stops
 - `docs/AGENT_OS.md`: lifecycle, task contract, roles, worktrees, Done Gate, and queue conventions
+- `docs/AGENT_QUEUE.md`: authoritative one-shot selection, duplicate prevention, two-Builder cap, continuation, terminal outcomes, and durable resume
 - `docs/AUTO_MERGE_POLICY.md`: authoritative exception for eligible safe, reversible, non-Production PRs
+- `docs/PRODUCTION_RELEASE_POLICY.md`: authoritative exception for the normal Vercel Production release triggered by an eligible merge
 - `.github/ISSUE_TEMPLATE/agent-task.yml`: task contract
 - `.github/pull_request_template.md`: implementation and gate evidence
 
-One task uses one dedicated `codex/` branch and worktree from verified `origin/main`. Ordinary safe failures enter the diagnose/repair/revalidate loop. A PR may be marked ready and merged autonomously only when the complete Auto-Merge Gate passes; otherwise stop at the smallest real approval boundary.
+One task uses one dedicated `codex/` branch and worktree from verified `origin/main`. Ordinary safe failures enter the diagnose/repair/revalidate loop. A PR may be marked ready and merged autonomously only when the complete Auto-Merge Gate passes. Its normal Git-triggered Vercel release may proceed only when the Standing Production Release Gate also passes; otherwise stop at the smallest real approval boundary.
 
-Issue #108 is the first measured documentation-only, one-Agent experiment. Its PR/result is the authoritative record for elapsed time, interventions, repair loops, validation runs, review findings, stop-condition ambiguities, and merge disposition.
+Measured Agent OS experiments #108, #112, #114, and #118 proved the documentation-only run, bounded code run, independent roles, and two disjoint Builders. Queue / Orchestrator v1 is defined by Issue #121 and the merge containing this handoff. The next manual experiment is a fresh session started only with the one-shot instruction in `docs/AGENT_QUEUE.md`.
 
 ## 9. Approval and safety boundaries
 
@@ -244,14 +248,15 @@ Always require explicit approval for:
 
 - Production DB writes, migrations, backfills, cleanup, schema operations, or seeds
 - GitHub Actions `workflow_dispatch`
-- Production deployments, promotions, or gate changes
+- Production deployments, promotions, or gate changes excluded by `docs/PRODUCTION_RELEASE_POLICY.md`
 - Repository or service Secrets / Variables changes
 - paid operations
 - destructive or irreversible actions
 - direct pushes to `main`
 - any PR merge excluded by `docs/AUTO_MERGE_POLICY.md`
+- auth/security-boundary changes or major product decisions
 
-Eligible safe, reversible, non-Production PRs are the narrow merge exception defined by `docs/AUTO_MERGE_POLICY.md`.
+Eligible safe, reversible, non-Production PRs are the narrow merge exception defined by `docs/AUTO_MERGE_POLICY.md`. Only their normal Git-triggered Vercel Production release may use the separate narrow exception in `docs/PRODUCTION_RELEASE_POLICY.md`.
 
 Hard repository rules:
 

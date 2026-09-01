@@ -143,13 +143,13 @@ Require explicit approval for:
 - workflow dispatches
 - migrations
 - cleanup/deletes
-- Production deployments, promotions, and gate changes
+- manual Production deployments, promotions, gate changes, and releases excluded by `docs/PRODUCTION_RELEASE_POLICY.md`
 - Repository Variables/Secrets
 - merges excluded by `docs/AUTO_MERGE_POLICY.md`
 
 Read-only investigation is allowed.
 
-Safe, reversible, non-Production PRs are the narrow exception: they may be marked ready and merged autonomously only when every Auto-Merge Gate item passes. Direct pushes to `main` remain prohibited.
+Safe, reversible, non-Production PRs are the narrow merge exception: they may be marked ready and merged autonomously only when every Auto-Merge Gate item passes. Their normal Git-triggered Vercel release is the separate narrow release exception and requires every Standing Production Release Gate item. Direct pushes to `main`, manual Production deployments, and all other exclusions remain prohibited.
 
 ### D-041 — Hard repository constraints
 
@@ -193,7 +193,20 @@ Gacha Lens uses `AGENTS.md` and `docs/AGENT_OS.md` as the operating contract for
 - GitHub Issues hold task contracts and Draft PRs hold validation/review evidence
 - repository-specific approval boundaries override general autonomy
 
-Agent OS does not authorize Production writes/deploys/migrations, workflow dispatches, Secrets / Variables changes, destructive cleanup, paid operations, direct `main` pushes, or ineligible merges. Eligible safe, reversible, non-Production PRs may use the explicit gated exception in `docs/AUTO_MERGE_POLICY.md`.
+Agent OS does not authorize Production DB actions, manual deployments, migrations, workflow dispatches, Secrets / Variables changes, destructive cleanup, paid operations, direct `main` pushes, or ineligible merges/releases. Eligible safe, reversible, non-Production PRs may use the explicit gated exception in `docs/AUTO_MERGE_POLICY.md`; their normal Git-triggered Vercel release separately requires `docs/PRODUCTION_RELEASE_POLICY.md`.
+
+### D-054 — Queue / Orchestrator v1 is bounded and resumable
+
+`docs/AGENT_QUEUE.md` is the authoritative procedure for a one-shot queue run inside the existing Agent OS permissions.
+
+- resume one durable Issue/branch/worktree/PR claim before starting duplicate work
+- select deterministically from explicit instruction, lifecycle repair, queue/TODO/parent priority, dependency value, and Issue number
+- allow at most two Builders with separate worktrees and disjoint ownership
+- skip unrelated human-bound work while eligible work remains
+- persist frozen state in GitHub/repository records so a fresh session does not depend on chat memory
+- treat `human-bound` and `queue-exhausted` as distinct terminal outcomes
+
+Queue position never grants authority. Queue v1 is not a daemon and does not alter any Production, DB, workflow-dispatch, Secrets / Variables, paid, destructive, auth/security, merge, or release boundary.
 
 ## Business priority
 

@@ -7,7 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- BEGIN:agent-os-v1 -->
 # Gacha Lens Agent OS v1
 
-Read `docs/AGENT_OS.md` before planning or changing this repository. Also read `docs/AUTO_MERGE_POLICY.md`, `docs/PRODUCTION_RELEASE_POLICY.md`, and the canonical project state in `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, and `docs/TODO.md`. Repository-specific safety decisions in those files override general autonomy below. For merge/release decisions, the Auto-Merge and Production Release policies are the explicit repository exceptions and override older lower-precedence statements that require a human to perform every safe merge or routine Vercel release.
+Read `docs/AGENT_OS.md` before planning or changing this repository. For a queue run, also read `docs/AGENT_QUEUE.md`; it is an operating procedure inside these existing permissions, not a grant of additional authority. Also read `docs/AUTO_MERGE_POLICY.md`, `docs/PRODUCTION_RELEASE_POLICY.md`, and the canonical project state in `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, and `docs/TODO.md`. Repository-specific safety decisions in those files override general autonomy below. For merge/release decisions, the Auto-Merge and Production Release policies are the explicit repository exceptions and override older lower-precedence statements that require a human to perform every safe merge or routine Vercel release.
 
 ## AUTONOMOUSLY ALLOWED
 
@@ -49,6 +49,14 @@ Before claiming completion, apply the gate in `docs/AGENT_OS.md`: confirm accept
 ## AGENT TASK CONTRACT
 
 Every agent task must state: Goal, Context, Scope, Acceptance Criteria, Constraints, Validation, Stop Conditions, and Done Definition. Use `.github/ISSUE_TEMPLATE/agent-task.yml` or the contract in `docs/AGENT_OS.md`.
+
+## QUEUE / ORCHESTRATOR ENTRY
+
+The short instruction `Gacha Lens続けて。Agent Queueを自律実行し、真のStop Conditionだけ戻して。` requests one bounded, resumable run of the existing Agent OS lifecycle using the selection and checkpoint procedure in `docs/AGENT_QUEUE.md`.
+
+The Queue procedure must resume durable existing work before creating a duplicate, select only complete tasks authorized by canonical priority, use no more than two disjoint Builders, and persist Issue/PR/branch/worktree/frozen-commit state for another session. It may skip an unrelated human-bound item while eligible work remains, but it never converts that item into authorized work.
+
+The short instruction grants no new permission. Every HUMAN APPROVAL REQUIRED item and REPOSITORY HARD STOP above remains unchanged. The run ends at a true Stop Condition, a human-bound dependency, queue exhaustion, repository ambiguity, or an unavoidable session/tool limit.
 
 ## MULTI-AGENT AND WORKTREE RULES
 
