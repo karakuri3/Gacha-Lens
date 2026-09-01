@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   calculateUpcomingVariantForecast,
@@ -15,6 +18,9 @@ import {
   priceUpsideScore,
   scarcityScore,
 } from "../lib/domain/public-display-clean.js";
+
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const NOW = "2026-09-01T09:30:00.000Z";
 
 function metadataVariant(overrides = {}) {
   const variant = {
@@ -34,6 +40,36 @@ function metadataVariant(overrides = {}) {
   };
 }
 
+function preorderListing(overrides = {}) {
+  return {
+    id: "pre-1",
+    variant_id: "variant-1",
+    listing_type: "single",
+    status: "pre_release",
+    price: 1200,
+    confidence: 0.9,
+    review_required: false,
+    source_url: "https://item.rakuten.co.jp/example/pre-1/",
+    listed_at: NOW,
+    ...overrides,
+  };
+}
+
+function socialReaction(overrides = {}) {
+  return {
+    id: "x-1",
+    source_type: "official_x",
+    review_required: false,
+    posted_at: NOW,
+    confidence: 0.95,
+    likes: 200,
+    reposts: 50,
+    quotes: 10,
+    intent_tags: ["attention"],
+    ...overrides,
+  };
+}
+
 test("metadata-only heuristics cannot create a public expectation score", () => {
   const variant = metadataVariant();
   const forecast = calculateUpcomingVariantForecast({ variant });
@@ -50,10 +86,10 @@ test("metadata-only heuristics cannot create a public expectation score", () => 
   assert.equal(forecast.x, 0, "manual X signal is not treated as an observed X reaction");
 });
 
-test("catalog plus an observed preorder market family can pass the evidence gate", () => {
+test("catalog plus a review-safe exact single-item preorder family can pass the evidence gate", () => {
   const forecast = calculateUpcomingVariantForecast({
     variant: metadataVariant(),
-    marketListings: [{ id: "pre-1", status: "pre_release", price: 1200, confidence: 0.9 }],
+    marketListings: [preorderListing()],
   });
 
   assert.equal(forecast.evidence_status, "ready");
@@ -62,18 +98,22 @@ test("catalog plus an observed preorder market family can pass the evidence gate
   assert.ok(forecast.preorder > 0);
 });
 
-test("catalog plus an observed authorized social family can pass the evidence gate", () => {
+test("series/set preorder evidence cannot masquerade as exact variant demand", () => {
   const forecast = calculateUpcomingVariantForecast({
     variant: metadataVariant(),
-    xReactions: [{
-      id: "x-1",
-      source_type: "x_api",
-      confidence: 0.95,
-      likes: 200,
-      reposts: 50,
-      quotes: 10,
-      intent_tags: ["attention"],
-    }],
+    marketListings: [preorderListing({ variant_id: null, listing_type: "complete_set" })],
+  });
+
+  assert.equal(forecast.evidence_status, "insufficient_evidence");
+  assert.deepEqual(forecast.evidence_families, ["catalog_identity"]);
+  assert.equal(forecast.preorder, 0);
+  assert.equal(forecast.total, null);
+});
+
+test("catalog plus a timestamped recognized social family can pass the evidence gate", () => {
+  const forecast = calculateUpcomingVariantForecast({
+    variant: metadataVariant(),
+    xReactions: [socialReaction()],
   });
 
   assert.equal(forecast.evidence_status, "ready");
@@ -82,27 +122,46 @@ test("catalog plus an observed authorized social family can pass the evidence ga
   assert.ok(forecast.x > 0);
 });
 
+test("unknown, review-required, or untimestamped social rows fail closed", () => {
+  for (const reaction of [
+    socialReaction({ source_type: "x_api" }),
+    socialReaction({ review_required: true }),
+    socialReaction({ posted_at: "" }),
+  ]) {
+    const forecast = calculateUpcomingVariantForecast({
+      variant: metadataVariant(),
+      xReactions: [reaction],
+    });
+    assert.equal(forecast.evidence_status, "insufficient_evidence");
+    assert.equal(forecast.total, null);
+    assert.equal(forecast.x, 0);
+  }
+});
+
 test("availability is visible as supporting evidence but does not silently masquerade as X demand", () => {
+  const restock = { id: "restock-1", source_type: "official", confidence: 1, review_required: false, reported_at: NOW };
+  const stock = { id: "stock-1", source_type: "official", confidence: 1, review_required: false, reported_at: NOW };
   const forecast = calculateUpcomingVariantForecast({
     variant: metadataVariant(),
-    restockEvents: [{ id: "restock-1", source_type: "official", confidence: 1 }],
-    stockReports: [{ id: "stock-1", source_type: "official", confidence: 1 }],
+    restockEvents: [restock],
+    stockReports: [stock],
   });
   const evidence = classifyForecastEvidence({
     variant: metadataVariant(),
-    restockEvents: [{ id: "restock-1", confidence: 1 }],
+    restockEvents: [restock],
   });
 
   assert.equal(forecast.evidence_status, "insufficient_evidence");
   assert.equal(forecast.x, 0);
   assert.deepEqual(evidence.supporting_families, ["availability"]);
+  assert.deepEqual(forecast.supporting_evidence_families, ["availability"]);
 });
 
 test("two observed exact-match families can qualify even when catalog identity is unavailable to the pure function", () => {
   const forecast = calculateUpcomingVariantForecast({
     variant: { axes: { complete: 50, ace: 50, compatibility: 50, limited: 50 } },
-    marketListings: [{ id: "pre-2", status: "pre_release", price: 900, confidence: 0.9 }],
-    xReactions: [{ id: "x-2", confidence: 0.9, likes: 10, reposts: 2, quotes: 0, intent_tags: [] }],
+    marketListings: [preorderListing({ variant_id: "variant-external" })],
+    xReactions: [socialReaction({ id: "x-2", source_type: "user_x", likes: 10, reposts: 2, quotes: 0, intent_tags: [] })],
   });
 
   assert.equal(forecast.evidence_status, "ready");
@@ -165,4 +224,13 @@ test("legacy positive sample fixtures remain renderable only when no explicit ev
     forecast_score: 70,
     forecast_breakdown: { evidence_status: "insufficient_evidence" },
   }), false);
+});
+
+test("upcoming public ranking has a positive forecast gate, so metadata-only null scores are not ranked", async () => {
+  const source = await readFile(path.join(repositoryRoot, "app/ranking/page.js"), "utf8");
+  const metadataForecast = calculateUpcomingVariantForecast({ variant: metadataVariant() });
+
+  assert.equal(metadataForecast.total, null);
+  assert.match(source, /\(item\.forecast_score \?\? 0\) > 0/);
+  assert.doesNotMatch(source, /deriveOfficialForecastAxes/);
 });
