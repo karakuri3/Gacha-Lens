@@ -4,7 +4,7 @@ import test from "node:test";
 import { buildMarketplaceListingId } from "../lib/domain/market-canary-write.js";
 import { planMarketReobservation } from "../lib/domain/market-reobservation.js";
 
-test("missing provider price cannot become a synthetic zero-price observation", () => {
+test("missing or zero provider price cannot become a synthetic zero-price observation", () => {
   const provider = "rakuten_ichiba";
   const sourceListingId = "shop:item-1";
   const publicUrl = "https://item.rakuten.co.jp/shop/item-1/";
@@ -23,7 +23,7 @@ test("missing provider price cannot become a synthetic zero-price observation", 
     raw: { provider, source_listing_id: sourceListingId, public_url: publicUrl },
   };
 
-  for (const missingPrice of [null, undefined, ""]) {
+  for (const invalidPrice of [null, undefined, "", 0, "0"]) {
     const plan = planMarketReobservation({
       listing,
       providerResult: {
@@ -31,11 +31,11 @@ test("missing provider price cannot become a synthetic zero-price observation", 
         provider,
         source_listing_id: sourceListingId,
         public_url: publicUrl,
-        price: missingPrice,
+        price: invalidPrice,
         status: "active",
       },
       observedAt: "2026-09-02T00:00:00.000Z",
-      observationKey: `missing-price-${String(missingPrice) || "empty"}`,
+      observationKey: `invalid-price-${String(invalidPrice) || "empty"}`,
     });
     assert.equal(plan.outcome, "provider_error");
     assert.equal(plan.writes.observation_insert, null);
