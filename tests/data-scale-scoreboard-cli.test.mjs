@@ -7,7 +7,7 @@ import {
 } from "../scripts/data-scale-scoreboard-report.mjs";
 
 const NOW = "2026-09-01T10:00:00.000Z";
-const MAIN = "3e633b1fe591aadd5e02e409104aa0214457c527";
+const MAIN = "99948dbb1273aefcf398654f72b8fce193f38fe5";
 
 function rowsFor(table) {
   const commonTime = "2026-09-01T09:30:00.000Z";
@@ -94,9 +94,15 @@ test("Production scoreboard loader uses only the injected read interface in dete
     assert.ok(calls.every((entry) => typeof entry.options.select === "string" && entry.options.select.length > 0));
     assert.equal(snapshot.panels.data.catalog.series_total.value, 1);
     assert.equal(snapshot.panels.data.catalog.variants_total.value, 2);
+    assert.equal(snapshot.panels.data.catalog.supported_source_count.value, 3);
+    assert.equal(snapshot.panels.data.catalog.source_capability_count.value, 5);
+    assert.equal(
+      snapshot.panels.data.catalog.source_capabilities.value.find((entry) => entry.source === "x")?.state,
+      "paid_access_required",
+    );
     assert.equal(snapshot.panels.data.market_breadth.listings_total.value, 1);
     assert.equal(snapshot.panels.data.history.observations_total.value, 1);
-    assert.equal(snapshot.panels.data.signals.stock.value.total, 0, "review-required stock rows are excluded from public signal coverage");
+    assert.equal(snapshot.panels.data.signals.stock.value.total, 0, "review-required stock rows are excluded by the domain contract");
     assert.equal(snapshot.panels.data.signals.social.state, "not_instrumented");
     assert.equal(snapshot.panels.traffic.state, "unavailable");
     assert.equal(snapshot.panels.revenue.state, "unavailable");
@@ -106,17 +112,19 @@ test("Production scoreboard loader uses only the injected read interface in dete
   }
 });
 
-test("source capability map keeps Mercari as partnership-required and X activation explicit", () => {
+test("source capability map keeps Mercari partnership-only and X paid-access until reviewed activation", () => {
   const originalX = process.env.X_FETCH_ENABLED;
   try {
     process.env.X_FETCH_ENABLED = "false";
     const disabled = buildSourceCapabilities();
     assert.equal(disabled.find((entry) => entry.source === "mercari")?.state, "partnership_required");
-    assert.equal(disabled.find((entry) => entry.source === "x")?.state, "not_configured");
+    assert.equal(disabled.find((entry) => entry.source === "x")?.state, "paid_access_required");
+    assert.equal(disabled.filter((entry) => entry.state === "active").length, 3);
 
     process.env.X_FETCH_ENABLED = "true";
     const enabled = buildSourceCapabilities();
     assert.equal(enabled.find((entry) => entry.source === "x")?.state, "active");
+    assert.equal(enabled.filter((entry) => entry.state === "active").length, 4);
   } finally {
     if (originalX === undefined) delete process.env.X_FETCH_ENABLED;
     else process.env.X_FETCH_ENABLED = originalX;
