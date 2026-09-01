@@ -65,13 +65,12 @@ export async function loadProductionDataScaleScoreboard(options = {}) {
 
   const previousDay = readSnapshotOption(options.previousDay);
   const previousWeek = readSnapshotOption(options.previousWeek);
+  const socialAuthorized = parseBoolean(process.env.X_FETCH_ENABLED);
 
   return buildDataScaleScoreboard({
     ...data,
-    stockReports: data.stockReports.filter((row) => row.review_required !== true),
-    restockEvents: data.restockEvents.filter((row) => row.review_required !== true),
-    socialAuthorized: parseBoolean(process.env.X_FETCH_ENABLED),
-    sourceCapabilities: buildSourceCapabilities(),
+    socialAuthorized,
+    sourceCapabilities: buildSourceCapabilities({ socialAuthorized }),
     traffic: normalizeExternalPanel(options.traffic),
     revenue: normalizeExternalPanel(options.revenue),
   }, {
@@ -82,12 +81,13 @@ export async function loadProductionDataScaleScoreboard(options = {}) {
   });
 }
 
-export function buildSourceCapabilities() {
+export function buildSourceCapabilities(options = {}) {
+  const socialAuthorized = options.socialAuthorized ?? parseBoolean(process.env.X_FETCH_ENABLED);
   return [
     { source: "official", capability: "catalog_and_release_facts", state: "active" },
     { source: "rakuten", capability: "market_listings", state: "active" },
     { source: "yahoo_shopping", capability: "market_listings", state: "active" },
-    { source: "x", capability: "social_signals", state: parseBoolean(process.env.X_FETCH_ENABLED) ? "active" : "not_configured" },
+    { source: "x", capability: "social_signals", state: socialAuthorized ? "active" : "paid_access_required" },
     { source: "mercari", capability: "market_history_and_completed_sales", state: "partnership_required" },
   ];
 }
