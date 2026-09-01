@@ -48,6 +48,7 @@ Examples:
 - disconnected Search Console means Traffic is `unavailable`, not zero impressions.
 - X without reviewed/authorized collection means the social signal metric is `not_instrumented`, not zero interest, while its source capability remains `paid_access_required`.
 - affiliate-provider revenue without a connected provider report is `unavailable`, not zero revenue.
+- zero rows in database `ingestion_runs` does not prove zero GitHub Actions collection runs; those run sources are reported separately.
 
 ## DATA panel
 
@@ -151,8 +152,14 @@ Until those reports are connected, the panel remains `unavailable` or `not_instr
 
 ## COLLECTION HEALTH panel
 
-- recent market ingestion run counts
-- success/failure counts
+Collection execution is intentionally separated by evidence source:
+
+- `database_market_runs_24h` and success/failure counts come only from the Production `ingestion_runs` table.
+- `workflow_market_runs_24h` and success/failure counts require separately supplied reviewed workflow evidence; without it they are `not_instrumented`.
+- the Scoreboard does not sum these into a fake global run count when one lane is missing.
+
+Other collection-health metrics:
+
 - unresolved import issues by sanitized reason class
 - provider request metrics when instrumented
 - Re-observer outcomes when instrumented
@@ -213,6 +220,8 @@ It does not read `import_issues.note` or arbitrary issue text into the output. R
 
 The current Production schema was re-checked read-only before the clean #126 settlement; the selected `review_required`, timestamp and identity columns used by this CLI exist on the relevant tables.
 
+The base CLI does not call GitHub APIs. Therefore GitHub Actions run counts must remain `not_instrumented` until reviewed workflow evidence is supplied instead of being inferred from an unrelated database table.
+
 ## Source capability states in v1
 
 Current conservative built-in inventory:
@@ -239,6 +248,8 @@ At the dated 2026-09-01 baseline, the dominant evidence was:
 - X was not activated
 - first-party outbound clicks were present
 
+A read-only validation during the clean #126 settlement still measured 10,241 series, 23,808 variants, 107 listings, 107 observations, zero completed sales, zero listings with 2+ observations, and review-safe stock/restock/X counts of zero. Database `ingestion_runs` showed zero market rows in that 24h window, while that must not be interpreted as evidence about GitHub Actions runs.
+
 #150, #153 and #156 established code-only history/depth foundations. They did not authorize Production persistence. Engineering work should therefore be judged by actual breadth, depth, history and conversion movement once separately approved rollouts occur, not by the number of PRs created.
 
 ## Safety boundaries
@@ -258,5 +269,6 @@ Scoreboard v1 must not:
 - treat three listings as collection completion
 - count partnership-required or paid-access-required sources as active support
 - surface review-required stock/restock/social rows as trusted signal coverage
+- claim database ingestion records represent GitHub Actions execution
 
 Any future write, schedule, paid-service or Production activation remains a separate approval boundary.
