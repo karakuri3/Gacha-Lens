@@ -165,6 +165,7 @@ function normalizeEntry(entry, observationKey) {
   const publicUrl = clean(value.public_url);
   const variantId = clean(value.variant_id);
   const seriesId = clean(value.series_id);
+  const entryObservationKey = safeObservationKey(value.observation_key);
   const observationId = clean(value.observation_id);
   const observedAt = normalizeTime(value.observed_at);
   const expectedLastObservedAt = normalizeTime(value.expected_last_observed_at);
@@ -187,6 +188,7 @@ function normalizeEntry(entry, observationKey) {
   }
   if (!listingId || !["rakuten_ichiba", "yahoo_shopping"].includes(provider)
     || source !== expectedSource || !sourceListingId || !publicUrl || !variantId || !seriesId
+    || entryObservationKey !== observationKey
     || !OBSERVATION_ID.test(observationId) || observationId !== expectedObservationId
     || !observedAt || !expectedLastObservedAt || observedAt <= expectedLastObservedAt
     || price === null || expectedPrice === null || priorCount === null
