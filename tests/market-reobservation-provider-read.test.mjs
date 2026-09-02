@@ -120,11 +120,31 @@ test("arbitrary HTTPS Yahoo endpoint is rejected before appid can reach fetch", 
   assert.equal(requested, false);
 });
 
-test("Yahoo JSONP parser requires the exact fixed callback wrapper", () => {
-  const parsed = parseYahooItemLookupJsonp("gachaLensItemLookupV1({\"ResultSet\":{\"totalResultsReturned\":0}});");
-  assert.equal(parsed.ResultSet.totalResultsReturned, 0);
-  assert.throws(() => parseYahooItemLookupJsonp("evilCallback({\"ResultSet\":{}});"));
-  assert.throws(() => parseYahooItemLookupJsonp("gachaLensItemLookupV1({not-json});"));
+test("Yahoo JSONP parser accepts only the exact callback with no padding or observed /* */ padding", () => {
+  const payload = "{\"ResultSet\":{\"totalResultsReturned\":0}}";
+  const direct = parseYahooItemLookupJsonp(`gachaLensItemLookupV1(${payload});`);
+  const observedPadded = parseYahooItemLookupJsonp(`/* */gachaLensItemLookupV1(${payload});`);
+  assert.equal(direct.ResultSet.totalResultsReturned, 0);
+  assert.equal(observedPadded.ResultSet.totalResultsReturned, 0);
+
+  for (const invalid of [
+    `/**/gachaLensItemLookupV1(${payload});`,
+    `/*x*/gachaLensItemLookupV1(${payload});`,
+    `/* *//* */gachaLensItemLookupV1(${payload});`,
+    ` /* */gachaLensItemLookupV1(${payload});`,
+    `\n/* */gachaLensItemLookupV1(${payload});`,
+    `/* */ gachaLensItemLookupV1(${payload});`,
+    `/* */\ngachaLensItemLookupV1(${payload});`,
+    ` gachaLensItemLookupV1(${payload});`,
+    `\ngachaLensItemLookupV1(${payload});`,
+    `\uFEFFgachaLensItemLookupV1(${payload});`,
+    `evilCallback(${payload});`,
+    payload,
+    "gachaLensItemLookupV1({not-json});",
+  ]) {
+    assert.throws(() => parseYahooItemLookupJsonp(invalid));
+  }
+  assert.throws(() => parseYahooItemLookupJsonp(`evilCallback(${payload});`, "evilCallback"));
 });
 
 test("Yahoo parser accepts historical indexed payload and upgrades only official Yahoo item URL to HTTPS", () => {
@@ -207,8 +227,8 @@ test("Rakuten exact read sends accessKey only as a header, refuses redirects and
   assert.doesNotMatch(serialized, /access-secret-example|app-secret-example|raw_body|credential/);
 });
 
-test("Yahoo exact read refuses redirects and preserves exact item identity", async () => {
-  const body = "gachaLensItemLookupV1(" + JSON.stringify({
+test("Yahoo exact read refuses redirects and preserves exact item identity with observed padding", async () => {
+  const body = "/* */gachaLensItemLookupV1(" + JSON.stringify({
     ResultSet: {
       totalResultsReturned: 1,
       Result: {
