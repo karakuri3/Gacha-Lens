@@ -34,7 +34,7 @@ test("R2 v2 exact frozen Yahoo cohort produces the four reviewed deterministic o
 
 test("R2 v2 SQL freezes the same four listing IDs/key and recomputes the existing v1 observation identity", () => {
   const migration = fs.readFileSync(new URL("../supabase/migrations/20260902180000_r2_yahoo_only_reobservation_canary_v2.sql", import.meta.url), "utf8");
-  for (const listingId of EXPECTED.keys()) assert.match(migration, new RegExp(listingId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const listingId of EXPECTED.keys()) assert.ok(migration.includes(`'${listingId}'`));
   assert.match(migration, /reobs-v1:r2-20260902-02/);
   assert.match(migration, /\["gacha-lens","market-reobservation-v1",/);
   assert.match(migration, /extensions\.digest\(v_identity_json, 'sha256'\)/);
