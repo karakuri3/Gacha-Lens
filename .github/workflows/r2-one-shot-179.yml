@@ -1,0 +1,80 @@
+name: R2 One-Shot #179
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  APPROVED_MAIN_SHA: 8a63676bc11474644f8cc09c2fde43886c00c9f0
+  R2_APPROVAL: APPROVE_MARKET_REOBSERVATION_R2_CANARY_V1:8a63676bc11474644f8cc09c2fde43886c00c9f0:baa79db92e6302c2809559a796d47433a69a303d1b5a46c76979c3aab6492105
+
+on:
+  push:
+    branches:
+      - ops/r2-one-shot-179-20260902
+    paths:
+      - .github/workflows/r2-one-shot-179.yml
+
+jobs:
+  execute-r2-once:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: r2-one-shot-179-20260902
+      cancel-in-progress: false
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      RAKUTEN_APPLICATION_ID: ${{ secrets.RAKUTEN_APPLICATION_ID }}
+      RAKUTEN_ACCESS_KEY: ${{ secrets.RAKUTEN_ACCESS_KEY }}
+      YAHOO_SHOPPING_APP_ID: ${{ secrets.YAHOO_SHOPPING_APP_ID }}
+      MARKET_API_MAX_ATTEMPTS: "3"
+      RAKUTEN_REQUEST_TIMEOUT_MS: "12000"
+      YAHOO_SHOPPING_REQUEST_TIMEOUT_MS: "12000"
+    steps:
+      - name: Check out one-shot branch
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact approved main and branch-only workflow delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/ops/r2-one-shot-179-20260902"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$APPROVED_MAIN_SHA"
+          test "$(git rev-parse "$APPROVED_MAIN_SHA^{commit}")" = "$APPROVED_MAIN_SHA"
+          mapfile -t changed < <(git diff --name-only "$APPROVED_MAIN_SHA"...HEAD)
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = ".github/workflows/r2-one-shot-179.yml"
+          git diff --check "$APPROVED_MAIN_SHA"...HEAD
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Execute approved R2 canary exactly once
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/market-reobservation-r2-canary.mjs \
+            --mode canary-write \
+            --head-sha "$APPROVED_MAIN_SHA" \
+            --expected-main-sha "$APPROVED_MAIN_SHA" \
+            --approval "$R2_APPROVAL" \
+            2>&1 | tee "$RUNNER_TEMP/r2-result.txt"
+
+      - name: Upload sanitized execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r2-one-shot-179-${{ github.run_id }}
+          path: ${{ runner.temp }}/r2-result.txt
+          if-no-files-found: ignore
+          retention-days: 7
