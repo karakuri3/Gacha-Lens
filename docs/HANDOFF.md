@@ -1,264 +1,177 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-02 JST — post-Yahoo JSONP repair (#173/#176) checkpoint
+Updated: 2026-09-02 JST — post-R2 atomic prerequisite / #183 canonical-sync target
 
-This is the canonical operational handoff for resuming Gacha Lens. Prefer newer verified GitHub/Vercel/Supabase/provider evidence over dated values here. Historical detail remains in Git history and linked Issues/PRs.
+This is the canonical operational handoff for resuming Gacha Lens. Prefer newer verified GitHub/Vercel/Supabase/provider evidence over dated values here.
+
+## Self-referential canonical-sync rule
+
+This file is authored by Issue #183 / PR #184.
+
+- If read from branch `docs/canonical-sync-post-r2-prereq-183` or open PR #184, finish #184's exact-head gates and merge/release flow first.
+- If read from `main`, #183/#184 is complete by definition because this content reached `main`; do not create another docs-only sync merely to mark #184 complete. Proceed to the fresh SELECT-only #179 pre-execution gate.
 
 ## Resume protocol
 
 If a fresh thread receives only **「Gacha Lens続けて」**:
 
 1. Read this file plus `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`, `docs/DATA_SCALE_SCOREBOARD.md`, `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
-2. Re-fetch `main`, open PRs/Issues, recent Actions, Vercel, and any live Production/provider evidence needed before acting.
+2. Re-fetch `main`, open PRs/Issues, recent Actions, Vercel, and live Production/provider evidence needed before acting.
 3. Resume durable Issue/branch/PR work; do not duplicate it.
-4. Do not repeat completed Production canaries/diagnostics merely to refresh context.
-5. Production DB mutation, approval-bound live provider execution, workflow/schedule changes or dispatch, Secrets/Variables changes, paid actions, contractual commitments, destructive work, direct main pushes, and ineligible merges/releases require the appropriate explicit approval.
-6. After every major Production/recovery/security/release milestone, synchronize `HANDOFF / STATUS / DECISIONS / TODO` before starting the next major implementation phase.
+4. Do not repeat completed Production canaries merely to refresh context.
+5. Production DB mutation/migration/schema work, approval-bound live provider execution, workflow/schedule changes or dispatch, Secrets/Variables changes, paid actions, contractual commitments, destructive work, direct main pushes, and ineligible merges/releases require explicit approval.
+6. After every major Production/recovery/security/release milestone, synchronize `HANDOFF / STATUS / DECISIONS / TODO` before the next major implementation/execution phase.
 
-Repository: `karakuri3/Gacha-Lens`
+## Repository / services
 
-Preferred local path: `C:\dev\Gacha-Lens`
+- Repository: `karakuri3/Gacha-Lens`
+- Production: `https://gachalens.com`
+- Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
+- Old inactive Supabase: `ihcudkfspzuixsqsvoku` (`gacha-site-start`) — never confuse with Production
+- Vercel project ID: `prj_8Yelkn1wM7JGoA2WCMCGGhRt3o8x`
+- Preferred local path: `C:\dev\Gacha-Lens`
 
-Production: `https://gachalens.com`
+## Verified checkpoint before #183/#184 sync
 
-Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
+Pre-sync `main`:
 
-Old inactive Supabase: `ihcudkfspzuixsqsvoku` (`gacha-site-start`) — never confuse with Production.
+`d80450626fd30768bb8f0af68340f0d2aea00bbb`
 
-Vercel project: `karakuri3s-projects/gachalens`
+Completed milestones:
 
-Vercel project ID: `prj_8Yelkn1wM7JGoA2WCMCGGhRt3o8x`
-
-## Verified repository / Production checkpoint
-
-Canonical `main` immediately before this docs-only sync:
-
-`a8bf9b7d7da7826544cb72a89f77b082fd86f248`
-
-Latest milestone:
-
-- Issue #173 — Yahoo exact JSONP padding compatibility: completed
-- PR #176 — independently reviewed/verified and squash-merged
-- final reviewed PR head: `d995e03f346398d02e212ac529316b81c0c2054b`
-- merge/main SHA: `a8bf9b7d7da7826544cb72a89f77b082fd86f248`
-- Git-triggered Production deployment: `dpl_4U73Cev864RvycfGGPteqQxMS246`
-- deployment state: **READY**
-- aliases include `gachalens.com` and `www.gachalens.com`
-- Issue #177 is the current post-release canonical-sync gate
-
-No R2 Production persistence has been authorized or executed.
+- #172 R1 exact-provider read-only canary: completed; Production DB writes 0
+- #173/#176 Yahoo JSONP repair: completed and Production READY
+- #177/#178 post-Yahoo canonical sync: completed
+- #180/#182 R2 atomic persistence prerequisite: completed in repository
+- #182 final head `7f9486d68c8923a57d70555dcd14b81516cdad06`
+- #182 merge/main `d80450626fd30768bb8f0af68340f0d2aea00bbb`
+- #182 PR Code Quality `33600534520`: PASS
+- #182 Preview `dpl_6G9LxzpEZtgeQZ7JKV8BYBR9jeLK`: READY
+- #182 Production deployment `dpl_8oacYiC3Nia5RJbicgNxnr3TL3eW`: READY with canonical aliases
 
 PR #142 / Issue #137 remains a separate F0 Production-impact approval boundary.
 
-## Product purpose / P0
+## Product purpose / priority
 
-Customer promise:
+Customer promise: **「欲しいガチャを、見つけて、比べて、逃さない」**
 
-**「欲しいガチャを、見つけて、比べて、逃さない」**
+Current umbrella: Issue #119 Data Scale.
 
-Current umbrella program: Issue #119 — **Data Scale Program**.
+Near-term order: **DATA -> TRAFFIC -> CLICK -> REVENUE**.
 
-The goal is compounding lawful coverage, not a 3-listing demo:
+Repeated observation history remains the immediate DATA bottleneck.
 
-- broad catalog coverage
-- multiple independent listings per variant where available
-- repeated observations for price/inventory history
-- authorized completed/sold evidence only
-- stock/restock evidence
-- explainable demand and purchase-intent signals
-- measurable **DATA -> TRAFFIC -> CLICK -> REVENUE** movement
+## R1 durable result
 
-## Completed Data Scale foundations
+Rakuten frozen 3 all returned `not_found`. Yahoo final frozen 3 returned two `unchanged` and one `not_found`. Production DB writes remained 0, false completed `sold` remained 0, and the Yahoo continuation approval was consumed exactly 9/9 and is exhausted.
 
-- #146 throughput audit
-- #147 market history architecture
-- #148 market signal architecture
-- #149 forecast truthfulness
-- #150 re-observation engine v1
-- #153 exact Rakuten/Yahoo provider-read v1
-- #156 Depth Collector v1
-- #159 truthful read-only Data Scale Scoreboard
-- #162 lawful source capability matrix
-- #169 equal-time/null-time re-observation safety
-- #170 Production history/depth rollout plan
-- #172 first Production-connected exact-provider **R1 read-only canary** — completed, DB writes 0
-- #175 canonical sync after R1
-- #173/#176 permanent Yahoo JSONP compatibility repair — completed and Production READY
+## Yahoo JSONP durable contract
 
-## R1 #172 — completed Production-connected read-only canary
+PR #176 permanently repaired live Yahoo exact-read compatibility. Only a fixed internal callback at raw byte 0, or exact `/* */` at raw byte 0 immediately followed by that callback, is accepted. Alternate comments, leading whitespace/BOM, wrong callbacks, bare JSON and malformed wrappers fail closed. Independent Reviewer + Verifier passed the final repaired head.
 
-R1 was explicitly approved and executed on six frozen known listings. It granted **read-only provider execution only**, never Production persistence.
+## #180/#182 atomic R2 prerequisite
 
-### Rakuten 3
+Repository migration: `supabase/migrations/20260902150500_r2_atomic_reobservation_canary.sql`.
 
-Each used one HTTP attempt, HTTP 200:
+The repository now contains a deliberately narrow R2 path:
 
-- `rakuten-auc-toysanta-10382232` → `not_found`
-- `rakuten-realize-store-2-10578559` → `not_found`
-- `rakuten-surugaya-a-too-357043092` → `not_found`
+- exactly 4 frozen known listings, 2 Rakuten + 2 Yahoo
+- shared key `reobs-v1:r2-20260902-01`
+- deterministic observation IDs
+- exact current-main/cohort approval binding
+- read-only dry-run with provider/RPC/write count 0
+- exact provider reads only
+- max 3 attempts/listing, max 12 HTTP attempts total
+- any unsafe provider result stops before RPC
+- one PostgreSQL RPC transaction only if all four exact reads are safe
+- exactly 4 observation inserts + 4 listing updates limited to price/status/last_observed_at/updated_at
+- no completed `sold` / `sold_at`
+- no automatic RPC write retry
+- ambiguous commit resolver is SELECT-only and never auto-retries
 
-`not_found` means exact current item evidence was not returned. It does **not** mean completed `sold` and caused no lifecycle mutation.
+Exact #182 validation:
 
-### Yahoo 3
+- PR Code Quality `33600534520`: PASS
+- Preview `dpl_6G9LxzpEZtgeQZ7JKV8BYBR9jeLK`: READY
+- disposable Supabase run `33600534418`: all 9 migrations applied successfully before a stale fixed 8-version workflow assertion failed
+- SQL/Node deterministic observation-ID parity: 4/4
 
-The first Yahoo reads exposed the live JSONP compatibility issue: exact Yahoo `itemLookup` responses began with literal `/* */` before the callback. Sanitized diagnostics established the shape without raw-body/credential logging.
+For #180/#182 only, the human allowed exact-head CI + Preview + disposable-Supabase migration proof + strengthened self-review to replace independent Reviewer/Verifier. That exception ended with #182.
 
-A one-time strict branch-only parser completed the frozen reads:
+## Fresh Production evidence after #182 merge
 
-- `yahoo-lead-netstore-302507s186ook3` → `unchanged`, 698 / active
-- `yahoo-suruga-ya-561833216001` → `not_found`
-- `yahoo-selen-shope-5500000224314` → `unchanged`, 1500 / active
-
-All three final calls were HTTP 200, one attempt each, retries 0, rate limits 0.
-
-### R1 request accounting / safety
-
-- Rakuten actual attempts: 3
-- separately approved Yahoo continuation envelope: **9/9 consumed exactly**
-  - initial Yahoo exact reads: 3
-  - response-shape diagnostics: 3
-  - final Yahoo reads: 3
-- no further Yahoo request is authorized by that exhausted approval
-- temporary execution scaffolding was removed/reset after evidence capture
-- Production DB writes from R1: 0
-- frozen six rows remained price/status/`last_observed_at` unchanged with exactly one observation each
-
-Issue #172 is closed completed.
-
-## #173 / #176 — permanent Yahoo JSONP repair completed
-
-The permanent repair initially received two major independent-review findings. They were repaired before merge:
-
-1. direct JSONP parsing could still tolerate leading bytes because of trimming;
-2. exported parser accepted a caller-selected callback argument, weakening the fixed-callback boundary.
-
-Final merged contract:
-
-- callback is fixed internally; caller callback override is removed
-- direct form must start with the fixed callback at raw byte 0
-- padded form must start with exact literal `/* */` at raw byte 0 and the fixed callback must immediately follow
-- only trailing whitespace normalization is allowed outside the wrapper
-- leading space/newline/BOM fails closed
-- `/**/`, `/*x*/`, arbitrary/multiple comments, comment gaps, arbitrary bytes, wrong callbacks, bare JSON and malformed wrappers fail closed
-- reviewed official endpoint/redirect, exact persisted identity, positive integer price, explicit availability, active/sold_out-only, and no-false-sold contracts remain unchanged
-- raw provider bodies/credentials are not logged
-
-Independent final gates on exact head `d995e03f346398d02e212ac529316b81c0c2054b`:
-
-- independent Reviewer: PASS, no remaining finding
-- independent Verifier: PASS
-- custom acceptance matrix: 2 accepted / 12 rejected, callback override rejected
-- focused validation: PASS
-- full Node suite: 1992/1992 PASS
-- lint: PASS
-- diff check: PASS
-- added-line secret findings: 0
-- exact-head PR Code Quality: PASS
-- exact-head Vercel Preview: READY
-
-The PR was then squash-merged as `a8bf9b7d7da7826544cb72a89f77b082fd86f248`; normal Production deployment `dpl_4U73Cev864RvycfGGPteqQxMS246` is READY. No manual deployment/promotion was invoked.
-
-## Current Production data evidence
-
-Latest SELECT-only snapshot on 2026-09-02 JST after #176:
+SELECT-only snapshot on 2026-09-02 JST:
 
 - market listings: **113**
 - market listing observations: **113**
 - listings with 2+ observations: **0**
 - completed `status=sold`: **0**
 - `status=sold_out`: **0**
-- Rakuten listings: **50**
-- Yahoo listings: **63**
 
-The earlier post-R1 snapshot was 110/110. The increase to 113/113 is existing Production breadth activity, not R2 persistence.
+Frozen #179 cohort remains 4/4 present, active, single/review-safe, one observation each, matched variant identity, `sold_at=null`, complete provider/native/public identity, unresolved import issues 0.
 
-Repeated observation history therefore remains the central Data Scale bottleneck.
+| Listing | Current | Last observed | Deterministic R2 observation ID |
+| --- | --- | --- | --- |
+| `rakuten-auc-toysanta-10386044` | 598 / active | `2026-08-31T05:41:52.543Z` | `market-reobservation-05cd92e65bb9dbc29b6cb4c2b05f9724` |
+| `rakuten-realize-store-2-10575349` | 898 / active | `2026-08-31T05:41:52.543Z` | `market-reobservation-277ddad06f32358e9fc13ed597608a93` |
+| `yahoo-lead-netstore-302507s186ook3` | 698 / active | `2026-08-16T08:50:42.683Z` | `market-reobservation-ee52021350491f4496916654e2f74703` |
+| `yahoo-selen-shope-5500000224314` | 1500 / active | `2026-08-31T05:41:52.543Z` | `market-reobservation-371537fad7dfb98834b92754610e6f08` |
 
-## Current phase gate — Issue #177
+## Critical Production schema distinction
 
-Issue #177: **Sync canonical state after Yahoo JSONP repair**.
+Repository/Vercel release state and Supabase Production schema state are different.
 
-This docs-only sync must be merged and its normal Production deployment verified READY before the next major implementation/execution phase.
+At the post-#182 checkpoint:
 
-Scope is exactly:
+- repository R2 migration: merged in `main`
+- Production migration ledger version `20260902150500`: **absent**
+- Production `public.apply_market_reobservation_r2_canary_v1(jsonb)`: **absent**
+
+Therefore #182 did not apply its database function to Production.
+
+## #183 / PR #184 review substitution
+
+PR #184 is docs-only and must keep the changed paths exactly to:
 
 - `docs/HANDOFF.md`
 - `docs/STATUS.md`
 - `docs/DECISIONS.md`
 - `docs/TODO.md`
 
-It records #173/#176 completion, current release evidence, current Production counts, and the next R2 approval boundary. It grants no provider request and no Production write authority.
+On 2026-09-02, the human explicitly authorized **#184 only** to replace independent Reviewer + Verifier with:
 
-## R2 and later rollout boundary
+- exact-head PR Code Quality
+- exact-head Vercel Preview
+- strengthened full-diff/canonical-consistency self-review
 
-Authoritative plan: `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`.
+If those exact-head gates pass and the remaining Auto-Merge / Standing Production Release conditions pass, #184 may be merged and its normal Git-triggered Vercel Production deployment may proceed.
 
-- R1: completed read-only provider canary; DB writes 0
-- R2: tiny Production re-observation persistence canary; **not authorized**
-- R3: depth read-only canary; separate approval
-- R4: depth persistence canary; separate approval
+This #184 exception is task-specific. It does **not** authorize #179 Production migration application, live provider calls, Production DB writes, R3/R4, workflow/schedule changes, Secrets/Variables, F0/#142, paid actions, or future PR review substitutions.
 
-After #177 is merged/Production READY, safe read-only R2 preparation may proceed:
+When this file is on `main`, treat #183/#184 as complete and go directly to the fresh #179 pre-execution reread. Do not create a recursive docs sync just to record #184's own merge.
 
-1. re-read Production listing/observation state
-2. freeze exactly four known listings, planned 2 Rakuten + 2 Yahoo
-3. verify exact identity/current observation counts
-4. freeze deterministic observation keys/IDs and expected deltas
-5. define bounded transaction, post-write reread, stop conditions and rollback evidence
-6. present the exact bounded write plan to the user
+## #179 final Production approval boundary
 
-**Do not perform the R2 Production DB mutation until the user explicitly approves that exact cohort/write delta.** R2 approval would not authorize R3/R4, schedules, workflow changes or paid actions.
+After #184 reaches `main`, re-read current main and Production immediately before execution. Then present one exact approval request covering all three actions:
 
-## Re-observation durable contract
+1. apply reviewed migration `20260902150500_r2_atomic_reobservation_canary.sql` to Supabase Production;
+2. allow fresh exact provider reads for the frozen four, max 3 attempts/listing and absolute max 12 HTTP attempts;
+3. only if all four produce valid exact `seen` evidence, allow exactly one atomic RPC write with successful deltas:
+   - market listings: +0
+   - observations: +4
+   - listings with 2+ observations: +4
+   - completed `sold`: +0
+   - deletes: 0
+   - protected identity/provenance changes: 0
+   - exactly four listing updates limited to price/status/last_observed_at/updated_at
 
-- exact persisted provider identity; no keyword rediscovery
-- append-only successful observations
-- deterministic retry-safe observation IDs
-- ordinary states only `active` / `sold_out`
-- `not_found` / provider failure never fabricate `sold`
-- positive integer price and explicit availability required
-- stale timestamp fails closed
-- equal timestamp + conflicting price/status fails closed
-- equal timestamp unchanged same-key retry remains deterministic
-- null/blank observation time invalid
-- credentials only reach reviewed official host/path; redirects fail closed
-- failed checks do not advance `last_observed_at`
-- Yahoo JSONP wrapper acceptance stays fixed to direct raw-byte-0 callback or exact raw-byte-0 `/* */` + callback
+If any provider result is not_found, throttled, provider error, identity mismatch, malformed, invalid price/availability, or otherwise outside contract, Production data writes must remain 0.
 
-## Depth durable contract
+Do not apply the migration, make those live provider calls, or execute the RPC until the user explicitly approves that exact #179 scope.
 
-- explicit variant + parent series
-- strict P3 single-item/set/ambiguity safety
-- durable listing/native provider/canonical URL dedupe
-- many legitimate offers allowed; no `3 listings = done`
-- SHA-256 selection binding / post-selection drift rejection
-- insert-only projected writes
-- Production persistence separately approval-gated
+## Known workflow debt
 
-## Lawful source posture
-
-Canonical matrix: `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`.
-
-- Rakuten Ichiba: active
-- Yahoo Shopping: active; permanent exact-read JSONP compatibility repaired by #176
-- Bandai / Takara Tomy Arts: active official catalog sources
-- Kitan auto: off
-- Qualia broad auto: unapproved
-- Aucfan: `paid_access_required`, strongest identified licensed completed-sale/history candidate pending diligence
-- Mercari C2C: `partnership_required`; no scraping
-- Mercari Shops API: seller-scoped, not broad C2C intelligence
-- X: `paid_access_required`
-- eBay: lower-priority planned with Japan/historical limitations
-- Surugaya/Mandarake/AmiAmi broad automation: permission/partnership first
-- connected GSC reporting path: unavailable at last check due subscription/payment state; unavailable is not zero traffic
-
-Recheck provider terms/pricing/quotas immediately before acting.
-
-## F0 official incident remains separate
-
-PR #142 / Issue #137 repairs the month-precision rerelease canonical-year problem. The scheduled failure was fail-closed with transaction `not_started`, DB writes 0.
-
-Do not merge #142 or manually dispatch F0 without its separate required review/approval.
+`.github/workflows/foundation-baseline.yml` still hardcodes the former eight migration versions. Run `33600534418` proves all nine current migrations applied before that stale assertion failed. Workflow repair remains a separate approval-bound task.
 
 ## Hard rules
 
@@ -269,22 +182,12 @@ Do not merge #142 or manually dispatch F0 without its separate required review/a
 - never weaken the strict matcher merely for coverage
 - completed `sold` evidence stays separate from active/sold_out listing evidence
 - do not scrape Mercari or Amazon
-- do not misuse Mercari Shops seller scope as broad C2C access
 - no paid/licensed source activation without explicit approval
-- no further #172 Yahoo live calls; its continuation budget is exhausted
-- no R2 Production DB mutation without new exact user approval
+- no further #172 Yahoo live calls
+- no R2 Production migration/provider/write action without new exact #179 approval
+- known Foundation migration-order harness debt does not authorize an unapproved workflow change
 
 ## Exact next action
 
-Finish Issue #177 canonical sync first.
-
-After its docs-only PR is exact-head green, independently reviewed/verified as required by its task contract, merged, and normal Vercel Production is READY:
-
-1. re-fetch current main/open PRs/Issues
-2. perform a fresh SELECT-only Production R2 preflight
-3. prepare/freeze the exact four-row R2 cohort and deterministic expected write delta
-4. verify current provider/read prerequisites without spending unapproved live-call budget
-5. present the exact Production mutation plan and stop conditions to the user
-6. **stop for explicit R2 Production DB approval before any write**
-
-Business priority remains **DATA first**, then TRAFFIC, CLICK/conversion, and REVENUE.
+- **On PR #184 branch:** re-run exact-head CI/Preview after recording the #184-specific substitution, perform strengthened full-diff self-review on that same head, then merge only if Auto-Merge / Standing Production Release gates pass and verify the normal Production deployment READY.
+- **On `main`:** perform the fresh SELECT-only #179 Production preflight, verify frozen rows + deterministic IDs + migration/function state + global baseline, then present the exact combined migration + max-12 provider + atomic-write approval request and stop for explicit human approval.

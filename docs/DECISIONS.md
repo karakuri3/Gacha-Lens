@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-02 JST — post-Yahoo JSONP repair (#173/#176) checkpoint
+Updated: 2026-09-02 JST — post-R2 atomic prerequisite / #183 canonical-sync target
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -33,8 +33,6 @@ Accepted complete/full sets remain series-scoped. Broad automatic complete-set p
 Reject incomplete/ambiguous identity, unsupported source, invalid price, preorder, parent conflict, duplicate identity, count mismatch, generic partial set, random one-of-N wording, or single-item evidence.
 
 ### D-016 — Re-observation is append-only, identity-stable, and fail closed
-Durable contract from #150/#169:
-
 - listing identity/matching provenance are immutable in ordinary re-observation
 - successful later checks may append a new observation even when price/status are unchanged
 - observation identity is deterministic/retry-safe
@@ -51,8 +49,8 @@ Durable contract from #150/#169:
 ### D-017 — Provider credentials only reach reviewed official endpoints
 Credential-bearing requests must stay on the reviewed HTTPS host + exact path. Arbitrary host/path/query/fragment, HTTP, embedded URL credentials and redirects fail closed. Persisted durable identity validates before provider request.
 
-### D-018 — Merged read/dry-run code does not authorize Production persistence
-PRs #150/#153/#156/#169/#176 and rollout planning do not authorize Production DB mutation, schedule activation, workflow dispatch, Secrets/Variables changes, or paid entitlement activation.
+### D-018 — Merged read/dry-run/prerequisite code does not authorize Production persistence
+PRs #150/#153/#156/#169/#176/#182 and rollout planning do not authorize Production DB mutation, Production migration application, live provider execution outside a task-specific approval, schedule activation, workflow dispatch, Secrets/Variables changes, or paid entitlement activation.
 
 ### D-019 — Depth Collector is multi-offer, identity-driven and dry-run first
 - explicit variant + parent series target
@@ -99,54 +97,34 @@ Canonical plan: `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`.
 Approval for one stage never authorizes another. No schedule/budget scaling is automatic.
 
 ### D-026 — R1 #172 is complete and grants no R2 authority
-R1 completed on 2026-09-02 with Production DB writes 0.
-
-Live outcomes:
-- Rakuten frozen 3: all `not_found`, HTTP 200
-- Yahoo final frozen 3: two `unchanged`, one `not_found`, HTTP 200
-- false completed `sold`: 0
-- frozen six rows remained unchanged with one observation each
-
-`not_found` means the exact provider did not return current item evidence. It must never be promoted to completed-sale evidence or silently mutate lifecycle.
-
-The separate Yahoo continuation approval was consumed **9/9 attempts exactly**. It is exhausted and cannot be reused for new live Yahoo calls.
+R1 completed on 2026-09-02 with Production DB writes 0. Rakuten frozen 3 all returned `not_found`; Yahoo final frozen 3 returned two `unchanged` and one `not_found`; false completed `sold` remained 0. The separate Yahoo continuation approval was consumed 9/9 attempts exactly and is exhausted.
 
 ### D-027 — Yahoo exact JSONP compatibility is fixed to two raw-byte-0 forms
-Issue #173 / PR #176 permanently repaired the live Yahoo `itemLookup` compatibility problem without adding generic comment stripping.
+Issue #173 / PR #176 permanently repaired Yahoo exact `itemLookup` compatibility. Only the fixed internal callback at raw byte 0, or exact literal `/* */` at raw byte 0 immediately followed by that callback, is accepted. Leading whitespace/BOM, alternate comments, wrong callbacks, bare JSON and malformed wrappers fail closed. Independent Reviewer + Verifier passed the final repaired exact head.
 
-The only accepted wrapper starts are:
+### D-028 — R2 is prepared in repository but still exact Production-approval-bound
+Issue #180 / PR #182 completed the R2-specific single-transaction prerequisite and merged it to main `d80450626fd30768bb8f0af68340f0d2aea00bbb`.
 
-1. fixed internal callback at raw byte 0; or
-2. exact literal `/* */` at raw byte 0 immediately followed by that same fixed callback.
+Durable execution design:
+- exactly four frozen known listings, two Rakuten + two Yahoo
+- shared logical key `reobs-v1:r2-20260902-01`
+- deterministic observation IDs
+- exact current-main/cohort binding
+- fresh exact provider reads immediately before persistence
+- max 3 attempts/listing and 12 HTTP attempts total
+- all four must produce valid exact `seen`; otherwise Production data writes = 0
+- one PostgreSQL RPC transaction only after all four plans are safe
+- exactly four observation inserts plus four listing updates limited to price/status/last_observed_at/updated_at
+- no automatic RPC write retry
+- ambiguous commit state is resolved by SELECT-only deterministic evidence and never authorizes automatic retry
 
-Durable security/truthfulness rules:
-
-- parser callers cannot select/override the callback
-- leading whitespace, newline or BOM is rejected rather than trimmed into validity
-- `/**/`, `/*x*/`, arbitrary/multiple comments, arbitrary bytes and comment gaps fail closed
-- wrong callbacks and bare JSON fail closed
-- malformed body/wrapper fails closed
-- trailing whitespace normalization is allowed
-- endpoint/redirect/identity/positive-price/explicit-availability/active-or-sold_out/no-false-sold rules are unchanged
-- do not log raw provider bodies or credentials
-
-Independent Reviewer + Verifier passed the final exact head after two prior major findings were repaired. The Production release is `a8bf9b7d7da7826544cb72a89f77b082fd86f248` / `dpl_4U73Cev864RvycfGGPteqQxMS246` READY.
-
-### D-028 — R2 is now preparation-eligible but Production-write approval-bound
-Completion of #173/#176 removes the parser blocker, but it does **not** authorize Production persistence.
-
-After the post-#176 canonical sync is merged/Production READY, safe read-only R2 preparation may:
-
-- reread current Production listings/observations
-- freeze exactly four known targets, planned 2 Rakuten + 2 Yahoo
-- verify exact identity and observation counts
-- freeze deterministic observation keys/IDs and expected deltas
-- define the bounded transaction, stop conditions, post-write reread and rollback evidence
-
-The actual R2 Production DB mutation requires a new explicit user approval for the exact cohort/write delta. R2 approval never implies R3/R4, schedules, workflow changes, Secrets/Variables changes or paid actions.
+The actual #179 Production action requires one fresh exact human approval covering migration application, the max-12 live provider envelope, and the bounded atomic write delta. R2 approval never implies R3/R4, schedules, workflow changes, Secrets/Variables changes or paid actions.
 
 ### D-029 — Breadth growth must not be mistaken for history growth
-The post-#176 SELECT snapshot is 113 listings / 113 observations / 0 re-observed listings. Growth from the earlier 110/110 checkpoint came from existing breadth activity, not R2. History success requires actual listings with 2+ observations, not just more first observations.
+The post-#182 SELECT snapshot remains 113 listings / 113 observations / 0 re-observed listings. History success requires actual listings with 2+ observations.
+
+### D-034 — Repository migration presence is not Production schema state
+A migration file being merged and Vercel READY do not mean that migration is applied to Supabase Production. At the post-#182 checkpoint, repository migration `20260902150500_r2_atomic_reobservation_canary.sql` exists, but Production migration version `20260902150500` and `public.apply_market_reobservation_r2_canary_v1(jsonb)` are absent.
 
 ## SEO
 
@@ -162,18 +140,7 @@ Indexable page 2+ URLs canonicalize to themselves; preserve noindex behavior tha
 ## Automation / safety
 
 ### D-040 — Explicit approval boundaries
-Explicit approval remains required for standing-policy exclusions, including:
-- Production DB writes/migrations/backfills/cleanup/schema/seed/reset
-- approval-bound live Production-connected provider execution
-- `workflow_dispatch`
-- Secrets/Variables changes
-- paid actions/API credits/subscriptions
-- contractual commitments/data agreements
-- destructive/irreversible work
-- direct main push
-- new/material Production-capable workflow/schedule/cron/automatic ingestion
-- ineligible merges/releases/gate changes
-- major unresolved product/security decisions
+Explicit approval remains required for standing-policy exclusions, including Production DB writes/migrations/backfills/cleanup/schema/seed/reset, approval-bound live provider execution, `workflow_dispatch`, Secrets/Variables changes, paid actions, contractual commitments, destructive/irreversible work, direct main pushes, new/material Production-capable automation, ineligible merges/releases/gate changes, and major unresolved product/security decisions.
 
 ### D-041 — Hard repository constraints
 - never touch `supabase/.temp/cli-latest`
@@ -181,6 +148,9 @@ Explicit approval remains required for standing-policy exclusions, including:
 - do not casually modify F0 auto or P3 V2 auto
 - do not enable Kitan/Qualia auto without approval
 - do not rerun completed canaries without new task-specific approval
+
+### D-042 — Foundation migration-order assertion is known stale harness debt
+Disposable-Supabase run `33600534418` successfully applied all nine migrations and then failed only because `.github/workflows/foundation-baseline.yml` still hardcodes the former eight-version list. This is not a migration-application failure and does not authorize a workflow change inside unrelated scopes.
 
 ## Development workflow
 
@@ -206,19 +176,27 @@ After a major Production/recovery/security/release milestone, update the canonic
 It is not global policy.
 
 ### D-057 — Scoreboard truthfulness is durable
-PR #159 preserves `available/unavailable/not_instrumented`, `sold` vs `sold_out`, review-safe evidence, provider+variant click scope, and DB-run vs workflow-run separation. Missing evidence fails closed rather than becoming zero.
+PR #159 preserves `available/unavailable/not_instrumented`, `sold` vs `sold_out`, review-safe evidence, provider+variant click scope, and DB-run vs workflow-run separation.
 
 ### D-058 — #167/#168 review substitution was one-workstream-only
-The user allowed replacement PRs #169/#170 to use exact-head CI, Preview, strengthened self-review, and regressions in place of independent review. This exception is not global and did not apply to #173/#176.
+The user allowed replacement PRs #169/#170 to use exact-head CI, Preview, strengthened self-review, and regressions in place of independent review. This exception was not global.
 
 ### D-059 — Draft→Ready connector failure uses clean replacement
 When the connector's Draft→Ready mutation fails on `fullDatabaseId`, use a clean non-Draft replacement from correct current main and rerun required validation; never bypass Draft safety dishonestly.
 
 ### D-060 — Temporary approved execution scaffolding must be removed immediately
-One-time canary workflows/scripts may be used only within the exact approved scope, must receive only the minimal required credentials, must not gain DB credentials when DB access is disallowed, and must be removed/reset immediately after evidence capture. R1's temporary ops branch was reset to main after each execution and after completion.
+One-time canary workflows/scripts may be used only within exact approved scope, minimal credentials, and must be removed/reset immediately after evidence capture.
 
 ### D-061 — Independent review findings must repair the contract, not be waived silently
-PR #176 demonstrated why collection-semantic review gates matter: independent review found two major boundary issues after ordinary tests/self-review. Both were repaired and the final exact head was re-reviewed before merge. A prior PASS on an older head is never sufficient after a semantic repair; review/CI/Preview must bind to the final exact head.
+PR #176 demonstrated that prior PASS on an older head is insufficient after a semantic repair; review/CI/Preview must bind to the final exact head.
+
+### D-062 — #180/#182 review substitution was task-specific only
+For #180/#182 only, the human explicitly allowed exact-head CI, exact-head Vercel Preview, disposable-Supabase migration application proof, and strengthened self-review in place of independent Reviewer/Verifier. That exception ended with #182 and granted no Production migration/provider/write authority.
+
+### D-063 — #183/#184 docs-only review substitution is task-specific only
+On 2026-09-02, the human explicitly authorized **#184 only** to replace independent Reviewer + Verifier with exact-head PR Code Quality, exact-head Vercel Preview, and strengthened full-diff self-review, and to merge if all remaining Auto-Merge / Standing Production Release gates pass.
+
+This is a separate exception from D-062. It applies only to the docs-only canonical-sync PR #184 and does **not** authorize or substitute review/approval for #179 Production migration application, live provider calls, Production DB writes, R3/R4, workflow/schedule changes, Secrets/Variables, F0/#142, paid actions, or future PRs.
 
 ## Business priority
 
