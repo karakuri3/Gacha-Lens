@@ -1,221 +1,146 @@
 # Gacha Lens Status
 
-Updated: 2026-09-02 JST — post-PR #170 checkpoint
+Updated: 2026-09-02 JST — post-R1 (#172) checkpoint
 
-This is the compact operational companion to `docs/HANDOFF.md`. Re-fetch live GitHub/Vercel/Supabase/provider state before acting; counts and provider terms below are dated unless explicitly re-read.
+This is the compact operational companion to `docs/HANDOFF.md`. Re-fetch live state before acting.
 
 ## Repository / release
 
 - repo: `karakuri3/Gacha-Lens`
-- current merged checkpoint before this canonical-sync PR: `def36cbc1dfe57da8c35faa0577490bc4ab5866c`
-- latest merged safety milestone: #169 `P0 Data Scale: harden equal-time re-observation safety`
-- #169 merged main: `d8921839491ce1e544c9bb3db92525831418f67b`
-- #169 Production deployment `dpl_3vMxWwP89osNcjZdLKTbUBscQWHR`: READY
-- Issue #166: closed completed
-- latest merged planning milestone: #170 `P0 Data Scale: finalize Production history/depth rollout plan`
-- #170 merged main: `def36cbc1dfe57da8c35faa0577490bc4ab5866c`
-- #170 Production deployment `dpl_DiuYPDViLe25wLjgeEXkpdeozgcg`: READY
-- Issue #165: closed completed
-- Draft #167/#168: closed superseded by non-Draft #169/#170 due the connected Draft→Ready GraphQL `fullDatabaseId` failure
-- generic PR Code Quality remains the default non-Production validation lane
-- Auto-Merge + Standing Production Release policies remain authoritative
+- canonical main before this sync: `26fb12ac868d10cb68ae9c3b1ce85675a2c3ab8f`
+- #169 equal-time/null-time re-observation safety: merged
+- #170 Production history/depth rollout plan: merged
+- #171 post-#170 canonical sync: merged; Production `dpl_4CQkGPnkfd3EnmAsvNbv5M5kXpNh` READY
+- #172 R1 exact-provider read-only canary: **completed**
+- #173 Yahoo exact JSONP padding repair: **open, next mandatory blocker before R2**
+- #142 / #137 F0 repair: still explicit human/Production-impact bound
 
-Review exception note: the user explicitly approved the #167/#168 workstream only to substitute exact-head CI + Vercel Preview + strengthened Lead/self-review + regression tests for independent Verifier/Reviewer. This is not a global policy change and does not authorize Production execution.
+The user exception that replaced independent review for #167/#168 applied only to replacement PRs #169/#170. It does not apply to #173.
 
-## Current P0
+## Current P0 order
 
-Issue #119 — **Data Scale Program**.
+Issue #119 — Data Scale.
 
-Current ordering after this canonical sync:
+1. finish this post-R1 canonical sync
+2. repair #173 code/tests only from the new current main
+3. obtain independent Verifier + Reviewer for #173 unless a new narrow substitution is explicitly granted
+4. merge #173 only if all code/review/release gates pass
+5. re-read Production/provider state
+6. prepare exact R2 persistence cohort
+7. request explicit Production DB write approval for R2
+8. only then execute bounded R2
+9. R3/R4 remain separate later approvals
 
-1. prepare exact R1 read-only re-observation cohort/preflight
-2. obtain explicit approval before any live Production-connected provider read
-3. execute only the approved R1 scope, then measure provider outcomes and zero DB writes
-4. separately request approval for R2 Production re-observation persistence
-5. after measured history gain, separately prepare/approve R3 depth read-only and R4 depth persistence
-6. use the Scoreboard after each approved rollout
-7. pursue licensed completed-sale evidence, with Aucfan currently the strongest identified commercial candidate
-8. DATA -> TRAFFIC -> CLICK -> REVENUE
+## R1 #172 result
 
-Three active listings is a presentation threshold only, never a collection-completion target.
+R1 had zero Production persistence.
 
-## Completed current-sequence milestones
+### Rakuten
 
-- #146 — read-only collection throughput audit: merged
-- #147 — scalable market history architecture: merged
-- #148 — evidence-backed market signal architecture: merged
-- #149 — upcoming forecast truthfulness fail-closed repair: merged
-- #150 — safe dry-run re-observation engine: merged
-- #153 — hardened exact provider re-observation dry-run: merged
-- #156 — hardened dry-run Depth Collector: merged
-- #159 — truthful read-only Data Scale Scoreboard: merged
-- #162 — current lawful source capability matrix: merged
-- #169 — equal-time/null-time re-observation safety hardening: merged
-- #170 — Production history/depth rollout plan: merged
+3 frozen exact reads, one HTTP request each, all HTTP 200:
 
-## Re-observation foundation after #169
+- 3 × `not_found / exact_item_not_returned`
+- retries 0
+- false `sold` 0
 
-- append-only repeated observation planning
-- retry-safe deterministic observation IDs
-- exact persisted Rakuten/Yahoo item reads without keyword rediscovery
-- credential destinations restricted to reviewed official host/path
-- redirects refused
-- ordinary states only `active` / `sold_out`; no fabricated `sold`
-- positive price + explicit availability required
-- older stale observations cannot roll current snapshot backward
-- equal timestamp + conflicting price/status fails closed
-- equal timestamp + unchanged same-key retry remains deterministic
-- null/undefined/blank/whitespace observation time is invalid
-- failed provider attempts do not advance `last_observed_at`
+### Yahoo
 
-Merged code remains dormant with respect to Production persistence until separately approved.
+Initial exact-read adapter calls reached HTTP 200 but failed closed because live Yahoo JSONP begins with exact padding `/* */` before the configured callback.
 
-## Depth foundation after #156
+Live sanitized diagnostics established:
 
-- explicit target variant + parent series
-- strict P3 matcher/set/ambiguity safety reused unchanged
-- many genuinely distinct offers can be retained; no `3 listings = done`
-- durable marketplace identity dedupe
-- SHA-256 selection binding and post-selection drift checks
-- insert-only projected-write contract
-- default budget 50 / hard max 200 are safety bounds, not product targets
+- callback starts at byte index 5
+- exact five-byte block-comment prefix
+- prefix is `/* */`
+- no raw body/credential logging
 
-Production depth persistence/automatic activation remains unapproved.
+Final one-off strict Yahoo reads used exact observed padding only:
 
-## Production history/depth rollout plan after #170
+- lead-netstore item → unchanged 698 / active
+- suruga-ya item → not_found
+- selen-shope item → unchanged 1500 / active
 
-Canonical plan: `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`.
+All HTTP 200, one attempt each, retries 0, rate limits 0.
 
-### R1 proposed read-only canary — next approval point
+Yahoo continuation approval used **9/9 attempts exactly**: 3 initial + 3 diagnostics + 3 final. No more Yahoo request is authorized by that approval.
 
-Not yet approved/executed.
+Temporary ops branch was force-reset to canonical main and compare-confirmed identical.
 
-- 6 known listings
-- 3 Rakuten + 3 Yahoo
-- serial exact-provider reads
-- no keyword fallback
-- normal request count <=6
-- retry limit <=3 only for reviewed retryable conditions
-- worst-case HTTP attempt envelope <=18
-- Rakuten pacing >=1200ms / Yahoo >=1000ms
-- Production DB writes 0
+## Production data checkpoint
 
-### R2 proposed Production history persistence
+Latest SELECT-only post-R1 snapshot:
 
-Separate explicit Production DB approval required later.
+- market listings: **110**
+- observations: **110**
+- listings with 2+ observations: **0**
 
-- 4 known listings
-- 2 Rakuten + 2 Yahoo
-- expected +4 observations and +4 re-observed listings if baseline still has one observation each
-- listing count unchanged
-- bounded transaction + exact before/after + post-write reread
+The six R1 frozen rows remain unchanged in price/status/`last_observed_at`, each with one observation. The increase from 107/107 to 110/110 was independent existing Production activity, not R1 persistence.
+
+History compounding remains the primary measurable bottleneck.
+
+## #173 blocker
+
+Main Yahoo parser currently requires `gachaLensItemLookupV1(` at byte 0, while current live Yahoo exact itemLookup returned exact `/* */gachaLensItemLookupV1(...)`.
+
+Permanent repair must:
+
+- keep direct exact callback valid
+- accept only exact `/* */` before exact callback
+- reject `/**/`, `/*x*/`, arbitrary comments/garbage, wrong callback, malformed wrapper/body
+- preserve exact endpoint, redirects-fail, identity, positive-price, explicit-availability, active/sold_out-only, no-false-sold contracts
+- change only provider parser/tests
+- perform zero provider requests/DB writes during implementation
+
+#173 is collection semantics and requires independent Verifier + Reviewer unless the user grants a new task-specific exception.
+
+## R2 remains unapproved
+
+Planned R2 from `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`:
+
+- 4 known listings, 2 Rakuten + 2 Yahoo
+- bounded Production persistence
+- deterministic observation IDs
+- exact before/after counts and post-write reread
+- no listing-count change expected
 - no false `sold`
 
-### R3 proposed depth read-only
+This is a future separate explicit Production DB approval. R1 completion does not authorize it.
 
-Separate live-provider approval required later.
+## Durable provider/history safety
 
-- 2 explicit target variants
-- one Rakuten-first + one Yahoo-first
-- max 5 accepted each / 10 total
-- max 6 planner requests / max 18 HTTP attempts
-- 0 DB writes
+- exact persisted identity; no keyword rediscovery
+- append-only successful observations
+- positive integer price / explicit availability
+- only active/sold_out ordinary states
+- no `not_found`→`sold` inference
+- stale timestamp rejected
+- equal-time conflicts rejected
+- equal-time unchanged retry deterministic
+- null/blank observedAt rejected
+- credentials restricted to reviewed official host/path; redirects rejected
+- failed reads do not advance `last_observed_at`
 
-### R4 proposed depth persistence
+## Source posture
 
-Separate Production DB approval required later.
+- Rakuten: active
+- Yahoo: active provider, but permanent exact-read parser blocked by #173 until repaired
+- Aucfan: paid access diligence only
+- Mercari C2C: partnership required; no scraping
+- X: paid access required
+- GSC connected reporting path: last seen subscription-unavailable, not zero traffic
 
-- only frozen strict-safe R3 subset
-- <=10 total new listing+initial-observation pairs
-- insert-only
-- no existing-row updates/deletes
-
-No automatic schedule/budget scaling is authorized by #170.
-
-## Dated Production data evidence
-
-Supabase Production: `vxbrnvfhmzcxehuuzzum`.
-
-Issue #165 read-only baseline at 2026-09-02 01:49 JST:
-
-- series: 10,241
-- variants: 23,808
-- market listings: 107
-- observations: 107
-- re-observed listings: 0
-- depth: 96 variants ×1, 1 variant ×2, 0 variants ×3+
-- completed `sold`: 0
-- Scoreboard bottleneck: `history_not_enabled`
-
-Treat these as dated until re-read. The measurable bottleneck remained repeated history.
-
-## Source capability checkpoint
-
-Canonical source contract: `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`.
-
-Current verified posture, dated 2026-09-02:
-
-- Rakuten Ichiba API: `active`
-- Yahoo Shopping API / ValueCommerce: `active`
-- Bandai / Takara Tomy Arts: active official catalog sources
-- Kitan Club: capability exists, auto remains off
-- Qualia: conservative/limited, broad/auto rollout unapproved
-- Aucfan: `paid_access_required`; best current licensed completed-sale/history candidate, commercial rights/pricing still require diligence
-- Mercari C2C: `partnership_required`; no scraping
-- Mercari Shops Public API: seller/shop scoped, not broad C2C market intelligence
-- X API: `paid_access_required`; recheck current pricing/quota/search before activation
-- eBay Browse: lower-priority `planned`; recheck Japan/historical limitations
-- Surugaya / Mandarake / AmiAmi broad automation: permission/partnership first
-- Gacha Lens outbound clicks: active provider+variant intent evidence, not transactions
-- connected GSC Wizard reporting path: unavailable at verification due subscription/payment state, not zero traffic
-
-## Current open work
-
-Re-fetch before acting.
-
-- Issue #119 — Data Scale umbrella: open
-- PR #142 / Issue #137 — F0 rerelease canonical-year repair: explicit Production-impact review/approval boundary; do not auto-merge or manually dispatch F0
-- Issue #165/#166: completed
-- #167/#168: superseded/closed
-- next history/depth work begins only after this canonical-sync gate completes
-
-## F0 official automatic incident
-
-Run `33484450472` failed safely on 2026-09-01:
-
-- transaction `not_started`
-- DB writes 0 / deletes 0
-- blocker `official_bounded_rerelease_canonical_release_mismatch`
-
-PR #142 contains the repair; approval remains required before merge and any manual rerun/dispatch.
+Use `docs/DATA_SOURCE_CAPABILITY_MATRIX.md` for the full canonical matrix.
 
 ## Hard boundaries
 
+- no R2 Production writes without explicit approval
+- no further Yahoo calls under exhausted #172 approval
+- do not merge #173 without required review/new explicit exception
+- do not merge #142 or dispatch F0 without separate approval
 - never touch `supabase/.temp/cli-latest`
 - keep `.github/workflows/gacha-ingestion.yml` disabled
-- do not casually modify F0 official auto or P3 V2 auto
-- Kitan auto remains off; Qualia auto remains unapproved
-- no Mercari/Amazon scraping
-- do not misuse Mercari Shops seller scope as market-wide access
-- do not automate public storefronts without reviewed API/feed/permission
-- authorized X/social only
-- no matcher weakening for coverage
-- no completed/active evidence mixing
-- complete sets stay series-level
-- no Aucfan/X/GSC-paid/other paid activation without explicit approval
+- do not weaken matcher, mix sold/current evidence, or scrape Mercari/Amazon
 
 ## Exact next step
 
-This canonical-sync PR is the current gate.
-
-After it is exact-head green, merged, and Production READY:
-
-1. re-fetch #119, `main`, open PRs, Production Scoreboard counts and current provider-health evidence
-2. freeze the exact R1 six-listing cohort: 3 Rakuten + 3 Yahoo, exact-identity complete, review-safe and due
-3. verify the max-18-attempt budget and current official endpoint contract
-4. present the exact R1 cohort to the user for explicit live provider-read approval
-5. do not execute R1 until approved
-6. keep R2/R3/R4 separately approval-gated
-7. keep #142 approval-bound
-
-Business bottleneck remains **Data Scale first**.
+This docs-only canonical sync is the phase gate. After it is green, merged, and Production READY, reset/recreate #173 repair from the new main and implement/test the exact `/* */` compatibility only. Stop at #173's independent-review boundary before merge if no new reviewer/substitution is available.
