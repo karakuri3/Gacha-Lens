@@ -131,6 +131,8 @@ test("Yahoo JSONP parser accepts only the exact callback with no padding or obse
     `/**/gachaLensItemLookupV1(${payload});`,
     `/*x*/gachaLensItemLookupV1(${payload});`,
     `/* *//* */gachaLensItemLookupV1(${payload});`,
+    ` /* */gachaLensItemLookupV1(${payload});`,
+    `\n/* */gachaLensItemLookupV1(${payload});`,
     `/* */ gachaLensItemLookupV1(${payload});`,
     `/* */\ngachaLensItemLookupV1(${payload});`,
     `evilCallback(${payload});`,
