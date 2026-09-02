@@ -100,12 +100,13 @@ R1 grants no later provider/write authority.
 - [x] Keep branch delta to the one-shot workflow only before execution.
 - [x] Run Actions `33605362604` exactly once.
 - [x] Exact-main / branch-only guard PASS.
-- [x] First target `rakuten-auc-toysanta-10386044` returns `not_found` after exactly one successful HTTP response path.
-- [x] Stop immediately under all-or-nothing contract.
+- [x] First target `rakuten-auc-toysanta-10386044` ends as `not_found`.
+- [x] Preserve evidence precision: retained failure artifact does not expose provider diagnostics, so exact HTTP attempt count for the first target is unknown; reviewed reader bounds it to 1–3 attempts.
+- [x] Stop immediately after the first target's final outcome under all-or-nothing contract.
 - [x] Remaining three provider calls = 0.
 - [x] Atomic RPC calls = 0.
 - [x] R2 market-data writes = 0.
-- [x] No retry.
+- [x] No retry of the canary run.
 
 ### Post-failure verification / cleanup
 
@@ -124,10 +125,10 @@ This was a successful safety result but did not create repeated history.
 
 - [x] Create Issue #185 from exact main `8a63676bc11474644f8cc09c2fde43886c00c9f0`.
 - [x] Create branch `docs/canonical-sync-post-r2-attempt-185`.
-- [ ] Keep changed paths exactly `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`.
-- [ ] Record migration-applied schema state and tool-generated ledger timestamp truthfully.
-- [ ] Record failed-first-provider result, one HTTP attempt, zero RPC and zero market-data writes.
-- [ ] Record one-shot workflow cleanup and consumed approval.
+- [x] Keep changed paths exactly `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`.
+- [x] Record migration-applied schema state and tool-generated ledger timestamp truthfully.
+- [x] Record failed-first-provider result, bounded/unknown exact attempt count, zero RPC and zero market-data writes.
+- [x] Record one-shot workflow cleanup and consumed approval.
 - [ ] Disclose non-independent sequential Reviewer/Verifier under Agent OS small-task rule.
 - [ ] Exact-head PR Code Quality PASS.
 - [ ] Exact-head Vercel Preview READY.
