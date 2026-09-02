@@ -3,7 +3,10 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { canonicalMarketplaceSource } from "../lib/domain/market-canary-write.js";
-import { resolveBoundedMarketplaceIdentity } from "../lib/domain/market-bounded-write.js";
+import {
+  canonicalizeBoundedMarketplaceUrl,
+  resolveBoundedMarketplaceIdentity,
+} from "../lib/domain/market-bounded-write.js";
 import {
   MARKET_REOBSERVATION_BOUNDED_MAX_BATCH,
   MARKET_REOBSERVATION_BOUNDED_MIN_BATCH,
@@ -163,6 +166,10 @@ function normalizeEntry(entry, observationKey) {
   const source = clean(value.source);
   const sourceListingId = clean(value.source_listing_id);
   const publicUrl = clean(value.public_url);
+  const expectedSourceUrl = clean(value.expected_source_url);
+  const expectedRawProvider = clean(value.expected_raw_provider);
+  const expectedRawSourceListingId = clean(value.expected_raw_source_listing_id);
+  const expectedRawPublicUrl = clean(value.expected_raw_public_url);
   const variantId = clean(value.variant_id);
   const seriesId = clean(value.series_id);
   const entryObservationKey = safeObservationKey(value.observation_key);
@@ -186,8 +193,14 @@ function normalizeEntry(entry, observationKey) {
   } catch {
     expectedObservationId = "";
   }
+  const canonicalPublicUrl = canonicalizeBoundedMarketplaceUrl(publicUrl);
+  const persistedUrlsMatchCanonical = canonicalizeBoundedMarketplaceUrl(expectedSourceUrl) === canonicalPublicUrl
+    && canonicalizeBoundedMarketplaceUrl(expectedRawPublicUrl) === canonicalPublicUrl;
   if (!listingId || !["rakuten_ichiba", "yahoo_shopping"].includes(provider)
-    || source !== expectedSource || !sourceListingId || !publicUrl || !variantId || !seriesId
+    || source !== expectedSource || !sourceListingId || !canonicalPublicUrl || !variantId || !seriesId
+    || !expectedSourceUrl || expectedRawProvider !== provider
+    || expectedRawSourceListingId !== sourceListingId || !expectedRawPublicUrl
+    || !persistedUrlsMatchCanonical
     || entryObservationKey !== observationKey
     || !OBSERVATION_ID.test(observationId) || observationId !== expectedObservationId
     || !observedAt || !expectedLastObservedAt || observedAt <= expectedLastObservedAt
@@ -200,7 +213,11 @@ function normalizeEntry(entry, observationKey) {
     observation_id: observationId,
     provider,
     source_listing_id: sourceListingId,
-    public_url: publicUrl,
+    public_url: canonicalPublicUrl,
+    expected_source_url: expectedSourceUrl,
+    expected_raw_provider: expectedRawProvider,
+    expected_raw_source_listing_id: expectedRawSourceListingId,
+    expected_raw_public_url: expectedRawPublicUrl,
     variant_id: variantId,
     series_id: seriesId,
     source,
@@ -222,13 +239,13 @@ function verifyIdentity(listing, entry) {
     || listing.series_id !== entry.series_id
     || listing.source !== entry.source
     || listing.source_type !== "marketplace"
-    || listing.source_url !== entry.public_url
+    || listing.source_url !== entry.expected_source_url
     || listing.listing_type !== "single"
     || listing.market_review_type !== "single"
     || listing.review_required === true
-    || listing.raw?.provider !== entry.provider
-    || listing.raw?.source_listing_id !== entry.source_listing_id
-    || listing.raw?.public_url !== entry.public_url
+    || listing.raw?.provider !== entry.expected_raw_provider
+    || listing.raw?.source_listing_id !== entry.expected_raw_source_listing_id
+    || listing.raw?.public_url !== entry.expected_raw_public_url
     || listing.sold_at !== null) return false;
   const identity = resolveBoundedMarketplaceIdentity(listing);
   return identity.complete
