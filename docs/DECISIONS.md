@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-03 JST — first reusable bounded Production migration + fail-closed execution attempt / Issue #202 canonical sync
+Updated: 2026-09-03 JST — first successful reusable bounded history batch / Issue #204 canonical sync
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -24,7 +24,7 @@ Never mix completed/sold evidence with active asking-price evidence. Presentatio
 Do not weaken the matcher merely to increase coverage. Complete sets and ambiguous candidates must not leak into variant prices.
 
 ### D-013 — Recall alone does not justify Production upgrade
-Higher raw recall without higher safe accepted unique coverage does not justify replacing the current strict Production lane.
+Higher raw recall without higher safe accepted unique coverage does not justify replacing a strict Production lane.
 
 ### D-014 — Complete sets are series-level evidence
 Accepted complete/full sets remain series-scoped. Broad automatic complete-set persistence remains unapproved.
@@ -46,16 +46,16 @@ Reject incomplete/ambiguous identity, unsupported source, invalid price, preorde
 - Production persistence remains separately approval-gated
 
 ### D-017 — Provider credentials only reach reviewed official endpoints
-Credential-bearing requests must stay on reviewed HTTPS hosts and paths. Arbitrary host/path/query/fragment, HTTP, embedded URL credentials and redirects fail closed. Persisted durable identity validates before provider request.
+Credential-bearing requests stay on reviewed HTTPS hosts and paths. Arbitrary host/path/query/fragment, HTTP, embedded URL credentials and redirects fail closed. Durable identity validates before provider request.
 
-### D-018 — Merged repository code never implies Production DB authority
-Repository merge, Preview READY, normal Vercel Production READY, and disposable migration proof are all distinct from actual Supabase Production schema/data state. A repository migration file being present does not authorize or prove its Production application.
+### D-018 — Repository merge never implies Production DB authority
+Repository merge, Preview READY, normal Vercel Production READY, disposable migration proof and actual Supabase Production schema/data state are separate facts.
 
 ### D-019 — Depth Collector remains multi-offer, identity-driven and dry-run first
 Depth work uses explicit variant/series targets, strict identity matching, durable dedupe, bounded request envelopes, and dry-run first. R3/R4 remain separately approval-gated.
 
 ### D-020 — Production writes remain bounded/gated
-Keep exact identity, bounded write, verification, canonical consistency, and fail-closed patterns. Do not bypass them merely to make a run succeed.
+Keep exact identity, bounded write, verification, canonical consistency and fail-closed patterns. Do not bypass them to make a run succeed.
 
 ### D-021 — Kitan auto remains off
 Do not rerun or enable automatic writes without explicit approval.
@@ -74,8 +74,8 @@ Canonical vocabulary: `active`, `planned`, `partnership_required`, `paid_access_
 
 Current posture: Rakuten/Yahoo active; Aucfan paid-access diligence; Mercari C2C partnership-required/no scraping; Mercari Shops seller-scoped; X paid-access-required; eBay lower-priority planned; broad Surugaya/Mandarake/AmiAmi permission-first.
 
-### D-024 — Use Rakuten/Yahoo history/depth before provider-count expansion
-Repeated history/depth on lawful reviewed sources is the current near-term DATA multiplier before another general live-listing provider.
+### D-024 — Use lawful existing-source depth/history before provider-count expansion
+Repeated history/depth on reviewed sources is the near-term DATA multiplier before another general live-listing provider, unless current Scoreboard evidence changes the bottleneck.
 
 ### D-025 — History/depth rollout stages are separately approved
 Canonical plan: `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`.
@@ -88,47 +88,47 @@ Canonical plan: `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`.
 Approval for one stage never authorizes another. No schedule/budget scaling is automatic.
 
 ### D-026 — R1 #172 is complete and grants no later authority
-R1 completed with Production writes 0. Rakuten frozen three all returned `not_found`; final Yahoo frozen three returned two `unchanged` and one `not_found`. Yahoo continuation budget was consumed exactly and is exhausted.
+R1 completed with Production writes 0. Rakuten frozen three all returned `not_found`; final Yahoo frozen three returned two `unchanged` and one `not_found`. Yahoo continuation budget was exhausted.
 
 ### D-027 — Yahoo exact JSONP compatibility accepts only two raw-byte-0 forms
 Only the fixed internal callback at raw byte 0, or exact literal `/* */` at raw byte 0 immediately followed by that callback, is accepted. Leading whitespace/BOM, alternate comments, wrong callbacks, bare JSON and malformed wrappers fail closed.
 
-### D-028 — R2 atomic persistence remains historical, narrow, and non-reusable as authority
-Original v1 and Yahoo-only v2 prove the safety pattern, but their approvals/tokens/workflows are consumed. Their installed RPCs must not be invoked merely because they exist.
+### D-028 — R2 atomic persistence is historical proof, not reusable authority
+Original v1 and Yahoo-only v2 prove the safety pattern, but their approvals/tokens/workflows are consumed. Installed R2 RPCs must not be invoked merely because they exist.
 
 ### D-029 — Breadth and repeated history are separate scorecard metrics
-Successful Yahoo-only R2 v2 changed Production from 113 listings / 113 observations / 0 re-observed to **113 / 117 / 4**, with completed sold still 0. Future scorecards report breadth and repeated-history coverage separately.
+Successful R2 v2 changed Production 113/113/0 -> 113/117/4 for listings/observations/re-observed, with completed sold still 0. Future scorecards report breadth and repeated-history coverage separately.
 
 ### D-034 — Repository migration presence is not Production schema state
-Verify Supabase Production directly. Repository filename timestamp and Supabase generated ledger timestamp may differ; link actual schema using reviewed SQL body, migration name, function verification and execution evidence.
+Verify Supabase Production directly. Repository filename timestamp and Supabase generated ledger timestamp may differ; link schema state using reviewed SQL body, migration name, object verification and execution evidence.
 
 ### D-035 — Original #179 v1 Production attempt was a correct fail-closed result
-Actions `33605362604` stopped on first Rakuten target `not_found`. Exact first-target attempt count is not retained; reviewed reader bounds it to 1-3. Remaining three target calls 0, RPC 0, market-data writes 0, no retry. Old approval/token are consumed.
+Actions `33605362604` stopped on first Rakuten `not_found`. Exact first-target attempt count is not retained; reviewed reader bounds it to 1-3. Remaining calls 0, RPC0, writes0, no retry.
 
 ### D-036 — Changed write cohorts require fresh reviewed identity and approval
-Never reinterpret an old hardcoded canary as a generic write license. Reselect read-only, freeze identity/snapshot/history expectations, validate the appropriate reviewed contract, then obtain fresh provider + Production mutation authority.
+Never reinterpret an old canary as a generic write license. Freeze exact identity/snapshot/history expectations and obtain fresh applicable authority.
 
 ### D-037 — Yahoo-only R2 v2 is the successful first-history proof
-The Yahoo-only choice was evidence-driven, not symmetry-driven. Actions `33621881117` used 4 HTTP attempts total, one per listing, all `unchanged`, then one verified atomic RPC. Production became 113 listings / 117 observations / 4 re-observed / 0 completed sold.
+Actions `33621881117` used four HTTP attempts total, one per listing, all `unchanged`, then one verified atomic RPC. Production became 113/117/4/sold0.
 
 ### D-038 — Schema approval and credentialed execution mechanism are separate facts
-Production migration application does not automatically authorize a credentialed GitHub Actions mechanism. The successful R2 v2 one-shot mechanism had its own explicit branch/workflow authorization, which is consumed.
+Production migration application does not automatically authorize a credentialed GitHub Actions mechanism. One-shot workflow authority must be explicit when required.
 
-### D-039 — Successful R2 v2 execution is terminal evidence, not reusable authorization
-Do not rerun R2 merely to reconfirm. Its provider/RPC/workflow approvals are consumed. The durable evidence is preserved in HANDOFF/STATUS and Issue #179.
+### D-039 — Successful R2 v2 execution is terminal evidence
+Do not rerun R2 merely to reconfirm. Its provider/RPC/workflow approvals are consumed.
 
-### D-045 — Reusable bounded re-observation v1 replaces bespoke history canaries for future expansion
-Issue #196 / replacement PR #198 merged the repository prerequisite for future bounded history compounding.
+### D-045 — Reusable bounded re-observation v1 replaces bespoke history canaries
+Issue #196 / replacement PR #198 merged the reusable repository prerequisite.
 
 Contract:
 - explicit frozen cohort 1..10
 - Yahoo + Rakuten exact persisted identities
-- exact-main SHA + observation key + frozen snapshot/prior-count cohort digest
+- exact-main SHA + observation key + full frozen snapshot/prior-count cohort digest
 - distinct namespace `APPROVE_MARKET_REOBSERVATION_BOUNDED_V1`
 - dry-run provider/RPC/write 0
-- max 3 attempts/listing / max30 total in future approved write mode
-- one atomic RPC only after all target plans are safe
-- prior observation count >=1 and exact
+- max3 attempts/listing / max30 total in approved write mode
+- one atomic RPC only after all targets safe
+- prior observation count exact and may be >1
 - deterministic observation IDs recomputed in SQL
 - sanitized pre-RPC resolver manifest mandatory
 - no automatic RPC retry; resolver SELECT-only
@@ -136,42 +136,65 @@ Contract:
 - never completed `sold` / `sold_at`
 - SECURITY INVOKER, empty search_path, service_role-only
 
-Future history expansion should use this reviewed reusable contract rather than creating another hardcoded eight-row function, unless new evidence shows the generic contract itself is insufficient.
+### D-046 — Canonical and persisted marketplace identities are separate guards
+Node proves canonical provider/native/public identity. The bounded RPC also freezes and exact-matches actual DB `source_url`, `raw.provider`, `raw.source_listing_id`, and `raw.public_url`.
 
-### D-046 — Canonical and persisted marketplace URL identities are separate guards
-Node proves canonical provider/native/public identity. The bounded RPC also freezes and exact-matches the actual DB-stored `source_url`, `raw.provider`, `raw.source_listing_id`, and `raw.public_url`. Canonical-equivalent URLs such as a harmless trailing slash must not create Node/SQL contract disagreement, while persisted snapshot drift still fails closed.
-
-### D-047 — Bounded postwrite verification distinguishes exact target truth from concurrent global growth
-Target rows, deterministic observation IDs, prior->post counts, provider snapshot and RPC result identity sets remain exact. Global listings/observations/re-observed counters use minimum-delta sanity checks so unrelated legitimate P3 breadth/history writes do not falsely classify a correct bounded run as inconsistent. Completed sold must remain exactly unchanged.
+### D-047 — Bounded postwrite verification separates exact target truth from concurrent global growth
+Target rows, deterministic IDs, prior->post counts and RPC result identity sets remain exact. Global listings/observations/re-observed counters use minimum-delta sanity checks so unrelated legitimate P3 growth is not misclassified. Completed sold remains exact.
 
 ### D-048 — Ambiguous write resolution requires evidence captured before RPC
-Future bounded write mode must persist a sanitized resolver manifest before RPC invocation. After ambiguous transport/commit state, resolution is SELECT-only and returns only `committed`, `not_committed`, or `inconsistent`; it never grants automatic write retry.
+A sanitized resolver manifest must exist before RPC. After ambiguous transport/commit state, resolution is SELECT-only and returns only `committed`, `not_committed`, or `inconsistent`; it never grants automatic retry.
 
-### D-049 — Generic bounded v1 is now installed in Production, but no generic data execution has succeeded
-Under the first exact #201 human approval, `market_reobservation_bounded_v1` was applied to Production. Ledger is `20260902165958 / market_reobservation_bounded_v1`. Function `apply_market_reobservation_bounded_v1(jsonb)` was verified SECURITY INVOKER, empty search_path, service_role-only; migration alone changed market data by 0.
+### D-049 — Generic bounded v1 schema is installed in Production
+Ledger is `20260902165958 / market_reobservation_bounded_v1`. Function `apply_market_reobservation_bounded_v1(jsonb)` is SECURITY INVOKER, empty search_path and service_role-only. Do not reapply the migration.
 
-Do not reapply the migration. Installed schema does not imply provider/RPC authority.
+### D-073 — Cohort digests must use the complete merged frozen payload
+The first #201 digest `9940a558...` was wrong because a hand reproduction omitted persisted identity fields. Never compute approval identity from a reduced approximation.
 
-### D-073 — A cohort digest must be generated from the complete merged frozen payload, never a hand-reduced approximation
-The first #201 precomputed digest `9940a558...` was wrong because the external reproduction omitted persisted identity fields that `frozenCohortEntry()` includes. The one-shot correctly failed before provider execution because the approval token did not match the runner's recomputed digest.
-
-For any future bounded approval identity:
-- derive/reproduce the exact merged `buildMarketReobservationBoundedCohortDigest()` semantics;
-- include every frozen field, including persisted source/raw identity values;
-- bind to the then-current canonical main SHA;
-- treat any digest computed before a canonical-main change as stale;
-- never “fix” an approval token in-place after human authorization.
+For future bounded identity:
+- use merged `buildMarketReobservationBoundedCohortDigest()` semantics
+- include every frozen field
+- bind to current canonical main SHA
+- any main change makes the digest stale
+- never repair an already-human-approved token in place
 
 ### D-074 — First #201 one-shot failure is safe terminal evidence for that authorization
-Actions `33658579004` failed at invocation approval validation before the provider loop. Verified provider attempts 0, RPC 0, market-data writes 0, deterministic rows 0/8, all eight targets still one observation. The workflow was removed, branch final file diff is 0, run count is exactly 1, and the branch was never merged.
+Actions `33658579004` failed at approval validation before provider loop: provider0/RPC0/writes0. Workflow was removed, branch final diff0, run count1. That approval is consumed.
 
-The exact #201 approval tied to `9940a...` is consumed. Do not rerun `33658579004` and do not reuse that approval for a corrected digest.
-
-### D-075 — Schema may remain installed after a fail-closed pre-provider execution attempt
-Because the approved migration completed before the one-shot token mismatch, Production legitimately has the generic function while data remains unchanged. Future retry planning must verify the function/ledger and **skip migration reapplication**; only provider/RPC/workflow authority needs fresh approval if snapshots remain safe.
+### D-075 — Installed schema may remain after a fail-closed pre-provider attempt
+The generic migration completed before the first #201 token mismatch. Future attempts verify installed schema and skip migration reapplication.
 
 ### D-076 — Independent breadth drift does not invalidate a frozen cohort unless target invariants drift
-Approved P3 run `33655998914` increased global market counts from 113/117 to 115/119 while the frozen #201 targets remained exact. This is expected. Cohort validity is determined by exact target identity/snapshot/prior-count/import-issue/collision invariants, not by an unchanged global denominator. Global postwrite checks remain concurrency-tolerant minimums.
+Approved P3 run `33655998914` increased global counts 113/117 -> 115/119 while #201 target invariants remained exact. Frozen-cohort validity is determined by exact target state, not a fixed global denominator.
+
+### D-077 — First reusable generic bounded Production history batch succeeded
+Fresh #201 retry authority bound to main `9859ab4d1d92043cc914dd00ea5814eff614e6f3`, key `reobs-v1:bounded-20260903-01`, digest `1142a10b4c8818562b27f9222a388be073934ca83a33932c2dfca65a5d4782bf`.
+
+Actions `33660684355`:
+- 8 Yahoo attempts total, exactly 1 each
+- retries0, rate-limits0, timeouts0
+- 7 unchanged, 1 price_changed
+- Toysanta target `yahoo-toysanta-g-5l370018il-003-57693`: 568 -> 399, active remained active
+- pre-RPC resolver manifest preserved
+- exactly one verified bounded RPC, applied_count8
+- Production 115/119/4/sold0 -> 115/127/12/sold0
+- deterministic rows8/8; all eight targets exactly two observations
+- workflow removed; cleanup `c4a058f5cda1ad770bd5340e9650217484a6028e`; final diff0/run count1/never merged
+
+This is terminal evidence for that exact approval. Do not rerun `33660684355`.
+
+### D-078 — Crossing the first history threshold changes the next decision
+At the verified checkpoint, 12/115 ~=10.43% re-observed coverage crosses the Scoreboard's first 10% history threshold.
+
+Therefore:
+- do not automatically run another history batch
+- do not automatically jump to R3/R4
+- first re-read live Scoreboard/breadth/depth/history evidence
+- choose the single highest-leverage remaining DATA bottleneck
+- if Data Scale is sufficient, shift effort toward TRAFFIC -> CLICK -> REVENUE rather than infrastructure for its own sake
+
+### D-079 — Successful #201 retry approval is exact, consumed and non-reusable
+The provider/RPC/workflow authorization tied to main `9859ab4d...` and digest `1142a10b...` ended with run `33660684355` and cleanup. It grants no future provider call, RPC, workflow or R3/R4 authority.
 
 ## SEO
 
@@ -187,7 +210,7 @@ Indexable page 2+ URLs canonicalize to themselves; preserve noindex behavior tha
 ## Automation / safety
 
 ### D-040 — Explicit approval boundaries
-Explicit approval remains required for standing-policy exclusions, including Production DB writes/migrations/backfills/cleanup/schema/seed/reset, approval-bound live provider execution, `workflow_dispatch`, Secrets/Variables changes, paid actions, destructive/irreversible work, direct main pushes, new/material Production-capable automation, ineligible merges/releases/gate changes, and major unresolved product/security decisions.
+Explicit approval remains required for Production DB writes/migrations/backfills/cleanup/schema/seed/reset, approval-bound live provider execution, `workflow_dispatch`, Secrets/Variables changes, paid actions, destructive work, direct main pushes, new/material Production-capable automation, ineligible merges/releases/gate changes, and major unresolved product/security decisions.
 
 ### D-041 — Hard repository constraints
 - never touch `supabase/.temp/cli-latest`
@@ -197,13 +220,31 @@ Explicit approval remains required for standing-policy exclusions, including Pro
 - do not rerun completed/failed canaries without new task-specific approval
 
 ### D-042 — Foundation migration-order assertion is known stale harness debt
-The Foundation disposable DB successfully applied 9 migrations for #182, 10 for #188, and 11 for #197/#198, then failed because `.github/workflows/foundation-baseline.yml` still hardcodes the original eight-version list. This is not migration-application failure and does not authorize workflow modification inside unrelated scopes.
+Foundation disposable DB successfully applied 9 migrations for #182, 10 for #188, and 11 for #197/#198, then failed because `.github/workflows/foundation-baseline.yml` still hardcodes the original eight-version list. This is not migration failure.
 
 ### D-043 — Supabase migration ledger identity may differ from repository filename timestamp
-For approved Production migrations, connected tooling may generate ledger versions different from repository filenames. Do not manually “fix” the ledger; identify Production schema by reviewed SQL, migration name, object verification and durable execution evidence.
+Do not manually fix generated ledger timestamps. Identify Production schema by reviewed SQL, migration name, object verification and durable execution evidence.
 
-### D-044 — Vercel release cannot consume a future Production schema approval
-A normal Vercel Production release caused by repository merge does not apply Supabase migrations. Production schema and Vercel release are separate external states.
+### D-044 — Vercel release and Supabase schema state are separate
+A normal Vercel Production release caused by repository merge does not apply Supabase migrations.
+
+### D-060 — Temporary approved execution scaffolding is removed immediately
+One-time workflows/scripts may be used only inside exact approved scope with minimal credentials and must be removed/reset immediately after evidence capture.
+
+### D-061 — Review/CI evidence binds to the final exact head
+A semantic repair invalidates older PASS claims. Re-run applicable validation against the final frozen head.
+
+### D-064 — Original #179 v1 one-shot authorization is consumed
+Actions `33605362604` ran once; workflow removed; no second run.
+
+### D-066 — Yahoo-only R2 v2 one-shot authorization is consumed
+Actions `33621881117` ran once; workflow removed; final branch diff0.
+
+### D-068 — First #201 authorization is consumed
+Migration succeeded; run `33658579004` failed before provider calls due invalid digest; no reuse.
+
+### D-069 — Successful #201 retry authorization is consumed
+Run `33660684355` succeeded and workflow was removed; no reuse.
 
 ## Development workflow
 
@@ -211,10 +252,10 @@ A normal Vercel Production release caused by repository merge does not apply Sup
 ChatGPT owns direction, prioritization, approval boundaries and review. Codex can implement/test when available, but quota exhaustion must not block safe connected-tool work.
 
 ### D-051 — Preserve partially completed work
-Resume durable Issue/branch/PR/worktree evidence. If local-only work is unreachable, reconstruct from canonical durable contracts and label it as reconstruction.
+Resume durable Issue/branch/PR/worktree evidence. Reconstruct unreachable local-only work from canonical durable contracts and label reconstruction clearly.
 
 ### D-052 — Conserve coding-agent quota
-Use connected tools for live reads/safe repository operations; reserve coding-agent capacity for difficult implementation when available.
+Use connected tools for live reads/safe repository operations; reserve coding-agent capacity for difficult implementation.
 
 ### D-053 — Agent OS remains authoritative
 `AGENTS.md` and `docs/AGENT_OS.md` govern bounded autonomous development and evidence gates.
@@ -228,43 +269,16 @@ After a major Production/recovery/security/release milestone, update the canonic
 ### D-056 — Task-specific review substitutions never become global policy
 Every human-approved replacement of independent Reviewer/Verifier applies only to the named task/PR unless explicitly stated otherwise.
 
-### D-059 — Draft->Ready connector failure uses a clean replacement PR
-When the connector's Draft->Ready mutation fails before state change, it is acceptable to close the unmerged Draft and create a non-Draft replacement from the exact same branch/head/base, rerun normal PR gates, and preserve the audit trail. Never bypass Draft state dishonestly or alter the reviewed code merely to work around tooling.
-
-### D-060 — Temporary approved execution scaffolding must be removed immediately
-One-time canary workflows/scripts may be used only within exact approved scope, minimal credentials, and must be removed/reset immediately after evidence capture.
-
-### D-061 — Review/CI evidence binds to the final exact head
-A semantic repair invalidates older PASS claims. Re-run applicable validation against the final frozen head.
-
-### D-062 — #180/#182 review substitution was task-specific only
-It ended with #182 and granted no Production authority.
-
-### D-063 — #183/#184 docs-only review substitution was task-specific only
-It ended with #184.
-
-### D-064 — Original #179 v1 one-shot workflow authorization was exact, consumed and cleaned up
-Actions `33605362604` ran once; workflow was removed; no second run occurred. The authorization cannot be reused.
-
-### D-065 — #188 review substitution was task-specific only
-It ended with #188 and grants no later authority.
-
-### D-066 — Yahoo-only R2 v2 one-shot workflow authorization was exact, consumed and cleaned up
-Actions `33621881117` ran exactly once; workflow was removed; final disposable branch file diff was zero. The authorization cannot be reused.
-
-### D-067 — #196/#197 independent-review substitution was consumed by byte-identical replacement PR #198
-The human explicitly allowed exact-head CI + Vercel Preview + disposable Supabase migration-apply proof + strengthened self-review in place of independent Reviewer/Verifier for #196/#197 only. The Draft->Ready connector failed before mutation; #197 was closed unmerged, and non-Draft #198 reused the exact same head/base with no code commit change, reran normal PR gates, and merged as `9c74d243b5a8f43b49dc7fa649b4c4043bb4a82c`. The substitution is consumed and grants no later Production authority.
-
-### D-068 — First #201 Production/workflow approval is exact, consumed, and non-reusable
-The human authorized the migration plus one exact credentialed attempt for main `0a509fe...`, key `reobs-v1:bounded-20260903-01`, and the then-recorded digest `9940a...`. Migration succeeded; the one-shot failed before provider calls because that digest was invalid. The authorization cannot be transferred to a corrected digest or second workflow.
+### D-059 — Draft->Ready connector failure may use a clean byte-identical replacement PR
+If the connector mutation fails before state change, a non-Draft replacement may reuse exact head/base, rerun gates and preserve audit trail. Never alter reviewed code merely to bypass tooling.
 
 ## Business priority
 
 ### D-070 — Revenue-relevant work outranks infrastructure for its own sake
 Prioritize useful data density, organic traffic, affiliate clicks/sales, then AdSense readiness.
 
-### D-071 — Data Scale remains P0
+### D-071 — Data Scale remains P0 until the defined useful threshold is met
 Build lawful breadth, depth and repeated history with exact provenance and fail-closed evidence semantics. Evaluate work through **DATA -> TRAFFIC -> CLICK -> REVENUE**.
 
-### D-072 — Current next DATA experiment remains bounded history coverage, but requires a fresh post-sync identity
-The generic schema is now installed, while truthful repeated history remains 4. After #202 canonical sync, first revalidate the frozen eight targets SELECT-only and recompute the cohort digest against the new canonical main. Only then may a new exact provider/RPC/workflow approval be requested. R3/R4 remain separate later stages.
+### D-072 — After first history threshold, reassess before more DATA execution
+The next action after #204 is read-only Scoreboard/bottleneck reassessment. More history, R3/R4 or source expansion require evidence that they are now the highest-leverage DATA move.
