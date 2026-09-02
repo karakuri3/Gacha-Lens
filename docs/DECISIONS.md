@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-02 JST — post-R1 (#172) checkpoint
+Updated: 2026-09-02 JST — post-Yahoo JSONP repair (#173/#176) checkpoint
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -52,7 +52,7 @@ Durable contract from #150/#169:
 Credential-bearing requests must stay on the reviewed HTTPS host + exact path. Arbitrary host/path/query/fragment, HTTP, embedded URL credentials and redirects fail closed. Persisted durable identity validates before provider request.
 
 ### D-018 — Merged read/dry-run code does not authorize Production persistence
-PRs #150/#153/#156/#169 and rollout planning do not authorize Production DB mutation, schedule activation, workflow dispatch, Secrets/Variables changes, or paid entitlement activation.
+PRs #150/#153/#156/#169/#176 and rollout planning do not authorize Production DB mutation, schedule activation, workflow dispatch, Secrets/Variables changes, or paid entitlement activation.
 
 ### D-019 — Depth Collector is multi-offer, identity-driven and dry-run first
 - explicit variant + parent series target
@@ -111,26 +111,42 @@ Live outcomes:
 
 The separate Yahoo continuation approval was consumed **9/9 attempts exactly**. It is exhausted and cannot be reused for new live Yahoo calls.
 
-### D-027 — Yahoo JSONP live padding compatibility must be exact, not permissive
-R1 live evidence established that Yahoo `itemLookup` currently returns JSONP with exact literal **`/* */`** immediately before the exact configured callback.
+### D-027 — Yahoo exact JSONP compatibility is fixed to two raw-byte-0 forms
+Issue #173 / PR #176 permanently repaired the live Yahoo `itemLookup` compatibility problem without adding generic comment stripping.
 
-Permanent parser repair (#173) may:
-- continue accepting the existing no-padding exact-callback form
-- accept exact `/* */` + exact callback
+The only accepted wrapper starts are:
 
-It must continue rejecting:
-- `/**/`
-- `/*x*/`
-- arbitrary/multiple comments
-- arbitrary leading bytes/whitespace garbage
-- wrong callbacks
-- bare JSON without the configured callback
-- malformed wrapper/body
+1. fixed internal callback at raw byte 0; or
+2. exact literal `/* */` at raw byte 0 immediately followed by that same fixed callback.
 
-This live compatibility fact does not justify a generic comment-stripping regex or parser loosening. Endpoint/redirect/identity/price/availability/lifecycle contracts stay unchanged.
+Durable security/truthfulness rules:
 
-### D-028 — R2 is blocked on #173 and fresh explicit Production approval
-Do not prepare an executable R2 write until #173 is safely resolved, current Production/provider evidence is reread, an exact R2 cohort is frozen, and the user explicitly approves the bounded Production DB mutation.
+- parser callers cannot select/override the callback
+- leading whitespace, newline or BOM is rejected rather than trimmed into validity
+- `/**/`, `/*x*/`, arbitrary/multiple comments, arbitrary bytes and comment gaps fail closed
+- wrong callbacks and bare JSON fail closed
+- malformed body/wrapper fails closed
+- trailing whitespace normalization is allowed
+- endpoint/redirect/identity/positive-price/explicit-availability/active-or-sold_out/no-false-sold rules are unchanged
+- do not log raw provider bodies or credentials
+
+Independent Reviewer + Verifier passed the final exact head after two prior major findings were repaired. The Production release is `a8bf9b7d7da7826544cb72a89f77b082fd86f248` / `dpl_4U73Cev864RvycfGGPteqQxMS246` READY.
+
+### D-028 — R2 is now preparation-eligible but Production-write approval-bound
+Completion of #173/#176 removes the parser blocker, but it does **not** authorize Production persistence.
+
+After the post-#176 canonical sync is merged/Production READY, safe read-only R2 preparation may:
+
+- reread current Production listings/observations
+- freeze exactly four known targets, planned 2 Rakuten + 2 Yahoo
+- verify exact identity and observation counts
+- freeze deterministic observation keys/IDs and expected deltas
+- define the bounded transaction, stop conditions, post-write reread and rollback evidence
+
+The actual R2 Production DB mutation requires a new explicit user approval for the exact cohort/write delta. R2 approval never implies R3/R4, schedules, workflow changes, Secrets/Variables changes or paid actions.
+
+### D-029 — Breadth growth must not be mistaken for history growth
+The post-#176 SELECT snapshot is 113 listings / 113 observations / 0 re-observed listings. Growth from the earlier 110/110 checkpoint came from existing breadth activity, not R2. History success requires actual listings with 2+ observations, not just more first observations.
 
 ## SEO
 
@@ -193,13 +209,16 @@ It is not global policy.
 PR #159 preserves `available/unavailable/not_instrumented`, `sold` vs `sold_out`, review-safe evidence, provider+variant click scope, and DB-run vs workflow-run separation. Missing evidence fails closed rather than becoming zero.
 
 ### D-058 — #167/#168 review substitution was one-workstream-only
-The user allowed replacement PRs #169/#170 to use exact-head CI, Preview, strengthened self-review, and regressions in place of independent review. This exception does **not** apply to #173 or future unrelated work.
+The user allowed replacement PRs #169/#170 to use exact-head CI, Preview, strengthened self-review, and regressions in place of independent review. This exception is not global and did not apply to #173/#176.
 
 ### D-059 — Draft→Ready connector failure uses clean replacement
 When the connector's Draft→Ready mutation fails on `fullDatabaseId`, use a clean non-Draft replacement from correct current main and rerun required validation; never bypass Draft safety dishonestly.
 
 ### D-060 — Temporary approved execution scaffolding must be removed immediately
 One-time canary workflows/scripts may be used only within the exact approved scope, must receive only the minimal required credentials, must not gain DB credentials when DB access is disallowed, and must be removed/reset immediately after evidence capture. R1's temporary ops branch was reset to main after each execution and after completion.
+
+### D-061 — Independent review findings must repair the contract, not be waived silently
+PR #176 demonstrated why collection-semantic review gates matter: independent review found two major boundary issues after ordinary tests/self-review. Both were repaired and the final exact head was re-reviewed before merge. A prior PASS on an older head is never sufficient after a semantic repair; review/CI/Preview must bind to the final exact head.
 
 ## Business priority
 

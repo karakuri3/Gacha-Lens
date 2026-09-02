@@ -1,35 +1,35 @@
 # Gacha Lens Status
 
-Updated: 2026-09-02 JST — post-R1 (#172) checkpoint
+Updated: 2026-09-02 JST — post-Yahoo JSONP repair (#173/#176) checkpoint
 
 This is the compact operational companion to `docs/HANDOFF.md`. Re-fetch live state before acting.
 
 ## Repository / release
 
 - repo: `karakuri3/Gacha-Lens`
-- canonical main before this sync: `26fb12ac868d10cb68ae9c3b1ce85675a2c3ab8f`
-- #169 equal-time/null-time re-observation safety: merged
-- #170 Production history/depth rollout plan: merged
-- #171 post-#170 canonical sync: merged; Production `dpl_4CQkGPnkfd3EnmAsvNbv5M5kXpNh` READY
-- #172 R1 exact-provider read-only canary: **completed**
-- #173 Yahoo exact JSONP padding repair: **open, next mandatory blocker before R2**
+- canonical main before this sync: `a8bf9b7d7da7826544cb72a89f77b082fd86f248`
+- #172 R1 exact-provider read-only canary: **completed**, Production DB writes 0
+- #175 post-R1 canonical sync: merged
+- #173 Yahoo exact JSONP padding repair: **completed**
+- #176 repair PR: independently reviewed/verified, squash-merged as `a8bf9b7d7da7826544cb72a89f77b082fd86f248`
+- #176 Production deployment: `dpl_4U73Cev864RvycfGGPteqQxMS246` — **READY**, canonical aliases healthy
+- #177 post-#176 canonical sync: **current phase gate**
 - #142 / #137 F0 repair: still explicit human/Production-impact bound
 
-The user exception that replaced independent review for #167/#168 applied only to replacement PRs #169/#170. It does not apply to #173.
+The one-workstream independent-review substitutions previously granted for #156 and #167/#168 were task-specific only. #176 did not rely on them: independent Reviewer + Verifier passed on the final exact head after two earlier major findings were repaired.
 
 ## Current P0 order
 
 Issue #119 — Data Scale.
 
-1. finish this post-R1 canonical sync
-2. repair #173 code/tests only from the new current main
-3. obtain independent Verifier + Reviewer for #173 unless a new narrow substitution is explicitly granted
-4. merge #173 only if all code/review/release gates pass
-5. re-read Production/provider state
-6. prepare exact R2 persistence cohort
-7. request explicit Production DB write approval for R2
-8. only then execute bounded R2
-9. R3/R4 remain separate later approvals
+1. finish #177 canonical sync and verify its normal Production release READY
+2. re-read current Production/provider state
+3. prepare an exact R2 persistence cohort read-only
+4. freeze exact target rows, deterministic observation IDs/keys, expected deltas, transaction and rollback evidence
+5. present the bounded R2 write plan to the user
+6. obtain explicit Production DB write approval
+7. only then execute R2
+8. R3/R4 remain separate later approvals
 
 ## R1 #172 result
 
@@ -45,16 +45,9 @@ R1 had zero Production persistence.
 
 ### Yahoo
 
-Initial exact-read adapter calls reached HTTP 200 but failed closed because live Yahoo JSONP begins with exact padding `/* */` before the configured callback.
+Initial exact-read adapter calls reached HTTP 200 but failed closed because live Yahoo JSONP begins with exact padding `/* */` before the callback.
 
-Live sanitized diagnostics established:
-
-- callback starts at byte index 5
-- exact five-byte block-comment prefix
-- prefix is `/* */`
-- no raw body/credential logging
-
-Final one-off strict Yahoo reads used exact observed padding only:
+Final one-off strict Yahoo reads used the exact observed padding only:
 
 - lead-netstore item → unchanged 698 / active
 - suruga-ya item → not_found
@@ -62,49 +55,57 @@ Final one-off strict Yahoo reads used exact observed padding only:
 
 All HTTP 200, one attempt each, retries 0, rate limits 0.
 
-Yahoo continuation approval used **9/9 attempts exactly**: 3 initial + 3 diagnostics + 3 final. No more Yahoo request is authorized by that approval.
+Yahoo continuation approval used **9/9 attempts exactly**: 3 initial + 3 diagnostics + 3 final. That approval is exhausted and grants no further live Yahoo request.
 
-Temporary ops branch was force-reset to canonical main and compare-confirmed identical.
+## #173 / #176 repair — completed
+
+The permanent Yahoo exact-read parser now preserves a narrow fail-closed contract:
+
+- fixed callback only; caller-selected callback override removed
+- direct form must begin with the fixed callback from raw byte 0
+- padded form must begin with exact `/* */` from raw byte 0 and immediately continue with the fixed callback
+- leading space/newline/BOM, `/**/`, `/*x*/`, arbitrary/multiple comments, comment gaps, wrong callbacks, bare JSON and malformed wrappers fail closed
+- exact reviewed endpoint, redirect refusal, persisted identity, positive price, explicit availability, active/sold_out-only and no-false-sold rules remain unchanged
+
+Independent review on final head `d995e03f346398d02e212ac529316b81c0c2054b`:
+
+- Reviewer: PASS
+- Verifier: PASS
+- custom acceptance matrix: expected accepted/rejected shapes PASS
+- focused tests: PASS
+- full Node suite: 1992/1992 PASS
+- lint / diff check: PASS
+- exact-head PR Code Quality: PASS
+- exact-head Vercel Preview: READY
+
+The merge itself performed no provider call and no Production DB mutation.
 
 ## Production data checkpoint
 
-Latest SELECT-only post-R1 snapshot:
+Latest SELECT-only snapshot on 2026-09-02 JST after #176:
 
-- market listings: **110**
-- observations: **110**
+- market listings: **113**
+- observations: **113**
 - listings with 2+ observations: **0**
+- completed `sold`: **0**
+- `sold_out`: **0**
+- Rakuten listings: **50**
+- Yahoo listings: **63**
 
-The six R1 frozen rows remain unchanged in price/status/`last_observed_at`, each with one observation. The increase from 107/107 to 110/110 was independent existing Production activity, not R1 persistence.
-
-History compounding remains the primary measurable bottleneck.
-
-## #173 blocker
-
-Main Yahoo parser currently requires `gachaLensItemLookupV1(` at byte 0, while current live Yahoo exact itemLookup returned exact `/* */gachaLensItemLookupV1(...)`.
-
-Permanent repair must:
-
-- keep direct exact callback valid
-- accept only exact `/* */` before exact callback
-- reject `/**/`, `/*x*/`, arbitrary comments/garbage, wrong callback, malformed wrapper/body
-- preserve exact endpoint, redirects-fail, identity, positive-price, explicit-availability, active/sold_out-only, no-false-sold contracts
-- change only provider parser/tests
-- perform zero provider requests/DB writes during implementation
-
-#173 is collection semantics and requires independent Verifier + Reviewer unless the user grants a new task-specific exception.
+The growth from the R1 post-run 110/110 checkpoint to 113/113 is existing Production breadth activity, not R2 persistence. Re-observation history remains at zero and is still the primary measurable Data Scale bottleneck.
 
 ## R2 remains unapproved
 
 Planned R2 from `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`:
 
-- 4 known listings, 2 Rakuten + 2 Yahoo
-- bounded Production persistence
+- exactly 4 known listings, 2 Rakuten + 2 Yahoo
+- bounded Production re-observation persistence
 - deterministic observation IDs
 - exact before/after counts and post-write reread
-- no listing-count change expected
+- listing count should remain unchanged
 - no false `sold`
 
-This is a future separate explicit Production DB approval. R1 completion does not authorize it.
+Safe read-only cohort preparation may proceed after #177 is merged/Production READY. The actual Production DB mutation requires a fresh explicit user approval and grants no R3/R4 or schedule authority.
 
 ## Durable provider/history safety
 
@@ -119,11 +120,12 @@ This is a future separate explicit Production DB approval. R1 completion does no
 - null/blank observedAt rejected
 - credentials restricted to reviewed official host/path; redirects rejected
 - failed reads do not advance `last_observed_at`
+- Yahoo JSONP parser accepts only the exact fixed raw-byte-0 wrapper forms documented above
 
 ## Source posture
 
 - Rakuten: active
-- Yahoo: active provider, but permanent exact-read parser blocked by #173 until repaired
+- Yahoo: active; exact-read JSONP compatibility repaired by #176
 - Aucfan: paid access diligence only
 - Mercari C2C: partnership required; no scraping
 - X: paid access required
@@ -135,7 +137,6 @@ Use `docs/DATA_SOURCE_CAPABILITY_MATRIX.md` for the full canonical matrix.
 
 - no R2 Production writes without explicit approval
 - no further Yahoo calls under exhausted #172 approval
-- do not merge #173 without required review/new explicit exception
 - do not merge #142 or dispatch F0 without separate approval
 - never touch `supabase/.temp/cli-latest`
 - keep `.github/workflows/gacha-ingestion.yml` disabled
@@ -143,4 +144,4 @@ Use `docs/DATA_SOURCE_CAPABILITY_MATRIX.md` for the full canonical matrix.
 
 ## Exact next step
 
-This docs-only canonical sync is the phase gate. After it is green, merged, and Production READY, reset/recreate #173 repair from the new main and implement/test the exact `/* */` compatibility only. Stop at #173's independent-review boundary before merge if no new reviewer/substitution is available.
+#177 is the current docs-only phase gate. After it is exact-head green, merged, and Production READY, perform a fresh read-only R2 preflight/cohort selection. Stop before any Production DB write and present the exact bounded mutation plan for explicit user approval.
