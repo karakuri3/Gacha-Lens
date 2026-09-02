@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-02 JST — post-R2 v2 Production migration / Issue #191 canonical sync
+Updated: 2026-09-02 JST — successful Yahoo-only R2 v2 / Issue #193 canonical sync
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -102,34 +102,33 @@ R1 completed on 2026-09-02 with Production DB writes 0. Rakuten frozen 3 all ret
 ### D-027 — Yahoo exact JSONP compatibility is fixed to two raw-byte-0 forms
 Issue #173 / PR #176 permanently repaired Yahoo exact `itemLookup` compatibility. Only the fixed internal callback at raw byte 0, or exact literal `/* */` at raw byte 0 immediately followed by that callback, is accepted. Leading whitespace/BOM, alternate comments, wrong callbacks, bare JSON and malformed wrappers fail closed. Independent Reviewer + Verifier passed the final repaired exact head.
 
-### D-028 — R2 is prepared in repository and execution remains exact-approval-bound
-Issue #180 / PR #182 completed the original R2-specific single-transaction prerequisite.
+### D-028 — R2 atomic persistence is deliberately narrow and approval-bound
+Issue #180 / PR #182 created the original R2-specific single-transaction prerequisite; Issue #187 / PR #188 later created a distinct Yahoo-only v2 contract rather than broadening v1.
 
-Durable original execution design:
-- exactly four frozen known listings, two Rakuten + two Yahoo
-- shared logical key `reobs-v1:r2-20260902-01`
-- deterministic observation IDs
-- exact current-main/cohort binding
-- fresh exact provider reads immediately before persistence
-- max 3 attempts/listing and 12 HTTP attempts total
-- all four must produce valid exact `seen`; otherwise Production market-data writes = 0
-- one PostgreSQL RPC transaction only after all four plans are safe
-- exactly four observation inserts plus four listing updates limited to price/status/last_observed_at/updated_at
+Durable requirements remain:
+- exact frozen cohort/key and deterministic observation IDs
+- exact approved-code/cohort binding
+- fresh exact provider evidence immediately before persistence
+- strict request budgets/pacing
+- all required targets must be valid exact `seen` before persistence
+- one PostgreSQL transaction only after all safe plans exist
+- observation append + allowlisted listing snapshot update only
+- no completed `sold` fabrication and no `sold_at`
 - no automatic RPC write retry
-- ambiguous commit state is resolved by SELECT-only deterministic evidence and never authorizes automatic retry
+- ambiguous commit state resolved by SELECT-only deterministic evidence and never by blind retry
 
-Every new R2 execution still needs a fresh exact human approval. Approval never implies R3/R4, schedules, workflow changes, Secrets/Variables changes or paid actions.
+Any new execution still needs a new task-specific approval. R2 success does not authorize R3/R4, schedules, workflow changes, Secrets/Variables changes or paid actions.
 
-### D-029 — Breadth growth must not be mistaken for history growth
-The post-v2-migration Production snapshot remains 113 listings / 113 observations / 0 re-observed listings. History success requires actual listings with 2+ observations; installing an RPC is not history growth.
+### D-029 — Breadth and history growth are separate metrics; R2 now proves first truthful history
+Installing an RPC or adding listings is not history growth. The successful Yahoo-only R2 v2 execution changed Production from 113 listings / 113 observations / 0 re-observed to **113 listings / 117 observations / 4 re-observed** with completed sold still 0. Future scorecards must report breadth and repeated-history depth separately.
 
 ### D-034 — Repository migration presence is not Production schema state
-A migration file being merged and Vercel READY do not mean that migration is applied to Supabase Production. After #188 the v2 function was absent; under the later exact #179 approval, repository migration `20260902180000_r2_yahoo_only_reobservation_canary_v2.sql` was then applied to Production as ledger version `20260902095120`, name `r2_yahoo_only_reobservation_canary_v2`. Schema state must always be verified directly.
+A migration file being merged and Vercel READY do not mean that migration is applied to Supabase Production. After #188 the v2 function was absent; under the later exact #179 approval, repository migration `20260902180000_r2_yahoo_only_reobservation_canary_v2.sql` was applied to Production as ledger version `20260902095120`, name `r2_yahoo_only_reobservation_canary_v2`. Schema state must always be verified directly.
 
 ### D-035 — The first #179 R2 Production attempt failed closed and its approval is consumed
-On 2026-09-02, the human approved one exact R2 migration/provider/RPC scope. The reviewed v1 migration was applied, but Actions run `33605362604` stopped on the first frozen Rakuten listing `rakuten-auc-toysanta-10386044` with final outcome `not_found`.
+On 2026-09-02, the human approved one exact original R2 migration/provider/RPC scope. The reviewed v1 migration was applied, but Actions run `33605362604` stopped on the first frozen Rakuten listing `rakuten-auc-toysanta-10386044` with final outcome `not_found`.
 
-The retained failure artifact/log does not expose the provider reader diagnostics, so the exact HTTP attempt count for that first listing is not observable. The reviewed reader contract bounds it to **1–3 attempts**. The remaining three original targets received 0 provider calls.
+The retained failure artifact/log does not expose provider reader diagnostics, so the exact HTTP attempt count for that first listing is not observable. The reviewed reader contract bounds it to **1–3 attempts**. The remaining three original targets received 0 provider calls.
 
 Durable outcome:
 - first target: `not_found`, attempt count unknown but bounded 1–3
@@ -139,24 +138,24 @@ Durable outcome:
 - observations delta: 0
 - re-observed listings delta: 0
 - completed sold delta: 0
-- no retry of the canary run
+- no retry
 
-The old provider/write approval and approval token are consumed. Do not reuse them or call the remaining original targets under that authorization.
+The old provider/write approval and approval token are consumed. Do not reuse them.
 
 ### D-036 — A changed R2 cohort requires a new reviewed function contract and new approval
-The installed `apply_market_reobservation_r2_canary_v1(jsonb)` hardcodes the original four listing IDs and observation key. If the next R2 attempt changes any cohort identity/key or materially changes provider mix, do not silently reuse the old function/approval.
+The installed `apply_market_reobservation_r2_canary_v1(jsonb)` hardcodes the original four listing IDs and observation key. The Yahoo-only v2 path correctly used a separate reviewed migration/function and approval identity.
 
-Required order:
+Required pattern for any future changed write cohort:
 1. investigate/reselect read-only;
 2. preserve strict identity/history safety without inferring lifecycle from `not_found`;
-3. create a new reviewed migration/function contract when the frozen cohort changes;
+3. create a new reviewed bounded function/contract if frozen write identity changes materially;
 4. pass repository/CI/Preview/review gates;
-5. obtain a fresh exact provider + Production mutation approval.
+5. obtain fresh exact provider + Production mutation authority.
 
-Provider symmetry is not a reason to keep a weak target; evidence should determine the next tiny cohort while safety predicates remain unchanged.
+Provider symmetry is not a reason to keep a weak target.
 
-### D-037 — Yahoo-only R2 v2 is the reviewed next first-history proof
-Issue #187 / PR #188 completed a separate v2 contract rather than mutating/reusing v1.
+### D-037 — Yahoo-only R2 v2 is the successful first-history proof
+Issue #187 / PR #188 created a separate v2 contract rather than mutating/reusing v1.
 
 Frozen v2 contract:
 - four Yahoo Shopping listings only
@@ -172,14 +171,32 @@ Frozen v2 contract:
 - expected +0 listings / +4 observations / +4 re-observed / +0 completed sold
 - no automatic RPC retry; resolver SELECT-only and never authorizes retry
 
-The Yahoo-only choice is evidence-driven: multiple Rakuten exact probes repeatedly returned `not_found`, while Yahoo had durable exact `unchanged` evidence. Provider symmetry is not a success criterion.
+The Yahoo-only choice was evidence-driven: repeated Rakuten exact probes returned `not_found`, while Yahoo had durable exact `unchanged` evidence. Provider symmetry is not a success criterion.
 
-PR #188 merged as `f3da6c82952dd44bf343d2c1717cd62920ace116`, and the v2 Production function remained absent at that merge checkpoint. After #190, a fresh SELECT-only preflight and exact human approval bound to main `dc25eb16b7e057397fe3bf9527f5467ac54b281a` authorized the migration/provider/RPC envelope. The migration portion is now complete; provider HTTP attempts, v2 RPC calls, and market-data writes remain 0.
+The Production migration was applied as ledger `20260902095120`. The later separately authorized one-shot run `33621881117` then completed successfully: 4 Yahoo attempts total, one per listing, all `unchanged`, one verified atomic RPC, and exact +0/+4/+4/+0 deltas. Production is now 113 listings / 117 observations / 4 re-observed / 0 completed sold.
 
 ### D-038 — V2 schema application and credentialed execution are separate approval facts
-Under the exact #179 v2 approval, the reviewed Production migration was applied as ledger `20260902095120`; `apply_market_reobservation_r2_canary_v2(jsonb)` is present as SECURITY INVOKER with empty `search_path` and service_role-only EXECUTE. Do not reapply it.
+Under the exact #179 v2 approval, the reviewed Production migration was applied as ledger `20260902095120`; `apply_market_reobservation_r2_canary_v2(jsonb)` is present as SECURITY INVOKER with empty `search_path` and service_role-only EXECUTE. Schema application did not itself authorize a new credentialed workflow mechanism.
 
-The same approval preserves the exact provider/RPC envelope bound to main `dc25eb16b7e057397fe3bf9527f5467ac54b281a`, digest `441957a6649817acff82d5b07eb0c6e9701fa4473662ef8544a7a9fa61614a24`, and its exact token. It did not authorize a new Production-capable workflow mechanism. Before the first provider request, separately approve the disposable exact-base, branch-only push-trigger one-shot workflow, its single automatic run, and immediate same-branch workflow-file removal. Do not use `workflow_dispatch`, merge that workflow to main, substitute the broader ingestion path, or reuse the consumed v1 workflow authorization.
+The human later separately authorized the exact disposable branch-only push-trigger workflow from approved code SHA `dc25eb16b7e057397fe3bf9527f5467ac54b281a`, using existing Secrets, no `workflow_dispatch`, no main merge, one automatic run and immediate same-branch workflow removal. That authorization was correctly separated from schema approval and is now consumed.
+
+### D-039 — Successful R2 v2 execution is terminal evidence, not reusable authorization
+The successful run is durable evidence:
+
+- Actions `33621881117`, run count exactly 1
+- artifact id `9843223874`
+- provider attempts 4 total / 1 each / retries 0
+- all outcomes `unchanged`
+- one verified atomic RPC result, applied_count 4
+- before 113/113/0/0 -> after 113/117/4/0 for listings/observations/re-observed/completed-sold
+- deterministic v2 rows present 4/4
+- each target exactly two observations, active, original price, `sold_at=null`
+- shared observed_at `2026-09-02T10:55:01.023Z`
+- workflow removed in commit `41add3c5629cb33ae48d0e00aca6b67270a6ea94`
+- final disposable branch tree has zero file differences from approved code SHA
+- deletion caused no second run and branch was never merged to main
+
+Do not rerun R2 merely to reconfirm. R2 execution and workflow approvals are consumed. The next step is read-only Data Scale reassessment before any separately authorized R3/R4 action.
 
 ## SEO
 
@@ -213,7 +230,7 @@ For the approved v1 R2 Production application, repository file `20260902150500_r
 When connected tooling generates the applied ledger timestamp, link Production schema state using the reviewed SQL body, migration name, function/object verification and execution evidence. Do not falsely classify the migration as absent solely because the repository filename timestamp is not the ledger version.
 
 ### D-044 — A repository/Preview release cannot consume a future Production schema approval
-PR #188 proved the v2 migration could apply on disposable Supabase and deployed repository code to Vercel, but that release did not itself apply `apply_market_reobservation_r2_canary_v2(jsonb)` to Production. The function became present only after the later exact #179 Production approval/application recorded as ledger `20260902095120`. Repository release, Preview READY, Production Vercel READY, disposable proof, and actual Production schema state remain distinct evidence.
+PR #188 proved the v2 migration could apply on disposable Supabase and deployed repository code to Vercel, but that release did not itself apply `apply_market_reobservation_r2_canary_v2(jsonb)` to Production. The function became present only after the later exact #179 Production approval/application recorded as ledger `20260902095120`. Repository release, Preview READY, Production Vercel READY, disposable proof, actual Production schema state and later provider/RPC execution remain distinct evidence.
 
 ## Development workflow
 
@@ -259,15 +276,20 @@ For #180/#182 only, the human explicitly allowed exact-head CI, exact-head Verce
 ### D-063 — #183/#184 docs-only review substitution was task-specific only
 On 2026-09-02, the human explicitly authorized **#184 only** to replace independent Reviewer + Verifier with exact-head PR Code Quality, exact-head Vercel Preview, and strengthened full-diff self-review. That exception ended with #184 and does not apply to #179 or future PRs.
 
-### D-064 — #179 one-shot workflow authorization was exact, consumed and cleaned up
-For #179 only, the human authorized a disposable branch-only GitHub Actions workflow using existing repository Secrets to execute the already-approved R2 runner once. The workflow ran once as Actions `33605362604`, failed closed on the first provider result, and was then deleted from the branch in commit `cac883d9f74af9cad051a6fd853631f8a91ebc89`.
+### D-064 — Original #179 v1 one-shot workflow authorization was exact, consumed and cleaned up
+For the original v1 attempt, the human authorized a disposable branch-only GitHub Actions workflow using existing repository Secrets to execute the approved v1 runner once. The workflow ran once as Actions `33605362604`, failed closed on the first provider result, and was then deleted from the branch in commit `cac883d9f74af9cad051a6fd853631f8a91ebc89`.
 
-The disposable branch's final tree has zero file differences from main and no second workflow run occurred. This authorization does not permit recreating, dispatching or rerunning an execution workflow later.
+The disposable branch's final tree has zero file differences from its approved base and no second workflow run occurred. This authorization does not permit recreating, dispatching or rerunning an execution workflow later.
 
 ### D-065 — #188 review substitution was task-specific only
 For PR #188 only, the human explicitly authorized replacing independent Reviewer + Verifier with exact-head PR Code Quality, exact-head Vercel Preview, disposable Supabase migration-apply proof, and strengthened Lead/self-review. The final reviewed head was `53d7de690a7b5aacba65f69d30b6c70249182b3d`; PR #188 then squash-merged as `f3da6c82952dd44bf343d2c1717cd62920ace116` and normal Vercel Production became READY.
 
-This exception ended with #188. It grants no authority for #189 review, future PR review, Production v2 migration application, live Yahoo requests, or v2 RPC/write.
+This exception ended with #188. It grants no later authority.
+
+### D-066 — Yahoo-only R2 v2 one-shot workflow authorization was exact, consumed and cleaned up
+For #179 Yahoo-only v2 only, the human authorized a disposable branch from approved code SHA `dc25eb16b7e057397fe3bf9527f5467ac54b281a`, one branch-only push-trigger workflow, existing GitHub Secrets only, no `workflow_dispatch`, exactly one run, no main merge, and immediate workflow-file removal.
+
+The workflow was added in commit `bb741654797286c801cc5c0415070e14fa96aa21`, ran once as Actions `33621881117` with SUCCESS, and was removed in commit `41add3c5629cb33ae48d0e00aca6b67270a6ea94`. Final branch file diff from the approved base is zero; run count is exactly one. This authorization is consumed and cannot be reused for R2/R3/R4 or any other execution.
 
 ## Business priority
 
@@ -276,3 +298,5 @@ Prioritize useful data density, organic traffic, affiliate clicks/sales, then Ad
 
 ### D-071 — Data Scale remains P0
 Build lawful breadth, depth and repeated history with exact provenance and fail-closed evidence semantics. Evaluate work through **DATA -> TRAFFIC -> CLICK -> REVENUE**.
+
+R2 has proven the first truthful repeated-history path. The next Data Scale work should be chosen by fresh scorecard evidence and expected DATA gain per engineering/risk cost, not by mechanically advancing stages.
