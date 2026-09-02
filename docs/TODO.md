@@ -1,16 +1,16 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-02 JST — post-R2 v2 Production migration / Issue #191 canonical sync
+Updated: 2026-09-02 JST — successful Yahoo-only R2 v2 / Issue #193 canonical sync
 
 Work top-to-bottom unless newer verified evidence changes priority. Current umbrella: Issue #119 Data Scale.
 
 ## Canonical-sync interpretation
 
-This file is authored by Issue #191.
+This file is authored by Issue #193.
 
-- On branch `codex/post-r2-v2-migration-sync-191` or its open PR, finish the P0-K canonical-sync gate below.
-- Once this content is on `main`, treat P0-K as complete and resume at P1-D.
-- Do not create a recursive docs sync merely to mark #191's own merge.
+- On branch `docs/canonical-sync-post-r2-v2-success-193` or its open PR, finish the P0-L canonical-sync gate below.
+- Once this content is on `main`, treat P0-L as complete and resume at P1-E.
+- Do not create a recursive docs sync merely to mark #193's own merge.
 
 ## P0-A — F0 separate approval boundary
 
@@ -80,7 +80,7 @@ This was a successful safety outcome but did not create repeated history.
 - [x] Record exact fail-closed attempt evidence and consumed authorization.
 - [x] Merge #186 and verify Production READY.
 
-## P1-B — R2 redesign/reselection #187/#188 — complete in repository/release
+## P1-B — R2 redesign/reselection #187/#188 — complete
 
 Evidence-driven decision: use Yahoo-only for the next first-history proof rather than retaining weak Rakuten targets for symmetry.
 
@@ -99,74 +99,107 @@ Evidence-driven decision: use Yahoo-only for the next first-history proof rather
 - [x] PR Code Quality `33613902680` SUCCESS.
 - [x] Vercel Preview `dpl_26iNtrQRcAN3ntTZHgxsiAAutV28` READY.
 - [x] Foundation `33613902714`: all 10 migrations applied successfully, then known stale expected-8 assertion failed.
-- [x] Obtain #188-only human review substitution for exact-head CI + Preview + disposable migration proof + strengthened self-review.
+- [x] Obtain #188-only human review substitution.
 - [x] Squash merge #188 as `f3da6c82952dd44bf343d2c1717cd62920ace116`.
-- [x] Verify Issue #187 closed.
-- [x] Verify normal Production deployment `dpl_8qZotT9SYvG6zEQkmsaz9pY6Z2ms` READY with canonical aliases.
-- [x] Verify at merge boundary Production still 113/113/0 and v2 function absent; v2 live provider calls 0; v2 Production writes 0.
+- [x] Verify Issue #187 closed and normal Production READY.
 
-#188 review substitution ended with #188 and grants no Production execution authority.
+#188 review substitution ended with #188 and grants no later Production execution authority.
 
 ## P0-J — Post-#188 canonical sync #189/#190 — complete
 
-- [x] Create Issue #189 from exact main `f3da6c82952dd44bf343d2c1717cd62920ace116`.
-- [x] Create branch `docs/canonical-sync-post-r2-v2-189`.
-- [x] Keep final changed paths exactly `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`.
-- [x] Record #188 merge/release/CI/Preview/disposable-migration evidence.
-- [x] Record #188-only review substitution as consumed/non-transferable.
-- [x] Record v2 Production function absent and 0 live v2 calls/writes.
-- [x] Record exact Yahoo-only cohort/key/deterministic IDs and next approval boundary.
-- [x] Complete applicable review disclosure/evidence.
-- [x] Exact-head PR checks and Preview pass.
-- [x] Full canonical-consistency review pass.
-- [x] Merge under Auto-Merge / Standing Production Release gates as `dc25eb16b7e057397fe3bf9527f5467ac54b281a`.
+- [x] Sync canonical four from exact #188 merge state.
+- [x] Merge as `dc25eb16b7e057397fe3bf9527f5467ac54b281a`.
 - [x] Verify normal Git-triggered Production `dpl_65egbLB3KUCntXStsECrp6ztrdCi` READY.
 
-Once this file is on `main`, P0-J is closed by definition.
+## P1-C — Fresh Yahoo-only R2 v2 preflight / approval / migration — complete
 
-## P1-C — Fresh Yahoo-only R2 v2 preflight / approval / migration — complete to workflow boundary
+Exact approval identity:
 
-The exact approval binds main `dc25eb16b7e057397fe3bf9527f5467ac54b281a`, digest `441957a6649817acff82d5b07eb0c6e9701fa4473662ef8544a7a9fa61614a24`, and the corresponding exact V2 token.
+- approved code/main SHA: `dc25eb16b7e057397fe3bf9527f5467ac54b281a`
+- digest `441957a6649817acff82d5b07eb0c6e9701fa4473662ef8544a7a9fa61614a24`
+- observation key `reobs-v1:r2-20260902-02`
 
-- [x] Re-fetch current main, #179 and Production state.
+- [x] Re-fetch main, #179 and Production state.
 - [x] Re-read exact frozen four Yahoo rows.
-- [x] Verify each remains one observation, exact identity, review-safe, positive price, active/sold_out, `sold_at=null`.
+- [x] Verify each one observation, exact identity, review-safe, positive price, active/sold_out, `sold_at=null`.
 - [x] Verify unresolved import issues = 0 for all four.
-- [x] Verify all four deterministic v2 observation IDs remain collision-free.
-- [x] Verify v2 function/migration absent before approval/application.
-- [x] Refresh current Supabase function/security guidance.
-- [x] Compute/freeze exact current-main + v2 cohort digest/token.
+- [x] Verify deterministic v2 observation IDs collision-free.
+- [x] Verify v2 function/migration absent before application.
+- [x] Compute/freeze exact digest/token.
 - [x] Obtain exact human approval for migration + max-12 frozen Yahoo envelope + exactly-one RPC only-if-all-four-seen.
-- [x] Apply reviewed v2 migration to Production; ledger `20260902095120`, name `r2_yahoo_only_reobservation_canary_v2`.
-- [x] Verify v2 RPC SECURITY INVOKER, empty `search_path`, PUBLIC/anon/authenticated denied, service_role allowed.
+- [x] Apply reviewed v2 migration; ledger `20260902095120`, name `r2_yahoo_only_reobservation_canary_v2`.
+- [x] Verify SECURITY INVOKER, empty search_path, PUBLIC/anon/authenticated denied, service_role allowed.
 - [x] Verify post-migration Production remains 113/113/0; provider HTTP 0; v2 RPC 0; market-data writes 0.
-- [x] Stop before provider execution because the approved scope did not authorize a new Production-capable workflow mechanism.
+- [x] Stop at separate workflow-authority boundary.
 
-Do not reuse #172 Yahoo approval, original #179/v1 approval/token, or #188 review/merge authorization.
+## P0-K — Post-v2-migration canonical sync #191/#192 — complete
 
-## P0-K — Post-v2-migration canonical sync #191 — current phase gate
+- [x] Create Issue #191 / branch `codex/post-r2-v2-migration-sync-191`.
+- [x] Keep changed paths exactly canonical four docs.
+- [x] Record ledger/function/security state and frozen cohort evidence.
+- [x] Record migration complete and provider/RPC actions 0.
+- [x] Focused/full tests, lint, diff checks pass; build limitation classified as missing secret-free data-source config only.
+- [x] Independent Verifier PASS on exact head `b2a15b74b30a116a3469d47c8a055c34c821b947`.
+- [x] Independent Reviewer PASS; blocking/major/minor findings 0.
+- [x] PR Code Quality `33619012438` SUCCESS.
+- [x] Preview `dpl_GQjuVKc3HH2G5EqAhgeP27VsgTzr` READY.
+- [x] Squash merge #192 as `f1d723f971ddbdceed830bc87f2c67936577f56b`.
+- [x] Verify normal Production `dpl_EQwjhzqm5hHpxSWr36x4QFjBFrYc` READY.
 
-- [x] Create Issue #191 from exact main `dc25eb16b7e057397fe3bf9527f5467ac54b281a`.
-- [x] Create branch/worktree `codex/post-r2-v2-migration-sync-191`.
-- [x] Keep changed paths exactly `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`.
-- [x] Record ledger/function/security state and fresh frozen-cohort evidence.
-- [x] Record migration complete, provider/RPC/market-data actions 0, and the exact remaining workflow boundary.
-- [x] Focused queue test, full regression, lint and `git diff --check` pass; secret-free build compiles/types successfully and is then blocked only by unavailable sitemap data-source configuration.
-- [ ] Independent Verifier and Reviewer pass on the frozen exact head.
-- [ ] Exact-head PR checks and Vercel Preview pass.
-- [ ] Merge only if Auto-Merge / Standing Production Release gates pass.
-- [ ] Verify exact normal Git-triggered Production READY.
+## P1-D — Yahoo-only R2 v2 exact one-shot execution — complete SUCCESS
 
-Once this file is on `main`, P0-K is closed by definition.
+The human separately authorized the smallest credentialed mechanism from the approved code SHA.
 
-## P1-D — Exact disposable v2 execution workflow approval — next after #191
+- [x] Create disposable branch `ops/r2-v2-one-shot-179-20260902` from exact approved SHA `dc25eb16b7e057397fe3bf9527f5467ac54b281a`.
+- [x] Add exactly one branch-only push-trigger workflow with read-only repository permission and existing Secrets only.
+- [x] Use exact v2 SHA/digest/token; no `workflow_dispatch`.
+- [x] Verify current main `f1d723f...` differs from approved code SHA only by canonical docs and one-shot branch differs by exactly the workflow file before provider execution.
+- [x] Execute exactly once as Actions run `33621881117`.
+- [x] Yahoo provider attempts: **4 total / 1 each / retries 0 / rate-limit 0 / timeout 0**.
+- [x] All four exact outcomes: **unchanged**.
+- [x] Invoke one verified atomic v2 RPC after all four safe plans; no automatic retry.
+- [x] Artifact postwrite: 113→113 listings / 113→117 observations / 0→4 re-observed / sold 0→0.
+- [x] Fresh independent Production SELECT matches artifact exactly; deterministic rows 4/4, each target exactly 2 observations.
+- [x] Preserve original prices 698 / 1500 / 898 / 458, active status and `sold_at=null`.
+- [x] Delete workflow immediately from same branch in commit `41add3c5629cb33ae48d0e00aca6b67270a6ea94`.
+- [x] Verify final branch tree has zero file differences from approved code SHA.
+- [x] Verify branch Actions run count remains exactly 1; deletion produced no second run.
+- [x] Do not merge disposable branch to main.
+- [x] Mark v2 provider/RPC and workflow authorizations consumed/non-reusable.
 
-- [ ] Obtain separate exact human approval to create a disposable branch from approved main `dc25eb16b7e057397fe3bf9527f5467ac54b281a`.
-- [ ] Approval must cover exactly one branch-only push-trigger workflow invoking only the reviewed v2 runner with the exact SHA/token and existing Secrets.
-- [ ] Preserve exact-main + one-file-delta guard, read-only repo permissions, reviewed attempt limits, sanitized artifact, and no merge to main.
-- [ ] Allow exactly one automatic push-triggered run; do not use `workflow_dispatch`.
-- [ ] After evidence capture, immediately delete the workflow file from the same disposable branch; retain only inert audit history unless deletion is separately approved.
-- [ ] STOP before creating or pushing that workflow until this exact workflow-change/automatic-run/cleanup authority exists.
+**R2 first truthful repeated-history objective is achieved.**
+
+## P0-L — Post-success canonical sync #193 — current phase gate
+
+- [x] Create Issue #193 from exact main `f1d723f971ddbdceed830bc87f2c67936577f56b`.
+- [x] Create branch `docs/canonical-sync-post-r2-v2-success-193`.
+- [x] Update only `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`.
+- [x] Record run `33621881117`, artifact `9843223874`, exact 4-attempt provider evidence, one atomic +4 history result and cleanup commit.
+- [x] Record Production 113 listings / 117 observations / 4 re-observed / sold 0.
+- [x] Record each frozen Yahoo target now has exactly 2 observations and deterministic row present.
+- [x] Record all R2 provider/write/workflow approvals consumed.
+- [ ] Complete cross-file consistency self-review as non-independent Reviewer/Verifier under docs-only small-task rule.
+- [ ] Exact-head PR Code Quality PASS.
+- [ ] Exact-head Vercel Preview READY.
+- [ ] Confirm no unresolved GitHub/Vercel threads.
+- [ ] Squash merge only if Auto-Merge + Standing Production Release gates pass.
+- [ ] Verify normal Git-triggered Production READY.
+- [ ] Close #179 completed after the canonical success state is on main.
+
+Once this content reaches `main`, P0-L is closed by definition; do not create a recursive sync just to record #193's own merge.
+
+## P1-E — Read-only post-R2 Data Scale reassessment — next after #193
+
+Do **not** jump directly to R3/R4 merely because R2 succeeded.
+
+- [ ] Re-fetch main and Production after #193 release.
+- [ ] Run/review the Data Scale Scoreboard using new baseline **113 listings / 117 observations / 4 re-observed**.
+- [ ] Compare actual R2 result against `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md` success criteria.
+- [ ] Re-rank current Data Scale bottlenecks under #119 by expected DATA gain / engineering effort / Production risk.
+- [ ] Decide whether R3 read-only depth collection is still the highest-priority next bounded workstream.
+- [ ] If yes, create a fresh R3 task with explicit variants/cohort/request ceiling and no Production writes.
+- [ ] Obtain any required live provider/search authority separately before making R3 calls.
+- [ ] Keep R4 persistence separately Production-write approval-bound even if R3 succeeds.
 
 ## Separate known workflow debt
 
@@ -176,10 +209,10 @@ Once this file is on `main`, P0-K is closed by definition.
 
 ## P2 — R3/R4 depth rollout — future separately approved
 
-- [ ] R3: freeze 2 explicit variants, <=10 accepted offers total, obtain separate live provider/search approval, DB writes 0.
-- [ ] R4: persist only strict-safe R3 subset, <=10 new listing+observation pairs, obtain separate Production DB approval.
+- [ ] R3 candidate plan: freeze 2 explicit variants, <=10 accepted offers total, separately authorize applicable live provider/search envelope, Production DB writes 0.
+- [ ] R4 candidate plan: persist only strict-safe R3 subset, <=10 new listing+observation pairs, separate Production DB approval.
 
-Do not jump here while R2 repeated history is still zero unless a newer explicit product decision changes priority.
+R2 success does not authorize either stage.
 
 ## P3 — Licensed completed-sale / source expansion
 
@@ -204,11 +237,10 @@ Do not jump here while R2 repeated history is still zero unless a newer explicit
 
 - [ ] Do NOT merge #142 or manually dispatch F0 without its required approval.
 - [ ] Do NOT make more Yahoo provider calls under exhausted #172 approval.
-- [ ] Do NOT rerun original #179 run `33605362604` or reuse its old provider/write approval/token.
-- [ ] Do NOT invoke v1 merely because it exists.
-- [ ] Do NOT reapply the completed v2 Production migration/function.
-- [ ] Do NOT create/push/run/clean up the disposable v2 workflow without its separate exact workflow authority.
-- [ ] Do NOT make v2 live Yahoo requests or invoke the v2 RPC outside the approved exact SHA/token/cohort/envelope and all-four-safe evidence.
+- [ ] Do NOT rerun original #179 v1 run `33605362604` or reuse its approval/token.
+- [ ] Do NOT rerun successful v2 run `33621881117` or recreate/reuse its disposable workflow authorization.
+- [ ] Do NOT invoke v1/v2 R2 RPC merely because functions exist.
+- [ ] Do NOT reapply completed v1/v2 Production migrations.
 - [ ] Do NOT execute R3/R4 by implication.
 - [ ] Do NOT change Production-capable workflows/schedules or dispatch them without applicable approval.
 - [ ] Do NOT enable Kitan/Qualia automatic writes.
