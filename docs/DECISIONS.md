@@ -127,16 +127,19 @@ The post-first-R2-attempt Production snapshot remains 113 listings / 113 observa
 A migration file being merged and Vercel READY do not mean that migration is applied to Supabase Production. At the post-#182 checkpoint, repository migration `20260902150500_r2_atomic_reobservation_canary.sql` existed while the Production RPC was absent. It was later applied only after the separate explicit #179 Production approval.
 
 ### D-035 — The first #179 R2 Production attempt failed closed and its approval is consumed
-On 2026-09-02, the human approved one exact R2 migration/provider/RPC scope. The reviewed migration was applied, but Actions run `33605362604` stopped on the first frozen Rakuten listing `rakuten-auc-toysanta-10386044` returning `not_found` after exactly one successful HTTP response path.
+On 2026-09-02, the human approved one exact R2 migration/provider/RPC scope. The reviewed migration was applied, but Actions run `33605362604` stopped on the first frozen Rakuten listing `rakuten-auc-toysanta-10386044` with final outcome `not_found`.
+
+The retained failure artifact/log does not expose the provider reader diagnostics, so the exact HTTP attempt count for that first listing is not observable. The reviewed reader contract bounds it to **1–3 attempts**. The remaining three original targets received 0 provider calls.
 
 Durable outcome:
-- provider attempts: exactly 1 Rakuten HTTP attempt; remaining three targets 0
+- first target: `not_found`, attempt count unknown but bounded 1–3
+- remaining provider calls: 0
 - atomic RPC calls: 0
 - market listings delta: 0
 - observations delta: 0
 - re-observed listings delta: 0
 - completed sold delta: 0
-- no retry
+- no retry of the canary run
 
 The old provider/write approval and approval token are consumed. Do not reuse them or call the remaining original targets under that authorization.
 
