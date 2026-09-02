@@ -1,16 +1,16 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-02 JST — post-#188 Yahoo-only R2 v2 prerequisite / Issue #189 canonical sync
+Updated: 2026-09-02 JST — post-R2 v2 Production migration / Issue #191 canonical sync
 
 This is the canonical operational handoff for resuming Gacha Lens. Prefer newer verified GitHub/Vercel/Supabase/provider evidence over dated values here.
 
 ## Self-referential canonical-sync rule
 
-This file is authored by Issue #189.
+This file is authored by Issue #191.
 
-- If read from branch `docs/canonical-sync-post-r2-v2-189` or its open PR, finish that docs-only exact-head validation/release flow first.
-- If read from `main`, Issue #189 is complete by definition because this content reached `main`. Do not create another docs-only sync merely to mark #189 complete.
-- Once #189 is on `main`, resume #179 at the fresh SELECT-only Yahoo-only R2 v2 preflight below. Do not apply Production schema, make live provider calls, or invoke the v2 RPC before a new exact human approval.
+- If read from branch `codex/post-r2-v2-migration-sync-191` or its open PR, finish that docs-only exact-head validation/release flow first.
+- If read from `main`, Issue #191 is complete by definition because this content reached `main`. Do not create another docs-only sync merely to mark #191 complete.
+- Once #191 is on `main`, resume #179 only at the exact disposable-workflow approval boundary below. Do not reapply the v2 migration, make live Yahoo calls, invoke the v2 RPC, or create/push the execution workflow without the applicable authority.
 
 ## Resume protocol
 
@@ -62,11 +62,11 @@ PR #142 / Issue #137 remains a separate F0 Production-impact approval boundary.
 
 ## Current repository / release checkpoint
 
-Current canonical main before Issue #189 sync:
+Current canonical main before Issue #191 sync:
 
-`f3da6c82952dd44bf343d2c1717cd62920ace116`
+`dc25eb16b7e057397fe3bf9527f5467ac54b281a`
 
-That is PR #188's squash merge.
+That is PR #190's squash merge after the post-#188 canonical sync.
 
 Completed milestones:
 
@@ -78,6 +78,9 @@ Completed milestones:
 - #179 first approved original R2 Production attempt: fail-closed before RPC/write on first Rakuten `not_found`; old approval consumed
 - #185/#186 post-attempt canonical sync: completed
 - #187/#188 Yahoo-only R2 v2 repository prerequisite: completed and merged
+- #189/#190 post-#188 canonical sync: completed and Production READY
+- #179 Yahoo-only R2 v2 fresh preflight and exact Production approval: completed
+- #179 approved v2 Production migration application: completed; provider/RPC execution remains paused at a separate workflow-authorization boundary
 
 PR #188 release evidence:
 
@@ -88,6 +91,11 @@ PR #188 release evidence:
 - Foundation `33613902714`: disposable Supabase successfully applied all 10 repository migrations, including the new v2 migration; run then failed only at the known stale expected-8 migration-order assertion
 - normal Git-triggered Production `dpl_8qZotT9SYvG6zEQkmsaz9pY6Z2ms`: READY with aliases including `gachalens.com` and `www.gachalens.com`
 - Issue #187: closed completed
+
+PR #190 release evidence:
+
+- squash merge/current approved main: `dc25eb16b7e057397fe3bf9527f5467ac54b281a`
+- normal Git-triggered Production `dpl_65egbLB3KUCntXStsECrp6ztrdCi`: READY with aliases including `gachalens.com` and `www.gachalens.com`
 
 For PR #188 only, the human explicitly allowed exact-head CI + Preview + disposable migration proof + strengthened self-review to replace independent Reviewer/Verifier. That exception ended with #188 and grants no later review or Production authority.
 
@@ -224,9 +232,9 @@ Durable design:
 
 The four exact reviewed deterministic IDs are frozen in regression tests so Node/SQL identity drift fails CI.
 
-## Current Production checkpoint after #188 release
+## Current Production checkpoint after the approved v2 migration
 
-Fresh SELECT-only verification immediately before #188 merge showed:
+Fresh SELECT-only verification at `2026-09-02T10:04:55Z` showed:
 
 - market listings: **113**
 - observations: **113**
@@ -235,32 +243,50 @@ Fresh SELECT-only verification immediately before #188 merge showed:
 - `status=sold_out`: **0**
 - each v2 frozen Yahoo row: exactly one observation, active, review-safe
 
-Crucially:
+Production schema milestone:
 
-- `public.apply_market_reobservation_r2_canary_v2(jsonb)`: **absent in Production**
-- v2 Production migration/function application: **not performed**
+- reviewed repository SQL `supabase/migrations/20260902180000_r2_yahoo_only_reobservation_canary_v2.sql` was applied under the exact #179 human approval
+- Supabase ledger version: `20260902095120`
+- Supabase ledger name: `r2_yahoo_only_reobservation_canary_v2`
+- `public.apply_market_reobservation_r2_canary_v2(jsonb)`: **present in Production**
+- SECURITY INVOKER (`security_definer=false`)
+- empty `search_path`
+- PUBLIC/anon/authenticated EXECUTE denied
+- service_role EXECUTE allowed
+- applying the v2 migration again is not authorized or needed
 - v2 live Yahoo provider calls: **0**
 - v2 RPC calls: **0**
-- v2 Production writes: **0**
+- v2 market-data writes: **0**
 
-A repository migration being merged and Vercel Production being READY does not mean Supabase Production schema changed.
+The frozen four still satisfy exact identity, single/review-safe scope, positive price, active status, `sold_at=null`, exactly one observation, unresolved import issues 0, and deterministic v2 observation-ID collisions 0.
 
-## Exact next action after Issue #189 reaches main
+## Exact approved execution identity
 
-Stay **read-only** and perform a fresh v2 preflight:
+The human approved the exact Production migration/provider/RPC scope on main:
 
-1. Re-fetch current `main`, #179 and open work; avoid duplicate work.
-2. SELECT-only re-read the exact four frozen Yahoo rows and their observations/import issues.
-3. Verify each remains review-safe, exact identity, one prior observation, positive price, active/sold_out, `sold_at=null`, no unresolved import issue.
-4. Verify all four deterministic v2 observation IDs remain collision-free.
-5. Verify Production v2 migration/function remains absent.
-6. Refresh Supabase function/security guidance if needed.
-7. Compute/freeze the exact current-main + v2 cohort digest and exact approval token `APPROVE_MARKET_REOBSERVATION_R2_CANARY_V2:<main>:<digest>`.
-8. Present one fresh human approval request that explicitly covers:
-   - applying `20260902180000_r2_yahoo_only_reobservation_canary_v2.sql` to Supabase Production;
-   - at most 12 exact Yahoo provider HTTP attempts across the frozen four;
-   - only if all four return valid exact `seen`, exactly one v2 atomic RPC with expected +0 listings/+4 observations/+4 re-observed/+0 completed sold.
-9. Stop before any migration/provider/RPC mutation until that exact approval exists.
+- approved main: `dc25eb16b7e057397fe3bf9527f5467ac54b281a`
+- cohort digest: `441957a6649817acff82d5b07eb0c6e9701fa4473662ef8544a7a9fa61614a24`
+- approval token: `APPROVE_MARKET_REOBSERVATION_R2_CANARY_V2:dc25eb16b7e057397fe3bf9527f5467ac54b281a:441957a6649817acff82d5b07eb0c6e9701fa4473662ef8544a7a9fa61614a24`
+- provider envelope: exactly the frozen four Yahoo exact reads, serial >=1000ms, max 3 attempts/listing and max 12 attempts total
+- RPC envelope: exactly one v2 atomic RPC only if all four produce valid exact `seen`
+- expected successful deltas: +0 listings / +4 observations / +4 re-observed / +0 completed sold
+- any unsafe provider result stops before RPC; no automatic RPC retry
+
+The migration portion of that approval is complete. Do not reapply it.
+
+## Exact next action after Issue #191 reaches main
+
+The reviewed runner needs existing repository credentials, but no main-branch workflow invokes it. The normal market ingestion endpoint is broader and is not a substitute. The consumed v1 one-shot workflow authorization cannot be reused.
+
+The smallest remaining execution mechanism requires one separate exact human approval covering all of these workflow actions:
+
+1. create a disposable branch from exact approved main `dc25eb16b7e057397fe3bf9527f5467ac54b281a`;
+2. add exactly one branch-only, push-triggered one-shot workflow that invokes only `scripts/market-reobservation-r2-v2-canary.mjs` with the exact v2 SHA/token and existing repository Secrets;
+3. preserve the exact-main + one-file-delta guard, read-only repository permissions, reviewed attempt bounds, sanitized artifact, and no merge to `main`;
+4. allow that push-triggered workflow to run exactly once; do not use `workflow_dispatch`;
+5. after evidence capture, immediately delete the workflow file from the same disposable branch and retain only inert audit history unless deletion is separately approved.
+
+Stop before creating or pushing that workflow until the exact workflow-change/automatic-run/cleanup approval exists. The current v2 migration/provider/RPC approval did not include this execution mechanism.
 
 Old #172 Yahoo approval, old #179/v1 approval/token, and #188 review/merge authorization cannot authorize this execution.
 
@@ -279,9 +305,8 @@ This is known harness debt, not a migration-application failure. Repair is a sep
 
 Explicit human approval is required before:
 
-- v2 Production migration/function application
-- v2 live Yahoo provider requests
-- v2 RPC/write
+- the disposable branch-only v2 one-shot workflow change, its automatic push-triggered Production-capable run, and its same-branch workflow-file cleanup
+- any v2 provider/RPC execution outside the already approved exact SHA/token/cohort/envelope
 - R3/R4 live/provider/Production execution
 - merge/dispatch of F0/#142
 - Production-capable workflow/schedule changes or dispatches
@@ -293,11 +318,12 @@ Explicit human approval is required before:
 
 If context is lost, preserve these facts:
 
-- current main before #189 sync: `f3da6c82952dd44bf343d2c1717cd62920ace116`
-- #188 is merged and normal Production is READY
+- current main before #191 sync: `dc25eb16b7e057397fe3bf9527f5467ac54b281a`
+- #188 and #190 are merged and normal Production is READY
 - Production remains 113 listings / 113 observations / 0 re-observed / 0 completed sold
-- Production v1 RPC exists; Production v2 RPC does not yet exist
-- next action is SELECT-only v2 preflight, then a new exact approval request
-- make **zero** v2 live provider calls and **zero** v2 Production mutations before that approval
+- Production v1 and v2 RPCs exist; v2 ledger version is `20260902095120`
+- v2 provider calls/RPC/market-data writes remain 0
+- next action after #191 is the exact disposable-workflow approval request above
+- do not reapply the v2 migration or create/push the workflow before that approval
 - never touch `supabase/.temp/cli-latest`
 - keep `.github/workflows/gacha-ingestion.yml` disabled

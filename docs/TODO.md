@@ -1,16 +1,16 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-02 JST — post-#188 Yahoo-only R2 v2 prerequisite / Issue #189 canonical sync
+Updated: 2026-09-02 JST — post-R2 v2 Production migration / Issue #191 canonical sync
 
 Work top-to-bottom unless newer verified evidence changes priority. Current umbrella: Issue #119 Data Scale.
 
 ## Canonical-sync interpretation
 
-This file is authored by Issue #189.
+This file is authored by Issue #191.
 
-- On branch `docs/canonical-sync-post-r2-v2-189` or its open PR, finish the P0-J canonical-sync gate below.
-- Once this content is on `main`, treat P0-J as complete and resume at P1-C.
-- Do not create a recursive docs sync merely to mark #189's own merge.
+- On branch `codex/post-r2-v2-migration-sync-191` or its open PR, finish the P0-K canonical-sync gate below.
+- Once this content is on `main`, treat P0-K as complete and resume at P1-D.
+- Do not create a recursive docs sync merely to mark #191's own merge.
 
 ## P0-A — F0 separate approval boundary
 
@@ -107,7 +107,7 @@ Evidence-driven decision: use Yahoo-only for the next first-history proof rather
 
 #188 review substitution ended with #188 and grants no Production execution authority.
 
-## P0-J — Post-#188 canonical sync #189 — current phase gate
+## P0-J — Post-#188 canonical sync #189/#190 — complete
 
 - [x] Create Issue #189 from exact main `f3da6c82952dd44bf343d2c1717cd62920ace116`.
 - [x] Create branch `docs/canonical-sync-post-r2-v2-189`.
@@ -116,35 +116,57 @@ Evidence-driven decision: use Yahoo-only for the next first-history proof rather
 - [x] Record #188-only review substitution as consumed/non-transferable.
 - [x] Record v2 Production function absent and 0 live v2 calls/writes.
 - [x] Record exact Yahoo-only cohort/key/deterministic IDs and next approval boundary.
-- [ ] Disclose non-independent sequential Reviewer/Verifier under Agent OS docs-only small-task rule.
-- [ ] Exact-head PR Code Quality PASS.
-- [ ] Exact-head Vercel Preview READY.
-- [ ] Full canonical-consistency self-review PASS.
-- [ ] Merge only if Auto-Merge / Standing Production Release gates pass.
-- [ ] Verify normal Git-triggered Production READY.
+- [x] Complete applicable review disclosure/evidence.
+- [x] Exact-head PR checks and Preview pass.
+- [x] Full canonical-consistency review pass.
+- [x] Merge under Auto-Merge / Standing Production Release gates as `dc25eb16b7e057397fe3bf9527f5467ac54b281a`.
+- [x] Verify normal Git-triggered Production `dpl_65egbLB3KUCntXStsECrp6ztrdCi` READY.
 
 Once this file is on `main`, P0-J is closed by definition.
 
-## P1-C — Fresh Yahoo-only R2 v2 Production preflight / approval — next after #189
+## P1-C — Fresh Yahoo-only R2 v2 preflight / approval / migration — complete to workflow boundary
 
-Stay SELECT-only until a new exact approval exists.
+The exact approval binds main `dc25eb16b7e057397fe3bf9527f5467ac54b281a`, digest `441957a6649817acff82d5b07eb0c6e9701fa4473662ef8544a7a9fa61614a24`, and the corresponding exact V2 token.
 
-- [ ] Re-fetch current main, #179 and current Production state.
-- [ ] Re-read exact frozen four Yahoo rows.
-- [ ] Verify each remains one observation, exact identity, review-safe, positive price, active/sold_out, `sold_at=null`.
-- [ ] Verify unresolved import issues = 0 for all four.
-- [ ] Verify all four deterministic v2 observation IDs remain collision-free.
-- [ ] Verify `public.apply_market_reobservation_r2_canary_v2(jsonb)` remains absent in Production.
-- [ ] Refresh current Supabase function/security guidance if needed.
-- [ ] Compute/freeze exact current-main + v2 cohort digest.
-- [ ] Produce exact V2 approval token `APPROVE_MARKET_REOBSERVATION_R2_CANARY_V2:<main>:<digest>`.
-- [ ] Present one fresh human approval request explicitly covering:
-  - [ ] Production application of `20260902180000_r2_yahoo_only_reobservation_canary_v2.sql`;
-  - [ ] max 12 exact Yahoo provider HTTP attempts across the frozen four;
-  - [ ] only if all four are valid exact `seen`, exactly one v2 atomic RPC with expected +0 listings / +4 observations / +4 re-observed / +0 completed sold.
-- [ ] STOP before all Production migration/provider/RPC actions until the new approval is explicit.
+- [x] Re-fetch current main, #179 and Production state.
+- [x] Re-read exact frozen four Yahoo rows.
+- [x] Verify each remains one observation, exact identity, review-safe, positive price, active/sold_out, `sold_at=null`.
+- [x] Verify unresolved import issues = 0 for all four.
+- [x] Verify all four deterministic v2 observation IDs remain collision-free.
+- [x] Verify v2 function/migration absent before approval/application.
+- [x] Refresh current Supabase function/security guidance.
+- [x] Compute/freeze exact current-main + v2 cohort digest/token.
+- [x] Obtain exact human approval for migration + max-12 frozen Yahoo envelope + exactly-one RPC only-if-all-four-seen.
+- [x] Apply reviewed v2 migration to Production; ledger `20260902095120`, name `r2_yahoo_only_reobservation_canary_v2`.
+- [x] Verify v2 RPC SECURITY INVOKER, empty `search_path`, PUBLIC/anon/authenticated denied, service_role allowed.
+- [x] Verify post-migration Production remains 113/113/0; provider HTTP 0; v2 RPC 0; market-data writes 0.
+- [x] Stop before provider execution because the approved scope did not authorize a new Production-capable workflow mechanism.
 
 Do not reuse #172 Yahoo approval, original #179/v1 approval/token, or #188 review/merge authorization.
+
+## P0-K — Post-v2-migration canonical sync #191 — current phase gate
+
+- [x] Create Issue #191 from exact main `dc25eb16b7e057397fe3bf9527f5467ac54b281a`.
+- [x] Create branch/worktree `codex/post-r2-v2-migration-sync-191`.
+- [x] Keep changed paths exactly `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`.
+- [x] Record ledger/function/security state and fresh frozen-cohort evidence.
+- [x] Record migration complete, provider/RPC/market-data actions 0, and the exact remaining workflow boundary.
+- [x] Focused queue test, full regression, lint and `git diff --check` pass; secret-free build compiles/types successfully and is then blocked only by unavailable sitemap data-source configuration.
+- [ ] Independent Verifier and Reviewer pass on the frozen exact head.
+- [ ] Exact-head PR checks and Vercel Preview pass.
+- [ ] Merge only if Auto-Merge / Standing Production Release gates pass.
+- [ ] Verify exact normal Git-triggered Production READY.
+
+Once this file is on `main`, P0-K is closed by definition.
+
+## P1-D — Exact disposable v2 execution workflow approval — next after #191
+
+- [ ] Obtain separate exact human approval to create a disposable branch from approved main `dc25eb16b7e057397fe3bf9527f5467ac54b281a`.
+- [ ] Approval must cover exactly one branch-only push-trigger workflow invoking only the reviewed v2 runner with the exact SHA/token and existing Secrets.
+- [ ] Preserve exact-main + one-file-delta guard, read-only repo permissions, reviewed attempt limits, sanitized artifact, and no merge to main.
+- [ ] Allow exactly one automatic push-triggered run; do not use `workflow_dispatch`.
+- [ ] After evidence capture, immediately delete the workflow file from the same disposable branch; retain only inert audit history unless deletion is separately approved.
+- [ ] STOP before creating or pushing that workflow until this exact workflow-change/automatic-run/cleanup authority exists.
 
 ## Separate known workflow debt
 
@@ -184,9 +206,9 @@ Do not jump here while R2 repeated history is still zero unless a newer explicit
 - [ ] Do NOT make more Yahoo provider calls under exhausted #172 approval.
 - [ ] Do NOT rerun original #179 run `33605362604` or reuse its old provider/write approval/token.
 - [ ] Do NOT invoke v1 merely because it exists.
-- [ ] Do NOT apply the v2 Production migration/function without fresh approval.
-- [ ] Do NOT make v2 live Yahoo provider requests without fresh exact approval.
-- [ ] Do NOT invoke v2 RPC/write without fresh exact approval and all-four-safe evidence.
+- [ ] Do NOT reapply the completed v2 Production migration/function.
+- [ ] Do NOT create/push/run/clean up the disposable v2 workflow without its separate exact workflow authority.
+- [ ] Do NOT make v2 live Yahoo requests or invoke the v2 RPC outside the approved exact SHA/token/cohort/envelope and all-four-safe evidence.
 - [ ] Do NOT execute R3/R4 by implication.
 - [ ] Do NOT change Production-capable workflows/schedules or dispatch them without applicable approval.
 - [ ] Do NOT enable Kitan/Qualia automatic writes.
