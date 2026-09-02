@@ -154,7 +154,7 @@ The actual #179 Production action requires one new exact human approval covering
 ### D-029 — Breadth growth must not be mistaken for history growth
 The current SELECT snapshot remains 113 listings / 113 observations / 0 re-observed listings. History success requires actual listings with 2+ observations, not just more first observations.
 
-### D-030 — Repository migration presence is not Production schema state
+### D-034 — Repository migration presence is not Production schema state
 A migration file being merged and a Vercel application deployment being READY do not mean the migration is applied to Supabase Production.
 
 At the post-#182 checkpoint:
@@ -167,13 +167,13 @@ Always re-read Production migration/function state immediately before requesting
 
 ## SEO
 
-### D-031 — Preserve observer separation
+### D-030 — Preserve observer separation
 Keep separate root/series/variant sitemaps.
 
-### D-032 — No mass SEO pruning without evidence
+### D-031 — No mass SEO pruning without evidence
 Use current GSC/performance evidence before mass noindex/delete decisions.
 
-### D-033 — Pagination is self-canonical
+### D-032 — Pagination is self-canonical
 Indexable page 2+ URLs canonicalize to themselves; preserve noindex behavior that prevents search/filter index explosion.
 
 ## Automation / safety
