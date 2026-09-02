@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-02 JST — post-#179 first Production attempt / Issue #185 canonical sync
+Updated: 2026-09-02 JST — post-#188 Yahoo-only R2 v2 prerequisite / Issue #189 canonical sync
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -50,7 +50,7 @@ Reject incomplete/ambiguous identity, unsupported source, invalid price, preorde
 Credential-bearing requests must stay on the reviewed HTTPS host + exact path. Arbitrary host/path/query/fragment, HTTP, embedded URL credentials and redirects fail closed. Persisted durable identity validates before provider request.
 
 ### D-018 — Merged read/dry-run/prerequisite code does not authorize Production persistence
-PRs #150/#153/#156/#169/#176/#182 and rollout planning do not authorize Production DB mutation, Production migration application, live provider execution outside a task-specific approval, schedule activation, workflow dispatch, Secrets/Variables changes, or paid entitlement activation.
+PRs #150/#153/#156/#169/#176/#182/#188 and rollout planning do not authorize Production DB mutation, Production migration application, live provider execution outside a task-specific approval, schedule activation, workflow dispatch, Secrets/Variables changes, or paid entitlement activation.
 
 ### D-019 — Depth Collector is multi-offer, identity-driven and dry-run first
 - explicit variant + parent series target
@@ -103,10 +103,10 @@ R1 completed on 2026-09-02 with Production DB writes 0. Rakuten frozen 3 all ret
 Issue #173 / PR #176 permanently repaired Yahoo exact `itemLookup` compatibility. Only the fixed internal callback at raw byte 0, or exact literal `/* */` at raw byte 0 immediately followed by that callback, is accepted. Leading whitespace/BOM, alternate comments, wrong callbacks, bare JSON and malformed wrappers fail closed. Independent Reviewer + Verifier passed the final repaired exact head.
 
 ### D-028 — R2 is prepared in repository and execution remains exact-approval-bound
-Issue #180 / PR #182 completed the R2-specific single-transaction prerequisite.
+Issue #180 / PR #182 completed the original R2-specific single-transaction prerequisite.
 
-Durable execution design:
-- exactly four frozen known listings, two Rakuten + two Yahoo for the original canary
+Durable original execution design:
+- exactly four frozen known listings, two Rakuten + two Yahoo
 - shared logical key `reobs-v1:r2-20260902-01`
 - deterministic observation IDs
 - exact current-main/cohort binding
@@ -121,13 +121,13 @@ Durable execution design:
 Every new R2 execution still needs a fresh exact human approval. Approval never implies R3/R4, schedules, workflow changes, Secrets/Variables changes or paid actions.
 
 ### D-029 — Breadth growth must not be mistaken for history growth
-The post-first-R2-attempt Production snapshot remains 113 listings / 113 observations / 0 re-observed listings. History success requires actual listings with 2+ observations.
+The post-#188 Production snapshot remains 113 listings / 113 observations / 0 re-observed listings. History success requires actual listings with 2+ observations.
 
 ### D-034 — Repository migration presence is not Production schema state
-A migration file being merged and Vercel READY do not mean that migration is applied to Supabase Production. At the post-#182 checkpoint, repository migration `20260902150500_r2_atomic_reobservation_canary.sql` existed while the Production RPC was absent. It was later applied only after the separate explicit #179 Production approval.
+A migration file being merged and Vercel READY do not mean that migration is applied to Supabase Production. This was true after #182 before v1 application and is true again after #188: repository migration `20260902180000_r2_yahoo_only_reobservation_canary_v2.sql` is merged while Production `apply_market_reobservation_r2_canary_v2(jsonb)` remains absent.
 
 ### D-035 — The first #179 R2 Production attempt failed closed and its approval is consumed
-On 2026-09-02, the human approved one exact R2 migration/provider/RPC scope. The reviewed migration was applied, but Actions run `33605362604` stopped on the first frozen Rakuten listing `rakuten-auc-toysanta-10386044` with final outcome `not_found`.
+On 2026-09-02, the human approved one exact R2 migration/provider/RPC scope. The reviewed v1 migration was applied, but Actions run `33605362604` stopped on the first frozen Rakuten listing `rakuten-auc-toysanta-10386044` with final outcome `not_found`.
 
 The retained failure artifact/log does not expose the provider reader diagnostics, so the exact HTTP attempt count for that first listing is not observable. The reviewed reader contract bounds it to **1–3 attempts**. The remaining three original targets received 0 provider calls.
 
@@ -155,6 +155,27 @@ Required order:
 
 Provider symmetry is not a reason to keep a weak target; evidence should determine the next tiny cohort while safety predicates remain unchanged.
 
+### D-037 — Yahoo-only R2 v2 is the reviewed next first-history proof
+Issue #187 / PR #188 completed a separate v2 contract rather than mutating/reusing v1.
+
+Frozen v2 contract:
+- four Yahoo Shopping listings only
+- key `reobs-v1:r2-20260902-02`
+- exact reviewed deterministic observation IDs frozen in tests
+- distinct V2 approval namespace and cohort digest kind/version
+- distinct `apply_market_reobservation_r2_canary_v2(jsonb)` migration/function
+- serial Yahoo exact reads with >=1000ms same-provider pacing
+- max 3 attempts/listing / max 12 total
+- all four valid exact `seen` required before persistence
+- exactly one atomic RPC only after all four safe plans
+- one-prior-observation, deterministic-ID, identity/snapshot/import-issue, positive-price, active/sold_out and protected-field guards
+- expected +0 listings / +4 observations / +4 re-observed / +0 completed sold
+- no automatic RPC retry; resolver SELECT-only and never authorizes retry
+
+The Yahoo-only choice is evidence-driven: multiple Rakuten exact probes repeatedly returned `not_found`, while Yahoo had durable exact `unchanged` evidence. Provider symmetry is not a success criterion.
+
+PR #188 merged as `f3da6c82952dd44bf343d2c1717cd62920ace116`, but the v2 Production function remained absent at the merge checkpoint. A fresh SELECT-only preflight and fresh exact human approval are mandatory before Production migration/provider/RPC execution.
+
 ## SEO
 
 ### D-030 — Preserve observer separation
@@ -179,12 +200,15 @@ Explicit approval remains required for standing-policy exclusions, including Pro
 - do not rerun completed/failed canaries without new task-specific approval
 
 ### D-042 — Foundation migration-order assertion is known stale harness debt
-Disposable-Supabase run `33600534418` successfully applied all nine repository migrations and then failed only because `.github/workflows/foundation-baseline.yml` still hardcodes the former eight-version list. This is not a migration-application failure and does not authorize a workflow change inside unrelated scopes.
+Disposable-Supabase run `33600534418` successfully applied all nine repository migrations and then failed only because `.github/workflows/foundation-baseline.yml` still hardcoded the former eight-version list. Final #188 run `33613902714` later successfully applied all ten repository migrations, including `20260902180000_r2_yahoo_only_reobservation_canary_v2.sql`, and then failed at the same expected-eight assertion. This is not a migration-application failure and does not authorize a workflow change inside unrelated scopes.
 
 ### D-043 — Supabase migration ledger identity may differ from the repository filename timestamp
-For the approved R2 Production application, repository file `20260902150500_r2_atomic_reobservation_canary.sql` was applied through connected Supabase migration tooling, which recorded ledger version `20260902073919` with name `r2_atomic_reobservation_canary`.
+For the approved v1 R2 Production application, repository file `20260902150500_r2_atomic_reobservation_canary.sql` was applied through connected Supabase migration tooling, which recorded ledger version `20260902073919` with name `r2_atomic_reobservation_canary`.
 
 When connected tooling generates the applied ledger timestamp, link Production schema state using the reviewed SQL body, migration name, function/object verification and execution evidence. Do not falsely classify the migration as absent solely because the repository filename timestamp is not the ledger version.
+
+### D-044 — A repository/Preview release cannot consume a future Production schema approval
+PR #188 proves the v2 migration can apply on disposable Supabase and deploys the repository code to Vercel, but that release does not itself apply `apply_market_reobservation_r2_canary_v2(jsonb)` to Supabase Production. Production schema state must be verified directly immediately before approval/execution. Repository release, Preview READY, Production Vercel READY, and migration-apply proof are prerequisites/evidence, not standing Production mutation authority.
 
 ## Development workflow
 
@@ -234,6 +258,11 @@ On 2026-09-02, the human explicitly authorized **#184 only** to replace independ
 For #179 only, the human authorized a disposable branch-only GitHub Actions workflow using existing repository Secrets to execute the already-approved R2 runner once. The workflow ran once as Actions `33605362604`, failed closed on the first provider result, and was then deleted from the branch in commit `cac883d9f74af9cad051a6fd853631f8a91ebc89`.
 
 The disposable branch's final tree has zero file differences from main and no second workflow run occurred. This authorization does not permit recreating, dispatching or rerunning an execution workflow later.
+
+### D-065 — #188 review substitution was task-specific only
+For PR #188 only, the human explicitly authorized replacing independent Reviewer + Verifier with exact-head PR Code Quality, exact-head Vercel Preview, disposable Supabase migration-apply proof, and strengthened Lead/self-review. The final reviewed head was `53d7de690a7b5aacba65f69d30b6c70249182b3d`; PR #188 then squash-merged as `f3da6c82952dd44bf343d2c1717cd62920ace116` and normal Vercel Production became READY.
+
+This exception ended with #188. It grants no authority for #189 review, future PR review, Production v2 migration application, live Yahoo requests, or v2 RPC/write.
 
 ## Business priority
 
