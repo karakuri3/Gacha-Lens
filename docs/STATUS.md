@@ -77,14 +77,14 @@ Execution evidence:
 - exact-main / one-file branch guard: PASS
 - first listing: `rakuten-auc-toysanta-10386044`
 - provider result: `not_found`
-- successful HTTP response path -> exactly **1 Rakuten HTTP attempt**, no retry
+- retained failure artifact/log does **not** expose the provider reader diagnostics; exact HTTP attempt count for this first listing is therefore unknown, but reviewed code bounds it to **1–3 attempts**
 - remaining Rakuten target: 0 calls
 - both Yahoo targets: 0 calls
 - atomic RPC calls: **0**
 - R2 Production market-data writes: **0**
-- automatic/manual retry: **0**
+- automatic/manual retry of the canary run: **0**
 
-The runner stopped immediately under the all-or-nothing contract.
+The runner stopped immediately under the all-or-nothing contract after the first target's final `not_found` outcome.
 
 ## One-shot workflow cleanup
 
