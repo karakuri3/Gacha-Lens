@@ -1,6 +1,6 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-02 JST — post-Yahoo JSONP repair (#173/#176) checkpoint
+Updated: 2026-09-02 JST — post-R2 atomic prerequisite (#180/#182) checkpoint
 
 Work top-to-bottom unless newer verified evidence changes priority. Current umbrella: Issue #119 Data Scale.
 
@@ -49,86 +49,155 @@ R1 grants **no R2 authority**.
 
 Issue #174 / PR #175.
 
-- [x] Update `docs/HANDOFF.md`.
-- [x] Update `docs/STATUS.md`.
-- [x] Update `docs/DECISIONS.md`.
-- [x] Update ordered TODO.
-- [x] Confirm exactly four canonical docs changed and branch behind main 0.
-- [x] Pass exact-head full tests / lint / diff check and Vercel Preview.
-- [x] Squash merge #175.
+- [x] Update four canonical docs.
+- [x] Pass exact-head validation and Preview.
+- [x] Merge #175.
 - [x] Verify resulting Production deployment `dpl_8PP2URX7qF9LRCD9UguM6JRPBFQ6` READY.
 
 ## P0-E — Yahoo exact JSONP padding repair #173/#176 — complete
 
-Provider parsing / collection semantics.
-
-- [x] Rebuild repair from current post-#175 main.
-- [x] Limit mergeable diff to provider parser + provider-read tests.
-- [x] Preserve fixed direct-callback parsing.
-- [x] Accept exact observed `/* */` immediately before fixed callback.
-- [x] Reject `/**/`, `/*x*/`, arbitrary/multiple comments, garbage prefixes, wrong callback, bare JSON and malformed wrapper/body.
-- [x] Preserve endpoint allowlist, redirect refusal, exact identity, positive price, explicit availability and no-false-sold rules.
-- [x] Add focused accepted/rejected padding regressions.
-- [x] Independent review found leading-byte and callback-override major findings.
-- [x] Repair both findings: fixed callback only; raw byte-0 wrapper boundary; leading space/newline/BOM rejected.
-- [x] Re-run final exact-head independent Reviewer + Verifier: PASS.
-- [x] Focused/custom acceptance validation: PASS.
-- [x] Full Node suite 1992/1992 PASS; lint / diff check PASS; added-line secret findings 0.
-- [x] Exact-head PR Code Quality and Vercel Preview PASS.
-- [x] Squash merge #176 as `a8bf9b7d7da7826544cb72a89f77b082fd86f248`.
-- [x] Verify Git-triggered Production `dpl_4U73Cev864RvycfGGPteqQxMS246` READY with canonical aliases.
+- [x] Repair strict Yahoo JSONP compatibility without generic comment stripping.
+- [x] Fix independent-review findings: raw byte-0 boundary and callback override.
+- [x] Re-run final independent Reviewer + Verifier: PASS.
+- [x] Focused/custom acceptance validation, full Node suite, lint, diff and secret review: PASS.
+- [x] Exact-head PR Code Quality and Vercel Preview: PASS.
+- [x] Merge #176 as `a8bf9b7d7da7826544cb72a89f77b082fd86f248`.
+- [x] Verify Git-triggered Production `dpl_4U73Cev864RvycfGGPteqQxMS246` READY.
 - [x] Close #173 completed.
 - [x] Make no additional Yahoo provider call during permanent repair/merge.
 
-## P0-F — Post-Yahoo repair canonical sync #177 — current gate
+## P0-F — Post-Yahoo repair canonical sync #177/#178 — complete
 
-Issue #177. Branch `docs/canonical-sync-post-yahoo-173`.
+- [x] Sync exactly `HANDOFF / STATUS / DECISIONS / TODO`.
+- [x] Record 113 listings / 113 observations / 0 re-observed / 0 completed sold.
+- [x] Pass exact-head validation / Preview under the task-specific #178 review substitution granted at the time.
+- [x] Merge PR #178 as `82ef2532253a99b1ba1c46b48a22442281c27442`.
+- [x] Close Issue #177.
+- [x] Verify normal Production deployment READY.
 
-- [x] Re-fetch exact current main `a8bf9b7d7da7826544cb72a89f77b082fd86f248` and #176/#173 release evidence.
-- [x] SELECT-read current Production data: 113 listings / 113 observations / 0 re-observed / 0 completed sold; Rakuten 50 / Yahoo 63.
+## P0-G — R2 atomic persistence prerequisite #180/#182 — complete in repository
+
+Issue #180 / PR #182. This phase prepared the single-transaction writer only; it did not apply the migration or execute R2 in Production.
+
+- [x] Freeze the exact #179 four-listing cohort and shared key `reobs-v1:r2-20260902-01` in the DB-side contract.
+- [x] Add R2-specific PostgreSQL RPC migration with one atomic transaction.
+- [x] Restrict RPC to `SECURITY INVOKER`, empty search path and `service_role` EXECUTE only.
+- [x] Add exact identity/snapshot/one-prior-observation/import-issue/deterministic-ID guards.
+- [x] Limit writes to 4 observation inserts + 4 listing snapshot updates; never `sold`/`sold_at`.
+- [x] Add exact-head/cohort approval binding and DB-read-only dry-run.
+- [x] Enforce exact provider reads, pacing, max 3 attempts/listing and max 12 total attempts.
+- [x] Stop before RPC on any unsafe provider result.
+- [x] Add one-RPC/no-auto-retry behavior and SELECT-only ambiguous-commit resolver.
+- [x] Exact-head PR Code Quality `33600534520`: PASS.
+- [x] Exact-head Vercel Preview `dpl_6G9LxzpEZtgeQZ7JKV8BYBR9jeLK`: READY.
+- [x] Disposable Supabase run `33600534418`: all 9 migrations applied successfully.
+- [x] Classify its red status correctly: stale workflow assertion expected 8 migrations but observed 9.
+- [x] Apply the human's #180/#182-only substitution: exact-head CI + Preview + disposable migration proof + strengthened self-review in place of independent Reviewer/Verifier.
+- [x] Merge #182 as `d80450626fd30768bb8f0af68340f0d2aea00bbb`.
+- [x] Verify Git-triggered Production deployment `dpl_8oacYiC3Nia5RJbicgNxnr3TL3eW` READY.
+- [x] Close #180 completed.
+- [x] Confirm Production migration/function remains un-applied/unavailable after merge.
+- [x] Confirm R2 provider requests and Production DB writes remain 0.
+
+The #180/#182 review substitution is **finished and non-transferable**.
+
+## P0-H — Post-#182 canonical sync #183 — current gate
+
+Issue #183. Branch `docs/canonical-sync-post-r2-prereq-183`.
+
+Scope must remain exactly:
+
+- `docs/HANDOFF.md`
+- `docs/STATUS.md`
+- `docs/DECISIONS.md`
+- `docs/TODO.md`
+
+Current work:
+
+- [x] Re-fetch exact current main `d80450626fd30768bb8f0af68340f0d2aea00bbb`.
+- [x] Verify #182 Production deployment `dpl_8oacYiC3Nia5RJbicgNxnr3TL3eW` READY with canonical aliases.
+- [x] SELECT-read Production baseline: 113 listings / 113 observations / 0 re-observed / 0 completed sold / 0 sold_out.
+- [x] SELECT-reverify frozen #179 cohort: 4/4 present, active, single/review-safe, one observation each, unresolved import issues 0.
+- [x] SELECT-verify Production migration `20260902150500` absent and R2 RPC function absent.
+- [x] Create Issue #183 and branch from exact main.
 - [x] Update `docs/HANDOFF.md`.
 - [x] Update `docs/STATUS.md`.
 - [x] Update `docs/DECISIONS.md`.
 - [x] Update this ordered TODO.
-- [ ] Confirm exactly four canonical docs changed and branch behind main 0.
-- [ ] Create docs-only PR closing #177.
+- [ ] Confirm existing Decision IDs were preserved and new decisions use unused IDs.
+- [ ] Confirm exactly four canonical docs changed and branch is based on current main.
+- [ ] Create docs-only PR closing #183.
 - [ ] Run canonical consistency/full-diff review and exact changed-path check.
-- [ ] Pass exact-head full Node tests / lint / diff check and Vercel Preview.
-- [ ] Satisfy Issue #177 independent Reviewer + Verifier requirement; do not silently substitute self-review.
-- [ ] Merge only when all docs-only Auto-Merge / Production Release gates pass.
-- [ ] Verify exact Git-triggered Production deployment READY and close #177.
+- [ ] Pass exact-head PR Code Quality and Vercel Preview.
+- [ ] Satisfy normal independent Reviewer + Verifier requirement; the #180/#182 exception does not carry forward.
+- [ ] Merge only when Auto-Merge / Production Release gates pass.
+- [ ] Verify exact Git-triggered Production deployment READY and close #183.
 
-Do not start the next major implementation/execution phase before this gate closes.
+Do not start #179 Production execution before this gate closes.
 
-## P1 — R2 tiny Production re-observation persistence — preparation next, execution explicit approval
+## P1 — R2 tiny Production re-observation persistence #179 — final pre-execution gate after #183
 
 Authoritative plan: `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`.
 
-After P0-F is Production READY:
+### Repository preparation — complete
 
-### Safe read-only preparation
+- [x] Freeze exactly 4 known listings: 2 Rakuten + 2 Yahoo.
+- [x] Freeze exact provider/native/public identity and review-safe single scope.
+- [x] Freeze deterministic logical key and observation IDs.
+- [x] Define atomic transaction and exact expected deltas.
+- [x] Add fail-closed circuit breakers for provider/identity/price/availability/timestamp/snapshot/partial-write drift.
+- [x] Add post-write verification and SELECT-only ambiguous-commit resolver.
 
-- [ ] Re-read current Production listings/observations and confirm re-observed count.
-- [ ] Freeze exactly 4 known listings: planned 2 Rakuten + 2 Yahoo.
-- [ ] Verify exact provider/native identity, current price/status/`last_observed_at`, review-safe single scope and unresolved issue state.
-- [ ] Verify current observation count and expected delta for every target.
-- [ ] Freeze deterministic logical observation keys/IDs and immutable identity values.
-- [ ] Define bounded transaction, exact before/after counts, post-write reread and rollback evidence.
-- [ ] Define circuit breakers for provider/identity/price/availability/timestamp/partial-write drift.
-- [ ] Present exact target rows and projected Production write delta to the user.
+### Fresh pre-execution reread — required after #183 closes
 
-### Hard Production-write gate
+- [ ] Re-read current `main` and #179 immediately before approval request.
+- [ ] Re-read current Production global counts.
+- [ ] Re-read the four frozen listings and observation counts.
+- [ ] Recheck deterministic observation-ID collisions.
+- [ ] Recheck unresolved import issues.
+- [ ] Recheck Production migration/function absence or exact current schema state.
+- [ ] Recheck current Supabase function/security guidance before applying the migration.
+- [ ] Freeze the exact current-main/cohort digest and approval token inputs.
 
-- [ ] Obtain **fresh explicit user approval** for the exact bounded R2 Production DB mutation.
-- [ ] Only if approved, execute only the frozen cohort.
-- [ ] Listing count must remain unchanged; append only successful observations/current snapshot fields allowed by the durable contract.
-- [ ] No false completed `sold`.
-- [ ] Stop on any partial/unknown state or verification mismatch.
-- [ ] Post-write reread exact rows/counts and record rollback evidence.
-- [ ] Re-run Scoreboard and measure actual history gain.
-- [ ] Force another canonical sync after the Production persistence milestone.
+### Hard Production approval gate
+
+Present one exact request to the user covering all three actions together:
+
+1. [ ] apply reviewed migration `20260902150500_r2_atomic_reobservation_canary.sql` to Supabase Production;
+2. [ ] allow fresh exact provider reads for the frozen four, max 3 attempts/listing and absolute max 12 HTTP attempts;
+3. [ ] only if all four are valid exact `seen`, allow one atomic RPC write with expected successful deltas:
+   - market listings +0
+   - observations +4
+   - re-observed listings +4
+   - completed `sold` +0
+   - deletes 0
+   - protected identity/provenance changes 0
+   - exactly four listing updates limited to price/status/last_observed_at/updated_at
+
+- [ ] Obtain **fresh explicit user approval** for that exact combined scope.
+
+### Execution only after approval
+
+- [ ] Apply only the reviewed Production migration/function.
+- [ ] Verify function security/availability after application.
+- [ ] Run only the frozen provider envelope.
+- [ ] If any provider result is unsafe/not seen, stop with Production data writes = 0.
+- [ ] If all four are safe, execute exactly one atomic RPC write.
+- [ ] If RPC response is ambiguous, use SELECT-only resolver and never auto-retry.
+- [ ] Post-write reread exact four observation IDs and listings.
+- [ ] Verify global deltas exactly +0 listings / +4 observations / +4 re-observed / +0 completed sold.
+- [ ] Re-run Scoreboard and record actual history gain.
+- [ ] Force another canonical sync immediately after the Production persistence milestone.
 
 R2 approval does not authorize R3/R4, schedules, workflow changes, Secrets/Variables or paid actions.
+
+## Separate known workflow debt — not part of #183/#179 approval
+
+Foundation baseline workflow currently hardcodes the old eight migration versions.
+
+- [x] Confirm run `33600534418` applied all 9 migrations before failing at the stale fixed-list assertion.
+- [ ] Create/maintain a separate bounded workflow-repair task if/when workflow-change approval is appropriate.
+- [ ] Do not silently edit the workflow inside #183 or #179.
 
 ## P2 — R3/R4 depth rollout — future separately approved
 
@@ -173,7 +242,10 @@ R2 approval does not authorize R3/R4, schedules, workflow changes, Secrets/Varia
 
 - [ ] Do NOT merge #142 or manually dispatch F0 without its required approval.
 - [ ] Do NOT make more Yahoo provider calls under exhausted #172 approval.
-- [ ] Do NOT start R2 Production persistence without a fresh exact approval.
+- [ ] Do NOT apply the R2 Production migration/function without fresh exact #179 approval.
+- [ ] Do NOT make the R2 live provider requests without fresh exact #179 approval.
+- [ ] Do NOT execute R2 Production persistence without fresh exact #179 approval.
+- [ ] Do NOT change Production-capable workflows/schedules or dispatch them without applicable approval.
 - [ ] Do NOT enable Kitan/Qualia automatic writes.
 - [ ] Do NOT weaken the strict matcher.
 - [ ] Do NOT mix completed/sold with active/sold_out evidence.
@@ -191,6 +263,6 @@ After every major Production/recovery/security/release milestone:
 - [ ] update DECISIONS when durable rules changed
 - [ ] reorder TODO
 - [ ] use docs-only PR
-- [ ] merge and verify Production READY before next major implementation
+- [ ] merge and verify Production READY before next major implementation/execution
 
 Do not rely on chat-limit warnings and do not bypass this gate merely because the user says 「続けて」.
