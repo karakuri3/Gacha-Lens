@@ -1,6 +1,6 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-02 JST — post-R1 (#172) checkpoint
+Updated: 2026-09-02 JST — post-Yahoo JSONP repair (#173/#176) checkpoint
 
 Work top-to-bottom unless newer verified evidence changes priority. Current umbrella: Issue #119 Data Scale.
 
@@ -45,7 +45,7 @@ Issue #172.
 
 R1 grants **no R2 authority**.
 
-## P0-D — Post-R1 canonical sync — current gate
+## P0-D — Post-R1 canonical sync — complete
 
 Issue #174. Branch `docs/canonical-sync-post-r1-172`.
 
@@ -53,38 +53,53 @@ Issue #174. Branch `docs/canonical-sync-post-r1-172`.
 - [x] Update `docs/STATUS.md`.
 - [x] Update `docs/DECISIONS.md`.
 - [x] Update this ordered TODO.
-- [ ] Confirm exactly four canonical docs changed and branch is behind main 0.
-- [ ] Create docs-only PR.
-- [ ] Pass exact-head full tests / lint / diff check and Vercel Preview.
-- [ ] Merge only if docs-only Auto-Merge + Production Release gates pass.
-- [ ] Verify resulting Production deployment READY.
+- [x] Confirm exactly four canonical docs changed and branch is behind main 0.
+- [x] Create docs-only PR #175.
+- [x] Pass exact-head full tests / lint / diff check and Vercel Preview.
+- [x] Merge only after docs-only Auto-Merge + Production Release gates pass.
+- [x] Verify resulting Production deployment READY.
 
-Do not implement #173 before this gate is completely closed.
+This gate completed before #173 implementation began.
 
-## P0-E — Yahoo exact JSONP padding repair #173 — next code blocker
+## P0-E — Yahoo exact JSONP padding repair #173 — complete
 
 Issue #173. Provider parsing / collection semantics.
 
 After P0-D is Production READY:
 
-- [ ] Re-fetch current main and #173.
-- [ ] Reset/recreate `fix/p0-yahoo-jsonp-padding-173` from current main; do not build on stale pre-sync base.
-- [ ] Change only `lib/fetchers/market-reobservation-provider-read.js` and `tests/market-reobservation-provider-read.test.mjs` unless new evidence requires otherwise.
-- [ ] Preserve direct exact-callback parsing.
-- [ ] Accept exact observed `/* */` immediately before exact callback.
-- [ ] Reject `/**/`, `/*x*/`, arbitrary/multiple comments, garbage prefixes, wrong callback, bare JSON and malformed wrapper/body.
-- [ ] Preserve endpoint allowlist, redirect refusal, exact identity, positive price, explicit availability and no-false-sold rules.
-- [ ] Add focused regressions for accepted/rejected padding shapes.
-- [ ] Run focused tests, full Node suite, lint, `git diff --check`, exact-head CI and Vercel Preview.
-- [ ] Perform strengthened full-diff review.
-- [ ] Obtain **independent Verifier + Reviewer** before merge, unless user grants a new explicit task-specific substitution. The #167/#168 exception does not apply.
-- [ ] Do not make live Yahoo calls while implementing/validating #173.
+- [x] Re-fetch current main and #173.
+- [x] Use a clean repair branch from current main.
+- [x] Change only `lib/fetchers/market-reobservation-provider-read.js` and `tests/market-reobservation-provider-read.test.mjs`.
+- [x] Preserve direct exact-callback parsing from raw byte 0.
+- [x] Accept exact observed `/* */` immediately before exact callback from raw byte 0.
+- [x] Reject alternate/multiple comments, garbage/whitespace/BOM prefixes, callback gaps, wrong callback, bare JSON and malformed bodies.
+- [x] Fix callback identity internally; reject caller override attempts.
+- [x] Preserve endpoint allowlist, redirect refusal, exact identity, positive price, explicit availability and no-false-sold rules.
+- [x] Pass focused/full 1992 tests, lint, diff check, exact-head CI and Vercel Preview.
+- [x] Pass independent Verifier + Reviewer with no unresolved findings.
+- [x] Merge PR #176 as `a8bf9b7d7da7826544cb72a89f77b082fd86f248`; verify Production `dpl_4U73Cev864RvycfGGPteqQxMS246` READY.
+- [x] Make zero live Yahoo calls and zero Production DB actions during implementation/validation.
+
+## P0-F — Post-#173 canonical sync — current gate
+
+Issue #177. Branch `codex/post-173-canonical-sync`.
+
+- [x] Re-read Production Scoreboard SELECT-only: 113 listings / 113 observations / 0 re-observed.
+- [x] Update `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, and this TODO.
+- [ ] Confirm exactly four canonical docs changed and branch is behind main 0.
+- [ ] Pass focused/full tests, lint, diff/secret checks, independent review, exact-head CI and Vercel Preview.
+- [ ] Merge only if docs-only Auto-Merge + Production Release gates pass.
+- [ ] Verify exact resulting Production deployment READY.
+
+Do not begin the next major R2 preparation task before this gate is completely closed.
 
 ## P1 — R2 tiny Production re-observation persistence — future explicit approval
 
-Do not start merely because #173 is fixed.
+#173 is fixed, but that grants no live provider or Production-write authority.
 
-- [ ] After #173 is safely merged/Production READY, re-read current Production listings/observations and provider health.
+- [x] Verify #173 is safely merged/Production READY.
+- [x] Re-read current Production listings/observations SELECT-only.
+- [ ] Re-read live provider health only under a new explicit bounded provider-request approval.
 - [ ] Freeze exactly 4 known listings: 2 Rakuten + 2 Yahoo.
 - [ ] Verify each target's current observation count and expected delta.
 - [ ] Freeze deterministic observation keys/IDs and immutable identity values.
@@ -140,7 +155,7 @@ R2 approval does not authorize R3/R4 or schedules.
 
 - [ ] Do NOT merge #142 or manually dispatch F0 without its required approval.
 - [ ] Do NOT make more Yahoo provider calls under exhausted #172 approval.
-- [ ] Do NOT merge #173 without independent review or a new explicit narrow substitution.
+- [ ] Do NOT loosen #173's raw-byte-0 fixed-callback contract.
 - [ ] Do NOT start R2 Production persistence without a fresh exact approval.
 - [ ] Do NOT enable Kitan/Qualia automatic writes.
 - [ ] Do NOT weaken the strict matcher.

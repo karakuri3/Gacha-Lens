@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-02 JST — post-R1 (#172) checkpoint
+Updated: 2026-09-02 JST — post-Yahoo JSONP repair (#173/#176) checkpoint
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -114,9 +114,11 @@ The separate Yahoo continuation approval was consumed **9/9 attempts exactly**. 
 ### D-027 — Yahoo JSONP live padding compatibility must be exact, not permissive
 R1 live evidence established that Yahoo `itemLookup` currently returns JSONP with exact literal **`/* */`** immediately before the exact configured callback.
 
-Permanent parser repair (#173) may:
+Permanent parser repair (#173/#176) now:
 - continue accepting the existing no-padding exact-callback form
 - accept exact `/* */` + exact callback
+- requires either form to begin at raw byte 0
+- fixes the callback internally and does not accept a caller override
 
 It must continue rejecting:
 - `/**/`
@@ -127,10 +129,10 @@ It must continue rejecting:
 - bare JSON without the configured callback
 - malformed wrapper/body
 
-This live compatibility fact does not justify a generic comment-stripping regex or parser loosening. Endpoint/redirect/identity/price/availability/lifecycle contracts stay unchanged.
+This live compatibility fact does not justify a generic comment-stripping regex or parser loosening. Endpoint/redirect/identity/price/availability/lifecycle contracts stay unchanged. PR #176 passed independent Reviewer and Verifier gates and is merged as `a8bf9b7d7da7826544cb72a89f77b082fd86f248`; its normal Production deployment is READY.
 
-### D-028 — R2 is blocked on #173 and fresh explicit Production approval
-Do not prepare an executable R2 write until #173 is safely resolved, current Production/provider evidence is reread, an exact R2 cohort is frozen, and the user explicitly approves the bounded Production DB mutation.
+### D-028 — R2 requires a fresh exact provider/read and Production-write approval
+#173 is resolved. Read-only preparation may freeze persisted rows and build the approval packet, but no new live provider request or executable Production mutation is authorized. Freeze the exact R2 cohort and deterministic identities, prove transaction/lease/delta/verification/rollback behavior, re-read current safety evidence, and obtain explicit approval for both the bounded provider-read envelope and Production DB writes before execution.
 
 ## SEO
 
@@ -193,7 +195,7 @@ It is not global policy.
 PR #159 preserves `available/unavailable/not_instrumented`, `sold` vs `sold_out`, review-safe evidence, provider+variant click scope, and DB-run vs workflow-run separation. Missing evidence fails closed rather than becoming zero.
 
 ### D-058 — #167/#168 review substitution was one-workstream-only
-The user allowed replacement PRs #169/#170 to use exact-head CI, Preview, strengthened self-review, and regressions in place of independent review. This exception does **not** apply to #173 or future unrelated work.
+The user allowed replacement PRs #169/#170 to use exact-head CI, Preview, strengthened self-review, and regressions in place of independent review. The exception did **not** apply to #173; #176 used independent Verifier and Reviewer gates. It does not apply to future unrelated work.
 
 ### D-059 — Draft→Ready connector failure uses clean replacement
 When the connector's Draft→Ready mutation fails on `fullDatabaseId`, use a clean non-Draft replacement from correct current main and rerun required validation; never bypass Draft safety dishonestly.

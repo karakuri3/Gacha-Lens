@@ -1,6 +1,6 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-02 JST — post-R1 (#172) checkpoint
+Updated: 2026-09-02 JST — post-Yahoo JSONP repair (#173/#176) checkpoint
 
 This is the canonical operational handoff for resuming Gacha Lens. Prefer newer verified GitHub/Vercel/Supabase/provider evidence over dated values here. Historical detail remains in Git history and linked Issues/PRs.
 
@@ -33,17 +33,17 @@ Vercel project ID: `prj_8Yelkn1wM7JGoA2WCMCGGhRt3o8x`
 
 Canonical `main` immediately before this docs-only sync:
 
-`26fb12ac868d10cb68ae9c3b1ce85675a2c3ab8f`
+`a8bf9b7d7da7826544cb72a89f77b082fd86f248`
 
 Recent merged milestones:
 
-- #169 — equal-time/null-time re-observation safety
-- #170 — Production history/depth rollout plan
-- #171 — canonical sync after #169/#170
+- #172 — R1 exact-provider read-only canary, DB writes 0
+- #175 — post-R1 canonical sync
+- #176 — strict Yahoo exact JSONP padding compatibility
 
-#171 Production deployment `dpl_4CQkGPnkfd3EnmAsvNbv5M5kXpNh` is READY with canonical aliases.
+#176 Production deployment `dpl_4U73Cev864RvycfGGPteqQxMS246` is READY for exact merge SHA `a8bf9b7d7da7826544cb72a89f77b082fd86f248` with canonical aliases.
 
-The one-time independent-review substitution approved for #167/#168 applied only to their replacement workstream #169/#170. It is not global and does **not** apply to Issue #173.
+The one-time independent-review substitution approved for #167/#168 applied only to their replacement workstream #169/#170. It was not reused for #173: PR #176 passed independent Verifier and Reviewer gates on exact head `d995e03f346398d02e212ac529316b81c0c2054b`.
 
 ## Product purpose / P0
 
@@ -131,33 +131,34 @@ Issue #172 is closed completed.
 
 ## Current Production data evidence
 
-Latest SELECT-only post-R1 snapshot on 2026-09-02 JST:
+Latest SELECT-only snapshot at `2026-09-02T05:01:10.519Z`:
 
-- market listings: **110**
-- market listing observations: **110**
+- market listings: **113**
+- active safe single listings: **112**
+- market listing observations: **113**
 - listings with 2+ observations: **0**
+- providers: **Rakuten 50 / Yahoo 63**
+- fresh <30d depth: **102 variants ×1 / 1 variant ×2 / 0 variants ×3+**
+- outbound clicks: **3 / 14 / 41** at 24h / 7d / 30d
 
-The increase from the earlier 107/107 baseline happened independently through existing Production activity (P3 lane); R1 workflows had no DB credentials and did not mutate the frozen six rows.
+The increase from the earlier 107/107 and post-R1 110/110 checkpoints happened independently through existing Production activity (P3 lane). R1 and #176 performed no Production DB writes.
 
 Repeated history therefore remains the central Data Scale bottleneck.
 
-## Mandatory next blocker — Issue #173
+## Yahoo exact JSONP repair — completed
 
-Issue #173: **Accept Yahoo exact JSONP padding without weakening callback validation**.
+Issue #173 / PR #176 permanently repaired the live Yahoo `itemLookup` wrapper mismatch.
 
-This is the exact next P0 code task after the current canonical-sync gate is merged and its normal Production deployment is READY.
+Current parser behavior:
 
-Permanent parser behavior must:
-
-- keep the existing direct exact-callback form valid
-- additionally accept only exact live padding `/* */` immediately before the exact configured callback
+- accepts the direct exact callback from raw byte 0
+- accepts only exact live padding `/* */` from raw byte 0 immediately before the exact configured callback
 - reject `/**/`, `/*x*/`, arbitrary comments/bytes/whitespace prefixes, multiple comments, wrong callbacks, JSON without callback, and malformed wrappers
-- preserve reviewed official endpoint, redirect refusal, exact native identity, positive-price, explicit-availability, active/sold_out-only, and no-false-sold contracts
-- never log provider raw bodies or credentials
+- the parser callback is fixed and cannot be overridden by a caller
+- reviewed endpoint, redirect refusal, exact native identity, positive price, explicit availability, active/sold_out-only, and no-false-sold contracts remain unchanged
+- provider raw bodies and credentials remain excluded from diagnostics
 
-#173 is provider parsing / collection semantics. It requires an **independent Verifier + Reviewer** before merge unless the user grants a new explicit task-specific substitution. The old #167/#168 exception does not apply.
-
-A branch named `fix/p0-yahoo-jsonp-padding-173` was created from pre-sync main, but no permanent code changes have been committed there yet. After this canonical sync merges, reset/recreate the repair branch from the new main before implementation.
+Implementation and validation made zero live provider requests and zero Production DB reads/writes. The exhausted #172 Yahoo request envelope remains exhausted; merging #176 did not renew it.
 
 ## R2 and later rollout boundary
 
@@ -168,7 +169,7 @@ Authoritative plan: `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`.
 - R3: future depth read-only canary; separate approval
 - R4: future depth persistence canary; separate approval
 
-Do not request/execute R2 until #173 is safely repaired/merged and current Production/provider evidence is re-read.
+R2 may now be prepared read-only from current persisted evidence, but it must not execute until the exact cohort, transaction/rollback path, provider-read envelope, expected deltas, and current safety evidence are presented and explicitly approved. Any new live provider call also needs its own current authorization; #172 grants none.
 
 R2's planned shape remains 4 known listings (2 Rakuten + 2 Yahoo), bounded transaction, deterministic observation identity, exact before/after deltas, post-write reread, no false `sold`, and explicit Production DB approval.
 
@@ -202,7 +203,7 @@ R2's planned shape remains 4 known listings (2 Rakuten + 2 Yahoo), bounded trans
 Canonical matrix: `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`.
 
 - Rakuten Ichiba: active
-- Yahoo Shopping: active, but permanent exact-read parser currently blocked by #173 live JSONP padding compatibility
+- Yahoo Shopping: active; exact-read parser supports only direct fixed callback or exact observed `/* */` padding
 - Bandai / Takara Tomy Arts: active official catalog sources
 - Kitan auto: off
 - Qualia broad auto: unapproved
@@ -237,17 +238,16 @@ Do not merge #142 or manually dispatch F0 without its separate required review/a
 
 ## Exact next action
 
-This canonical sync is the current gate.
+Issue #177 canonical sync is the current gate.
 
 After its docs-only PR is exact-head green, merged, and normal Vercel Production is READY:
 
 1. re-fetch current main/open PRs/Issues
-2. reset/recreate `fix/p0-yahoo-jsonp-padding-173` from current main
-3. implement exact `/* */` compatibility in parser + tests only
-4. run focused/full tests, lint, diff check, exact-head CI and Vercel Preview
-5. perform strengthened full-diff review
-6. **do not merge #173 without independent Verifier+Reviewer or a new explicit narrow user substitution**
-7. do not execute additional Yahoo provider calls under #172 approval
-8. do not begin R2 until #173 is safely resolved and a new explicit R2 Production DB approval is obtained
+2. create/resume one bounded read-only R2 readiness task under #119
+3. SELECT-freeze exactly four safe persisted listings, two Rakuten and two Yahoo, with current observation counts and immutable identities
+4. prove the deterministic-key, transaction, lease, exact-delta, verification, rollback, and provider-request envelope before asking for execution authority
+5. make no live provider call and no Production mutation during preparation
+6. present the exact approval packet; R2 execution remains blocked until the user explicitly approves its Production DB writes and live provider reads
+7. keep R3/R4 as later separate approvals
 
 Business priority remains **DATA first**, then TRAFFIC, CLICK/conversion, and REVENUE.

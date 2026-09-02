@@ -1,35 +1,35 @@
 # Gacha Lens Status
 
-Updated: 2026-09-02 JST — post-R1 (#172) checkpoint
+Updated: 2026-09-02 JST — post-Yahoo JSONP repair (#173/#176) checkpoint
 
 This is the compact operational companion to `docs/HANDOFF.md`. Re-fetch live state before acting.
 
 ## Repository / release
 
 - repo: `karakuri3/Gacha-Lens`
-- canonical main before this sync: `26fb12ac868d10cb68ae9c3b1ce85675a2c3ab8f`
+- canonical main before this sync: `a8bf9b7d7da7826544cb72a89f77b082fd86f248`
 - #169 equal-time/null-time re-observation safety: merged
 - #170 Production history/depth rollout plan: merged
 - #171 post-#170 canonical sync: merged; Production `dpl_4CQkGPnkfd3EnmAsvNbv5M5kXpNh` READY
 - #172 R1 exact-provider read-only canary: **completed**
-- #173 Yahoo exact JSONP padding repair: **open, next mandatory blocker before R2**
+- #175 post-R1 canonical sync: merged; Production READY
+- #173 / #176 Yahoo exact JSONP padding repair: **completed / merged**
+- #176 Production `dpl_4U73Cev864RvycfGGPteqQxMS246`: READY for exact merge SHA `a8bf9b7d7da7826544cb72a89f77b082fd86f248`
 - #142 / #137 F0 repair: still explicit human/Production-impact bound
 
-The user exception that replaced independent review for #167/#168 applied only to replacement PRs #169/#170. It does not apply to #173.
+#176 passed independent Verifier and Reviewer gates; the old #167/#168 substitution was not reused.
 
 ## Current P0 order
 
 Issue #119 — Data Scale.
 
-1. finish this post-R1 canonical sync
-2. repair #173 code/tests only from the new current main
-3. obtain independent Verifier + Reviewer for #173 unless a new narrow substitution is explicitly granted
-4. merge #173 only if all code/review/release gates pass
-5. re-read Production/provider state
-6. prepare exact R2 persistence cohort
-7. request explicit Production DB write approval for R2
-8. only then execute bounded R2
-9. R3/R4 remain separate later approvals
+1. finish Issue #177 post-#173 canonical sync
+2. prepare an exact R2 readiness/approval packet read-only
+3. freeze four persisted listings, two Rakuten + two Yahoo, without live provider calls
+4. prove deterministic keys, transaction/lease, expected deltas, verification and rollback
+5. request explicit live-provider and Production DB write approval for the exact R2 envelope
+6. only then execute bounded R2
+7. R3/R4 remain separate later approvals
 
 ## R1 #172 result
 
@@ -68,30 +68,29 @@ Temporary ops branch was force-reset to canonical main and compare-confirmed ide
 
 ## Production data checkpoint
 
-Latest SELECT-only post-R1 snapshot:
+Latest SELECT-only snapshot at `2026-09-02T05:01:10.519Z`:
 
-- market listings: **110**
-- observations: **110**
+- market listings: **113**
+- active safe single listings: **112**
+- observations: **113**
 - listings with 2+ observations: **0**
+- providers: **Rakuten 50 / Yahoo 63**
+- fresh <30d depth: **102×1 / 1×2 / 0×3+**
 
-The six R1 frozen rows remain unchanged in price/status/`last_observed_at`, each with one observation. The increase from 107/107 to 110/110 was independent existing Production activity, not R1 persistence.
+At R1 close, the six frozen rows remained unchanged in price/status/`last_observed_at`, each with one observation. The later increases from 107/107 to 110/110 and now 113/113 came through independent existing Production activity, not R1 or #176 persistence.
 
 History compounding remains the primary measurable bottleneck.
 
-## #173 blocker
+## #173 / #176 completed repair
 
-Main Yahoo parser currently requires `gachaLensItemLookupV1(` at byte 0, while current live Yahoo exact itemLookup returned exact `/* */gachaLensItemLookupV1(...)`.
+Main now accepts the direct fixed callback or exact observed `/* */` immediately before that fixed callback, both from raw byte 0.
 
-Permanent repair must:
-
-- keep direct exact callback valid
-- accept only exact `/* */` before exact callback
-- reject `/**/`, `/*x*/`, arbitrary comments/garbage, wrong callback, malformed wrapper/body
-- preserve exact endpoint, redirects-fail, identity, positive-price, explicit-availability, active/sold_out-only, no-false-sold contracts
-- change only provider parser/tests
-- perform zero provider requests/DB writes during implementation
-
-#173 is collection semantics and requires independent Verifier + Reviewer unless the user grants a new task-specific exception.
+- direct and exact padded forms pass
+- arbitrary leading whitespace/bytes/BOM, alternate/double comments, callback gaps, wrong callback, bare JSON, and malformed JSON fail closed
+- caller callback override is not supported
+- endpoint, redirect, identity, positive-price, explicit-availability and no-false-sold boundaries are unchanged
+- independent Reviewer/Verifier, full 1992-test regression, lint, exact-head CI and Preview passed
+- implementation provider requests and Production DB reads/writes were 0
 
 ## R2 remains unapproved
 
@@ -123,7 +122,7 @@ This is a future separate explicit Production DB approval. R1 completion does no
 ## Source posture
 
 - Rakuten: active
-- Yahoo: active provider, but permanent exact-read parser blocked by #173 until repaired
+- Yahoo: active; permanent exact-read parser repair is merged, but no new live request is authorized
 - Aucfan: paid access diligence only
 - Mercari C2C: partnership required; no scraping
 - X: paid access required
@@ -135,7 +134,7 @@ Use `docs/DATA_SOURCE_CAPABILITY_MATRIX.md` for the full canonical matrix.
 
 - no R2 Production writes without explicit approval
 - no further Yahoo calls under exhausted #172 approval
-- do not merge #173 without required review/new explicit exception
+- do not reuse #172's exhausted Yahoo request envelope
 - do not merge #142 or dispatch F0 without separate approval
 - never touch `supabase/.temp/cli-latest`
 - keep `.github/workflows/gacha-ingestion.yml` disabled
@@ -143,4 +142,4 @@ Use `docs/DATA_SOURCE_CAPABILITY_MATRIX.md` for the full canonical matrix.
 
 ## Exact next step
 
-This docs-only canonical sync is the phase gate. After it is green, merged, and Production READY, reset/recreate #173 repair from the new main and implement/test the exact `/* */` compatibility only. Stop at #173's independent-review boundary before merge if no new reviewer/substitution is available.
+Issue #177 docs-only canonical sync is the phase gate. After it is green, merged, and Production READY, prepare the exact R2 cohort and approval packet read-only. Do not call providers or mutate Production until the user approves the exact bounded envelopes.
