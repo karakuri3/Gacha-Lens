@@ -39,4 +39,6 @@ test("R2 v2 SQL freezes the same four listing IDs/key and recomputes the existin
   assert.match(migration, /\["gacha-lens","market-reobservation-v1",/);
   assert.match(migration, /extensions\.digest\(v_identity_json, 'sha256'\)/);
   assert.match(migration, /left\(encode\(extensions\.digest\(v_identity_json, 'sha256'\), 'hex'\), 32\)/);
+  assert.ok(migration.includes("v_provider <> 'yahoo_shopping'"));
+  assert.ok(migration.includes("v_source <> 'yahoo_shopping'"));
 });
