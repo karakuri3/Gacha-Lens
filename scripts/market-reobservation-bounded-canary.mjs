@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -21,6 +22,7 @@ import {
   sanitizeReobservationProviderRead,
 } from "../lib/fetchers/market-reobservation-provider-read.js";
 import { loadOptionalEnvFile } from "./load-optional-env.mjs";
+import { buildMarketReobservationBoundedResolutionManifest } from "./market-reobservation-bounded-resolve.mjs";
 import { fetchRowCount, fetchRows } from "./supabase-rest.mjs";
 
 const HEAD_SHA = /^[0-9a-f]{40}$/;
@@ -56,6 +58,12 @@ export async function runMarketReobservationBoundedCanary(options = {}) {
 
   if (mode === "dry-run") {
     return buildPreparationArtifact({ headSha, cohortDigest, observationKey, cohort, preflight });
+  }
+
+  const resolutionManifestPath = clean(options.resolutionManifestPath
+    ?? process.env.REOBS_BOUNDED_RESOLUTION_MANIFEST_OUT);
+  if (!resolutionManifestPath) {
+    throw new Error("Bounded re-observation canary-write requires a resolution manifest output path before RPC.");
   }
 
   const providerRead = options.providerRead ?? fetchExactMarketReobservation;
@@ -98,12 +106,18 @@ export async function runMarketReobservationBoundedCanary(options = {}) {
 
   if (plans.length !== listings.length) throw new Error("Bounded re-observation provider preflight did not produce a successful plan for every frozen listing.");
   const batch = buildMarketReobservationBoundedRpcBatch({ cohort, plans, observationKey });
+  const resolutionManifest = buildMarketReobservationBoundedResolutionManifest({ observationKey, batch });
+  const persistResolutionManifest = options.persistResolutionManifest ?? writeResolutionManifest;
+  await persistResolutionManifest(resolutionManifest, resolutionManifestPath);
+
   const newlyReobservedDelta = batch.filter((entry) => entry.expected_prior_observation_count === 1).length;
   const rpcCall = options.rpcCall ?? invokeBoundedRpc;
   const rpcResult = validateMarketReobservationBoundedRpcResult(await rpcCall(batch, options), {
     batchSize: batch.length,
     newlyReobservedDelta,
     observationKey,
+    listingIds: batch.map((entry) => entry.listing_id),
+    observationIds: batch.map((entry) => entry.observation_id),
   });
   const postwrite = await verifyBoundedPostwrite({
     listingsBefore: listings,
@@ -124,6 +138,8 @@ export async function runMarketReobservationBoundedCanary(options = {}) {
     provider_attempts: totalAttempts,
     provider_attempt_ceiling: absoluteAttemptCeiling,
     provider_evidence: providerEvidence,
+    resolution_manifest_preserved: true,
+    resolution_manifest_path: resolutionManifestPath,
     rpc: rpcResult,
     postwrite,
     production_actions: 1,
@@ -254,7 +270,7 @@ export async function verifyBoundedPostwrite({ listingsBefore, batch, preflight,
     const expected = batchById.get(id);
     if (!before || !after || !expected
       || protectedListingSnapshot(before) !== protectedListingSnapshot(after)
-      || after.price !== expected.price
+      || Number(after.price) !== expected.price
       || after.status !== expected.status
       || validDate(after.last_observed_at)?.toISOString() !== expected.observed_at
       || validDate(after.updated_at)?.toISOString() !== expected.observed_at
@@ -281,19 +297,36 @@ export async function verifyBoundedPostwrite({ listingsBefore, batch, preflight,
     reobserved_listings: countReobserved(allObservations),
     completed_sold: completedSold,
   };
-  const expectedDeltas = {
+  const observedGlobalDeltas = Object.fromEntries(Object.keys(afterCounts).map((key) => [
+    key,
+    afterCounts[key] - preflight.counts[key],
+  ]));
+  const minimumGlobalDeltas = {
     market_listings: 0,
     observations: batch.length,
     reobserved_listings: expectedNewlyReobserved,
     completed_sold: 0,
   };
-  for (const [key, expectedDelta] of Object.entries(expectedDeltas)) {
-    if (afterCounts[key] - preflight.counts[key] !== expectedDelta) {
-      throw new Error(`Bounded re-observation unexpected Production delta for ${key}.`);
-    }
+  if (observedGlobalDeltas.market_listings < minimumGlobalDeltas.market_listings
+    || observedGlobalDeltas.observations < minimumGlobalDeltas.observations
+    || observedGlobalDeltas.reobserved_listings < minimumGlobalDeltas.reobserved_listings
+    || observedGlobalDeltas.completed_sold !== 0) {
+    throw new Error("Bounded re-observation global Production sanity check failed.");
   }
 
-  return { verified: true, before: preflight.counts, after: afterCounts, deltas: expectedDeltas };
+  return {
+    verified: true,
+    before: preflight.counts,
+    after: afterCounts,
+    exact_lane_deltas: {
+      market_listings: 0,
+      observations: batch.length,
+      reobserved_listings: expectedNewlyReobserved,
+      completed_sold: 0,
+    },
+    minimum_global_deltas: minimumGlobalDeltas,
+    observed_global_deltas: observedGlobalDeltas,
+  };
 }
 
 export async function invokeBoundedRpc(batch, options = {}) {
@@ -326,6 +359,15 @@ export function normalizeListingIds(value) {
   }
   if (new Set(ids).size !== ids.length) throw new Error("Bounded re-observation listing IDs must be unique.");
   return [...ids].sort((a, b) => a.localeCompare(b, "en"));
+}
+
+export async function writeResolutionManifest(manifest, outputPath) {
+  const safePath = clean(outputPath);
+  if (!safePath) throw new Error("Bounded re-observation resolution manifest output path is invalid.");
+  const absolute = path.resolve(safePath);
+  await fs.mkdir(path.dirname(absolute), { recursive: true });
+  await fs.writeFile(absolute, `${JSON.stringify(manifest, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+  return absolute;
 }
 
 function buildPreparationArtifact({ headSha, cohortDigest, observationKey, cohort, preflight }) {
@@ -442,11 +484,19 @@ function delay(ms) {
 }
 
 function parseArgs(argv) {
-  const result = { mode: "dry-run", approval: "", headSha: "", expectedMainSha: "", observationKey: "", listingIds: [] };
+  const result = {
+    mode: "dry-run",
+    approval: "",
+    headSha: "",
+    expectedMainSha: "",
+    observationKey: "",
+    listingIds: [],
+    resolutionManifestPath: "",
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     const value = argv[index + 1];
-    if (["--mode", "--approval", "--head-sha", "--expected-main-sha", "--observation-key", "--listing-ids"].includes(token)) {
+    if (["--mode", "--approval", "--head-sha", "--expected-main-sha", "--observation-key", "--listing-ids", "--resolution-manifest-out"].includes(token)) {
       if (!value || value.startsWith("--")) throw new Error(`${token} requires a value.`);
       index += 1;
       if (token === "--mode") result.mode = value;
@@ -454,7 +504,8 @@ function parseArgs(argv) {
       else if (token === "--head-sha") result.headSha = value;
       else if (token === "--expected-main-sha") result.expectedMainSha = value;
       else if (token === "--observation-key") result.observationKey = value;
-      else result.listingIds = parseListingIds(value);
+      else if (token === "--listing-ids") result.listingIds = parseListingIds(value);
+      else result.resolutionManifestPath = value;
     } else throw new Error(`Unknown argument: ${token}`);
   }
   return result;
