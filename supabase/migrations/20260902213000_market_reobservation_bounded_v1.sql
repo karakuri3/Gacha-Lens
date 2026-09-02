@@ -15,6 +15,10 @@ declare
   v_provider text;
   v_native_id text;
   v_public_url text;
+  v_expected_source_url text;
+  v_expected_raw_provider text;
+  v_expected_raw_native_id text;
+  v_expected_raw_public_url text;
   v_variant_id text;
   v_series_id text;
   v_source text;
@@ -72,6 +76,10 @@ begin
     v_provider := btrim(coalesce(v_item->>'provider', ''));
     v_native_id := btrim(coalesce(v_item->>'source_listing_id', ''));
     v_public_url := btrim(coalesce(v_item->>'public_url', ''));
+    v_expected_source_url := btrim(coalesce(v_item->>'expected_source_url', ''));
+    v_expected_raw_provider := btrim(coalesce(v_item->>'expected_raw_provider', ''));
+    v_expected_raw_native_id := btrim(coalesce(v_item->>'expected_raw_source_listing_id', ''));
+    v_expected_raw_public_url := btrim(coalesce(v_item->>'expected_raw_public_url', ''));
     v_variant_id := btrim(coalesce(v_item->>'variant_id', ''));
     v_series_id := btrim(coalesce(v_item->>'series_id', ''));
     v_source := btrim(coalesce(v_item->>'source', ''));
@@ -88,6 +96,10 @@ begin
       )
       or v_native_id = ''
       or v_public_url = ''
+      or v_expected_source_url = ''
+      or v_expected_raw_provider <> v_provider
+      or v_expected_raw_native_id <> v_native_id
+      or v_expected_raw_public_url = ''
       or v_variant_id = ''
       or v_series_id = ''
       or v_observation_key !~ '^[A-Za-z0-9._:-]{1,120}$'
@@ -140,10 +152,10 @@ begin
       or v_listing.series_id is distinct from v_series_id
       or v_listing.source is distinct from v_source
       or v_listing.source_type is distinct from 'marketplace'
-      or v_listing.source_url is distinct from v_public_url
-      or coalesce(v_listing.raw->>'provider', '') is distinct from v_provider
-      or coalesce(v_listing.raw->>'source_listing_id', '') is distinct from v_native_id
-      or coalesce(v_listing.raw->>'public_url', '') is distinct from v_public_url then
+      or v_listing.source_url is distinct from v_expected_source_url
+      or coalesce(v_listing.raw->>'provider', '') is distinct from v_expected_raw_provider
+      or coalesce(v_listing.raw->>'source_listing_id', '') is distinct from v_expected_raw_native_id
+      or coalesce(v_listing.raw->>'public_url', '') is distinct from v_expected_raw_public_url then
       raise exception using errcode = 'P0001', message = 'reobs_bounded_listing_identity_or_scope_changed';
     end if;
 
