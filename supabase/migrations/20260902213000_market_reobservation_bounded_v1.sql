@@ -61,6 +61,7 @@ begin
   end if;
 
   lock table public.market_listing_observations in share row exclusive mode;
+  lock table public.import_issues in share row exclusive mode;
 
   for v_item in
     select entry
