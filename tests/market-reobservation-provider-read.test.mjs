@@ -135,12 +135,16 @@ test("Yahoo JSONP parser accepts only the exact callback with no padding or obse
     `\n/* */gachaLensItemLookupV1(${payload});`,
     `/* */ gachaLensItemLookupV1(${payload});`,
     `/* */\ngachaLensItemLookupV1(${payload});`,
+    ` gachaLensItemLookupV1(${payload});`,
+    `\ngachaLensItemLookupV1(${payload});`,
+    `\uFEFFgachaLensItemLookupV1(${payload});`,
     `evilCallback(${payload});`,
     payload,
     "gachaLensItemLookupV1({not-json});",
   ]) {
     assert.throws(() => parseYahooItemLookupJsonp(invalid));
   }
+  assert.throws(() => parseYahooItemLookupJsonp(`evilCallback(${payload});`, "evilCallback"));
 });
 
 test("Yahoo parser accepts historical indexed payload and upgrades only official Yahoo item URL to HTTPS", () => {
