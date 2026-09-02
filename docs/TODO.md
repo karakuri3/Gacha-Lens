@@ -1,16 +1,16 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-03 JST — reusable bounded re-observation repository prerequisite / Issue #199 canonical sync
+Updated: 2026-09-03 JST — first reusable bounded Production migration + fail-closed execution attempt / Issue #202 canonical sync
 
 Work top-to-bottom unless newer verified evidence changes priority. Current umbrella: Issue #119 Data Scale.
 
 ## Canonical-sync interpretation
 
-This file is authored by Issue #199.
+This file is authored by Issue #202.
 
-- On branch `docs/canonical-sync-post-bounded-prereq-199` or its open PR, finish the P0-N canonical-sync gate below.
-- Once this content is on `main`, treat P0-N as complete and resume at P1-F.
-- Do not create a recursive docs sync merely to mark #199's own merge.
+- On branch `docs/canonical-sync-post-bounded-attempt-202` or its open PR, finish the P0-O canonical-sync gate below.
+- Once this content is on `main`, treat P0-O as complete and resume at P1-H.
+- Do not create a recursive docs sync merely to mark #202's own merge.
 
 ## P0-A — F0 separate approval boundary
 
@@ -29,124 +29,147 @@ This file is authored by Issue #199.
 - [x] #169 equal-time/null-time re-observation safety.
 - [x] #170 Production history/depth rollout plan.
 
-## P0-C — R1 / Yahoo repair / original R2 chain — complete historical evidence
+## P0-C — R1 / original R2 historical chain — complete
 
 - [x] #172 R1 exact-provider canary completed, Production writes 0.
 - [x] #173/#176 Yahoo JSONP exact-read repair merged and Production READY.
-- [x] #177/#178 post-Yahoo canonical sync completed.
 - [x] #180/#182 original R2 atomic repository prerequisite completed.
-- [x] #183/#184 post-prerequisite canonical sync completed.
-- [x] First original #179 Production attempt failed closed on first Rakuten `not_found`; remaining calls 0, RPC 0, writes 0.
-- [x] #185/#186 post-failed-attempt canonical sync completed.
+- [x] Original #179 Production attempt failed closed on first Rakuten `not_found`; remaining calls 0, RPC 0, writes 0.
+- [x] Canonical sync after the failed attempt completed.
 
 Old R1/R2 approvals are consumed and grant no new authority.
 
-## P0-D — Yahoo-only R2 v2 repository/schema/execution chain — complete SUCCESS
+## P0-D — Yahoo-only R2 v2 chain — complete SUCCESS
 
-- [x] #187/#188 separate Yahoo-only R2 v2 repository prerequisite merged.
-- [x] #189/#190 canonical sync completed.
-- [x] Fresh exact v2 preflight/digest/approval completed.
-- [x] Apply reviewed v2 Production migration under exact approval; ledger `20260902095120`, name `r2_yahoo_only_reobservation_canary_v2`.
-- [x] #191/#192 post-migration canonical sync completed.
+- [x] #187/#188 Yahoo-only R2 v2 repository prerequisite merged.
+- [x] Reviewed v2 Production migration applied; ledger `20260902095120 / r2_yahoo_only_reobservation_canary_v2`.
 - [x] Execute one-shot Actions `33621881117` exactly once.
-- [x] Yahoo attempts 4 total / 1 each / retries 0 / all outcomes `unchanged`.
-- [x] Invoke exactly one verified atomic v2 RPC after all four safe plans.
+- [x] Yahoo attempts 4 total / 1 each / all `unchanged`.
+- [x] Invoke exactly one verified atomic v2 RPC.
 - [x] Production 113->113 listings / 113->117 observations / 0->4 re-observed / completed sold 0.
-- [x] Verify deterministic v2 rows 4/4 and each target exactly two observations.
-- [x] Remove one-shot workflow immediately; branch final file diff 0; run count exactly 1; never merge branch.
-- [x] #193/#194 post-success canonical sync merged and Production READY.
+- [x] Verify deterministic v2 rows 4/4, each target two observations.
+- [x] Remove one-shot workflow immediately; branch final diff 0; run count 1; never merge.
+- [x] Post-success canonical sync #193/#194 complete.
 - [x] Close #179 completed.
 
-**R2 first truthful repeated-history objective is achieved. Do not rerun it merely to refresh evidence.**
+**Do not rerun R2 merely to refresh evidence.**
 
 ## P0-M — Reusable bounded re-observation repository prerequisite #196/#198 — complete
-
-Reason: post-R2 history coverage is only 4/113 ~=3.54%; current Scoreboard threshold is 10%. Do not create another bespoke hardcoded eight-row canary.
 
 - [x] #195 read-only reassessment selects reusable history compounding before automatic R3.
 - [x] Create Issue #196.
 - [x] Add generic bounded v1 domain/runner/SELECT-only resolver/migration.
-- [x] Batch supports explicit 1..10 listings.
-- [x] Support Yahoo + Rakuten exact persisted identities.
-- [x] Freeze exact current-main/cohort/snapshot/prior-count digest and distinct approval namespace.
+- [x] Batch explicit 1..10, Yahoo + Rakuten exact identities.
+- [x] Exact current-main/cohort/snapshot/prior-count digest and distinct approval namespace.
 - [x] Prior observation count >1 supported when exact.
 - [x] Dry-run provider/RPC/write = 0.
-- [x] Future write budget max3/listing / max30 total with current provider pacing.
-- [x] Require all safe plans before exactly one atomic RPC.
-- [x] Require pre-RPC sanitized resolver manifest; no automatic retry.
+- [x] Future write budget max3/listing / max30 total with provider pacing.
+- [x] All-safe before exactly one atomic RPC.
+- [x] Pre-RPC sanitized resolver manifest; no automatic retry.
 - [x] Bind exact listing and deterministic observation ID result sets.
-- [x] Separate canonical URL identity from exact persisted DB URL/raw identity.
-- [x] Lock listing/observation/import-issue race paths in bounded transaction.
-- [x] Keep exact target invariants while making global scoreboard checks concurrency-tolerant.
-- [x] Preserve no-sold/no-sold_at and service_role-only SECURITY INVOKER contract.
-- [x] Add focused persistence/runner/resolver tests.
-- [x] Final frozen implementation head `c6372d9f3a1857a2d18302c1a4118cf685e13ece`.
-- [x] PR Code Quality #198 run `33655012819` SUCCESS.
-- [x] Exact-head Preview `dpl_8Pc5xkekW6iM53XNXu2p4j1y4fz3` READY and attached/reused by #198.
-- [x] Foundation `33655012798`: all 11 migrations applied successfully, then known stale expected-8 assertion failed.
-- [x] Consume #196/#197-only review substitution through byte-identical replacement PR #198.
-- [x] Close Draft #197 unmerged after Draft->Ready connector defect; create non-Draft byte-identical #198 with no code commit changes.
-- [x] Squash merge #198 as `9c74d243b5a8f43b49dc7fa649b4c4043bb4a82c`.
-- [x] Verify Issue #196 closed.
-- [x] Fresh post-merge Production SELECT: generic bounded function absent, generic ledger absent, Production still 113/117/4/sold0.
+- [x] Separate canonical URL identity from persisted DB URL/raw identity.
+- [x] Lock listing/observation/import-issue race paths.
+- [x] Exact target invariants + concurrency-tolerant global scoreboard checks.
+- [x] No-sold/no-sold_at; SECURITY INVOKER; service_role-only.
+- [x] Focused tests and exact-head CI/Preview/disposable migration proof.
+- [x] Final implementation head `c6372d9f3a1857a2d18302c1a4118cf685e13ece`.
+- [x] Byte-identical replacement PR #198 squash merged as `9c74d243b5a8f43b49dc7fa649b4c4043bb4a82c` after Draft->Ready connector defect on #197.
+- [x] #196 closed.
 
-Repository prerequisite is complete. **Production generic migration/provider/RPC execution remains unapproved.**
+## P0-N — Post-#198 canonical sync #199/#200 — complete
 
-## P0-N — Post-#198 canonical sync #199 — current phase gate
+- [x] Update canonical four files.
+- [x] Code Quality `33656178555` SUCCESS.
+- [x] Preview `dpl_FRXK3zijJnjvamSAaRAmMrEJNg1P` READY.
+- [x] PR #200 squash merged; canonical main became `0a509fe5813216b529b6192e41fb0875b28d10db`.
+- [x] Production deployment `dpl_EJRVBn8vH1ZE9eSB2F8divjangNh` READY.
+- [x] #199 closed.
 
-- [x] Create Issue #199 from exact main `9c74d243b5a8f43b49dc7fa649b4c4043bb4a82c`.
-- [x] Create branch `docs/canonical-sync-post-bounded-prereq-199`.
-- [x] Update only `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`.
-- [x] Record #197 Draft-ready connector defect and #198 byte-identical replacement path.
-- [x] Record #198 CI/Preview/disposable migration proof and consumed review substitution.
-- [x] Record generic Production function/ledger absent and 113/117/4/sold0 unchanged.
-- [x] Record next generic Production migration/provider/RPC boundary as fresh-approval-only.
+## P1-F — First reusable bounded batch planning #201 — complete read-only planning
+
+- [x] Detect legitimate P3 breadth drift to 115 listings / 119 observations / 4 re-observed / sold0 via run `33655998914`.
+- [x] Freeze Yahoo cohort: Lead Netstore 6 + Toysanta 2.
+- [x] Freeze observation key `reobs-v1:bounded-20260903-01`.
+- [x] Require review-safe exact persisted identities, `sold_at=null`, prior count 1, unresolved issue 0.
+- [x] Compute deterministic observation IDs; collision check 0/8.
+- [x] Project all-safe +8 history => 12/115 = 10.43% at then-current denominator.
+- [x] Obtain one-time human approval for migration + exact provider/RPC envelope + one disposable push-trigger workflow.
+
+### Important superseded planning evidence
+
+- [x] Original recorded cohort digest `9940a55824e90bf252259fb489455502b14eb4d4bf65dca92ab4ba69cd2f3b73` later proved **incorrect**.
+- [x] Root cause identified: precomputation omitted persisted identity fields included by merged `frozenCohortEntry()`.
+- [x] Pre-sync corrected repository-equivalent digest evidence is `e1f56e29178a339efdfaf38c66e127fe65db5c767e454cd4b2f9e04add4973c9` for main `0a509fe...`.
+- [x] Mark both values as non-reusable after canonical main changes; digest must be recomputed post-sync.
+
+## P1-G — First reusable bounded Production attempt #201 — migration SUCCESS / data execution FAIL-CLOSED
+
+- [x] Recheck exact main, 8/8 target snapshots, prior counts, unresolved issues, deterministic collisions before consuming approval.
+- [x] Apply reviewed `20260902213000_market_reobservation_bounded_v1.sql` to Production.
+- [x] Verify ledger `20260902165958 / market_reobservation_bounded_v1`.
+- [x] Verify function SECURITY INVOKER / empty search_path / service_role-only.
+- [x] Verify migration alone leaves market data **115 listings / 119 observations / 4 re-observed / sold0**.
+- [x] Create disposable branch `ops/bounded-reobs-one-shot-201-20260903` from exact approved main.
+- [x] Add exactly one push-trigger workflow using existing Secrets only.
+- [x] Execute Actions `33658579004` exactly once.
+- [x] Guard step verifies approved main + one-file branch diff.
+- [x] Runner fails closed at approval validation with `Bounded re-observation canary-write approval is invalid.`
+- [x] Prove failure occurred before provider loop: Yahoo/provider attempts **0**.
+- [x] Prove RPC calls **0** and market-data writes **0**.
+- [x] Prove deterministic #201 rows **0/8** and all eight targets remain one observation.
+- [x] Do **not** rerun `33658579004`.
+- [x] Remove workflow immediately; cleanup commit `772f687c339fd729f3e11c682649926e4ca52645`.
+- [x] Verify disposable branch final file diff 0, push-trigger run count 1, never merged.
+- [x] Mark first #201 exact approval consumed/non-reusable.
+
+Generic schema is installed; generic data execution has **not succeeded**.
+
+## P0-O — Post-first-generic-attempt canonical sync #202 — current phase gate
+
+- [x] Add durable #201 correction comment; preserve invalid `9940...` as superseded audit evidence.
+- [x] Create Issue #202.
+- [x] Create branch `docs/canonical-sync-post-bounded-attempt-202` from main `0a509fe...`.
+- [x] Update exactly `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`.
+- [x] Record Production generic migration/ledger/security state.
+- [x] Record run `33658579004` fail-closed before provider loop and provider/RPC/write 0.
+- [x] Record workflow cleanup/final diff0/run count1/non-merge.
+- [x] Record old #201 approval consumed and incorrect digest superseded.
+- [x] Record requirement to recompute digest after this sync changes main SHA.
 - [ ] Cross-file consistency self-review under docs-only small-task rule; disclose non-independence.
 - [ ] Exact-head PR Code Quality PASS.
 - [ ] Exact-head Vercel Preview READY.
 - [ ] Confirm no unresolved GitHub/Vercel threads and main drift safe.
-- [ ] Squash merge only if Auto-Merge + Standing Production Release gates pass.
+- [ ] Squash merge if all docs-only gates pass.
 - [ ] Verify normal Git-triggered Vercel Production READY.
 
-Once this content reaches `main`, P0-N is closed by definition; do not create a recursive sync just to record #199's own merge.
+Once this content reaches `main`, P0-O is closed by definition; do not create a recursive sync just to record #202's own merge.
 
-## P1-F — First reusable bounded history batch planning — next after #199
+## P1-H — Post-sync #201 revalidation and fresh approval identity — next after #202
 
-**Read-only planning only until a new human Production approval is granted.**
+**SELECT-only until fresh human approval.**
 
-Goal: prepare an 8-10 listing first generic bounded batch that can raise truthful history coverage toward/through the current 10% Scoreboard threshold without another hardcoded canary.
+- [ ] Re-fetch new canonical main and live Production counts.
+- [ ] Re-select the same eight frozen Yahoo targets.
+- [ ] Require exact identity/snapshot still matches, prior observation count 1 each, unresolved issue 0, deterministic observation-ID collisions 0.
+- [ ] Re-verify generic function/ledger/security; **do not reapply migration**.
+- [ ] Recompute cohort digest using merged repository semantics against the **new canonical main SHA**; do not reuse `9940...` or `e1f56e...`.
+- [ ] If any target/main identity changed, stop and replan read-only.
+- [ ] If safe, prepare fresh exact approval request covering only: eight Yahoo reads max3 each / max24 total, >=1000ms same-provider pacing, exactly one bounded RPC iff all eight plans safe, no RPC retry, SELECT-only resolver if ambiguous, and a new disposable branch-only push-trigger workflow if credentials require it.
+- [ ] Treat previous #201 workflow/run-once authority as consumed; fresh workflow authorization required.
 
-- [ ] Re-fetch current main and Production after #199 release.
-- [ ] SELECT-only enumerate existing marketplace listings with exact durable provider/native/public identity.
-- [ ] Prefer listings with exactly one observation so each safe write increases re-observed coverage by one.
-- [ ] Require `listing_type=single`, `market_review_type=single`, `review_required=false`, `matched_variant_id=variant_id`, `sold_at=null`, positive price, active/sold_out, no unresolved import issue.
-- [ ] Require sufficiently old/freshness-appropriate `last_observed_at` for a truthful new observation bucket.
-- [ ] Use provider evidence quality rather than cosmetic Yahoo/Rakuten symmetry.
-- [ ] Freeze 8-10 exact listing IDs, snapshots and exact prior observation counts.
-- [ ] Freeze a new observation key.
-- [ ] Compute deterministic observation IDs and verify 0 collisions.
-- [ ] Compute cohort digest bound to then-current main.
-- [ ] Run/inspect generic dry-run only if practical; provider calls 0, RPC 0, Production writes 0.
-- [ ] Produce an exact execution proposal: Production migration application + provider attempt budget (<=3/listing, <=30 total) + exactly one RPC only if all plans safe + no auto retry.
-- [ ] Obtain fresh explicit human approval before applying generic migration or making any live provider/RPC calls.
-- [ ] If a credentialed one-shot workflow is still needed, obtain separate exact workflow authority unless explicitly included in the new approval.
+## P1-I — Future generic bounded data execution — human-bound
 
-Success planning state is a frozen, collision-free, review-safe cohort and exact approval identity — **not** a Production write.
+Only after P1-H fresh evidence and exact approval:
 
-## P1-G — First reusable bounded Production execution — future human-bound
-
-Only after P1-F evidence and exact approval:
-
-- [ ] Apply `20260902213000_market_reobservation_bounded_v1.sql` to Production once.
-- [ ] Verify SECURITY INVOKER / empty search_path / service_role-only EXECUTE.
-- [ ] Verify migration alone changes market data by 0.
-- [ ] Execute only the approved frozen exact-provider envelope.
+- [ ] Do not reapply migration; verify installed schema only.
+- [ ] Create only the newly approved disposable execution mechanism.
+- [ ] Execute only the approved exact Yahoo envelope.
 - [ ] Fail closed before RPC on any unsafe target.
-- [ ] Invoke exactly one bounded RPC only if every target plan is safe.
+- [ ] Invoke exactly one bounded RPC only if all eight target plans are safe.
 - [ ] No automatic RPC retry.
-- [ ] If commit transport is ambiguous, use the prewritten SELECT-only resolver manifest.
-- [ ] Verify exact target rows/IDs/counts and concurrency-safe global scoreboard deltas.
-- [ ] Force canonical sync immediately after any Production execution milestone.
+- [ ] If RPC transport/commit is ambiguous, use the prewritten SELECT-only resolver manifest.
+- [ ] Verify exact target rows/IDs/counts and concurrency-safe global deltas.
+- [ ] Force canonical sync immediately after any material Production execution milestone.
 
 ## Separate known workflow debt
 
@@ -157,9 +180,9 @@ Only after P1-F evidence and exact approval:
 
 ## P2 — R3/R4 depth rollout — future separately approved
 
-Do not advance automatically just because R2 succeeded.
+Do not advance automatically just because R2 succeeded or generic schema is installed.
 
-- [ ] Re-evaluate R3 priority after reusable history coverage improves or if new scorecard evidence changes the bottleneck.
+- [ ] Re-evaluate R3 priority after reusable history coverage improves or new scorecard evidence changes the bottleneck.
 - [ ] R3 candidate: bounded read-only depth collection for explicit variants, separately authorize applicable live provider/search envelope, Production DB writes 0.
 - [ ] R4 candidate: persist only strict-safe R3 subset, separate Production DB approval.
 
@@ -187,11 +210,13 @@ Do not advance automatically just because R2 succeeded.
 - [ ] Do NOT merge #142 or manually dispatch F0 without its required approval.
 - [ ] Do NOT make more Yahoo calls under exhausted #172 approval.
 - [ ] Do NOT rerun original #179 v1 run `33605362604` or reuse its approval/token.
-- [ ] Do NOT rerun successful R2 v2 run `33621881117` or recreate/reuse its workflow authorization.
-- [ ] Do NOT invoke v1/v2 R2 RPC merely because functions exist.
-- [ ] Do NOT reapply completed v1/v2 Production migrations.
-- [ ] Do NOT apply generic bounded v1 Production migration without fresh exact approval.
-- [ ] Do NOT make generic Yahoo/Rakuten provider calls or generic RPC writes without fresh exact approval.
+- [ ] Do NOT rerun successful R2 v2 run `33621881117` or reuse its workflow authorization.
+- [ ] Do NOT rerun failed generic run `33658579004`.
+- [ ] Do NOT reuse first #201 approval tied to invalid `9940...` digest.
+- [ ] Do NOT invoke old v1/v2 R2 RPCs merely because functions exist.
+- [ ] Do NOT reapply v1/v2 R2 migrations or generic bounded v1 migration.
+- [ ] Do NOT make new generic Yahoo/Rakuten provider calls or bounded RPC writes without fresh exact approval.
+- [ ] Do NOT create a second #201 one-shot workflow without fresh exact authorization.
 - [ ] Do NOT execute R3/R4 by implication.
 - [ ] Do NOT change Production-capable workflows/schedules or dispatch them without applicable approval.
 - [ ] Do NOT change Secrets/Variables by implication.
