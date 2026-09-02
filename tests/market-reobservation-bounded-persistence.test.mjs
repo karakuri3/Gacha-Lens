@@ -122,6 +122,10 @@ test("bounded RPC batch supports mixed providers and prior observation counts gr
   assert.deepEqual(batch.map((entry) => entry.expected_prior_observation_count).sort((a, b) => a - b), [1, 1, 2, 3]);
   assert.ok(batch.every((entry) => entry.source === (entry.provider === "rakuten_ichiba" ? "rakuten" : "yahoo_shopping")));
   assert.ok(batch.every((entry) => /^market-reobservation-[0-9a-f]{32}$/.test(entry.observation_id)));
+  assert.ok(batch.every((entry) => entry.expected_source_url));
+  assert.ok(batch.every((entry) => entry.expected_raw_provider === entry.provider));
+  assert.ok(batch.every((entry) => entry.expected_raw_source_listing_id === entry.source_listing_id));
+  assert.ok(batch.every((entry) => entry.expected_raw_public_url));
 });
 
 test("bounded dry-run validates deterministic identities and exposes zero external actions", () => {
@@ -184,6 +188,12 @@ test("bounded migration is generic 1-10, atomic, invoker-only, service-role-only
   assert.match(migration, /v_batch_size < 1 or v_batch_size > 10/i);
   assert.match(migration, /rakuten_ichiba[\s\S]{0,100}v_source = 'rakuten'/i);
   assert.match(migration, /yahoo_shopping[\s\S]{0,100}v_source = 'yahoo_shopping'/i);
+  assert.match(migration, /expected_source_url/i);
+  assert.match(migration, /expected_raw_provider/i);
+  assert.match(migration, /expected_raw_source_listing_id/i);
+  assert.match(migration, /expected_raw_public_url/i);
+  assert.match(migration, /v_listing\.source_url is distinct from v_expected_source_url/i);
+  assert.match(migration, /v_listing\.raw->>'public_url'[\s\S]{0,80}v_expected_raw_public_url/i);
   assert.match(migration, /expected_prior_observation_count/i);
   assert.match(migration, /v_post_observation_count <> v_expected_prior_observation_count \+ 1/i);
   assert.match(migration, /lock table public\.market_listing_observations in share row exclusive mode/i);
