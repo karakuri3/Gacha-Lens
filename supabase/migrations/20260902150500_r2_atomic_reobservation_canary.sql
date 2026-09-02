@@ -32,6 +32,14 @@ declare
   v_outcome text;
   v_listing_ids text[] := array[]::text[];
   v_observation_ids text[] := array[]::text[];
+  v_received_listing_ids text[];
+  v_frozen_listing_ids constant text[] := array[
+    'rakuten-auc-toysanta-10386044',
+    'rakuten-realize-store-2-10575349',
+    'yahoo-lead-netstore-302507s186ook3',
+    'yahoo-selen-shope-5500000224314'
+  ]::text[];
+  v_frozen_observation_key constant text := 'reobs-v1:r2-20260902-01';
 begin
   if p_batch is null
     or jsonb_typeof(p_batch) <> 'array'
@@ -47,6 +55,14 @@ begin
     from jsonb_array_elements(p_batch) as batch(entry)
   ) <> 4 then
     raise exception using errcode = '22023', message = 'r2_duplicate_batch_identity';
+  end if;
+
+  select array_agg(entry->>'listing_id' order by entry->>'listing_id')
+  into v_received_listing_ids
+  from jsonb_array_elements(p_batch) as batch(entry);
+
+  if v_received_listing_ids is distinct from v_frozen_listing_ids then
+    raise exception using errcode = '22023', message = 'r2_frozen_cohort_mismatch';
   end if;
 
   -- Prevent a concurrent observation INSERT/UPDATE/DELETE from invalidating the
@@ -83,6 +99,7 @@ begin
       or v_series_id = ''
       or v_source not in ('rakuten', 'yahoo_shopping')
       or v_observation_key !~ '^[A-Za-z0-9._:-]{1,120}$'
+      or v_observation_key <> v_frozen_observation_key
       or v_status not in ('active', 'sold_out')
       or v_expected_status not in ('active', 'sold_out') then
       raise exception using errcode = '22023', message = 'r2_invalid_entry_contract';
@@ -102,6 +119,9 @@ begin
     begin
       v_observed_at := (v_item->>'observed_at')::timestamptz;
       v_expected_last_observed_at := (v_item->>'expected_last_observed_at')::timestamptz;
+      if v_observed_at is null or v_expected_last_observed_at is null then
+        raise exception using errcode = '22023', message = 'r2_invalid_timestamp';
+      end if;
       if coalesce(v_item->>'price', '') !~ '^[1-9][0-9]*$'
         or coalesce(v_item->>'expected_price', '') !~ '^[1-9][0-9]*$' then
         raise exception using errcode = '22023', message = 'r2_invalid_price';
@@ -145,7 +165,8 @@ begin
       raise exception using errcode = 'P0001', message = 'r2_listing_snapshot_changed';
     end if;
 
-    if v_observed_at <= v_listing.last_observed_at then
+    if v_listing.last_observed_at is null
+      or v_observed_at <= v_listing.last_observed_at then
       raise exception using errcode = 'P0001', message = 'r2_observation_time_not_newer';
     end if;
 
@@ -256,4 +277,4 @@ revoke execute on function public.apply_market_reobservation_r2_canary_v1(jsonb)
 grant execute on function public.apply_market_reobservation_r2_canary_v1(jsonb) to service_role;
 
 comment on function public.apply_market_reobservation_r2_canary_v1(jsonb) is
-  'R2-only atomic four-listing re-observation canary. service_role only; Production application and execution are separately approval-bound.';
+  'R2-only atomic four-listing re-observation canary. Exact #179 cohort/key, service_role only; Production application and execution are separately approval-bound.';
