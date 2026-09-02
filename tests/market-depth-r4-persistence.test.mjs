@@ -141,6 +141,9 @@ test("R4 preflight fails closed on depth drift, unresolved issue, listing collis
     listings: [...common.listings, {
       ...existingListing(),
       id: "yahoo-suruga-ya-601199451001",
+      variant_id: "other-variant",
+      matched_variant_id: "other-variant",
+      series_id: "other-series",
       source_url: "https://store.shopping.yahoo.co.jp/other/1.html",
       raw: { provider: "yahoo_shopping", source_listing_id: "other_1", public_url: "https://store.shopping.yahoo.co.jp/other/1.html" },
     }],
@@ -150,6 +153,9 @@ test("R4 preflight fails closed on depth drift, unresolved issue, listing collis
     listings: [...common.listings, {
       ...existingListing(),
       id: "other-id",
+      variant_id: "other-variant",
+      matched_variant_id: "other-variant",
+      series_id: "other-series",
       source_url: "https://store.shopping.yahoo.co.jp/other/2.html",
       raw: { provider: "yahoo_shopping", source_listing_id: "suruga-ya_601199451001", public_url: "https://store.shopping.yahoo.co.jp/other/2.html" },
     }],
