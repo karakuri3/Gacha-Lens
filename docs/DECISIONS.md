@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-03 JST — reusable bounded re-observation repository prerequisite / Issue #199 canonical sync
+Updated: 2026-09-03 JST — first reusable bounded Production migration + fail-closed execution attempt / Issue #202 canonical sync
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -139,7 +139,7 @@ Contract:
 Future history expansion should use this reviewed reusable contract rather than creating another hardcoded eight-row function, unless new evidence shows the generic contract itself is insufficient.
 
 ### D-046 — Canonical and persisted marketplace URL identities are separate guards
-Node proves canonical provider/native/public identity. The bounded RPC also freezes and exact-matches the actual DB-stored `source_url`, `raw.provider`, and `raw.native_id`. Canonical-equivalent URLs such as a harmless trailing slash must not create Node/SQL contract disagreement, while persisted snapshot drift still fails closed.
+Node proves canonical provider/native/public identity. The bounded RPC also freezes and exact-matches the actual DB-stored `source_url`, `raw.provider`, `raw.source_listing_id`, and `raw.public_url`. Canonical-equivalent URLs such as a harmless trailing slash must not create Node/SQL contract disagreement, while persisted snapshot drift still fails closed.
 
 ### D-047 — Bounded postwrite verification distinguishes exact target truth from concurrent global growth
 Target rows, deterministic observation IDs, prior->post counts, provider snapshot and RPC result identity sets remain exact. Global listings/observations/re-observed counters use minimum-delta sanity checks so unrelated legitimate P3 breadth/history writes do not falsely classify a correct bounded run as inconsistent. Completed sold must remain exactly unchanged.
@@ -147,8 +147,31 @@ Target rows, deterministic observation IDs, prior->post counts, provider snapsho
 ### D-048 — Ambiguous write resolution requires evidence captured before RPC
 Future bounded write mode must persist a sanitized resolver manifest before RPC invocation. After ambiguous transport/commit state, resolution is SELECT-only and returns only `committed`, `not_committed`, or `inconsistent`; it never grants automatic write retry.
 
-### D-049 — Generic bounded Production state is currently absent
-After #198 repository merge, fresh Production SELECT proved `apply_market_reobservation_bounded_v1(jsonb)` absent and ledger `market_reobservation_bounded_v1` absent. Production remained 113 listings / 117 observations / 4 re-observed / 0 completed sold. Applying the generic migration requires a new explicit human approval.
+### D-049 — Generic bounded v1 is now installed in Production, but no generic data execution has succeeded
+Under the first exact #201 human approval, `market_reobservation_bounded_v1` was applied to Production. Ledger is `20260902165958 / market_reobservation_bounded_v1`. Function `apply_market_reobservation_bounded_v1(jsonb)` was verified SECURITY INVOKER, empty search_path, service_role-only; migration alone changed market data by 0.
+
+Do not reapply the migration. Installed schema does not imply provider/RPC authority.
+
+### D-073 — A cohort digest must be generated from the complete merged frozen payload, never a hand-reduced approximation
+The first #201 precomputed digest `9940a558...` was wrong because the external reproduction omitted persisted identity fields that `frozenCohortEntry()` includes. The one-shot correctly failed before provider execution because the approval token did not match the runner's recomputed digest.
+
+For any future bounded approval identity:
+- derive/reproduce the exact merged `buildMarketReobservationBoundedCohortDigest()` semantics;
+- include every frozen field, including persisted source/raw identity values;
+- bind to the then-current canonical main SHA;
+- treat any digest computed before a canonical-main change as stale;
+- never “fix” an approval token in-place after human authorization.
+
+### D-074 — First #201 one-shot failure is safe terminal evidence for that authorization
+Actions `33658579004` failed at invocation approval validation before the provider loop. Verified provider attempts 0, RPC 0, market-data writes 0, deterministic rows 0/8, all eight targets still one observation. The workflow was removed, branch final file diff is 0, run count is exactly 1, and the branch was never merged.
+
+The exact #201 approval tied to `9940a...` is consumed. Do not rerun `33658579004` and do not reuse that approval for a corrected digest.
+
+### D-075 — Schema may remain installed after a fail-closed pre-provider execution attempt
+Because the approved migration completed before the one-shot token mismatch, Production legitimately has the generic function while data remains unchanged. Future retry planning must verify the function/ledger and **skip migration reapplication**; only provider/RPC/workflow authority needs fresh approval if snapshots remain safe.
+
+### D-076 — Independent breadth drift does not invalidate a frozen cohort unless target invariants drift
+Approved P3 run `33655998914` increased global market counts from 113/117 to 115/119 while the frozen #201 targets remained exact. This is expected. Cohort validity is determined by exact target identity/snapshot/prior-count/import-issue/collision invariants, not by an unchanged global denominator. Global postwrite checks remain concurrency-tolerant minimums.
 
 ## SEO
 
@@ -177,7 +200,7 @@ Explicit approval remains required for standing-policy exclusions, including Pro
 The Foundation disposable DB successfully applied 9 migrations for #182, 10 for #188, and 11 for #197/#198, then failed because `.github/workflows/foundation-baseline.yml` still hardcodes the original eight-version list. This is not migration-application failure and does not authorize workflow modification inside unrelated scopes.
 
 ### D-043 — Supabase migration ledger identity may differ from repository filename timestamp
-For approved R2 Production migrations, connected tooling generated ledger versions different from repository filenames. Do not manually “fix” the ledger; identify Production schema by reviewed SQL, migration name, object verification and durable execution evidence.
+For approved Production migrations, connected tooling may generate ledger versions different from repository filenames. Do not manually “fix” the ledger; identify Production schema by reviewed SQL, migration name, object verification and durable execution evidence.
 
 ### D-044 — Vercel release cannot consume a future Production schema approval
 A normal Vercel Production release caused by repository merge does not apply Supabase migrations. Production schema and Vercel release are separate external states.
@@ -230,7 +253,10 @@ It ended with #188 and grants no later authority.
 Actions `33621881117` ran exactly once; workflow was removed; final disposable branch file diff was zero. The authorization cannot be reused.
 
 ### D-067 — #196/#197 independent-review substitution was consumed by byte-identical replacement PR #198
-The human explicitly allowed exact-head CI + Vercel Preview + disposable Supabase migration-apply proof + strengthened self-review in place of independent Reviewer/Verifier for #196/#197 only. The Draft->Ready connector failed before mutation; #197 was closed unmerged, and non-Draft #198 reused the exact same head/base with no code commit change, reran normal PR gates, and merged as `9c74d243b5a8f43b49dc7fa649b4c4043bb4a82c`. The substitution is now consumed and grants no Production migration/provider/RPC/workflow authority.
+The human explicitly allowed exact-head CI + Vercel Preview + disposable Supabase migration-apply proof + strengthened self-review in place of independent Reviewer/Verifier for #196/#197 only. The Draft->Ready connector failed before mutation; #197 was closed unmerged, and non-Draft #198 reused the exact same head/base with no code commit change, reran normal PR gates, and merged as `9c74d243b5a8f43b49dc7fa649b4c4043bb4a82c`. The substitution is consumed and grants no later Production authority.
+
+### D-068 — First #201 Production/workflow approval is exact, consumed, and non-reusable
+The human authorized the migration plus one exact credentialed attempt for main `0a509fe...`, key `reobs-v1:bounded-20260903-01`, and the then-recorded digest `9940a...`. Migration succeeded; the one-shot failed before provider calls because that digest was invalid. The authorization cannot be transferred to a corrected digest or second workflow.
 
 ## Business priority
 
@@ -240,5 +266,5 @@ Prioritize useful data density, organic traffic, affiliate clicks/sales, then Ad
 ### D-071 — Data Scale remains P0
 Build lawful breadth, depth and repeated history with exact provenance and fail-closed evidence semantics. Evaluate work through **DATA -> TRAFFIC -> CLICK -> REVENUE**.
 
-### D-072 — Current next DATA experiment is bounded history coverage, not automatic R3
-Current Production history coverage is 4/113 (~3.54%) and the Scoreboard threshold is 10%. After #199 canonical sync, first perform read-only selection/dry-run planning for an 8-10 listing reusable bounded batch. Only after exact evidence and fresh approval may generic Production migration/provider/RPC execution be considered. R3/R4 remain separate later stages.
+### D-072 — Current next DATA experiment remains bounded history coverage, but requires a fresh post-sync identity
+The generic schema is now installed, while truthful repeated history remains 4. After #202 canonical sync, first revalidate the frozen eight targets SELECT-only and recompute the cohort digest against the new canonical main. Only then may a new exact provider/RPC/workflow approval be requested. R3/R4 remain separate later stages.
