@@ -1,55 +1,32 @@
 # Gacha Lens Status
 
-Updated: 2026-09-02 JST — post-R2 atomic prerequisite / #183 canonical-sync target
+Updated: 2026-09-02 JST — post-#179 first Production attempt / Issue #185 canonical sync
 
 This is the compact operational companion to `docs/HANDOFF.md`. Re-fetch live state before acting.
 
 ## Self-referential sync status
 
-This file is authored by Issue #183 / PR #184.
+This file is authored by Issue #185.
 
-- On open PR #184 / branch `docs/canonical-sync-post-r2-prereq-183`, finish its exact-head gates and merge/release flow first.
-- On `main`, #183/#184 is complete by definition; proceed directly to the fresh SELECT-only #179 pre-execution gate. Do not create another docs-only PR merely to mark #184 complete.
+- On branch `docs/canonical-sync-post-r2-attempt-185` or its open PR, finish the docs-only exact-head validation/release flow first.
+- Once this content reaches `main`, Issue #185 is complete by definition; do not create a recursive docs sync merely to mark its own merge. Resume #179 only at the safe read-only redesign/reselection step described below.
 
 ## Repository / release checkpoint
 
-- pre-sync main: `d80450626fd30768bb8f0af68340f0d2aea00bbb`
-- #172 R1: completed; Production DB writes 0
-- #173/#176 Yahoo repair: completed and Production READY
-- #177/#178 canonical sync: completed
-- #180 R2 atomic persistence prerequisite: completed
-- #182 final head: `7f9486d68c8923a57d70555dcd14b81516cdad06`
-- #182 merge/main: `d80450626fd30768bb8f0af68340f0d2aea00bbb`
-- #182 Production: `dpl_8oacYiC3Nia5RJbicgNxnr3TL3eW` READY
-- #179 R2 Production execution canary: open and exact human approval-bound
+- current canonical main before #185 sync: `8a63676bc11474644f8cc09c2fde43886c00c9f0`
+- #172 R1 exact-provider read-only canary: completed; Production DB writes 0
+- #173/#176 Yahoo JSONP repair: completed and Production READY
+- #177/#178 post-Yahoo canonical sync: completed
+- #180/#182 R2 atomic persistence prerequisite: completed in repository
+- #183/#184 post-prerequisite canonical sync: completed
+- #184 merge/main: `8a63676bc11474644f8cc09c2fde43886c00c9f0`
+- #184 normal Vercel Production: `dpl_GWeSyvRhWmta2oSjjmLCxPJTqqD2` READY with `gachalens.com` / `www.gachalens.com`
+- #179 R2 Production persistence issue: still open; first approved execution attempt stopped fail-closed before any market-data write
 - #142/#137 F0: separate approval boundary
 
-## #182 prerequisite contract in repository
+## Current Production market-data checkpoint
 
-- exactly 4 frozen known listings, 2 Rakuten + 2 Yahoo
-- shared key `reobs-v1:r2-20260902-01`
-- deterministic observation IDs
-- one PostgreSQL transaction for 4 observation inserts + 4 allowlisted listing snapshot updates
-- exact identity/snapshot/one-prior-observation/import-issue checks
-- only positive integer price and `active` / `sold_out`
-- no completed `sold` / `sold_at`
-- service-role-only RPC execution
-- exact current-main/cohort approval binding
-- dry-run provider/RPC/write count = 0
-- max 3 attempts/listing / max 12 HTTP attempts total
-- any unsafe provider result stops before RPC
-- exactly one atomic RPC write call; no automatic write retry
-- ambiguous commit resolver is SELECT-only and never auto-retries
-
-#182 evidence:
-
-- PR Code Quality `33600534520`: PASS
-- Preview `dpl_6G9LxzpEZtgeQZ7JKV8BYBR9jeLK`: READY
-- disposable Supabase `33600534418`: all 9 migrations applied before stale fixed 8-version assertion failed
-
-## Fresh Production checkpoint
-
-SELECT-only snapshot on 2026-09-02 JST:
+Post-failure SELECT-only verification on 2026-09-02 JST:
 
 - market listings: **113**
 - observations: **113**
@@ -57,72 +34,104 @@ SELECT-only snapshot on 2026-09-02 JST:
 - completed `status=sold`: **0**
 - `status=sold_out`: **0**
 
-Frozen #179 cohort remains:
+The original #179 frozen four remain unchanged:
 
 - `rakuten-auc-toysanta-10386044` — 598 / active / 1 observation
 - `rakuten-realize-store-2-10575349` — 898 / active / 1 observation
 - `yahoo-lead-netstore-302507s186ook3` — 698 / active / 1 observation
 - `yahoo-selen-shope-5500000224314` — 1500 / active / 1 observation
 
-All four remain single/review-safe, matched variant identity, `sold_at=null`, complete provider/native/public identity, unresolved import issues 0.
+All four deterministic R2 observation IDs remain absent. R2 market-data write delta is exactly 0.
 
-## Critical Production schema state
+## Production R2 schema state — migration is now applied
 
-- repository contains migration `20260902150500_r2_atomic_reobservation_canary.sql`
-- Production migration ledger version `20260902150500`: **absent**
-- Production `public.apply_market_reobservation_r2_canary_v1(jsonb)`: **absent**
+Repository migration file:
 
-#182 did not apply the R2 database function to Production.
+`supabase/migrations/20260902150500_r2_atomic_reobservation_canary.sql`
 
-## #184-specific review substitution
+The approved SQL body was applied to Supabase Production project `vxbrnvfhmzcxehuuzzum` on 2026-09-02. Supabase migration tooling recorded:
 
-The human explicitly authorized **PR #184 only** to replace independent Reviewer + Verifier with:
+- ledger version: `20260902073919`
+- migration name: `r2_atomic_reobservation_canary`
 
-- exact-head PR Code Quality
-- exact-head Vercel Preview
-- strengthened full-diff/canonical-consistency self-review
+The tool-generated ledger timestamp differs from the repository filename timestamp. Treat the reviewed SQL body + migration name + execution evidence as the linkage; do not falsely conclude the migration is absent merely because version `20260902150500` is not the ledger key.
 
-If those exact-head gates pass and the remaining Auto-Merge / Standing Production Release gates pass, #184 may merge and its normal Git-triggered Vercel Production deployment may proceed.
+Verified function state:
 
-This exception does not apply to #179 Production migration/provider/write approval or any future PR.
+- `public.apply_market_reobservation_r2_canary_v1(jsonb)`: present
+- `SECURITY INVOKER` (`security_definer=false`)
+- empty `search_path`
+- EXECUTE: PUBLIC=false, anon=false, authenticated=false, service_role=true
 
-## R2 #179 remains unapproved
+The function being installed does **not** authorize another invocation.
 
-Successful R2 target delta, only after fresh exact human approval and four valid exact provider reads:
+## #179 first approved execution attempt — fail closed
 
-- market listings +0
-- observations +4
-- re-observed listings +4
-- completed `sold` +0
-- deletes 0
-- protected identity/provenance changes 0
-- exactly 4 listing snapshot updates limited to price/status/last_observed_at/updated_at
+Human approval covered one exact execution scope: apply the reviewed migration, allow at most 12 exact provider HTTP attempts across the frozen four, and call the atomic RPC exactly once only if all four returned valid exact `seen` evidence. A separate #179-only disposable branch workflow using existing GitHub Secrets was also explicitly authorized.
 
-The final #179 approval request must cover:
+Execution evidence:
 
-1. Production application of reviewed migration `20260902150500_r2_atomic_reobservation_canary.sql`;
-2. fresh exact provider reads for the frozen four, max 3 attempts/listing and max 12 total;
-3. only if all four are valid exact `seen`, exactly one atomic RPC write with the delta above.
+- disposable branch: `ops/r2-one-shot-179-20260902`
+- workflow commit: `2a263b4b3e8c5af2deb86c8d5d21b58c72a075ba`
+- Actions run: `33605362604`
+- exact-main / one-file branch guard: PASS
+- first listing: `rakuten-auc-toysanta-10386044`
+- provider result: `not_found`
+- retained failure artifact/log does **not** expose the provider reader diagnostics; exact HTTP attempt count for this first listing is therefore unknown, but reviewed code bounds it to **1–3 attempts**
+- remaining Rakuten target: 0 calls
+- both Yahoo targets: 0 calls
+- atomic RPC calls: **0**
+- R2 Production market-data writes: **0**
+- automatic/manual retry of the canary run: **0**
 
-Any unsafe provider result means Production data writes remain 0.
+The runner stopped immediately under the all-or-nothing contract after the first target's final `not_found` outcome.
+
+## One-shot workflow cleanup
+
+The temporary workflow `.github/workflows/r2-one-shot-179.yml` was deleted from the disposable branch in commit:
+
+`cac883d9f74af9cad051a6fd853631f8a91ebc89`
+
+Current disposable branch tree has **0 file differences** from main. Its two branch-only commits remain as audit history. Only one Actions run exists; workflow deletion triggered no second run. Nothing from that branch was merged to `main`.
+
+## Approval state after the attempt
+
+The #179 migration/provider/RPC approval and its approval token are **consumed**.
+
+Do not:
+
+- rerun run `33605362604`
+- recreate or reuse the one-shot workflow under the old authorization
+- reuse the old R2 approval token
+- call the remaining three providers under the old envelope
+- invoke the installed R2 RPC
+
+Any further live provider request or Production market-data mutation requires a fresh frozen design and fresh explicit human approval.
+
+## Exact next step
+
+After Issue #185 canonical sync reaches `main`:
+
+1. stay read-only;
+2. investigate why the first Rakuten exact identity returned `not_found` without inferring `sold`/`sold_out`;
+3. reselect/redesign the tiny R2 cohort using persisted evidence only, or decide whether the cohort/provider mix should change;
+4. because the installed RPC hardcodes the original four listing IDs/key, prepare a reviewed new migration/function contract if the cohort changes;
+5. validate repository/Preview/CI gates;
+6. only then present a **new** exact provider + Production write approval request.
+
+Do not proceed directly to R3/R4 while R2 history remains at 0 unless a newer explicit product decision changes priority.
 
 ## Known CI harness debt
 
-`.github/workflows/foundation-baseline.yml` still hardcodes the former eight migration versions. Run `33600534418` applied all nine migrations and then failed at that stale assertion. Workflow repair is separate and approval-bound.
+`.github/workflows/foundation-baseline.yml` still hardcodes the former eight migration versions. Run `33600534418` applied all nine repository migrations in disposable Supabase and then failed at that stale assertion. This debt remains a separate workflow-change task.
 
 ## Hard boundaries
 
-- no R2 Production migration/function application without fresh exact #179 approval
-- no R2 live provider calls without fresh exact #179 approval
-- no R2 Production data write without fresh exact #179 approval
+- no further #179 provider/RPC execution without fresh approval
+- no R3/R4 Production execution by implication
 - no further Yahoo calls under exhausted #172 approval
 - do not merge #142 or dispatch F0 without separate approval
 - do not change Production-capable workflows/schedules or dispatch them without applicable approval
 - never touch `supabase/.temp/cli-latest`
 - keep `.github/workflows/gacha-ingestion.yml` disabled
-- do not weaken matcher, mix sold/current evidence, or scrape Mercari/Amazon
-
-## Exact next step
-
-- **On PR #184 branch:** re-run exact-head CI/Preview and strengthened self-review on the head containing this authorization record; merge only if Auto-Merge / Standing Production Release gates pass; verify normal Production READY.
-- **On `main`:** re-fetch main/#179 and run a fresh SELECT-only R2 preflight; then present the exact combined #179 approval request and stop for explicit human approval.
+- do not weaken matcher, mix completed sold with active/sold_out evidence, or scrape Mercari/Amazon

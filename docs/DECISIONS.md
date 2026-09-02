@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-02 JST — post-R2 atomic prerequisite / #183 canonical-sync target
+Updated: 2026-09-02 JST — post-#179 first Production attempt / Issue #185 canonical sync
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -102,29 +102,58 @@ R1 completed on 2026-09-02 with Production DB writes 0. Rakuten frozen 3 all ret
 ### D-027 — Yahoo exact JSONP compatibility is fixed to two raw-byte-0 forms
 Issue #173 / PR #176 permanently repaired Yahoo exact `itemLookup` compatibility. Only the fixed internal callback at raw byte 0, or exact literal `/* */` at raw byte 0 immediately followed by that callback, is accepted. Leading whitespace/BOM, alternate comments, wrong callbacks, bare JSON and malformed wrappers fail closed. Independent Reviewer + Verifier passed the final repaired exact head.
 
-### D-028 — R2 is prepared in repository but still exact Production-approval-bound
-Issue #180 / PR #182 completed the R2-specific single-transaction prerequisite and merged it to main `d80450626fd30768bb8f0af68340f0d2aea00bbb`.
+### D-028 — R2 is prepared in repository and execution remains exact-approval-bound
+Issue #180 / PR #182 completed the R2-specific single-transaction prerequisite.
 
 Durable execution design:
-- exactly four frozen known listings, two Rakuten + two Yahoo
+- exactly four frozen known listings, two Rakuten + two Yahoo for the original canary
 - shared logical key `reobs-v1:r2-20260902-01`
 - deterministic observation IDs
 - exact current-main/cohort binding
 - fresh exact provider reads immediately before persistence
 - max 3 attempts/listing and 12 HTTP attempts total
-- all four must produce valid exact `seen`; otherwise Production data writes = 0
+- all four must produce valid exact `seen`; otherwise Production market-data writes = 0
 - one PostgreSQL RPC transaction only after all four plans are safe
 - exactly four observation inserts plus four listing updates limited to price/status/last_observed_at/updated_at
 - no automatic RPC write retry
 - ambiguous commit state is resolved by SELECT-only deterministic evidence and never authorizes automatic retry
 
-The actual #179 Production action requires one fresh exact human approval covering migration application, the max-12 live provider envelope, and the bounded atomic write delta. R2 approval never implies R3/R4, schedules, workflow changes, Secrets/Variables changes or paid actions.
+Every new R2 execution still needs a fresh exact human approval. Approval never implies R3/R4, schedules, workflow changes, Secrets/Variables changes or paid actions.
 
 ### D-029 — Breadth growth must not be mistaken for history growth
-The post-#182 SELECT snapshot remains 113 listings / 113 observations / 0 re-observed listings. History success requires actual listings with 2+ observations.
+The post-first-R2-attempt Production snapshot remains 113 listings / 113 observations / 0 re-observed listings. History success requires actual listings with 2+ observations.
 
 ### D-034 — Repository migration presence is not Production schema state
-A migration file being merged and Vercel READY do not mean that migration is applied to Supabase Production. At the post-#182 checkpoint, repository migration `20260902150500_r2_atomic_reobservation_canary.sql` exists, but Production migration version `20260902150500` and `public.apply_market_reobservation_r2_canary_v1(jsonb)` are absent.
+A migration file being merged and Vercel READY do not mean that migration is applied to Supabase Production. At the post-#182 checkpoint, repository migration `20260902150500_r2_atomic_reobservation_canary.sql` existed while the Production RPC was absent. It was later applied only after the separate explicit #179 Production approval.
+
+### D-035 — The first #179 R2 Production attempt failed closed and its approval is consumed
+On 2026-09-02, the human approved one exact R2 migration/provider/RPC scope. The reviewed migration was applied, but Actions run `33605362604` stopped on the first frozen Rakuten listing `rakuten-auc-toysanta-10386044` with final outcome `not_found`.
+
+The retained failure artifact/log does not expose the provider reader diagnostics, so the exact HTTP attempt count for that first listing is not observable. The reviewed reader contract bounds it to **1–3 attempts**. The remaining three original targets received 0 provider calls.
+
+Durable outcome:
+- first target: `not_found`, attempt count unknown but bounded 1–3
+- remaining provider calls: 0
+- atomic RPC calls: 0
+- market listings delta: 0
+- observations delta: 0
+- re-observed listings delta: 0
+- completed sold delta: 0
+- no retry of the canary run
+
+The old provider/write approval and approval token are consumed. Do not reuse them or call the remaining original targets under that authorization.
+
+### D-036 — A changed R2 cohort requires a new reviewed function contract and new approval
+The installed `apply_market_reobservation_r2_canary_v1(jsonb)` hardcodes the original four listing IDs and observation key. If the next R2 attempt changes any cohort identity/key or materially changes provider mix, do not silently reuse the old function/approval.
+
+Required order:
+1. investigate/reselect read-only;
+2. preserve strict identity/history safety without inferring lifecycle from `not_found`;
+3. create a new reviewed migration/function contract when the frozen cohort changes;
+4. pass repository/CI/Preview/review gates;
+5. obtain a fresh exact provider + Production mutation approval.
+
+Provider symmetry is not a reason to keep a weak target; evidence should determine the next tiny cohort while safety predicates remain unchanged.
 
 ## SEO
 
@@ -147,10 +176,15 @@ Explicit approval remains required for standing-policy exclusions, including Pro
 - keep `.github/workflows/gacha-ingestion.yml` disabled
 - do not casually modify F0 auto or P3 V2 auto
 - do not enable Kitan/Qualia auto without approval
-- do not rerun completed canaries without new task-specific approval
+- do not rerun completed/failed canaries without new task-specific approval
 
 ### D-042 — Foundation migration-order assertion is known stale harness debt
-Disposable-Supabase run `33600534418` successfully applied all nine migrations and then failed only because `.github/workflows/foundation-baseline.yml` still hardcodes the former eight-version list. This is not a migration-application failure and does not authorize a workflow change inside unrelated scopes.
+Disposable-Supabase run `33600534418` successfully applied all nine repository migrations and then failed only because `.github/workflows/foundation-baseline.yml` still hardcodes the former eight-version list. This is not a migration-application failure and does not authorize a workflow change inside unrelated scopes.
+
+### D-043 — Supabase migration ledger identity may differ from the repository filename timestamp
+For the approved R2 Production application, repository file `20260902150500_r2_atomic_reobservation_canary.sql` was applied through connected Supabase migration tooling, which recorded ledger version `20260902073919` with name `r2_atomic_reobservation_canary`.
+
+When connected tooling generates the applied ledger timestamp, link Production schema state using the reviewed SQL body, migration name, function/object verification and execution evidence. Do not falsely classify the migration as absent solely because the repository filename timestamp is not the ledger version.
 
 ## Development workflow
 
@@ -193,10 +227,13 @@ PR #176 demonstrated that prior PASS on an older head is insufficient after a se
 ### D-062 — #180/#182 review substitution was task-specific only
 For #180/#182 only, the human explicitly allowed exact-head CI, exact-head Vercel Preview, disposable-Supabase migration application proof, and strengthened self-review in place of independent Reviewer/Verifier. That exception ended with #182 and granted no Production migration/provider/write authority.
 
-### D-063 — #183/#184 docs-only review substitution is task-specific only
-On 2026-09-02, the human explicitly authorized **#184 only** to replace independent Reviewer + Verifier with exact-head PR Code Quality, exact-head Vercel Preview, and strengthened full-diff self-review, and to merge if all remaining Auto-Merge / Standing Production Release gates pass.
+### D-063 — #183/#184 docs-only review substitution was task-specific only
+On 2026-09-02, the human explicitly authorized **#184 only** to replace independent Reviewer + Verifier with exact-head PR Code Quality, exact-head Vercel Preview, and strengthened full-diff self-review. That exception ended with #184 and does not apply to #179 or future PRs.
 
-This is a separate exception from D-062. It applies only to the docs-only canonical-sync PR #184 and does **not** authorize or substitute review/approval for #179 Production migration application, live provider calls, Production DB writes, R3/R4, workflow/schedule changes, Secrets/Variables, F0/#142, paid actions, or future PRs.
+### D-064 — #179 one-shot workflow authorization was exact, consumed and cleaned up
+For #179 only, the human authorized a disposable branch-only GitHub Actions workflow using existing repository Secrets to execute the already-approved R2 runner once. The workflow ran once as Actions `33605362604`, failed closed on the first provider result, and was then deleted from the branch in commit `cac883d9f74af9cad051a6fd853631f8a91ebc89`.
+
+The disposable branch's final tree has zero file differences from main and no second workflow run occurred. This authorization does not permit recreating, dispatching or rerunning an execution workflow later.
 
 ## Business priority
 
