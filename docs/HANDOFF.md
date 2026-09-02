@@ -164,7 +164,7 @@ Important ledger distinction:
 - Supabase tooling recorded migration ledger version: `20260902073919`
 - migration name: `r2_atomic_reobservation_canary`
 
-The SQL body applied was the reviewed repository migration content. Supabase's connector/tool generated the ledger timestamp used for this application. Do not use the absence of ledger version `20260902150500` as evidence that the function is absent.
+The SQL body applied was the reviewed repository migration content. Supabase's connected migration tooling generated the ledger timestamp used for this application. Do not use the absence of ledger version `20260902150500` as evidence that the function is absent.
 
 Verified Production function state:
 
@@ -194,13 +194,13 @@ Execution evidence:
 - workflow add commit: `2a263b4b3e8c5af2deb86c8d5d21b58c72a075ba`
 - Actions run: `33605362604`
 - exact approved main / branch-one-file guard: PASS
-- first target `rakuten-auc-toysanta-10386044`: `not_found`
-- it came from a successful HTTP response path, therefore exactly one Rakuten HTTP attempt was consumed and no retry occurred
+- first target `rakuten-auc-toysanta-10386044`: final outcome `not_found`
+- the retained failure artifact/log contains only the fail-closed error and does not expose provider diagnostics; exact HTTP attempt count for that first target is **not observable**, but reviewed reader code bounds it to **1–3 attempts**
 - second Rakuten target: 0 provider calls
 - both Yahoo targets: 0 provider calls
 - atomic RPC calls: 0
 - Production R2 market-data writes: 0
-- run was not retried
+- canary run was not retried
 
 This is a successful **safety outcome** but an unsuccessful **history-growth outcome**.
 
