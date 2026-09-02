@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-02 JST — post-#188 Yahoo-only R2 v2 prerequisite / Issue #189 canonical sync
+Updated: 2026-09-02 JST — post-R2 v2 Production migration / Issue #191 canonical sync
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -121,10 +121,10 @@ Durable original execution design:
 Every new R2 execution still needs a fresh exact human approval. Approval never implies R3/R4, schedules, workflow changes, Secrets/Variables changes or paid actions.
 
 ### D-029 — Breadth growth must not be mistaken for history growth
-The post-#188 Production snapshot remains 113 listings / 113 observations / 0 re-observed listings. History success requires actual listings with 2+ observations.
+The post-v2-migration Production snapshot remains 113 listings / 113 observations / 0 re-observed listings. History success requires actual listings with 2+ observations; installing an RPC is not history growth.
 
 ### D-034 — Repository migration presence is not Production schema state
-A migration file being merged and Vercel READY do not mean that migration is applied to Supabase Production. This was true after #182 before v1 application and is true again after #188: repository migration `20260902180000_r2_yahoo_only_reobservation_canary_v2.sql` is merged while Production `apply_market_reobservation_r2_canary_v2(jsonb)` remains absent.
+A migration file being merged and Vercel READY do not mean that migration is applied to Supabase Production. After #188 the v2 function was absent; under the later exact #179 approval, repository migration `20260902180000_r2_yahoo_only_reobservation_canary_v2.sql` was then applied to Production as ledger version `20260902095120`, name `r2_yahoo_only_reobservation_canary_v2`. Schema state must always be verified directly.
 
 ### D-035 — The first #179 R2 Production attempt failed closed and its approval is consumed
 On 2026-09-02, the human approved one exact R2 migration/provider/RPC scope. The reviewed v1 migration was applied, but Actions run `33605362604` stopped on the first frozen Rakuten listing `rakuten-auc-toysanta-10386044` with final outcome `not_found`.
@@ -174,7 +174,12 @@ Frozen v2 contract:
 
 The Yahoo-only choice is evidence-driven: multiple Rakuten exact probes repeatedly returned `not_found`, while Yahoo had durable exact `unchanged` evidence. Provider symmetry is not a success criterion.
 
-PR #188 merged as `f3da6c82952dd44bf343d2c1717cd62920ace116`, but the v2 Production function remained absent at the merge checkpoint. A fresh SELECT-only preflight and fresh exact human approval are mandatory before Production migration/provider/RPC execution.
+PR #188 merged as `f3da6c82952dd44bf343d2c1717cd62920ace116`, and the v2 Production function remained absent at that merge checkpoint. After #190, a fresh SELECT-only preflight and exact human approval bound to main `dc25eb16b7e057397fe3bf9527f5467ac54b281a` authorized the migration/provider/RPC envelope. The migration portion is now complete; provider HTTP attempts, v2 RPC calls, and market-data writes remain 0.
+
+### D-038 — V2 schema application and credentialed execution are separate approval facts
+Under the exact #179 v2 approval, the reviewed Production migration was applied as ledger `20260902095120`; `apply_market_reobservation_r2_canary_v2(jsonb)` is present as SECURITY INVOKER with empty `search_path` and service_role-only EXECUTE. Do not reapply it.
+
+The same approval preserves the exact provider/RPC envelope bound to main `dc25eb16b7e057397fe3bf9527f5467ac54b281a`, digest `441957a6649817acff82d5b07eb0c6e9701fa4473662ef8544a7a9fa61614a24`, and its exact token. It did not authorize a new Production-capable workflow mechanism. Before the first provider request, separately approve the disposable exact-base, branch-only push-trigger one-shot workflow, its single automatic run, and immediate same-branch workflow-file removal. Do not use `workflow_dispatch`, merge that workflow to main, substitute the broader ingestion path, or reuse the consumed v1 workflow authorization.
 
 ## SEO
 
@@ -203,12 +208,12 @@ Explicit approval remains required for standing-policy exclusions, including Pro
 Disposable-Supabase run `33600534418` successfully applied all nine repository migrations and then failed only because `.github/workflows/foundation-baseline.yml` still hardcoded the former eight-version list. Final #188 run `33613902714` later successfully applied all ten repository migrations, including `20260902180000_r2_yahoo_only_reobservation_canary_v2.sql`, and then failed at the same expected-eight assertion. This is not a migration-application failure and does not authorize a workflow change inside unrelated scopes.
 
 ### D-043 — Supabase migration ledger identity may differ from the repository filename timestamp
-For the approved v1 R2 Production application, repository file `20260902150500_r2_atomic_reobservation_canary.sql` was applied through connected Supabase migration tooling, which recorded ledger version `20260902073919` with name `r2_atomic_reobservation_canary`.
+For the approved v1 R2 Production application, repository file `20260902150500_r2_atomic_reobservation_canary.sql` was applied through connected Supabase migration tooling, which recorded ledger version `20260902073919` with name `r2_atomic_reobservation_canary`. The approved v2 repository file `20260902180000_r2_yahoo_only_reobservation_canary_v2.sql` was later recorded as ledger version `20260902095120`, name `r2_yahoo_only_reobservation_canary_v2`.
 
 When connected tooling generates the applied ledger timestamp, link Production schema state using the reviewed SQL body, migration name, function/object verification and execution evidence. Do not falsely classify the migration as absent solely because the repository filename timestamp is not the ledger version.
 
 ### D-044 — A repository/Preview release cannot consume a future Production schema approval
-PR #188 proves the v2 migration can apply on disposable Supabase and deploys the repository code to Vercel, but that release does not itself apply `apply_market_reobservation_r2_canary_v2(jsonb)` to Supabase Production. Production schema state must be verified directly immediately before approval/execution. Repository release, Preview READY, Production Vercel READY, and migration-apply proof are prerequisites/evidence, not standing Production mutation authority.
+PR #188 proved the v2 migration could apply on disposable Supabase and deployed repository code to Vercel, but that release did not itself apply `apply_market_reobservation_r2_canary_v2(jsonb)` to Production. The function became present only after the later exact #179 Production approval/application recorded as ledger `20260902095120`. Repository release, Preview READY, Production Vercel READY, disposable proof, and actual Production schema state remain distinct evidence.
 
 ## Development workflow
 
