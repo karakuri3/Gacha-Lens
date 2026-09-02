@@ -1,6 +1,6 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-02 JST — post-Yahoo JSONP repair (#173/#176) checkpoint
+Updated: 2026-09-02 JST — post-R2 atomic prerequisite (#180/#182) checkpoint
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.
 
@@ -51,8 +51,8 @@ Durable contract from #150/#169:
 ### D-017 — Provider credentials only reach reviewed official endpoints
 Credential-bearing requests must stay on the reviewed HTTPS host + exact path. Arbitrary host/path/query/fragment, HTTP, embedded URL credentials and redirects fail closed. Persisted durable identity validates before provider request.
 
-### D-018 — Merged read/dry-run code does not authorize Production persistence
-PRs #150/#153/#156/#169/#176 and rollout planning do not authorize Production DB mutation, schedule activation, workflow dispatch, Secrets/Variables changes, or paid entitlement activation.
+### D-018 — Merged read/dry-run/prerequisite code does not authorize Production persistence
+PRs #150/#153/#156/#169/#176/#182 and rollout planning do not authorize Production DB mutation, Production migration application, live provider execution outside a task-specific approval, schedule activation, workflow dispatch, Secrets/Variables changes, or paid entitlement activation.
 
 ### D-019 — Depth Collector is multi-offer, identity-driven and dry-run first
 - explicit variant + parent series target
@@ -132,31 +132,48 @@ Durable security/truthfulness rules:
 
 Independent Reviewer + Verifier passed the final exact head after two prior major findings were repaired. The Production release is `a8bf9b7d7da7826544cb72a89f77b082fd86f248` / `dpl_4U73Cev864RvycfGGPteqQxMS246` READY.
 
-### D-028 — R2 is now preparation-eligible but Production-write approval-bound
-Completion of #173/#176 removes the parser blocker, but it does **not** authorize Production persistence.
+### D-028 — R2 is prepared in repository but still exact Production-approval-bound
+Issue #180 / PR #182 completed the R2-specific single-transaction prerequisite and merged it to main `d80450626fd30768bb8f0af68340f0d2aea00bbb`.
 
-After the post-#176 canonical sync is merged/Production READY, safe read-only R2 preparation may:
+The durable execution design is:
 
-- reread current Production listings/observations
-- freeze exactly four known targets, planned 2 Rakuten + 2 Yahoo
-- verify exact identity and observation counts
-- freeze deterministic observation keys/IDs and expected deltas
-- define the bounded transaction, stop conditions, post-write reread and rollback evidence
+- exactly four frozen known listings, two Rakuten + two Yahoo
+- one shared logical key `reobs-v1:r2-20260902-01`
+- deterministic observation IDs
+- exact current-main/cohort binding
+- fresh exact provider reads immediately before persistence
+- max 3 attempts/listing and max 12 HTTP attempts total
+- all four must produce valid exact `seen` results; otherwise Production DB writes = 0
+- one PostgreSQL RPC transaction only after all four plans are safe
+- exactly four observation inserts plus four listing updates limited to price/status/last_observed_at/updated_at
+- no automatic RPC write retry
+- ambiguous commit state is resolved by SELECT-only deterministic evidence; even `not_committed` does not authorize an automatic retry
 
-The actual R2 Production DB mutation requires a new explicit user approval for the exact cohort/write delta. R2 approval never implies R3/R4, schedules, workflow changes, Secrets/Variables changes or paid actions.
+The actual #179 Production action requires one new exact human approval covering migration application, the max-12 live provider envelope, and the bounded atomic write delta. R2 approval never implies R3/R4, schedules, workflow changes, Secrets/Variables changes or paid actions.
 
 ### D-029 — Breadth growth must not be mistaken for history growth
-The post-#176 SELECT snapshot is 113 listings / 113 observations / 0 re-observed listings. Growth from the earlier 110/110 checkpoint came from existing breadth activity, not R2. History success requires actual listings with 2+ observations, not just more first observations.
+The current SELECT snapshot remains 113 listings / 113 observations / 0 re-observed listings. History success requires actual listings with 2+ observations, not just more first observations.
+
+### D-030 — Repository migration presence is not Production schema state
+A migration file being merged and a Vercel application deployment being READY do not mean the migration is applied to Supabase Production.
+
+At the post-#182 checkpoint:
+
+- repository contains `supabase/migrations/20260902150500_r2_atomic_reobservation_canary.sql`
+- Production migration ledger does **not** contain `20260902150500`
+- Production `public.apply_market_reobservation_r2_canary_v1(jsonb)` is absent
+
+Always re-read Production migration/function state immediately before requesting or executing R2 approval.
 
 ## SEO
 
-### D-030 — Preserve observer separation
+### D-031 — Preserve observer separation
 Keep separate root/series/variant sitemaps.
 
-### D-031 — No mass SEO pruning without evidence
+### D-032 — No mass SEO pruning without evidence
 Use current GSC/performance evidence before mass noindex/delete decisions.
 
-### D-032 — Pagination is self-canonical
+### D-033 — Pagination is self-canonical
 Indexable page 2+ URLs canonicalize to themselves; preserve noindex behavior that prevents search/filter index explosion.
 
 ## Automation / safety
@@ -181,6 +198,11 @@ Explicit approval remains required for standing-policy exclusions, including:
 - do not casually modify F0 auto or P3 V2 auto
 - do not enable Kitan/Qualia auto without approval
 - do not rerun completed canaries without new task-specific approval
+
+### D-042 — Foundation migration-order assertion is known stale harness debt
+After #182 added the ninth repository migration, disposable-Supabase run `33600534418` successfully applied all nine migrations and then failed only because `.github/workflows/foundation-baseline.yml` still hardcodes the former eight-version list.
+
+Do not misclassify that run as a migration-application failure. Also do not silently repair the workflow inside docs-only or unrelated scopes; workflow changes remain separately approval-bound.
 
 ## Development workflow
 
@@ -219,6 +241,16 @@ One-time canary workflows/scripts may be used only within the exact approved sco
 
 ### D-061 — Independent review findings must repair the contract, not be waived silently
 PR #176 demonstrated why collection-semantic review gates matter: independent review found two major boundary issues after ordinary tests/self-review. Both were repaired and the final exact head was re-reviewed before merge. A prior PASS on an older head is never sufficient after a semantic repair; review/CI/Preview must bind to the final exact head.
+
+### D-062 — #180/#182 review substitution was task-specific only
+For #180/#182 only, the human explicitly allowed independent Reviewer/Verifier to be replaced by:
+
+- exact-head CI
+- exact-head Vercel Preview
+- disposable-Supabase migration application proof
+- strengthened self-review
+
+This exception ended with #182. It does not apply to #183, #179 execution, future schema/collection changes, or other workstreams. It granted no Production migration/provider/write authority.
 
 ## Business priority
 
