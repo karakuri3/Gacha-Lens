@@ -1,100 +1,87 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-03 JST — P0-A Supabase egress mitigation released / Issue #233 canonical sync
+Updated: 2026-09-04 JST — P0-B public-detail read mitigation
 
-The complete durable-decisions checkpoint immediately before this sync is preserved byte-for-byte at `docs/history/2026-09-03-pre-233-DECISIONS.md`. Decisions D-001 through D-118 remain authoritative unless explicitly superseded below.
+Historical durable decisions D-001 through D-123 remain authoritative unless explicitly superseded. Immediate prior snapshot: `docs/history/2026-09-03-pre-233-DECISIONS.md`. Current incident detail: `docs/HANDOFF_LATEST.md`.
 
-## Authoritative additions
+## D-119 through D-123 — preserved
 
-### D-119 — Reliability and cost risk outrank Data Scale when shared infrastructure faces credible restriction
+- Reliability/cost risk outranks Data Scale when shared infrastructure faces credible restriction.
+- P0-A sitemap caching is proven released, but #219 is not proven solved until observed Egress improves.
+- Remaining public read amplification is P0-B before more market writes.
+- Product prioritization uses **Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**, not Data Scale counts alone.
+- Exact #228 R4 authority remains consumed/non-reusable.
 
-The prior technical Data Scale diagnosis `depth_insufficient` remains valid for the last measured market snapshot, but it is not the business goal and does not permanently own P0 priority.
+## D-124 — Product-detail request-to-request read amplification is a verified P0-B mechanism
 
-On 2026-09-03, authenticated Supabase billing evidence showed shared Free Plan uncached Egress at 24.614 / 5 GB with Fair Use grace ending 2026-09-19 and possible HTTP 402 restriction. That availability/cost risk became the true P0 and correctly preempted further R4/depth execution.
+Live Preview and Supabase evidence proves that repeating the same normal Japanese `/series/[slug]` request repeats the target/sibling/market/signal/related backend read set. This is no longer a speculative optimization target; it is a verified amplification path and remains part of #219 until bounded or otherwise materially reduced.
 
-Future prioritization must similarly allow reliability, cost, user value, traffic, click or revenue evidence to supersede a lower-level infrastructure metric.
+## D-125 — Full-route static caching is rejected for current variant-detail pages
 
-### D-120 — P0-A sitemap caching is proven released, but #219 is not proven solved until observed Egress improves
+A full-route `force-static + revalidate=1800` experiment could produce an ASCII-slug cache HIT but normal Japanese slugs could fail with `ERR_INVALID_CHAR` involving `x-next-cache-tags`. Japanese slugs are ordinary Production data, so this route-cache design is not a safe release candidate.
 
-PR #231 changed the public sitemap execution model from request-driven dynamic/short-cache amplification to daily static/ISR plus outer-cache boundaries while preserving sitemap population and fail-closed contracts.
+Do not reintroduce full-route static caching for this path unless the Japanese cache-metadata failure is independently eliminated and re-proven.
 
-Exact evidence:
-- final head `fc091f32ae216779e782eef84fc2701fbc769492`;
-- Code Quality #116 / `33754793103` SUCCESS;
-- Preview `dpl_GVNunr8mDJ54FE5a6nr3mD5Hi4Qj` READY;
-- all three sitemap routes Static with `1d` revalidation in Vercel Build;
-- five-file strengthened Lead self-review, explicitly non-independent, findings0;
-- merge/main `8048a19ad478672a9d887d77073597ee95dc27d3`;
-- Production `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G` READY;
-- live Production sitemap smoke passed.
+## D-126 — Current `unstable_cache` designs are rejected after runtime-origin proof
 
-This proves code/release correctness, not exact billed-byte savings. Issue #219 remains open until read-only post-release evidence shows the Egress trajectory is compatible with the chosen plan or an explicit alternative plan decision is made.
+Multiple `unstable_cache`/Data Cache attempts preserved page correctness but did not suppress repeated backend reads. The decisive instrumented exact head `a02e69285ebcc9c06e1be67f2e066d8460e57e68` proved the cache facade itself executes: a first Japanese request emitted the hashed `variant` origin twice and `related` once; the identical second request emitted the same origin markers again. Supabase independently repeated the complete read set on the second request.
 
-### D-121 — If P0-A is insufficient, remaining public read amplification becomes P0-B before more market writes
+Therefore the working hypothesis is no longer “the alias/facade may not be used.” The facade is used, but this mechanism is not providing the required request-to-request reuse in the deployed path. Do not burn more build budget on alias-vs-explicit-import or minor `unstable_cache` variants without new evidence.
 
-If post-release Egress remains materially high, the next engineering lane is remaining public runtime read attribution/mitigation, especially broad signal-table/full-loader reads, unnecessary large fields, repeated hydration, and cacheable request paths.
+## D-127 — The next P0-B solution must be selected architecturally and include portability/cost as first-class criteria
 
-P0-B must remain measured and fail-safe: preserve SEO/public semantics, market/stock/restock/trend behavior, and ingestion/write isolation. Do not buy a paid plan or weaken functionality by implication merely to hide avoidable read amplification.
+Before the next implementation, compare the smallest viable production-grade approaches:
 
-### D-122 — Product prioritization uses a business/reliability scoreboard, not Data Scale counts alone
+1. a portable cache abstraction with a Vercel Runtime Cache adapter now and a Cloudflare KV/Cache adapter later;
+2. a safe public response/CDN cache boundary;
+3. a reduced/precomputed public-detail read model.
 
-After the reliability gate, the ordered decision model is:
+The chosen design must:
+- materially reduce repeated uncached Supabase reads;
+- never place raw service-role/admin/write data in shared cache;
+- preserve normal Japanese slugs and public behavior;
+- target freshness around the fastest intended ingestion cadence (currently about 30 minutes) unless evidence justifies another TTL;
+- fail safely if cache is unavailable;
+- account for duplicate cold-origin execution/stampede where practical;
+- avoid unnecessary Vercel lock-in because Cloudflare Workers/vinext POC #235 is active;
+- add no paid dependency without explicit owner approval;
+- prefer a small reversible diff over a Production schema migration unless the migration/read-model approach is clearly superior.
 
-**Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
+## D-128 — Exact-head backend evidence, not framework-cache assumptions, is the acceptance criterion
 
-Data Scale is a supporting capability. A future depth/breadth/history experiment must explain which user/business outcome it is expected to improve and how that improvement will be measured. Listing/depth counts alone are insufficient justification for continued infrastructure work.
+A cache implementation is not accepted because CI passes, a page returns 200, or a framework API is documented to cache. The gate requires the exact deployed head plus two identical fresh Japanese-slug requests and runtime/Supabase evidence demonstrating the intended reduction.
 
-Relevant evidence includes search impressions/clicks/CTR/indexation, page traffic, outbound shop clicks and CTR, affiliate conversion/revenue where available, data freshness/coverage quality, and Supabase/Vercel cost/request efficiency.
-
-### D-123 — The completed #228 R4 authority remains consumed across the P0 reprioritization
-
-Moving focus to #219 does not reopen or broaden any previous Production authority. The successful R4 repair and one-candidate proof remain historical verified state, and the exact #228 approval remains consumed/non-reusable.
-
-No further R4 write/retry, provider refresh, workflow mutation or Production market write is authorized by this reprioritization. A future write requires a new current-state bind and fresh applicable approval.
+Only after that evidence, complete diff/security review, main-drift check, applicable Production approval, release smoke, and short post-release observation may #219 be considered controlled enough to resume normal product development.
 
 ## Current durable state
 
-- current main: `8048a19ad478672a9d887d77073597ee95dc27d3`
-- Production: `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G` — READY
+- verified `main`: `da506232472c22c909f95e5a855b1cfed8889e73`
 - Issue #219: **OPEN P0**
-- P0-A sitemap mitigation: **RELEASED / VERIFIED**
-- P0-A billed-Egress outcome: **NOT YET PROVEN**
-- next true gate: **read-only post-release Egress observation**
-- if still high: **P0-B remaining public-loader attribution/mitigation**
-- if normalized: **business-scoreboard reassessment before choosing the next product/Data Scale experiment**
-- Production R4 repair: **APPLIED AND VERIFIED**
-- R4 one-candidate proof: **SUCCESS**
-- exact #228 write authority: **consumed/non-reusable**
-- last canonical market snapshot: **133 listings / 155 observations / 120x1 / 2x2 / 0x3+ / clicks7d10 / sold0**
+- Issue #239: **OPEN P0-B implementation lane**
+- Draft PR #240: **OPEN / UNMERGED / NOT A RELEASE CANDIDATE YET**
+- last exact code head tested: `a02e69285ebcc9c06e1be67f2e066d8460e57e68`
+- exact-head CI `33784381137`: **SUCCESS**
+- Preview `dpl_BagCivrtVobFkZum27Stg2PridsS`: **READY**
+- present `unstable_cache` mechanism: **REJECTED by backend evidence**
+- next gate: **architecture choice -> one new implementation -> exact-head backend proof**
 
-## Approval state
+## Approval / hard constraints
 
 Not authorized now:
-- another R4 write/retry
-- provider refresh under consumed authority
-- another history write by implication
+- merge/release PR #240
+- Production DB/schema/data mutation
+- provider/history/R4 write or retry
 - workflow dispatch/change
 - Secrets/Variables changes
-- F0/#142
+- paid-plan or paid-dependency change
 - unrelated advisor remediation
-- paid/destructive actions
-- Supabase paid-plan upgrade without exact current price/terms and explicit owner approval
+- destructive action
+- direct main push
 
-## Hard durable constraints
-
+Hard constraints:
 - never touch `supabase/.temp/cli-latest`
 - keep `.github/workflows/gacha-ingestion.yml` disabled
 - no automatic RPC retry
-- do not manually alter Supabase migration ledger identity/timestamps
-- do not weaken strict market matching or identity guards for coverage
+- do not weaken strict market matching/identity guards
 - completed sold evidence remains separate from asking-price evidence
 - do not scrape Mercari or Amazon
-- direct main pushes remain prohibited
-
-## Canonical history
-
-Immediate pre-#233 decisions snapshot:
-
-`docs/history/2026-09-03-pre-233-DECISIONS.md`
-
-Once this exact sync reaches `main`, Issue #233 is complete by definition and does not trigger another recursive canonical sync solely to record its own merge.
