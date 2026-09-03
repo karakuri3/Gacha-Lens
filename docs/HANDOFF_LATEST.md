@@ -2,100 +2,82 @@
 
 Updated: 2026-09-04 JST
 
-This file is the **latest in-progress checkpoint** while the Supabase egress P0 remains open. A fresh ChatGPT thread that receives only **「Gacha Lens続けて」** must read this file first, then `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `AGENTS.md`, and the live GitHub/Vercel/Supabase state before taking action.
+A fresh ChatGPT thread that receives only **「Gacha Lens続けて」** must read, in this order:
+
+1. `docs/COMPANY_INFRA_MIGRATION_PRIORITY.md` — company-level execution order; this wins over local P0 sequencing unless the user explicitly changes priorities.
+2. this file.
+3. `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `AGENTS.md`.
+4. live GitHub / Vercel / Cloudflare / Supabase state before taking action.
+
+## Company-level execution order
+
+1. Stop avoidable Vercel spend — immediate incident containment DONE; keep cost-aware build discipline active.
+2. Create Cloudflare parallel environments — substantially DONE.
+3. Fully validate `beach-match-manager` on Cloudflare first — **CURRENT TOP EXECUTION PRIORITY**.
+4. Validate Gacha Lens on Cloudflare including Next.js/vinext runtime compatibility.
+5. Validate selected Supabase hardening in isolated/rehearsal environment.
+6. If all gates pass, cut over `gachalens.com` with rollback ready.
+7. Only after stable cutover/rollback proof, downgrade or cancel Vercel Pro.
+
+Do not allow a project-local P0 to silently replace this company-level sequence again.
+
+## Verified Cloudflare migration state
+
+### Beach
+- Cloudflare Pages project `beach-match-manager` exists and is deployed.
+- Isolated POC production branch: `infra/cloudflare-poc`.
+- Build: `npm run build`; output: `dist`.
+- Browser-safe envs configured: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY`, `VITE_R3_05_NATIVE_MATCH_WRITER=true`, `VITE_R3_05_NATIVE_HISTORY_EDITOR=false`.
+- Public isolated URL: `https://beach-match-manager.pages.dev/`.
+- Verified deployment source: `aebed0155ccef98cfff85547996b06ffab46ea64`.
+- Draft PR #211 remains open and unmerged.
+- App renders on Pages and direct `/mypage` navigation returns the SPA rather than a host-level 404.
+- POC `_headers` preserves CSP, HSTS, nosniff, DENY framing, referrer policy, permissions policy, COOP and DNS-prefetch hardening.
+- No custom domain is attached; public Production remains Vercel.
+
+Beach Step 3 is **not closed yet**. Remaining acceptance: interactive auth/session/logout on the Cloudflare origin; representative Supabase-backed read/write flow including native match writer; confirm native history editor remains OFF; representative auth-dependent flows; Sentry/CSP smoke; served-header verification; final diff/main-drift review and acceptance record.
+
+### Gacha
+- Draft Cloudflare PR #235 remains open and unmerged.
+- Exact-head vinext compatibility/build previously passed at `3c541b07dc3776b0c5bab6c660dbaa15ce7722db`.
+- POC separated Node-only child-process ingestion execution from the web runtime; scheduled ingestion remains owned by GitHub Actions.
+- Real `workers.dev` runtime parity is not yet proven.
+- No `gachalens.com` DNS/custom-domain cutover has occurred.
+
+## Current Gacha Supabase egress P0
+
+The repeated public product-detail Supabase read problem remains real and must be resolved before final Gacha acceptance if still reproducible, but it is now explicitly subordinate to the company roadmap above.
+
+Draft PR #240: `fix: bound public Supabase reads to ingestion cadence`
+- branch: `fix/p0-public-data-cache-30m`
+- current PR head at this handoff: `a1b0dea74c04f1ed9175a767b63d5c3407707e71` (latest change is documentation/priority state)
+- base main at last check: `da506232472c22c909f95e5a855b1cfed8889e73`
+- PR remains Draft and MUST NOT be merged without backend-load proof and applicable Production approval.
+- P0 implementation Issue #239; parent reliability/cost Issue #219.
+
+Rejected experiments that must not be repeated:
+1. `revalidate=1800` alone — backend reads repeated.
+2. full-route `force-static + revalidate=1800` — Japanese slug HTTP 500 / invalid cache tags.
+3. operation-scoped custom fetch cache — Japanese route worked, Supabase full read set repeated.
+4. `unstable_cache` facade via alias — read set repeated.
+5. instrumented `unstable_cache` facade — runtime proved facade executed, but identical second request re-ran the same origin callbacks and Supabase reads.
+6. module-scope `unstable_cache` candidate also failed: identical second request still emitted the same variant/related origin markers and repeated Supabase product-detail reads. Do not spend more builds on `unstable_cache`/alias variants.
+
+The P0 solution should be portable toward Cloudflare; do not add a paid Vercel-only dependency without explicit approval. Candidate directions remain response/CDN-safe public boundary caching, a portable cache adapter, or reshaping/precomputing the public read model. Re-evaluate after Beach Cloudflare acceptance unless a Beach blocker directly requires Gacha work.
 
 ## Safety state
 
-- Production freeze remains active for the current P0-B experiment.
-- Do **not** merge PR #240 until exact-head Preview backend evidence passes and the applicable Production approval is given.
-- No Production DB/schema/data write, DNS change, Auth change, Secrets/Variables change, workflow dispatch/change, paid action, or direct-main push is authorized by this checkpoint.
-- Keep `.github/workflows/gacha-ingestion.yml` disabled.
-- Never touch `supabase/.temp/cli-latest`.
-
-## Repository state
-
-- repository: `karakuri3/Gacha-Lens`
-- current `main` at latest verification: `da506232472c22c909f95e5a855b1cfed8889e73`
-- current P0 branch: `fix/p0-public-data-cache-30m`
-- Draft PR: #240 `fix: bound public Supabase reads to ingestion cadence`
-- last **code** head tested in Preview: `a02e69285ebcc9c06e1be67f2e066d8460e57e68`
-- exact-head CI for that code head: run `33784381137` — SUCCESS
-- exact-head Vercel Preview for that code head: `dpl_BagCivrtVobFkZum27Stg2PridsS` — READY
-- P0 implementation issue: #239
-- parent reliability/cost incident: #219
-- Production domain: `https://gachalens.com`
-- Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
-- old inactive Supabase: `ihcudkfspzuixsqsvoku`
-- preferred local path: `C:\dev\Gacha-Lens`
-
-Any docs-only commit after `a02e692...` is a checkpoint update, not new cache-code evidence. The next code candidate requires fresh exact-head CI/Preview proof.
-
-## What is being fixed now
-
-The active defect is **repeated public product-detail Supabase reads**. One normal `/series/[slug]` request hydrates the target variant, siblings, market observations, four signal families, related candidates, and related-series signals. Repeating the same page request currently repeats that backend read set instead of reusing or otherwise avoiding the work. This can amplify Supabase uncached egress and keeps Issue #219 at credible reliability/cost risk.
-
-The final solution must continue to support normal Japanese slugs, preserve public semantics/freshness, and never cache raw service-role responses or admin/write data.
-
-## P0-A already released
-
-PR #231 bounded sitemap-driven amplification using static/ISR daily revalidation. That release was verified, but it did not by itself prove the shared Supabase egress risk solved; #219 remains open.
-
-## Rejected P0-B experiments — do not repeat
-
-1. `revalidate=1800` alone: the detail route remained dynamic and the backend reads repeated.
-2. Full-route `force-static + revalidate=1800`: ASCII slug could reach `x-vercel-cache: HIT`, but a normal Japanese slug returned HTTP 500 with `ERR_INVALID_CHAR` / invalid `x-next-cache-tags`. Rejected.
-3. Exact head `059df1a7bf75dab5552f5f324a78c6c96d6b67cf`: operation-scoped custom `fetch` cache for Supabase GET/HEAD only. CI run `33781577045` SUCCESS and Japanese `セブルス・スネイプ` HTTP 200, but Supabase logs repeated the complete read set at `2026-09-03T16:59:15Z` after baseline `16:58:51Z`. Rejected.
-4. Exact head `c587227d321767163620dd37b373265180b8ce73`: completed public-detail `unstable_cache` facade selected through a `jsconfig.json` alias. CI run `33782780011` SUCCESS; Preview `dpl_6e6tZ5ZCSUTZi5epnFomoZ6kuBgV` READY; Japanese probe `チョココロネ` HTTP 200. Supabase logs repeated the same target/siblings/market/signals/related read set at `17:11:05Z` after baseline `17:09:47Z`. Rejected as a merge candidate.
-5. Exact head `a02e69285ebcc9c06e1be67f2e066d8460e57e68`: the same `unstable_cache` facade was instrumented so the origin callback logs only a fixed operation name plus the first 12 SHA-256 hex characters of the cache identity. No raw slug, secret, or DB value was logged. CI `33784381137` SUCCESS and Preview `dpl_BagCivrtVobFkZum27Stg2PridsS` READY. Fresh Japanese probe displayed `アルバス・ダンブルドア` with HTTP 200. First request emitted `variant bcc2f31ed429` **twice** and `related a2f2b32e9ea6` once. The identical second request emitted the exact same three origin markers again. Supabase independently showed the product-detail read set at about `17:25:52Z` and again at `17:27:35-36Z`, including target, siblings, market observations, x reactions, stock reports, restock events, market listings, related candidates, and related-series signals. This decisively proves the facade is used at runtime but the present `unstable_cache` path is not reusing the completed result across requests. Reject this cache mechanism; do not spend more builds on alias/explicit-import variants.
-
-The duplicate `variant` origin execution within a single cold request also indicates two detail consumers (for example metadata + page rendering/concurrency) can perform the same expensive origin work. A final design should address request-to-request reuse/reduction and, where practical, cold-request duplicate work.
-
-## Current next step — architecture selection, not another `unstable_cache` tweak
-
-Do **not** run the previously proposed explicit-import diagnostic; the instrumentation proved the facade is executing, so that hypothesis is closed.
-
-Compare and select the smallest safe production-grade mechanism among:
-
-1. a portable cache abstraction with a Vercel Runtime Cache adapter now and a Cloudflare KV/Cache adapter later;
-2. response/CDN caching at a safe public-data boundary where Japanese-slug semantics and metadata remain valid;
-3. reducing/reshaping the public detail read model so one page requires far fewer Supabase reads, potentially a precomputed public snapshot aligned to ingestion cadence.
-
-Selection criteria:
-- materially reduce repeated Supabase uncached egress;
-- no raw service-role/admin/write data in shared cache;
-- normal Japanese slugs must remain HTTP 200;
-- freshness target approximately 30 minutes / fastest intended ingestion cadence unless evidence justifies otherwise;
-- fail safely if cache is unavailable;
-- account for cold-request duplication/stampede behavior;
-- minimize Vercel lock-in because Cloudflare Workers/vinext migration POC #235 is active;
-- no new paid dependency without explicit approval;
-- prefer a small reversible diff over a schema migration unless the latter is clearly superior.
-
-Before implementation, verify current official Runtime Cache / Cloudflare cache semantics, pricing/limits, and repository dependencies. Then implement one chosen candidate, not several speculative variants.
-
-## Required validation gate for the next candidate
-
-1. remove the temporary diagnostic instrumentation unless the selected mechanism needs equivalent non-sensitive proof;
-2. exact-head CI SUCCESS;
-3. exact-head Vercel Preview READY;
-4. fresh normal Japanese slug request #1;
-5. identical request #2;
-6. Vercel runtime evidence proves the intended cache/reduction path;
-7. Supabase API logs prove the repeated detail read set is absent or materially reduced as designed;
-8. runtime errors clean;
-9. final complete diff/security review and current-main drift check;
-10. only then request/apply the applicable Production approval and release gate.
-
-After release, Production smoke and a short Supabase egress/read observation are still required before #219 can be considered controlled/closable.
-
-## Separate work held behind P0
-
-- Cloudflare Workers/vinext POC: Draft PR #235, exact-head compatibility/build CI previously SUCCESS; no Production DNS/cutover.
-- Cloudflare Pages Beach POC is separate and must not distract from Gacha Lens reliability P0.
-- branch-protection hardening Issue #236 remains open.
-- Supabase advisor findings are separate; do not change RLS/policies/extensions/indexes by implication.
-- Data Scale/history/provider writes remain on hold; prior #228 authority is consumed and non-reusable.
+- No Production DB/schema/data write, DNS change, Auth change, secrets/variables change, paid action, or direct-main push is authorized by this handoff.
+- Do not merge PR #211, #235, or #240 merely because CI is green.
+- Keep `gachalens.com` on Vercel until Beach + Gacha + Supabase rehearsal + rollback gates pass.
+- Do not downgrade/cancel Vercel Pro before post-cutover stability is proven.
+- Do not mechanically change RLS, SECURITY DEFINER functions, extensions, or indexes based only on advisor warnings.
+- Never expose service-role secrets in browser-visible variables.
 
 ## Immediate resume instruction
 
-If this conversation disappears now, the next thread should say **「Gacha Lens続けて。docs/HANDOFF_LATEST.mdを正本としてP0 #219/#239、Draft PR #240から再開して」**. The assistant should re-fetch live state first, skip further `unstable_cache`/alias experiments, perform the architecture selection above, and continue from there. No user re-explanation should be required.
+If this conversation disappears now, start a new thread with:
+
+**「Gacha Lens続けて。`docs/COMPANY_INFRA_MIGRATION_PRIORITY.md` と `docs/HANDOFF_LATEST.md` を正本として、Beach Cloudflare完全検証から再開して」**
+
+The assistant must re-fetch live state first. The immediate next action is Step 3: finish Beach Cloudflare validation. No user re-explanation should be required.
