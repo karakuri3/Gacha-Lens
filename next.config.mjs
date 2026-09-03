@@ -16,12 +16,43 @@ const ingestionTraceIncludes = [
   "node_modules/@supabase/storage-js/**/*",
 ];
 
+const publicSharedCdnRoutes = [
+  "/",
+  "/series",
+  "/series/:path*",
+  "/ranking",
+  "/schedule",
+  "/restocks",
+  "/stock",
+  "/categories",
+  "/categories/:path*",
+  "/brands",
+  "/brands/:path*",
+  "/franchises",
+  "/franchises/:path*",
+  "/guides",
+  "/guides/:path*",
+];
+
+const publicSharedCdnCacheControl = "public, max-age=300, stale-while-revalidate=3600, stale-if-error=86400";
+
 const nextConfig = {
   turbopack: {
     root: import.meta.dirname,
   },
   images: {
     unoptimized: true,
+  },
+  async headers() {
+    return publicSharedCdnRoutes.map((source) => ({
+      source,
+      headers: [
+        {
+          key: "CDN-Cache-Control",
+          value: publicSharedCdnCacheControl,
+        },
+      ],
+    }));
   },
   outputFileTracingIncludes: {
     "/*": ingestionTraceIncludes,
