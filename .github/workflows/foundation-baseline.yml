@@ -101,12 +101,20 @@ jobs:
             20260721090000
             20260721100000
           )
-          if [ "${actual[*]}" != "${expected[*]}" ]; then
-            echo "Expected migrations: ${expected[*]}"
-            echo "Applied migrations:  ${actual[*]}"
+          if [ "${#actual[@]}" -lt "${#expected[@]}" ]; then
+            echo "Expected at least ${#expected[@]} migrations, found ${#actual[@]}."
+            echo "Applied migrations: ${actual[*]}"
             exit 1
           fi
-          echo "Applied 8 migrations in the reviewed order."
+          for i in "${!expected[@]}"; do
+            if [ "${actual[$i]}" != "${expected[$i]}" ]; then
+              echo "Foundation migration prefix mismatch at position $i."
+              echo "Expected prefix: ${expected[*]}"
+              echo "Applied migrations: ${actual[*]}"
+              exit 1
+            fi
+          done
+          echo "Foundation migration prefix verified: ${#expected[@]} reviewed migrations; ${#actual[@]} total migrations applied."
 
       - name: Verify final catalog
         shell: bash
