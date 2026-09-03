@@ -43,11 +43,14 @@ test("R4 repair reasserts the reviewed callable security surface", () => {
   assert.match(repairMigration, /has_function_privilege\('service_role'/i);
 });
 
-test("R4 repair migration contains a real transactional function invocation proof with zero residue", () => {
+test("R4 repair migration contains a real service-role transactional function invocation proof with zero residue", () => {
+  assert.match(repairMigration, /set local role service_role/i);
   assert.match(repairMigration, /v_result := public\.apply_market_depth_r4_atomic_v1\(v_batch\)/i);
   assert.match(repairMigration, /market_depth_r4_runtime_proof_result_mismatch/i);
   assert.match(repairMigration, /market_depth_r4_runtime_proof_depth_mismatch/i);
   assert.match(repairMigration, /market_depth_r4_runtime_proof_rollback/i);
+  assert.match(repairMigration, /current_user\s*<>\s*session_user/i);
+  assert.match(repairMigration, /market_depth_r4_runtime_proof_role_not_restored/i);
   assert.match(repairMigration, /market_depth_r4_runtime_proof_residue/i);
   assert.match(repairMigration, /SQLSTATE = 'P0001'/i);
   assert.match(repairMigration, /repeat\('a', 301\)/i);
