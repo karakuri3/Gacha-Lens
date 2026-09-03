@@ -71,11 +71,18 @@ DECLARE
   v_depth integer;
   v_security_definer boolean;
   v_empty_search_path boolean;
+  v_public_execute boolean;
 BEGIN
   SELECT
     p.prosecdef,
-    coalesce(p.proconfig, '{}'::text[]) @> ARRAY['search_path=""']::text[]
-  INTO v_security_definer, v_empty_search_path
+    coalesce(p.proconfig, '{}'::text[]) @> ARRAY['search_path=""']::text[],
+    EXISTS (
+      SELECT 1
+      FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+      WHERE acl.grantee = 0
+        AND acl.privilege_type = 'EXECUTE'
+    )
+  INTO v_security_definer, v_empty_search_path, v_public_execute
   FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public'
@@ -84,7 +91,7 @@ BEGIN
 
   IF v_security_definer IS DISTINCT FROM false
     OR v_empty_search_path IS DISTINCT FROM true
-    OR has_function_privilege('PUBLIC', 'public.apply_market_depth_r4_atomic_v1(jsonb)', 'EXECUTE')
+    OR v_public_execute IS DISTINCT FROM false
     OR has_function_privilege('anon', 'public.apply_market_depth_r4_atomic_v1(jsonb)', 'EXECUTE')
     OR has_function_privilege('authenticated', 'public.apply_market_depth_r4_atomic_v1(jsonb)', 'EXECUTE')
     OR NOT has_function_privilege('service_role', 'public.apply_market_depth_r4_atomic_v1(jsonb)', 'EXECUTE') THEN
