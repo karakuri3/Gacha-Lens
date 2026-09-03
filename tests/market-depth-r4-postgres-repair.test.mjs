@@ -20,11 +20,11 @@ test("R4 repair preserves migration history and replaces only the unsupported SQ
   assert.match(repairMigration, /v_occurrences\s*<>\s*1/i);
   assert.match(
     repairMigration,
-    /length\(coalesce\(e\.value->>'source_listing_id', ''\)\) not between 1 and 300/i,
+    /length\(coalesce\(e\.value->>''source_listing_id'', ''''\)\) not between 1 and 300/i,
   );
   assert.match(
     repairMigration,
-    /coalesce\(e\.value->>'source_listing_id', ''\) !~ '\^\[A-Za-z0-9:\._-\]\+\$'/i,
+    /coalesce\(e\.value->>''source_listing_id'', ''''\) !~ ''\^\[A-Za-z0-9:\._-\]\+\$''/i,
   );
   assert.match(repairMigration, /replace\(v_definition, v_broken_guard, v_repaired_guard\)/i);
 });
