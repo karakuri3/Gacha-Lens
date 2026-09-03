@@ -125,6 +125,9 @@ export function isSitemapSourceReady(sourceText) {
     "`/guides/${encodeURIComponent(slug)}`",
     "MAX_SITEMAP_URLS = 50000",
     "entries.length > MAX_SITEMAP_URLS",
+    "unstable_cache",
+    "export const revalidate = 86400",
+    "gacha-public-root-sitemap-v1",
   ]);
 }
 
@@ -135,11 +138,16 @@ export function isObserverSitemapSourceReady({ robotsText, seriesRouteText, vari
     'absoluteSiteUrl("/variant-sitemap.xml")',
     'disallow: ["/api/", "/review/", "/supabase-series"]',
   ])
-    && [seriesRouteText, variantRouteText].every((route) => hasEvery(route, [
-      'export const dynamic = "force-dynamic"',
-      "new Response(buildObserverSitemapXml(entries",
-      '"Content-Type": "application/xml; charset=utf-8"',
-    ]))
+    && [seriesRouteText, variantRouteText].every((route) => (
+      hasEvery(route, [
+        'export const dynamic = "force-static"',
+        "export const revalidate = 86400",
+        "unstable_cache",
+        "new Response(buildObserverSitemapXml(entries",
+        '"Content-Type": "application/xml; charset=utf-8"',
+      ])
+      && !route.includes("force-dynamic")
+    ))
     && hasEvery(publicationText, [
       "MAX_OBSERVER_SITEMAP_URLS = 50000",
       "Observer sitemap exceeds ${MAX_OBSERVER_SITEMAP_URLS} URLs",
@@ -195,7 +203,7 @@ function buildStaticChecks(root) {
       "sitemap",
       isSitemapSourceReady(sitemap) ? "pass" : "fail",
       true,
-      "Sitemap must publish core public routes, guides, and retain the 50,000 URL cap."
+      "Sitemap must publish core public routes, guides, retain the 50,000 URL cap, and keep the daily low-egress cache boundary."
     ),
     check(
       "observer_sitemaps",
@@ -206,7 +214,7 @@ function buildStaticChecks(root) {
         publicationText: sitemapPublication,
       }) ? "pass" : "fail",
       true,
-      "Root, series, and variant observer sitemaps must remain published with independent 50,000 URL fail-closed caps."
+      "Root, series, and variant observer sitemaps must remain published with independent 50,000 URL fail-closed caps and daily low-egress cache boundaries."
     ),
     check(
       "public_catalog_routes",

@@ -1,8 +1,17 @@
 import { getPublicSitemapIdentifiers } from "@/lib/series";
 import { getEditorialGuideSlugs } from "@/lib/domain/editorial-guides";
 import { absoluteSiteUrl } from "@/lib/site-metadata";
+import { unstable_cache } from "next/cache";
 
 const MAX_SITEMAP_URLS = 50000;
+
+export const revalidate = 86400;
+
+const getDailyPublicSitemapIdentifiers = unstable_cache(
+  () => getPublicSitemapIdentifiers(),
+  ["gacha-public-root-sitemap-v1"],
+  { revalidate: 86400 }
+);
 
 export default async function sitemap() {
   const staticPages = [
@@ -23,7 +32,7 @@ export default async function sitemap() {
     { path: "/operator", frequency: "yearly", priority: 0.3 },
     { path: "/contact", frequency: "yearly", priority: 0.3 },
   ];
-  const { variantSlugs, parentSeriesSlugs, franchises, brands, categories } = await getPublicSitemapIdentifiers();
+  const { variantSlugs, parentSeriesSlugs, franchises, brands, categories } = await getDailyPublicSitemapIdentifiers();
   const guideSlugs = getEditorialGuideSlugs();
 
   const entries = [
