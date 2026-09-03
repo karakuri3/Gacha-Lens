@@ -1,109 +1,84 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-03 JST — #218 R4 repository repair merged / Issue #224 canonical sync
+Updated: 2026-09-03 JST — Production R4 repair complete / Issue #226 canonical sync
 
-The complete durable-decisions checkpoint immediately before #224 is preserved byte-for-byte at `docs/history/2026-09-03-pre-224-DECISIONS.md`. Decisions D-001 through D-102 remain authoritative unless explicitly superseded below.
+The complete durable-decisions checkpoint immediately before #226 is preserved byte-for-byte at `docs/history/2026-09-03-pre-226-DECISIONS.md`. Decisions D-001 through D-107 remain authoritative unless explicitly superseded below.
 
 ## Authoritative additions
 
-### D-103 — #218-only human review substitution is consumed and cannot cross boundaries
+### D-108 — The reviewed Production R4 repair set has been applied successfully
 
-For PR #218 only, the user explicitly authorized replacing the otherwise-required independent Reviewer/Verifier with exact-head CI, exact-head Vercel Preview, disposable Supabase runtime proof, and strengthened Lead self-review through merge.
+Under a fresh explicit human approval limited to the Production R4 repair purpose, the three reviewed repository repairs were applied in order to Supabase Production `vxbrnvfhmzcxehuuzzum` through the migration mechanism.
 
-The substitution was bound to exact head `10864b7cf62aeb91ff7fa96d9e5277930cb06a38`, recorded in the PR, and consumed when #218 squash-merged to main `51f868b57571e0f25955ca91a1c8faff1e86c335`.
+Production migration ledger identities are:
+1. `20260903111455 market_observation_trigger_schema_qualification`
+2. `20260903111513 market_observation_service_role_contract`
+3. `20260903111600 market_depth_r4_postgres_regex_repair`
 
-It cannot be reused for:
-- another PR;
-- Production migration approval;
-- R4 candidate persistence;
-- provider calls;
-- F0/#142;
-- paid/destructive work;
-- any future independent-review gate.
+Their repository source files remain the reviewed `20260903183500`, `20260903183530`, and `20260903183600` migrations merged by #218. Do not rewrite already-applied repository or Production ledger history merely to align timestamps.
 
-### D-104 — Repository repair merge and Supabase Production repair remain distinct states
+### D-109 — Production R4 repair must prove market-data delta0 and zero runtime-proof residue
 
-PR #218 is merged and Vercel Production is READY, but post-merge SELECT-only verification proves Supabase Production has **not** applied the three merged repair migrations.
+The repair is considered successful only because independent post-application SELECT verification proved:
+- listings 127 -> 127;
+- observations 149 -> 149;
+- re-observed listings 22 -> 22;
+- completed/sold 0 -> 0;
+- target candidate0 and deterministic target observation0;
+- runtime-proof series/variant/listing/observation residue0.
 
-Current Production remains:
-- 127 listings;
-- 149 observations;
-- 22 re-observed listings;
-- sold/completed 0;
-- R4 candidate rows 0;
-- deterministic R4 observation rows 0;
-- installed broken R4 source-ID guard occurrences 1;
-- repository repair migrations applied: false.
+The reviewed runtime proof intentionally exercised the repaired writer under `service_role` and rolled its fixture writes back. This controlled proof is not candidate persistence.
 
-Therefore a Git/Vercel release is not evidence that the Production database function is repaired.
+### D-110 — The repaired Production callable contract is now the authoritative R4 function state
 
-### D-105 — The Production R4 repair migration set is one fresh explicit approval boundary
+After repair:
+- broken `{1,300}` source-ID regex guard occurrences = 0;
+- explicit source-ID length 1..300 guard is present;
+- PostgreSQL-safe ASCII allowlist `^[A-Za-z0-9:._-]+$` is present;
+- trigger unqualified `market_listing_observations` relation occurrences = 0;
+- qualified `public.market_listing_observations` relation is present;
+- R4 is SECURITY INVOKER with empty search_path;
+- PUBLIC/anon/authenticated do not have R4 EXECUTE;
+- service_role has R4 EXECUTE and required observation-table CRUD.
 
-The reviewed repository repair set is:
-1. `20260903183500_market_observation_trigger_schema_qualification.sql`
-2. `20260903183530_market_observation_service_role_contract.sql`
-3. `20260903183600_market_depth_r4_postgres_regex_repair.sql`
+Future R4 work must preserve these contracts.
 
-Applying this set to Production requires a fresh explicit human approval after re-fetching current main and live Production function/ledger/data state.
+### D-111 — Production repair authority is consumed and does not authorize candidate persistence
 
-If approved, apply the reviewed set exactly once through the normal migration mechanism and verify:
-- migration ledger identity;
-- trigger-function schema qualification;
-- service_role server-only table contract without widening client privileges;
-- SECURITY INVOKER / empty search_path / service_role-only EXECUTE;
-- PostgreSQL-safe validator state;
-- market-data delta0 from the repair itself.
+The approval that applied the three repair migrations is consumed/non-reusable.
 
-Do not edit already-applied historical migration identity or manually repair ledger timestamps.
+A candidate write now requires a new boundary after read-only current-state rebind, collision checks, Scoreboard review, evidence-validity review, manifest/digest reconstruction, and durable resolution evidence. The eventual write approval must identify the exact single candidate. No automatic retry is allowed.
 
-### D-106 — Production repair approval never authorizes R4 candidate persistence
+### D-112 — Supabase advisor findings outside the R4 repair are separate security/performance debt
 
-Even after the Production repair is successfully applied and verified, the candidate write remains a separate later boundary.
+Post-DDL Supabase advisors reported project-wide items including RLS-enabled/no-policy notices, GraphQL schema visibility from existing anon/authenticated SELECT grants, unindexed foreign keys, unused indexes, and a public-schema extension warning.
 
-Before a new candidate write:
-1. re-fetch current main and live Scoreboard;
-2. re-read target catalog/review/depth state;
-3. prove unresolved issues and all identity/URL/listing/observation collisions remain zero;
-4. determine whether historical R3 evidence is still valid without silently refreshing provider data;
-5. rebuild the complete frozen R4 manifest/digest against current state;
-6. obtain a new explicit one-candidate write approval;
-7. save a durable resolution manifest before the single invocation;
-8. never automatically retry; ambiguous commit state uses SELECT-only resolution.
-
-### D-107 — #218 repository repair is the new source of truth, while #214 remains terminal failure history
-
-The merged main now contains the reviewed trigger qualification, fresh service-role contract normalization, PostgreSQL validator repair, and disposable runtime proof. Future repository work must preserve these contracts.
-
-#214 remains terminal evidence for its consumed authorization: the old Production function failed synchronously before inserts with PostgreSQL 2201B, with independent zero-write proof. Do not reinterpret #218 merge as retroactively making #214 successful.
+The repair migration did not broaden client table grants; pre-repair checks already showed existing client SELECT access on `market_listing_observations`. These advisor findings must not be silently remediated under the R4 repair authority. Any access-model or index change requires a separate scoped review because it can alter application behavior.
 
 ## Current durable state
 
-- canonical main: `51f868b57571e0f25955ca91a1c8faff1e86c335`
-- #218 merged; Issue #217 closed
-- Vercel Production for current main: READY
-- final #218 exact-head Code Quality #109 / Foundation #113 / Preview: all SUCCESS/READY
-- #218-only review substitution: consumed/non-reusable
+- runtime main at repair: `b41382d3f8470edc68133a27d50892c016ea095f`
+- #218 merged; #217 closed
+- Production R4 repair: **APPLIED AND VERIFIED**
 - Production market state: **127 / 149 / 22 / sold0**
-- Production R4 function: still original runtime-defective/quarantined version
-- merged Production repair migrations: not applied
-- next true gate: explicit Production repair migration-set approval
-- #214 authority: consumed/non-reusable
+- target candidate/observation: **absent**
+- Production R4 callable contract: **repaired and verified**
+- repair approval: **consumed/non-reusable**
+- next true gate: fresh read-only R4 rebind, then separate one-candidate write approval
 
 ## Approval state
 
-Consumed/non-reusable includes all previously recorded R1/R2/#201/#206/#208/#211 approvals, #214 R4 migration/write authority, the one-time #180/#182 substitution, and the #218-only review substitution.
+Consumed/non-reusable includes all previously recorded R1/R2/#201/#206/#208/#211/#214 authorities, the one-time review substitutions, and the Production R4 repair migration approval.
 
 Not authorized now:
-- Production R4 repair migration set
-- current Production R4 function invocation
 - R4 candidate write/retry
-- provider calls under consumed authority
+- provider refresh under consumed authority
 - another history write by implication
 - workflow dispatch/change
 - Secrets/Variables changes
 - F0/#142
-- paid reviewer/action without approval
-- destructive actions
+- unrelated advisor remediation
+- paid/destructive actions
 
 ## Hard durable constraints
 
@@ -114,13 +89,12 @@ Not authorized now:
 - do not weaken strict market matching or identity guards for coverage
 - completed sold evidence remains separate from asking-price evidence
 - do not scrape Mercari or Amazon
-- repository merge and Vercel READY never imply Supabase Production authority
 - direct main pushes remain prohibited
 
 ## Canonical history
 
-Immediate pre-#224 decisions snapshot:
+Immediate pre-#226 decisions snapshot:
 
-`docs/history/2026-09-03-pre-224-DECISIONS.md`
+`docs/history/2026-09-03-pre-226-DECISIONS.md`
 
-Do not create a recursive canonical sync merely to record #224's own docs-only merge.
+Do not create a recursive canonical sync merely to record #226's own docs-only merge.

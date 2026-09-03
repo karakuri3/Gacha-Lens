@@ -1,8 +1,8 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-03 JST — PR #218 R4 repository repair merged / Issue #224 canonical sync
+Updated: 2026-09-03 JST — Production R4 repair migration applied and verified / Issue #226 canonical sync
 
-This is the current operational handoff. The complete checkpoint immediately before #224 is preserved byte-for-byte at `docs/history/2026-09-03-pre-224-HANDOFF.md`; that snapshot links to earlier pre-#222 and pre-#215 history.
+This is the current operational handoff. The complete checkpoint immediately before #226 is preserved byte-for-byte at `docs/history/2026-09-03-pre-226-HANDOFF.md`; that snapshot links to pre-#224, pre-#222 and older history.
 
 ## Resume protocol
 
@@ -10,141 +10,92 @@ If a fresh thread receives only **「Gacha Lens続けて」**:
 
 1. Read this file plus `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`, `docs/DATA_SCALE_SCOREBOARD.md`, `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
 2. Re-fetch current `main`, recent Issues/PRs/Actions, Vercel, and only the live Production evidence needed for the next decision.
-3. Do not repeat completed or failed R1/R2/R3/R4/history canaries merely to refresh context.
-4. Production DB mutation/migration/schema/backfill/reset/cleanup, approval-bound provider execution, workflow dispatch/change, Secrets/Variables changes, paid/destructive actions, direct main pushes, and ineligible merges/releases require applicable explicit approval.
+3. Do not repeat completed/failed R1/R2/R3/R4/history canaries merely to refresh context.
+4. Production data writes, new migrations/schema/backfills, provider execution, workflow dispatch/change, Secrets/Variables, paid/destructive actions, direct main pushes, and ineligible merges/releases require applicable explicit approval.
 5. After each major Production/recovery/security/release milestone, synchronize `HANDOFF / STATUS / DECISIONS / TODO` before the next major phase.
 
 ## Repository / services
 
 - Repository: `karakuri3/Gacha-Lens`
-- Canonical main after #218 merge: `51f868b57571e0f25955ca91a1c8faff1e86c335`
-- PR #218: **MERGED** by squash; Issue #217: **CLOSED completed**
-- Vercel Production for `51f868b...`: `dpl_6Gdzgr85kAi6CNCwbnoKKfP5b4sn` — **READY**
+- Runtime main used for the Production repair: `b41382d3f8470edc68133a27d50892c016ea095f`
+- PR #218: **MERGED**; Issue #217: **CLOSED**
+- PR #225 / Issue #224: docs-only post-merge canonical sync complete before this Production repair
 - Production: `https://gachalens.com`
 - Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
 - Old inactive Supabase: `ihcudkfspzuixsqsvoku` — never confuse with Production
 - Preferred local path: `C:\dev\Gacha-Lens`
-- Incidental unused branch `tmp-should-not-create` remains unrelated and harmless; do not delete automatically without an applicable cleanup policy/approval.
 
-## PR #218 final repository evidence
+## Production R4 repair — COMPLETE
 
-Final reviewed/substituted exact head before merge:
-- `10864b7cf62aeb91ff7fa96d9e5277930cb06a38`
-- base main at final gate: `4e566880502e7d601803f94000087d1c77cea021`
-- diff: exactly 5 R4 repair/test files, +483 / -0
+Fresh human authorization allowed only the three reviewed Production repair migrations. No candidate persistence was authorized.
 
-Final exact-head gates:
-- PR Code Quality #109: **SUCCESS**
-- Foundation baseline #113: **SUCCESS end-to-end**
-- exact-head Vercel Preview `dpl_5WncNPgN6VbwF8LnwhpMQ9ZupAkZ`: **READY**
-- GitHub unresolved review threads: 0
-- Vercel unresolved toolbar threads: 0
-- main drift at merge gate: 0
+Applied through Supabase migration mechanism, in reviewed order:
+1. `20260903111455 market_observation_trigger_schema_qualification`
+   - repository source: `20260903183500_market_observation_trigger_schema_qualification.sql`
+2. `20260903111513 market_observation_service_role_contract`
+   - repository source: `20260903183530_market_observation_service_role_contract.sql`
+3. `20260903111600 market_depth_r4_postgres_regex_repair`
+   - repository source: `20260903183600_market_depth_r4_postgres_regex_repair.sql`
 
-Foundation #113 proved on a fresh disposable Supabase:
-- fixed Supabase CLI 2.109.1
-- all 15 repository migrations apply successfully
-- real `service_role` invocation of repaired R4 function succeeds
-- exact listing/observation/depth assertions succeed
-- runtime proof fixtures roll back with zero residue
-- invalid length and disallowed-character source IDs fail closed as ordinary candidate validation
-- original eight Foundation migration prefix remains exact
-- final catalog, FK rollback smoke, Foundation static tests, data-source tests, lint, build and cleanup all succeed
+Post-application verification:
+- market listings: **127 -> 127**
+- observations: **149 -> 149**
+- re-observed listings: **22 -> 22**
+- completed/sold: **0 -> 0**
+- R4 target candidate rows: **0**
+- deterministic R4 observation rows: **0**
+- runtime-proof series/variant/listing/observation residue: **0**
+- broken `{1,300}` source-ID guard occurrences: **1 -> 0**
+- explicit source-ID length `1..300` guard: **present**
+- PostgreSQL-safe `^[A-Za-z0-9:._-]+$` allowlist: **present**
+- unqualified trigger relation occurrences: **1 -> 0**
+- qualified `public.market_listing_observations` trigger relation: **present**
+- R4 function: **SECURITY INVOKER**
+- R4 function `search_path`: **empty**
+- R4 EXECUTE: PUBLIC=false / anon=false / authenticated=false / service_role=true
+- `service_role` CRUD on `public.market_listing_observations`: **true**
 
-## #218-only review substitution — consumed and non-reusable
+The third migration executed the real R4 success path under `service_role` inside its reviewed PL/pgSQL exception subtransaction, asserted result/depth behavior, rolled all fixture writes back, and also proved invalid length and invalid character failures. Independent post-migration SELECT confirmed zero residue and market-data delta0.
 
-The user explicitly authorized **for PR #218 only** replacing the otherwise-required independent Reviewer/Verifier with:
-- exact-head CI,
-- exact-head Vercel Preview,
-- disposable Supabase runtime proof,
-- strengthened Lead self-review,
-through merge.
+## Supabase advisor note
 
-That authority was recorded on #218 and consumed by the squash merge to main `51f868b...`. It must never be reused for another PR, Production migration, R4 write, or unrelated review gate.
+Security and performance advisors were run after the DDL change. No new R4 callable-surface defect was found. Existing project-wide advisory debt remains, including RLS-enabled/no-policy INFO notices and GraphQL schema visibility warnings caused by existing `anon`/`authenticated` SELECT grants, plus performance notices such as unindexed foreign keys / unused indexes.
 
-## Repository repair now on main
+Those were **not changed** under this repair-only authorization. Treat any access-model cleanup as a separate reviewed security task. Current Supabase guidance distinguishes table grants from RLS and now increasingly requires explicit grants for Data API exposure; do not change existing client access casually.
 
-Merged main contains three new repair migrations plus focused tests:
+## Consumed approval
 
-1. `20260903183500_market_observation_trigger_schema_qualification.sql`
-   - rewrites exactly one installed trigger-function relation reference from `market_listing_observations` to `public.market_listing_observations`;
-   - does not recreate the trigger;
-   - reasserts SECURITY INVOKER and empty `search_path`.
-2. `20260903183530_market_observation_service_role_contract.sql`
-   - grants only `service_role` SELECT/INSERT/UPDATE/DELETE on `public.market_listing_observations` for fresh-chain parity;
-   - does not grant anon/authenticated/PUBLIC.
-3. `20260903183600_market_depth_r4_postgres_regex_repair.sql`
-   - leaves the already-applied historical R4 migration immutable;
-   - replaces the unsupported `{1,300}` PostgreSQL regex bound with explicit length 1..300 plus `^[A-Za-z0-9:._-]+$`;
-   - reasserts SECURITY INVOKER, empty search_path, PUBLIC/anon/authenticated EXECUTE revoke and service_role EXECUTE;
-   - contains the transactional service-role runtime proof with rollback/zero-residue checks.
+The Production R4 repair migration authorization is **consumed/non-reusable**. It authorized only this migration set and its verification.
 
-Repository merge does **not** apply these migrations to Supabase Production.
+It did **not** authorize:
+- R4 candidate persistence or retry;
+- provider refresh;
+- another history write;
+- workflow dispatch/change;
+- Secrets/Variables changes;
+- F0/#142;
+- unrelated Production security/access changes.
 
-## Current Production checkpoint — SELECT-only after #218 merge
+## Current true gate — fresh R4 candidate rebind
 
-Latest post-merge read-only verification:
-- market listings: **127**
-- observations: **149**
-- re-observed listings: **22**
-- repeated-history rate: **17.3228%**
-- completed/sold: **0**
-- R4 candidate `yahoo-suruga-ya-601199451001`: **0 rows**
-- deterministic observation `market-depth-r4-924833906c89effa6b6e67c9b76409dc`: **0 rows**
-- installed Production R4 broken guard occurrences: **1**
-- repository repair migrations applied in Production ledger: **false**
+Production function repair is complete. The next phase is read-only preparation for a possible single R4 candidate write:
+1. re-fetch exact current main;
+2. recompute current Data Scale Scoreboard;
+3. re-read target variant/series/review/depth state;
+4. re-read current listing IDs and collision state;
+5. prove unresolved target issues0 and deterministic observation collision0;
+6. determine whether historical R3 evidence remains valid; do not silently refresh provider data;
+7. rebuild a complete frozen R4 manifest/digest against current Production;
+8. save durable resolution evidence;
+9. request a **fresh exact one-candidate Production write approval**.
 
-Therefore Production still runs the original runtime-defective/quarantined R4 function. The repository is repaired; Supabase Production is not.
+No candidate write is authorized now. If later approved, invoke exactly once. Never automatically retry; ambiguous commit state must be resolved SELECT-only.
 
-## #214 remains terminal fail-closed evidence
+## Historical boundaries
 
-The historical R4 migration was applied once under #214, then the single authorized candidate write failed synchronously before inserts with PostgreSQL `2201B invalid regular expression: invalid repetition count(s)`. Independent SELECT proved zero target writes and non-ambiguous failure.
-
-#214 authority is consumed/non-reusable. Never retry #214 or invoke the currently installed defective Production R4 function before the reviewed repair reaches Production under a new approval.
-
-## Current true gate — Production repair migration approval
-
-The next major action is **not authorized yet**.
-
-Before any Production repair:
-1. Re-fetch current main and Production function/ledger/data state.
-2. Confirm exact merged repair identities:
-   - `20260903183500_market_observation_trigger_schema_qualification.sql`
-   - `20260903183530_market_observation_service_role_contract.sql`
-   - `20260903183600_market_depth_r4_postgres_regex_repair.sql`
-3. Request fresh explicit human approval for the **Production R4 repair migration set only**.
-4. If approved, apply exactly once through the reviewed migration mechanism.
-5. Verify ledger/security/trigger qualification/validator state and market-data delta0.
-6. Force canonical sync after that Production repair milestone.
-
-A Production repair approval does **not** authorize candidate persistence.
-
-## Separate later R4 candidate boundary
-
-Only after Production repair is applied and verified:
-1. re-fetch current main and live Scoreboard;
-2. re-read target variant/series/depth/issues/collisions;
-3. confirm historical R3 evidence remains valid or stop without silently refreshing provider data;
-4. rebuild the complete R4 manifest/digest against current state;
-5. request a **separate fresh exact one-candidate R4 write approval**;
-6. save durable resolution manifest before write;
-7. invoke exactly once if approved; no automatic retry; ambiguous commit -> SELECT-only resolver.
-
-## Approval / execution state
-
-Consumed/non-reusable includes all previously recorded R1/R2/#201/#206/#208/#211 approvals, #214 R4 migration/write authority, the one-time #180/#182 substitution, and the new **#218-only review substitution**.
-
-Not authorized now:
-- current Production R4 function invocation
-- Production R4 repair migration set
-- R4 candidate persistence/retry
-- provider calls under consumed authority
-- another history write by implication
-- workflow dispatch/change
-- Secrets/Variables changes
-- F0/#142
-- paid reviewer/action without approval
-- destructive work
+- #214 remains terminal fail-closed evidence for the old defective function and its consumed authority.
+- #218 repository repair and its one-time Reviewer/Verifier substitution are consumed/non-reusable.
+- Production repair now supersedes the previous quarantine state, but does not retroactively make #214 successful.
 
 ## Hard no-regression boundaries
 
@@ -156,13 +107,12 @@ Not authorized now:
 - Keep completed sold evidence separate from active/sold_out asking-price evidence.
 - Do not scrape Mercari or Amazon.
 - Do not infer merchant equivalence from display names.
-- Do not invoke historical RPCs merely because functions exist.
 - No direct push to `main`.
 - #137/#142 remains a separate F0 Production-impact boundary.
 
 ## Canonical history
 
-Immediate pre-#224 checkpoint:
-- `docs/history/2026-09-03-pre-224-HANDOFF.md`
+Immediate pre-#226 checkpoint:
+- `docs/history/2026-09-03-pre-226-HANDOFF.md`
 
-Do not create a recursive canonical sync merely to record #224's own docs-only merge.
+Do not create a recursive canonical sync merely to record #226's own docs-only merge.
