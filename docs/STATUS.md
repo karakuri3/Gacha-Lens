@@ -1,87 +1,76 @@
 # Gacha Lens Status
 
-Updated: 2026-09-03 JST — #218 R4 repository repair merged / Issue #224 canonical sync
+Updated: 2026-09-03 JST — Production R4 repair complete / Issue #226 canonical sync
 
-The complete status checkpoint immediately before #224 is preserved byte-for-byte at `docs/history/2026-09-03-pre-224-STATUS.md`.
+The complete status checkpoint immediately before #226 is preserved byte-for-byte at `docs/history/2026-09-03-pre-226-STATUS.md`.
 
 ## Current repository / release
 
-- canonical main: `51f868b57571e0f25955ca91a1c8faff1e86c335`
-- PR #218: **MERGED** by squash
-- Issue #217: **CLOSED completed**
-- Vercel Production: `dpl_6Gdzgr85kAi6CNCwbnoKKfP5b4sn` — **READY**
+- runtime main used for repair: `b41382d3f8470edc68133a27d50892c016ea095f`
+- PR #218: **MERGED**
+- Issue #217: **CLOSED**
 - Production domain: `gachalens.com`
 - Supabase Production: `vxbrnvfhmzcxehuuzzum`
 
-## #218 final verification
+## Production R4 repair status — SUCCESS
 
-Final PR head: `10864b7cf62aeb91ff7fa96d9e5277930cb06a38`
+Applied Production migrations:
+- `20260903111455 market_observation_trigger_schema_qualification`
+- `20260903111513 market_observation_service_role_contract`
+- `20260903111600 market_depth_r4_postgres_regex_repair`
 
-- PR Code Quality #109: **SUCCESS**
-- Foundation baseline #113: **SUCCESS**
-- exact-head Preview `dpl_5WncNPgN6VbwF8LnwhpMQ9ZupAkZ`: **READY**
-- GitHub unresolved review threads: 0
-- Vercel unresolved toolbar threads: 0
-- final PR diff: 5 files / +483 / -0
+Verified outcome:
+- listings **127**
+- observations **149**
+- re-observed listings **22**
+- sold/completed **0**
+- R4 candidate **0**
+- deterministic R4 observation **0**
+- runtime proof residue **0**
+- broken regex guard **0**
+- explicit length 1..300 guard **present**
+- safe allowlist **present**
+- unqualified observation-trigger relation **0**
+- qualified public relation **present**
+- R4 SECURITY INVOKER **true**
+- R4 empty search_path **true**
+- R4 PUBLIC/anon/authenticated EXECUTE **false**
+- R4 service_role EXECUTE **true**
+- service_role observation CRUD **true**
 
-Foundation #113 proved fresh all-15-migration application, real service-role R4 runtime invocation, rollback/zero residue, invalid source-ID fail-closed behavior, Foundation prefix, final catalog, FK smoke, static/data-source tests, lint, build and cleanup.
+Market-data delta from the repair itself: **0**.
 
-## Review substitution state
+## Approval state
 
-The user explicitly authorized a **#218-only** substitution of independent Reviewer/Verifier with exact-head CI, Vercel Preview, disposable Supabase runtime proof and strengthened Lead self-review through merge.
+The Production repair-migration approval has been **consumed**. It cannot be reused.
 
-That authority is now **consumed/non-reusable**.
-
-## Repository repair now merged
-
-Main contains:
-- `20260903183500_market_observation_trigger_schema_qualification.sql`
-- `20260903183530_market_observation_service_role_contract.sql`
-- `20260903183600_market_depth_r4_postgres_regex_repair.sql`
-- focused R4 repair/security tests
-
-The merged repair preserves historical migration immutability, qualifies the observation trigger relation, aligns fresh server-only service-role privileges, replaces the unsupported PostgreSQL `{1,300}` regex bound with explicit length + safe allowed-character regex, preserves SECURITY INVOKER/empty search_path/service-role-only EXECUTE, and includes a real rollback-safe runtime proof.
-
-## Current Supabase Production state — post-merge SELECT-only
-
-- listings: **127**
-- observations: **149**
-- re-observed listings: **22**
-- repeated-history rate: **17.3228%**
-- completed/sold: **0**
-- R4 candidate rows: **0**
-- deterministic R4 observation rows: **0**
-- broken source-ID guard occurrences in installed Production R4 function: **1**
-- merged repository repair migrations applied to Production: **false**
-
-Production remains unchanged and the installed R4 function remains runtime-defective/quarantined.
+Not authorized now:
+- R4 candidate persistence/retry
+- provider refresh
+- new history write
+- workflow dispatch/change
+- Secrets/Variables changes
+- F0/#142
+- unrelated Production access/security modifications
 
 ## Current true gate
 
-Next major action: **fresh explicit approval for the Production R4 repair migration set only**.
+Next phase is read-only R4 candidate rebind and manifest reconstruction against current state. Only after that evidence is complete may a fresh exact one-candidate Production write approval be requested.
 
-Not authorized yet:
-- apply any of the three merged repair migrations to Production
-- invoke current Production R4 function
-- persist/retry the R4 candidate
-- refresh provider evidence
+No R4 candidate write is authorized now.
 
-After an approved repair application, verify migration ledger, callable security, trigger qualification, validator repair and market-data delta0, then perform a canonical sync.
+## Advisor state
 
-Candidate persistence remains a separate later approval boundary after a fresh main/Production/Scoreboard/target rebind and new manifest/digest.
+Post-DDL Supabase security/performance advisors were run. Existing project-wide advisories remain, including RLS-enabled/no-policy notices, GraphQL schema visibility from existing client SELECT grants, unindexed foreign keys, and unused indexes. No such unrelated access/performance change was made under this repair-only authority.
 
 ## History lane
 
-Generic bounded history remains healthy from #211 at **127 / 149 / 22 / sold0**. #211 authority is consumed/non-reusable.
-
-#206 R3 source evidence remains historical evidence only; provider/workflow authority is consumed.
+Generic bounded history remains **127 / 149 / 22 / sold0**. Historical provider/workflow approvals remain consumed.
 
 ## Hard holds
 
-- no Production R4 invocation/retry
-- no Production repair migration without fresh approval
+- no R4 candidate write/retry without fresh exact approval
 - no provider refresh under consumed authority
-- no automatic history write
 - no workflow dispatch/change by implication
 - no Secrets/Variables changes
 - no F0/#142 implication
@@ -91,12 +80,8 @@ Generic bounded history remains healthy from #211 at **127 / 149 / 22 / sold0**.
 - no automatic RPC retry
 - no direct main push
 
-## Repository hygiene note
-
-Unused branch `tmp-should-not-create` remains unrelated and harmless; do not delete automatically without an applicable cleanup policy/approval.
-
 ## Canonical history
 
-`docs/history/2026-09-03-pre-224-STATUS.md`
+`docs/history/2026-09-03-pre-226-STATUS.md`
 
-Do not create a recursive canonical sync merely to record #224's own docs-only merge.
+Do not create a recursive canonical sync merely to record #226's own docs-only merge.
