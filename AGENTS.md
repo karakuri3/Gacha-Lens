@@ -66,6 +66,16 @@ The short instruction grants no new permission. Every HUMAN APPROVAL REQUIRED it
 - Parallel Builders must own disjoint files or use separate branches/worktrees. Serialize overlapping files. The Lead resolves integration and re-validates the combined diff.
 - Re-fetch and compare `origin/main` before work and before PR merge. Reconcile a stale base without force-pushing shared history.
 
+## COST-AWARE PUSH / VERCEL PREVIEW POLICY
+
+- Local commits and local validation may be granular, but remote pushes must be checkpointed. Do not push every micro-edit merely to obtain another Vercel deployment.
+- Batch logically related code/test changes and safe self-repair into one materially testable remote checkpoint whenever possible.
+- Run focused tests, lint/typecheck/build as applicable before the next remote push when those checks can catch the issue locally or in existing CI.
+- Vercel Preview is a validation resource, not a per-edit feedback loop. Prefer one Preview for a stable candidate or required exact-head verification point rather than one Preview per intermediate commit.
+- Never weaken an explicit exact-head Preview, release, security, or Production evidence requirement. When exact-head Preview evidence is required, create/push the stable candidate and verify that exact SHA.
+- Markdown-only documentation commits may be pushed normally; `vercel.json` intentionally skips their Vercel build. If that guard stops working, treat repeated docs-only builds as a cost regression.
+- Preserve this policy when increasing agent parallelism: more agents must not translate into proportional remote-push/build churn.
+
 ## REPOSITORY HARD STOPS
 
 - Never touch `supabase/.temp/cli-latest`.
