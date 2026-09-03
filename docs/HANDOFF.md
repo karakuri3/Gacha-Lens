@@ -2,15 +2,61 @@
 
 Updated: 2026-09-03 JST — #211 history buffer restored / Issue #212 canonical sync
 
-This is the canonical operational handoff for Gacha Lens. Re-fetch live GitHub, Vercel, Supabase, provider, and search/traffic evidence before making any current-state decision.
+## Authoritative current checkpoint — supersedes historical “current” values below
+
+This top section is the current operational state. The full prior canonical snapshot is retained below for durable history; if any retained historical section uses words like “current” or “next” and conflicts with this section, **this section wins**.
+
+- pre-#212 canonical main: `d7955b285fccd93b327ffb8d80594d400660c68c`
+- #211 exact Production run: `33726009433`, job `100555009635`, **SUCCESS**
+- artifact: `9881996601`, digest `sha256:c48abfa07cfcf78b81b661b4a09e5d43399e057f8507733a9f27f12509effdbe`
+- Yahoo provider attempts: **10 total / exactly 1 per listing / retry0 / throttle0 / timeout0**
+- outcomes: **9 unchanged / 1 price_changed**
+- truthful price change: `yahoo-suruga-ya-601192353001` (伏黒恵) **1670 -> 1690 JPY**, active retained
+- resolver manifest preserved before RPC
+- exactly one verified `apply_market_reobservation_bounded_v1(jsonb)` RPC
+- Production: **127 listings / 149 observations / 22 re-observed / sold0**
+- repeated-history rate: **22/127 = 17.3228%**
+- all 10 deterministic rows present and every target now has exactly 2 observations
+- one-shot workflow cleanup commit: `4ddccbb062ed0aa54742a6f6be4bbea7232b4389`
+- final disposable branch file diff vs approved main: **0**
+- push-trigger runs on branch: **exactly 1**
+- #211 authority is **consumed/non-reusable**; never rerun `33726009433` by implication
+- R4 repository prerequisite is merged, but **R4 Production migration/function/RPC/candidate persistence remain unauthorized and unexecuted by #211**
+- #142/#137 F0 remains a separate Production-impact approval boundary
+
+### Mandatory next action after #212 reaches main
+
+1. Re-fetch current main and live Production.
+2. Recompute the Data Scale Scoreboard **SELECT-only**: history rate, fresh coverage, fresh depth x1/x2/x3+, source mix and any other required inputs.
+3. Do **not** run another history batch automatically; 17.32% is currently a material buffer.
+4. If the live Scoreboard selects `depth_insufficient`, fresh-rebind the #206 R3 candidate to the then-current main/Production state, rebuild the complete R4 manifest/digest, and request a **fresh R4-specific Production approval** before migration/RPC.
+5. If another bottleneck wins, follow current evidence instead of sunk-cost logic.
+6. After the next major Production milestone, force canonical sync again.
+
+### #212 self-referential sync rule
+
+- On branch `docs/canonical-sync-post-history-buffer-212` or its open PR, finish the docs-only exact-head validation/release flow first.
+- Once this content reaches `main`, #212 is complete by definition. Do not create another docs-only sync merely to record #212's own merge.
+
+---
+
+## Historical canonical snapshot retained verbatim below
+
+The following snapshot is retained to preserve earlier IDs, approvals, failures, decisions and operational evidence. Its historical “current” values are not authoritative over the checkpoint above.
+
+# Gacha Lens Canonical Handoff
+
+Updated: 2026-09-03 JST — R4 repository prerequisite merged / Issue #209 canonical sync
+
+This is the canonical operational handoff for Gacha Lens. Re-fetch live GitHub, Vercel, Supabase, provider, and GSC evidence before making any current-state decision.
 
 ## Self-referential canonical-sync rule
 
-This version is authored by Issue #212.
+This file is authored by Issue #209.
 
-- If read from branch `docs/canonical-sync-post-history-buffer-212` or its open PR, finish that docs-only validation/release flow first.
-- If read from `main`, Issue #212 is complete by definition; do not create another docs-only sync merely to record #212's own merge.
-- After #212 reaches `main`, resume Issue #119 with a fresh **SELECT-only Data Scale reassessment**. History has a restored buffer; do not automatically execute R4 unless current Scoreboard evidence still selects depth as the next bottleneck.
+- If read from branch `docs/canonical-sync-post-r4-prereq-209` or its open PR, finish that docs-only exact-head validation/release flow first.
+- If read from `main`, Issue #209 is complete by definition because this content reached `main`. Do not create another docs-only sync merely to record #209's own merge.
+- After #209 reaches `main`, resume Issue #119 with a **fresh read-only Data Scale Scoreboard/bottleneck reassessment**. Do not automatically execute R4 merely because its repository prerequisite is now merged.
 
 ## Resume protocol
 
@@ -19,7 +65,7 @@ If a fresh thread receives only **「Gacha Lens続けて」**:
 1. Read this file plus `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`, `docs/DATA_SCALE_SCOREBOARD.md`, `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
 2. Re-fetch current `main`, open PRs/Issues, recent Actions, Vercel, and only the live Production evidence needed for the next decision.
 3. Resume durable Issue/branch/PR work; do not duplicate completed or in-flight work.
-4. Never rerun a completed/failed canary merely to refresh context.
+4. Do not rerun completed or failed canaries merely to refresh context.
 5. Production DB mutation/migration/schema/backfill/reset/cleanup, approval-bound live provider execution, workflow/schedule changes or dispatch, Secrets/Variables changes, paid actions, destructive work, direct main pushes, and ineligible merges/releases require explicit applicable approval.
 6. After every major Production/recovery/security/release milestone, synchronize `HANDOFF / STATUS / DECISIONS / TODO` before the next major implementation/execution phase.
 
@@ -44,156 +90,77 @@ Decision order remains **DATA -> TRAFFIC -> CLICK -> REVENUE**. Infrastructure i
 
 ## Current canonical repository checkpoint
 
-Pre-#212 main:
-
-`d7955b285fccd93b327ffb8d80594d400660c68c`
-
-That main already contains:
-
-- reusable bounded re-observation v1 repository capability and Production-installed generic function;
-- #206 R3 read-only depth evidence;
-- #207/#208 R4 atomic depth repository prerequisite;
-- #209/#210 canonical sync after R4 prerequisite merge.
-
-R4 repository prerequisite merge commit:
+R4 repository prerequisite PR #208 was squash-merged to `main` as:
 
 `10e097eaf11e70814a2d25bc1227e950f6b69d0f`
 
-Its normal Git-triggered Vercel Production release reached READY. Repository release does **not** imply Supabase R4 schema/write authority.
+Issue #207 auto-closed.
 
-## Latest live Production checkpoint — after #211 SUCCESS
+Normal Git-triggered Vercel Production release:
 
-Independent SELECT verification after Actions run `33726009433`:
+- deployment: `dpl_J3RwK5mbkfuyCPENVQFXEpCAwNgK`
+- Git SHA: `10e097eaf11e70814a2d25bc1227e950f6b69d0f`
+- target: Production
+- state: **READY**
+- aliases include `gachalens.com`
+- no manual deploy/promotion was used
+
+A Vercel release is not a Supabase migration. The R4 Production function remained absent after this merge.
+
+## Latest live Production checkpoint
+
+Fresh SELECT-only evidence after #208 merge:
 
 - market listings: **127**
-- observations: **149**
-- listings with 2+ observations: **22**
+- observations: **139**
+- listings with 2+ observations: **12**
 - completed sold: **0**
-- repeated-history coverage: **22 / 127 = 17.3228%**
-- all #211 target deterministic observations present: **10 / 10**
-- all #211 targets now have exactly 2 observations
-- R4 function `public.apply_market_depth_r4_atomic_v1(jsonb)`: **not applied to Production by #211**
-- R4 frozen candidate `yahoo-suruga-ya-601199451001`: **still not persisted by #211**
+- repeated-history coverage: **12 / 127 ~= 9.45%**
+- R4 function `public.apply_market_depth_r4_atomic_v1(jsonb)`: **absent**
+- R4 candidate listing `yahoo-suruga-ya-601199451001`: **absent**
+- target 伏黒恵 fresh safe depth still exactly one existing listing: `yahoo-suruga-ya-601192353001`
 
-This restores a material history buffer above the Scoreboard's first 10% history threshold. A future breadth increase can change the denominator again, so the threshold is never permanent truth; always re-fetch before acting.
+The earlier post-#201 checkpoint was 115 listings / 127 observations / 12 re-observed / sold0 = 10.43%. Independent breadth later grew the denominator to 127 while re-observed stayed 12, so the first 10% history threshold is no longer currently met.
 
-## #211 — second reusable bounded Production history batch SUCCESS
-
-Exact authority:
-
-- approved main: `d7955b285fccd93b327ffb8d80594d400660c68c`
-- observation key: `reobs-v1:bounded-20260903-02`
-- cohort digest: `7435ea9e78f1ebf5b27667bd0c252d48fbc6ef952ceb35d34c850c61ba7e68e3`
-- Yahoo-only frozen cohort: 10 listings / 10 distinct series
-- composition: Suruga 1 / Lead Netstore 7 / Toysanta 2
-
-Execution:
-
-- disposable branch: `ops/bounded-reobs-one-shot-211-20260903`
-- workflow add commit: `b67b5ce78f36f6ff89aee9ebaa46327616ed9dc0`
-- Actions run: `33726009433`
-- job: `100555009635`
-- conclusion: **SUCCESS**
-- run attempt: 1
-- artifact: `bounded-reobs-211-evidence`, ID `9881996601`
-- artifact digest: `sha256:c48abfa07cfcf78b81b661b4a09e5d43399e057f8507733a9f27f12509effdbe`
-
-Provider result:
-
-- Yahoo exact provider attempts: **10 total / exactly 1 each**
-- retries: **0**
-- throttles/timeouts: **0**
-- outcomes: **9 unchanged / 1 price_changed**
-- price change: `yahoo-suruga-ya-601192353001` (伏黒恵) **1670 -> 1690 JPY**
-- status remained `active`
-
-Persistence result:
-
-- resolver manifest preserved before RPC
-- exactly one `apply_market_reobservation_bounded_v1(jsonb)` RPC
-- `applied_count=10`
-- listing delta 0
-- observation delta +10
-- newly re-observed delta +10
-- completed sold delta 0
-- Production **127/139/12/sold0 -> 127/149/22/sold0**
-
-Cleanup:
-
-- workflow removed immediately on same disposable branch
-- cleanup commit: `4ddccbb062ed0aa54742a6f6be4bbea7232b4389`
-- final branch-vs-approved-main file diff: **0**
-- push-trigger run count on branch: **exactly 1**
-- branch never merged to main
-- no workflow_dispatch
-- no migration reapplication
-- no Secrets/Variables change
-- no R4/F0/paid/destructive action
-
-The #211 provider/RPC/workflow authorization is **consumed and non-reusable**. Never rerun `33726009433` by implication.
-
-## Reusable bounded history capability — Production installed
-
-Generic bounded re-observation v1 remains installed in Production:
-
-- repository migration: `supabase/migrations/20260902213000_market_reobservation_bounded_v1.sql`
-- Production ledger: `20260902165958 / market_reobservation_bounded_v1`
-- function: `public.apply_market_reobservation_bounded_v1(jsonb)`
-- SECURITY INVOKER
-- empty search_path
-- service_role-only EXECUTE
-- PUBLIC/anon/authenticated EXECUTE revoked
-
-Contract:
-
-- explicit frozen cohort 1..10
-- Yahoo/Rakuten exact persisted identities
-- exact-main + observation-key + complete frozen snapshot/prior-count digest
-- dry-run provider/RPC/write0
-- max3 attempts/listing / max30 total only under fresh approved write authority
-- one atomic RPC only after all targets are safe
-- deterministic observation IDs recomputed in SQL
-- resolver manifest preserved before RPC
-- no automatic RPC retry
-- append one observation + allowlisted listing snapshot update only
-- never fabricate completed `sold` / `sold_at`
-
-Do not reapply this migration.
-
-## #201 — first reusable bounded history SUCCESS
-
-Successful #201 retry run `33660684355` proved the generic lane with 8 Yahoo attempts / retry0 / one RPC:
-
-- 7 unchanged / 1 price_changed
-- Toysanta target 568 -> 399 JPY, active retained
-- Production 115/119/4/sold0 -> 115/127/12/sold0
-- deterministic rows 8/8
-- final disposable branch diff0/run count1/never merged
-
-Its approval/token/workflow authority is consumed. The earlier invalid-digest attempt `33658579004` failed before provider calls and is also terminal/consumed evidence.
+A recent scheduled `Gacha Market P3 Bounded Seed V2 Automatic` run `33715651335` completed successfully on the prior main and is consistent with independent breadth growth, but do not attribute the entire +12 listing delta to that one run without inspecting its exact write evidence.
 
 ## R3 #206 — completed read-only depth evidence
 
-At the R3 planning snapshot, history was 12/115=10.4348% and fresh depth was overwhelmingly x1, so `depth_insufficient` was correctly selected then.
+Issue #206 first re-read the Scoreboard when Production was 115 listings / 127 observations / 12 re-observed. At that checkpoint history was 10.4348% and the reviewed Scoreboard advanced to `depth_insufficient` because 104/105 fresh covered variants had only one fresh listing.
 
-Approved R3 main:
+Approved R3 exact main:
 
 `b38f62ef81b8ec3a9cdf02395d4bdd678dadee31`
 
+Disposable branch:
+
+`ops/r3-depth-one-shot-206-20260903`
+
 Actions:
 
-- run `33665350076`, job `100365611263`: **SUCCESS**
-- artifact `r3-depth-206-evidence`, ID `9860342840`
-- planner API requests 5 / HTTP attempts 5
-- retries/timeouts/rate limits/permanent failures 0
-- Production writes/RPC/migration 0
+- run: `33665350076`
+- job: `100365611263`
+- conclusion: **SUCCESS**
+- run_attempt: 1
+- artifact: `r3-depth-206-evidence`, ID `9860342840`
+- artifact digest: `sha256:a0fe9011e7b0102f8464835385746b0437fdebff74791e6db9d294d015df5e8a`
+- planner API requests: **5**
+- HTTP attempts: **5**
+- retries/timeouts/rate limits/permanent failures: **0**
+- Production writes/RPC/migration: **0**
 
-Results:
+R3 targets:
 
-- Rakuten-first Buzz Lightyear: no new strict-safe candidate
-- Yahoo-first 伏黒恵: exactly one new strict-safe candidate
+1. Rakuten-first `tarts-y903861-バズ・ライトイヤー`
+   - 3 requests / 3 HTTP attempts
+   - one raw candidate, rejected as existing identity
+   - strict-safe new accepted: 0
+2. Yahoo-first `gashapon-4535123846069000-伏黒恵`
+   - 2 requests / 2 HTTP attempts
+   - 5 raw candidates
+   - strict-safe new accepted: **1**
 
-Frozen R3 candidate:
+Frozen strict-safe R3 candidate:
 
 - variant: `gashapon-4535123846069000-伏黒恵`
 - series: `gashapon-4535123846069000`
@@ -202,10 +169,13 @@ Frozen R3 candidate:
 - listing ID: `yahoo-suruga-ya-601199451001`
 - provider/native: `yahoo_shopping:suruga-ya_601199451001`
 - URL: `https://store.shopping.yahoo.co.jp/suruga-ya/601199451001.html`
-- evidence price: **980**
+- title: `中古トレーディングフィギュア 伏黒恵 「るかっぷ ミニチュアコレクション 呪術廻戦」`
+- price: **980**
 - status: `active`
 
-#206 authority is consumed; R3 success never authorized R4.
+R3 workflow was removed immediately; cleanup commit `4815827a911737eacb758845cf8d671c629a874e`; final disposable-branch file diff vs approved main 0; branch never merged; push-trigger run count exactly 1; no `workflow_dispatch`.
+
+The #206 provider/workflow approval is consumed and non-reusable. Never rerun `33665350076` by implication.
 
 ## R4 atomic depth persistence prerequisite — repository capability only
 
@@ -219,72 +189,99 @@ Issue #207 / PR #208 added exactly seven new files and modified no existing file
 - `tests/market-depth-r4-resolve.test.mjs`
 - `tests/market-depth-r4-runner.test.mjs`
 
-Final PR head:
+Final exact PR head:
 
 `e46b0c8c2e40b6f0b464cac703b982891a2d239c`
 
-Merged repository commit:
+Repository contract:
 
-`10e097eaf11e70814a2d25bc1227e950f6b69d0f`
-
-Contract:
-
-- frozen explicit batch 1..10
-- exact-main + complete manifest digest
-- distinct namespace `APPROVE_MARKET_DEPTH_R4_ATOMIC_V1`
-- dry-run DB SELECT-only / provider0 / RPC0 / write0
-- write consumes frozen R3 evidence only; no provider discovery
-- exact catalog/depth/unresolved/collision guards
-- deterministic listing + initial-observation identities
-- one atomic insert-only RPC
-- no UPDATE/DELETE/completed sold/sold_at
-- SECURITY INVOKER / empty search_path / service_role-only
-- pre-RPC resolver manifest mandatory
-- no automatic RPC retry
-- SELECT-only resolver: `committed | not_committed | inconsistent`
+- explicit frozen batch only, minimum 1 / maximum 10 candidates
+- exact main SHA + complete frozen manifest -> SHA-256 batch digest
+- distinct approval namespace `APPROVE_MARKET_DEPTH_R4_ATOMIC_V1`
+- dry-run performs DB SELECT only: provider0 / RPC0 / write0
+- write mode performs no provider discovery; it consumes previously frozen R3 evidence only
+- exact variant/series/review-safe/fresh-depth/unresolved-issue/collision preconditions
+- deterministic listing and initial-observation identities
+- one PostgreSQL RPC `apply_market_depth_r4_atomic_v1(jsonb)`
+- entire batch validated before inserts
+- listing + first observation inserted atomically in one function transaction
+- insert-only; no UPDATE / DELETE / completed `sold` / `sold_at`
+- `SECURITY INVOKER`, empty `search_path`, schema-qualified relations
+- EXECUTE revoked from PUBLIC/anon/authenticated; service_role only
+- durable sanitized resolver manifest required before RPC
+- exactly one RPC max; no automatic write retry
+- ambiguous resolver is SELECT-only and returns `committed | not_committed | inconsistent`
+- R3 evidence timestamp is preserved as observation/listing evidence time
+- R1/R2/history/P2/P3 lanes remain untouched
 
 Validation:
 
-- Code Quality `33670220550`: SUCCESS
-- Node tests 2062/2062 PASS
+- Code Quality `33670220550`, job `100381685756`: **SUCCESS**
+- Node tests: **2062 / 2062 PASS**
 - lint PASS
-- diff check PASS
-- exact-head Preview `dpl_2ejC77ayiEVzXBBhUA1w2Zt7K5y2`: READY
-- Foundation `33670220535`: all 12 repository migrations including R4 applied successfully on disposable Supabase; run then failed only at known stale expected-8 assertion
-- strengthened self-review `5093856424`: no blocking finding; explicitly not independent
+- diff whitespace PASS
+- exact-head Vercel Preview `dpl_2ejC77ayiEVzXBBhUA1w2Zt7K5y2`: **READY**
+- GitHub inline review threads: 0
+- Vercel unresolved feedback: 0
+- strengthened self-review: review `5093856424`, no blocking finding; explicitly not independent
+- Foundation disposable Supabase run `33670220535` successfully applied all **12** repository migrations including `20260903033000_market_depth_r4_atomic_v1.sql` and finished DB reset; the run then failed only because the known harness assertion still expects the original eight versions
 
-The #208 one-time review substitution is consumed and grants **no R4 Production authority**.
+The R4 migration was **not** applied to Production by #208.
 
-## R1/R2 historical proof
+## #208 review substitution — exact, one-time, consumed
 
-- R1 #172: read-only exact-provider canary complete, Production writes0.
-- Original R2 v1 Actions `33605362604`: failed closed on first Rakuten `not_found`, RPC0/writes0.
-- Yahoo-only R2 v2 Actions `33621881117`: four Yahoo attempts, all unchanged, one atomic RPC, Production 113/113/0 -> 113/117/4, sold0.
-- All R1/R2 approvals/tokens/workflows are consumed. Do not invoke installed historical RPCs merely because they exist.
+The user explicitly approved a one-time substitution for PR #208 only: exact-head CI + Vercel Preview + disposable Supabase migration-apply proof + strengthened self-review in place of unavailable independent Reviewer/Verifier.
 
-## Current Data Scale interpretation after #211
+The substitution was recorded on PR #208, used only to mark Ready and squash merge the exact reviewed head, and is now **consumed**.
 
-History is now **17.3228%** at the current 127-listing denominator, materially above the first 10% gate.
+It did **not** authorize:
 
-The next step is **not another automatic history batch**. Recompute current Scoreboard inputs. Based on the most recent pre-#211 depth evidence, depth is likely to become the next bottleneck again, but current live evidence must decide.
+- R4 Production migration application
+- R4 RPC/data write
+- provider execution
+- workflow dispatch/change
+- Secrets/Variables changes
+- F0, paid, destructive, or other Production work
 
-Potential next outcomes:
+## Reusable history lane — durable earlier proof
 
-1. `depth_insufficient` -> fresh SELECT-only R4 preflight/rebinding; then request a fresh R4-specific Production migration + one-RPC authorization if still safe.
-2. another DATA bottleneck -> follow the current Scoreboard instead of sunk-cost logic.
-3. useful Data Scale thresholds met -> move toward TRAFFIC -> CLICK -> REVENUE.
+Generic bounded re-observation v1 remains installed in Production:
 
-## Exact next action after #212 reaches main
+- repository migration: `supabase/migrations/20260902213000_market_reobservation_bounded_v1.sql`
+- Production ledger: `20260902165958 / market_reobservation_bounded_v1`
+- function: `public.apply_market_reobservation_bounded_v1(jsonb)`
+- SECURITY INVOKER / empty search_path / service_role-only
+
+Successful #201 run `33660684355` added eight truthful observations in one atomic RPC and moved Production 115/119/4 -> 115/127/12, sold0. One Yahoo price changed truthfully 568 -> 399. Its approval/token/workflow authority is consumed; never rerun it merely to restore the percentage.
+
+Yahoo-only R2 v2 `33621881117` remains the first successful repeated-history proof. Original R2 v1 `33605362604` failed closed on first Rakuten `not_found`. All R1/R2 approvals are consumed.
+
+## Current Data Scale interpretation
+
+The R3 decision was correct for its 115-listing snapshot: history had crossed 10% and depth was overwhelmingly x1.
+
+The live denominator later changed. At the latest checkpoint repeated-history coverage is **9.45%**, below the same first threshold. Therefore prior `depth_insufficient` status must not be treated as permanently authoritative.
+
+After #209 reaches `main`, re-run/re-read the Scoreboard using current live counts and current depth/breadth/source metrics. Then choose the single highest-leverage DATA move. Possible outcomes include:
+
+- another bounded history-compounding batch if history is again the reviewed P0 bottleneck;
+- R4 persistence of the already-frozen strict-safe depth candidate if depth remains the highest-leverage bottleneck after the fresh reassessment;
+- lawful breadth/source work if source gap dominates under the reviewed contract;
+- moving toward TRAFFIC -> CLICK -> REVENUE if useful Data Scale thresholds are met.
+
+Do not execute R4 based on sunk-cost logic.
+
+## Exact next action after Issue #209 reaches main
 
 **Read-only first.**
 
-1. Re-fetch exact current main.
-2. Re-fetch live Production counts, re-observation rate, fresh depth distribution, fresh coverage and source mix.
-3. Re-run/re-read `docs/DATA_SCALE_SCOREBOARD.md` and select the current automatic bottleneck.
-4. If depth is selected, re-verify the #206 R3 candidate against current variant/series/review/unresolved/depth/collision state.
-5. Rebuild the R4 frozen manifest/digest against the then-current main and current Production snapshot.
-6. Only then request a **fresh R4-specific human approval** for Production migration application + exactly one atomic RPC. Credentialed disposable workflow authority, if required, must also be explicit.
-7. After any R4 Production milestone, immediately canonical-sync again before the next major phase.
+1. Re-fetch exact current `main`.
+2. Re-fetch live Production listings/observations/re-observed/sold counts and current depth distribution.
+3. Re-run/re-read `docs/DATA_SCALE_SCOREBOARD.md` inputs and determine the current automatic bottleneck.
+4. Inspect recent approved P3 breadth activity only as needed to explain denominator growth; do not assume one run explains all growth without evidence.
+5. If R4 is still highest leverage, perform a fresh SELECT-only R4 preflight/rebinding against the then-current main and Production state.
+6. Only then build the exact frozen manifest/digest and request a **fresh R4-specific human approval** for Production migration + one atomic RPC. Any credentialed disposable workflow would require its own explicit authorization if needed.
+7. If history has become the higher-priority bottleneck, do not apply R4 yet; design the next bounded history experiment and request its own fresh authority.
 
 ## Known Foundation CI harness debt
 
@@ -293,11 +290,11 @@ Potential next outcomes:
 Observed disposable DB proofs:
 
 - #182: 9 migrations applied before stale expected-8 failure
-- #188: 10 migrations applied
-- #197/#198: 11 migrations applied
-- #208: **12 migrations applied**, including R4
+- #188: 10 migrations applied before stale expected-8 failure
+- #197/#198: 11 migrations applied before stale expected-8 failure
+- #208: **12 migrations applied**, including R4, before stale expected-8 failure
 
-This is workflow harness debt, not migration failure. Repairing the Production-capable workflow remains a separate approval-bound task.
+This is workflow harness debt, not migration failure. Repairing the Production-capable workflow is a separate approval-bound task.
 
 ## Approval / execution state
 
@@ -311,7 +308,6 @@ Consumed and non-reusable:
 - #196/#198 repository review substitution
 - #206 R3 live-provider/workflow authority
 - #208 repository review substitution
-- **#211 second bounded history provider/RPC/workflow authority**
 
 Never rerun merely to refresh evidence:
 
@@ -320,7 +316,6 @@ Never rerun merely to refresh evidence:
 - `33658579004`
 - `33660684355`
 - `33665350076`
-- **`33726009433`**
 
 Not authorized now:
 
