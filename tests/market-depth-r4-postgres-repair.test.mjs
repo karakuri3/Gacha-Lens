@@ -6,10 +6,29 @@ const originalMigration = fs.readFileSync(
   new URL("../supabase/migrations/20260903033000_market_depth_r4_atomic_v1.sql", import.meta.url),
   "utf8",
 );
+const triggerRepairMigration = fs.readFileSync(
+  new URL("../supabase/migrations/20260903183500_market_observation_trigger_schema_qualification.sql", import.meta.url),
+  "utf8",
+);
 const repairMigration = fs.readFileSync(
   new URL("../supabase/migrations/20260903183600_market_depth_r4_postgres_regex_repair.sql", import.meta.url),
   "utf8",
 );
+
+test("R4 trigger prerequisite qualifies the historical observation relation without changing trigger semantics", () => {
+  assert.match(
+    triggerRepairMigration,
+    /pg_get_functiondef\('public\.sync_market_observation_links\(\)'::regprocedure\)/i,
+  );
+  assert.match(triggerRepairMigration, /v_broken_reference constant text := 'update market_listing_observations'/i);
+  assert.match(triggerRepairMigration, /v_repaired_reference constant text := 'update public\.market_listing_observations'/i);
+  assert.match(triggerRepairMigration, /v_occurrences\s*<>\s*1/i);
+  assert.match(triggerRepairMigration, /replace\(v_definition, v_broken_reference, v_repaired_reference\)/i);
+  assert.match(triggerRepairMigration, /alter function public\.sync_market_observation_links\(\) security invoker/i);
+  assert.match(triggerRepairMigration, /alter function public\.sync_market_observation_links\(\) set search_path to ''/i);
+  assert.doesNotMatch(triggerRepairMigration, /drop\s+trigger/i);
+  assert.doesNotMatch(triggerRepairMigration, /create\s+trigger/i);
+});
 
 test("R4 repair preserves migration history and replaces only the unsupported SQL validator semantics", () => {
   assert.match(
