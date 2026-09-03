@@ -18,8 +18,9 @@ test("public data caching remains scoped to Next shared data cache", () => {
   assert.match(source, /tags: \["gacha-public-series"\]/);
 });
 
-test("public variant detail route reuses one rendered page for the ingestion interval", () => {
+test("public variant detail route permits shared data caching without forcing full-route static rendering", () => {
   assert.match(detailRoute, /export const revalidate = 1800;/);
   assert.doesNotMatch(detailRoute, /export const dynamic = "force-dynamic";/);
+  assert.doesNotMatch(detailRoute, /export const dynamic = "force-static";/);
   assert.doesNotMatch(detailRoute, /export const revalidate = 0;/);
 });
