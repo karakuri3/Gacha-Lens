@@ -1,112 +1,113 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-03 JST — successful Production R4 one-candidate write / Issue #229 canonical sync
+Updated: 2026-09-03 JST — P0-A Supabase egress mitigation released / Issue #233 canonical sync
 
-The complete ordered TODO checkpoint immediately before #229 is preserved byte-for-byte at `docs/history/2026-09-03-pre-229-TODO.md`.
+The complete ordered TODO checkpoint immediately before this sync is preserved byte-for-byte at `docs/history/2026-09-03-pre-233-TODO.md`.
 
-Current umbrella: Issue #119 Data Scale.
+## P0 — Issue #219 shared Supabase Egress risk — CURRENT
 
-## P0 — Canonical sync #229 — CURRENT
+P0-A is released; the incident is **not yet closed** because billed-byte recovery has not been observed.
 
-- [x] verify exact approved runtime main `8cc10b23236406b7bb3b9cec3db5e72574205196`
-- [x] verify repaired Production R4 callable state immediately before write
-- [x] verify target variant/series/review state exact
-- [x] verify target fresh depth1 with exact existing ID set
-- [x] verify unresolved issues0 and all candidate/observation collisions0
-- [x] verify immutable R3 artifact digest and Production seven-day freshness guard
-- [x] freeze new observation key `depth-r4-v1:20260903-02`
-- [x] freeze digest `219f0f0f9d7019f38c2d6a6689921835247980c5f6d91c4a4ff175b8bce19a72`
-- [x] obtain exact fresh human approval for one candidate only
-- [x] record durable pre-RPC execution manifest on #228
-- [x] invoke R4 function exactly once under service_role
-- [x] no automatic retry
-- [x] synchronous result inserted_count1 / target depth1->2
-- [x] independently verify listings 132->133 / observations 154->155 / sold0
-- [x] independently verify candidate1 / deterministic observation1 / exact provenance markers
-- [x] verify only the expected listing + observation were created after the immediate precheck timestamp
-- [x] close Issue #228 completed
-- [x] mark exact #228 approval consumed/non-reusable
-- [x] recompute postwrite Data Scale: 122 covered / 120x1 / 2x2 / 0x3+ / reobs22 / clicks7d10
-- [x] confirm P0 remains `depth_insufficient`
-- [x] create Issue #229
-- [x] preserve pre-#229 canonical files byte-for-byte under `docs/history/`
-- [x] update current four canonical checkpoints
-- [ ] verify #229 diff contains only 4 current canonical + 4 history files
-- [ ] verify history blob identities match pre-#229 blobs
-- [ ] open docs-only PR closing #229
-- [ ] exact-head Code Quality SUCCESS
-- [ ] exact-head Vercel Preview READY
-- [ ] unresolved GitHub/Vercel threads0 and main drift0
-- [ ] record docs-only self-review as explicitly non-independent
-- [ ] squash merge under docs-only safe policy
-- [ ] verify #229 closed and normal Vercel Production READY
+Completed P0-A:
+- [x] identify high-confidence sitemap/public-read amplification mechanism
+- [x] create and review PR #231
+- [x] exact-head Code Quality #116 / `33754793103` SUCCESS
+- [x] exact-head Preview `dpl_GVNunr8mDJ54FE5a6nr3mD5Hi4Qj` READY
+- [x] prove root/series/variant sitemaps Static with `1d` revalidation
+- [x] preserve sitemap population/XML/>50k fail-closed semantics
+- [x] full five-file strengthened Lead self-review; explicitly non-independent; findings0
+- [x] pre-merge threads0 and main drift0
+- [x] squash merge #231 as `8048a19ad478672a9d887d77073597ee95dc27d3`
+- [x] normal Vercel Production `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G` READY
+- [x] live Production smoke root/series/variant sitemap endpoints
+- [x] record durable P0-A checkpoint on Issue #219
 
-Do not create a recursive canonical sync merely to record #229's own docs-only merge.
+Next true gate — read-only observation:
+- [ ] observe current Supabase uncached Egress trajectory without resetting counters
+- [ ] compare post-release large-read/request shape with pre-release evidence
+- [ ] determine whether sitemap amplification materially declined
+- [ ] keep #219 open until Fair Use/402 risk is credibly controlled
 
-## P1 — Read-only Data Scale reassessment — NEXT
+If Egress remains materially high — P0-B:
+- [ ] attribute remaining public request paths using Vercel/Supabase evidence
+- [ ] quantify product/detail/category signal-table/full-loader reads
+- [ ] identify unnecessary `raw`/wide-column hydration where applicable
+- [ ] bound/filter/cache remaining public reads without semantic regression
+- [ ] use exact-head CI + Preview + Production smoke + post-release measurement for each mitigation
 
-The real R4 one-candidate proof is complete and successful. No further market write is authorized.
+Do not solve avoidable amplification merely by buying a paid plan. Any plan upgrade requires exact current cost/terms evidence and explicit owner approval.
 
-Next safe work:
-- [ ] re-fetch live Scoreboard at the start of the next execution/design phase
-- [ ] inspect recent P3 V2 automatic runs and distinguish breadth growth from depth growth
-- [ ] quantify how many currently covered variants can safely receive a second distinct listing under existing strict identity/matching rules
-- [ ] compare bounded depth scaling against source breadth, signal coverage, TRAFFIC -> CLICK -> REVENUE and current business priorities
-- [ ] choose the smallest high-leverage next experiment rather than defaulting to more infrastructure
+## P1 — Business/reliability Scoreboard reassessment — NEXT AFTER #219 IS CONTROLLED
 
-Current evidence favors investigating bounded depth scaling because 120/122 fresh covered variants remain depth1.
+Do not automatically return to depth scaling. Re-rank work using:
 
-## P2 — Bounded depth-scaling design — HOLD UNTIL P1 CHOICE
+**Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
 
-If P1 confirms depth scaling remains highest leverage:
-- [ ] design a bounded candidate-selection contract for already-covered depth1 variants
-- [ ] preserve strict variant/parent identity and collision guards
+Measure/re-fetch as available:
+- [ ] Search Console impressions / clicks / CTR / indexation
+- [ ] product/series page traffic and top landing/search pages
+- [ ] outbound shop clicks and click-through rate
+- [ ] affiliate conversion / revenue instrumentation and actual revenue where available
+- [ ] data freshness / coverage quality
+- [ ] Supabase/Vercel request efficiency and cost trajectory
+- [ ] identify the single highest-leverage bottleneck and choose one bounded experiment
+
+The goal is not to maximize variants/listings/depth in isolation. The next experiment must state which user/business metric it is expected to improve and how success/failure will be measured.
+
+## P2 — Data Scale depth work — HOLD UNTIL P1 CHOICE
+
+Last canonical Data Scale evidence remains:
+- variants 23,808
+- listings 133
+- observations 155
+- fresh covered variants 122
+- depth 120 x1 / 2 x2 / 0 x3+
+- re-observed 22/133
+- clicks7d 10
+- completed sales0
+
+`depth_insufficient` is still a technical diagnosis, not authorization and not guaranteed to be the next business priority.
+
+If P1 later proves depth scaling is highest leverage:
+- [ ] design the smallest bounded cohort for already-covered depth1 variants
+- [ ] preserve strict variant/parent/provider/native/public-URL identity and collision guards
 - [ ] define provider/request/write ceilings and fail-closed behavior
-- [ ] define exact observability and before/after Scoreboard evidence
-- [ ] prove in code/disposable environment before any Production execution
-- [ ] use independent review or a separately authorized substitution if required by governance
-- [ ] obtain separate explicit approval for any provider execution, workflow mutation or Production write
+- [ ] define before/after user/business as well as Data Scale evidence
+- [ ] prove repository/disposable behavior before Production execution
+- [ ] obtain independent review or an explicitly authorized substitution when required
+- [ ] obtain separate explicit approval for provider execution, workflow mutation, migration/schema action or Production write
 
-Do not infer batch write authority from #228. #228 authorized exactly one consumed candidate.
+No #228 authority may be reused.
 
-## P3 — Product / traffic / revenue path
+## P3 — Product value / traffic / revenue path
 
-At every reassessment, avoid treating data scale as the business goal itself.
-- [ ] monitor whether added depth materially improves market pages/usefulness
+Once reliability is stable, actively test the reason a user should open Gacha Lens. Candidate user-visible jobs include understanding current price, where an item can be obtained, and whether/when it is restocked or rereleased.
+
+- [ ] use behavior/search evidence to identify the strongest primary user job
+- [ ] improve the smallest page/feature/SEO path that supports that job
 - [ ] preserve outbound-click measurement
-- [ ] prioritize conversion/revenue instrumentation once data quality is sufficient
-- [ ] do not delay traffic/revenue work merely to chase arbitrary listing counts
+- [ ] connect traffic and click evidence to monetization rather than assuming more infrastructure creates revenue
+- [ ] prefer measurable experiments over broad speculative feature expansion
 
-## Separate security/performance debt
+## Separate work / debt
 
-Post-repair Supabase advisor findings remain separate behavior-impact work:
-- RLS enabled / no policy INFO notices
-- existing anon/authenticated GraphQL/schema visibility from SELECT grants
-- `pg_net` extension in public schema warning
-- unindexed foreign keys
-- unused indexes
-
-Do not remediate these by implication during Data Scale work.
-
-## Separate holds / debt
-
-- #142/#137 F0 remains a separate approval boundary
-- Foundation migration-order debt is resolved by #220/#221
-- unused branch `tmp-should-not-create` remains unrelated; do not delete automatically without applicable cleanup policy/approval
+- PR #232 technology-intelligence docs lane is separate Draft work and lower priority than #219; require current-main drift/rebase proof before merge.
+- #137/#142 F0 remains a separate approval boundary.
+- Supabase advisor findings remain separate behavior-impact work; do not change RLS/policies/grants/extensions/indexes by implication.
+- unused branch cleanup remains subject to applicable cleanup policy; do not delete unrelated branches by implication.
 
 ## HOLD — explicit prohibitions now
 
-- [ ] DO NOT invoke another R4 write under the consumed #228 approval
+- [ ] DO NOT invoke another R4 write under consumed #228 approval
 - [ ] DO NOT retry #214 or #228
-- [ ] DO NOT reuse Production repair authority
-- [ ] DO NOT reuse #208, #180/#182, or #218 review substitutions
+- [ ] DO NOT reuse Production repair authority or prior review substitutions
 - [ ] DO NOT make new provider calls under consumed authority
-- [ ] DO NOT run another history batch automatically
+- [ ] DO NOT run another history/depth batch automatically
 - [ ] DO NOT dispatch/change workflows without applicable approval
 - [ ] DO NOT change Secrets/Variables by implication
 - [ ] DO NOT merge/dispatch F0/#142 without its boundary
 - [ ] DO NOT remediate advisor findings by implication
-- [ ] DO NOT invoke paid reviewer/actions without approval
+- [ ] DO NOT invoke paid reviewer/actions or paid plan changes without approval
 - [ ] DO NOT use destructive actions without approval
 - [ ] DO NOT weaken strict matcher/identity guards
 - [ ] DO NOT scrape Mercari or Amazon
@@ -117,6 +118,6 @@ Do not remediate these by implication during Data Scale work.
 
 ## Canonical history
 
-`docs/history/2026-09-03-pre-229-TODO.md`
+`docs/history/2026-09-03-pre-233-TODO.md`
 
-Do not create a recursive canonical sync merely to record #229's own docs-only merge.
+Once this exact sync reaches `main`, Issue #233 is complete by definition; do not create a recursive sync solely for its own docs-only merge.
