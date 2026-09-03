@@ -1,90 +1,92 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-03 JST — Production R4 repair complete / Issue #226 canonical sync
+Updated: 2026-09-03 JST — successful Production R4 one-candidate write / Issue #229 canonical sync
 
-The complete ordered TODO checkpoint immediately before #226 is preserved byte-for-byte at `docs/history/2026-09-03-pre-226-TODO.md`.
+The complete ordered TODO checkpoint immediately before #229 is preserved byte-for-byte at `docs/history/2026-09-03-pre-229-TODO.md`.
 
 Current umbrella: Issue #119 Data Scale.
 
-## P0 — Canonical sync #226 — CURRENT
+## P0 — Canonical sync #229 — CURRENT
 
-- [x] verify current main at repair application `b41382d3f8470edc68133a27d50892c016ea095f`
-- [x] verify reviewed three-migration repair set from merged main
-- [x] verify pre-repair Production 127 / 149 / 22 / sold0, candidate0, observation0, broken guard1, unqualified trigger1
-- [x] obtain fresh human approval limited to Production R4 repair migrations
-- [x] apply `market_observation_trigger_schema_qualification`
-- [x] verify trigger unqualified relation0, qualified public relation present, SECURITY INVOKER, empty search_path
-- [x] apply `market_observation_service_role_contract`
-- [x] verify service_role observation CRUD true
-- [x] apply `market_depth_r4_postgres_regex_repair`
-- [x] verify migration runtime proof succeeds and leaves zero residue
-- [x] verify ledger records `20260903111455`, `20260903111513`, `20260903111600`
-- [x] verify post-repair market state still 127 / 149 / 22 / sold0
-- [x] verify target candidate and deterministic observation remain absent
-- [x] verify broken guard0, explicit length guard present, safe allowlist present
-- [x] verify R4 SECURITY INVOKER / empty search_path / service_role EXECUTE only
-- [x] run Supabase security/performance advisors without changing unrelated findings
-- [x] create Issue #226
-- [x] preserve pre-#226 canonical files byte-for-byte under `docs/history/`
+- [x] verify exact approved runtime main `8cc10b23236406b7bb3b9cec3db5e72574205196`
+- [x] verify repaired Production R4 callable state immediately before write
+- [x] verify target variant/series/review state exact
+- [x] verify target fresh depth1 with exact existing ID set
+- [x] verify unresolved issues0 and all candidate/observation collisions0
+- [x] verify immutable R3 artifact digest and Production seven-day freshness guard
+- [x] freeze new observation key `depth-r4-v1:20260903-02`
+- [x] freeze digest `219f0f0f9d7019f38c2d6a6689921835247980c5f6d91c4a4ff175b8bce19a72`
+- [x] obtain exact fresh human approval for one candidate only
+- [x] record durable pre-RPC execution manifest on #228
+- [x] invoke R4 function exactly once under service_role
+- [x] no automatic retry
+- [x] synchronous result inserted_count1 / target depth1->2
+- [x] independently verify listings 132->133 / observations 154->155 / sold0
+- [x] independently verify candidate1 / deterministic observation1 / exact provenance markers
+- [x] verify only the expected listing + observation were created after the immediate precheck timestamp
+- [x] close Issue #228 completed
+- [x] mark exact #228 approval consumed/non-reusable
+- [x] recompute postwrite Data Scale: 122 covered / 120x1 / 2x2 / 0x3+ / reobs22 / clicks7d10
+- [x] confirm P0 remains `depth_insufficient`
+- [x] create Issue #229
+- [x] preserve pre-#229 canonical files byte-for-byte under `docs/history/`
 - [x] update current four canonical checkpoints
-- [ ] verify #226 diff contains only 4 current canonical + 4 history files
-- [ ] verify history blob identities match pre-#226 blobs
-- [ ] open docs-only PR closing #226
+- [ ] verify #229 diff contains only 4 current canonical + 4 history files
+- [ ] verify history blob identities match pre-#229 blobs
+- [ ] open docs-only PR closing #229
 - [ ] exact-head Code Quality SUCCESS
 - [ ] exact-head Vercel Preview READY
 - [ ] unresolved GitHub/Vercel threads0 and main drift0
 - [ ] record docs-only self-review as explicitly non-independent
 - [ ] squash merge under docs-only safe policy
-- [ ] verify #226 closed and normal Vercel Production READY
+- [ ] verify #229 closed and normal Vercel Production READY
 
-Do not create a recursive canonical sync merely to record #226's own docs-only merge.
+Do not create a recursive canonical sync merely to record #229's own docs-only merge.
 
-## P1 — Fresh R4 candidate rebind — NEXT / READ-ONLY
+## P1 — Read-only Data Scale reassessment — NEXT
 
-Production R4 function is repaired. No candidate write is authorized.
+The real R4 one-candidate proof is complete and successful. No further market write is authorized.
 
 Next safe work:
-- [ ] re-fetch exact current main after #226 docs sync
-- [ ] recompute live Data Scale Scoreboard
-- [ ] confirm history/depth still justify R4
-- [ ] re-read target variant/series/review state
-- [ ] re-read exact fresh depth and existing listing ID set
-- [ ] unresolved target issues0
-- [ ] candidate listing/provider-native/public URL collisions0
-- [ ] deterministic observation collision0
-- [ ] assess whether historical R3 evidence remains valid; do not silently refresh provider data
-- [ ] rebuild complete R4 manifest and digest against current main/Production
-- [ ] save durable resolution evidence before any write request
+- [ ] re-fetch live Scoreboard at the start of the next execution/design phase
+- [ ] inspect recent P3 V2 automatic runs and distinguish breadth growth from depth growth
+- [ ] quantify how many currently covered variants can safely receive a second distinct listing under existing strict identity/matching rules
+- [ ] compare bounded depth scaling against source breadth, signal coverage, TRAFFIC -> CLICK -> REVENUE and current business priorities
+- [ ] choose the smallest high-leverage next experiment rather than defaulting to more infrastructure
 
-## P2 — Separate exact one-candidate Production write approval — HOLD
+Current evidence favors investigating bounded depth scaling because 120/122 fresh covered variants remain depth1.
 
-Only after P1 evidence is complete:
-- [ ] present exact candidate, manifest/digest, before-state and expected delta
-- [ ] request fresh explicit one-candidate R4 write approval
-- [ ] invoke exactly once only if approved
-- [ ] no automatic retry; ambiguous commit -> SELECT-only resolver
-- [ ] independently verify listing + observation + depth/global invariants
-- [ ] force canonical sync after success or material failure
+## P2 — Bounded depth-scaling design — HOLD UNTIL P1 CHOICE
 
-Production repair approval is consumed and cannot be reused for this write.
+If P1 confirms depth scaling remains highest leverage:
+- [ ] design a bounded candidate-selection contract for already-covered depth1 variants
+- [ ] preserve strict variant/parent identity and collision guards
+- [ ] define provider/request/write ceilings and fail-closed behavior
+- [ ] define exact observability and before/after Scoreboard evidence
+- [ ] prove in code/disposable environment before any Production execution
+- [ ] use independent review or a separately authorized substitution if required by governance
+- [ ] obtain separate explicit approval for any provider execution, workflow mutation or Production write
 
-## P3 — Data Scale reassessment after successful R4 proof
+Do not infer batch write authority from #228. #228 authorized exactly one consumed candidate.
 
-After a successful candidate proof:
-- [ ] fresh Scoreboard reassessment
-- [ ] decide whether bounded depth scaling, lawful source breadth, non-price signals, or TRAFFIC -> CLICK -> REVENUE is highest leverage
-- [ ] avoid endless infrastructure work once useful product-data thresholds are met
+## P3 — Product / traffic / revenue path
+
+At every reassessment, avoid treating data scale as the business goal itself.
+- [ ] monitor whether added depth materially improves market pages/usefulness
+- [ ] preserve outbound-click measurement
+- [ ] prioritize conversion/revenue instrumentation once data quality is sufficient
+- [ ] do not delay traffic/revenue work merely to chase arbitrary listing counts
 
 ## Separate security/performance debt
 
-Post-repair Supabase advisors reported project-wide existing debt. Do not change it under R4 authority.
+Post-repair Supabase advisor findings remain separate behavior-impact work:
 - RLS enabled / no policy INFO notices
-- anon/authenticated GraphQL schema visibility warnings from existing SELECT grants
+- existing anon/authenticated GraphQL/schema visibility from SELECT grants
 - `pg_net` extension in public schema warning
-- unindexed foreign-key INFO notices
-- unused-index INFO notices
+- unindexed foreign keys
+- unused indexes
 
-Any remediation must be a separate scoped task with behavior-impact review.
+Do not remediate these by implication during Data Scale work.
 
 ## Separate holds / debt
 
@@ -94,8 +96,8 @@ Any remediation must be a separate scoped task with behavior-impact review.
 
 ## HOLD — explicit prohibitions now
 
-- [ ] DO NOT persist the R4 candidate without fresh exact approval
-- [ ] DO NOT retry #214
+- [ ] DO NOT invoke another R4 write under the consumed #228 approval
+- [ ] DO NOT retry #214 or #228
 - [ ] DO NOT reuse Production repair authority
 - [ ] DO NOT reuse #208, #180/#182, or #218 review substitutions
 - [ ] DO NOT make new provider calls under consumed authority
@@ -115,6 +117,6 @@ Any remediation must be a separate scoped task with behavior-impact review.
 
 ## Canonical history
 
-`docs/history/2026-09-03-pre-226-TODO.md`
+`docs/history/2026-09-03-pre-229-TODO.md`
 
-Do not create a recursive canonical sync merely to record #226's own docs-only merge.
+Do not create a recursive canonical sync merely to record #229's own docs-only merge.
