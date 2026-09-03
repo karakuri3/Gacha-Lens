@@ -1,0 +1,68 @@
+name: Cloudflare vinext POC
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "next.config.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/cloudflare-vinext-poc.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-vinext-poc-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Run vinext compatibility check
+        run: npx --yes vinext@1.0.0-beta.8 check
+
+      - name: Generate ephemeral Cloudflare configuration
+        run: npx --yes vinext@1.0.0-beta.8 init --skip-check --platform=cloudflare --data-cache=kv --image-optimization=cloudflare-images
+
+      - name: Pin non-production placeholder bindings
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const path = "wrangler.jsonc";
+          const config = JSON.parse(fs.readFileSync(path, "utf8"));
+          config.name = "gachalens-cloudflare-poc";
+          config.preview_urls = true;
+
+          for (const namespace of config.kv_namespaces ?? []) {
+            if (namespace.binding === "VINEXT_KV_CACHE" && !namespace.id) {
+              namespace.id = "00000000000000000000000000000000";
+            }
+          }
+
+          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          NODE
+
+      - name: Build vinext worker artifact
+        run: npm run build:vinext
+
+      - name: Verify worker artifact
+        run: test -f dist/server/wrangler.json
