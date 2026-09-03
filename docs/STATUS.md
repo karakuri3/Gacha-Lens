@@ -2,7 +2,7 @@
 
 Updated: 2026-09-04 JST — P0-B public detail read amplification under active mitigation
 
-For the full live checkpoint and rejected experiments, read `docs/HANDOFF_LATEST.md` first. Historical pre-P0-B status is preserved in `docs/history/2026-09-03-pre-233-STATUS.md`.
+For the full live checkpoint and rejected experiments, read `docs/HANDOFF_LATEST.md` first. `HANDOFF_LATEST / HANDOFF / STATUS / DECISIONS / TODO` are synchronized for cross-thread recovery. Historical pre-P0-B status is preserved in `docs/history/2026-09-03-pre-233-STATUS.md`.
 
 ## Current repository / release
 
