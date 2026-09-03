@@ -2,7 +2,7 @@
 
 Updated: 2026-09-04 JST — P0-B public-detail read mitigation
 
-Historical durable decisions D-001 through D-123 remain authoritative unless explicitly superseded. Immediate prior snapshot: `docs/history/2026-09-03-pre-233-DECISIONS.md`. Current incident detail: `docs/HANDOFF_LATEST.md`.
+Historical durable decisions D-001 through D-123 remain authoritative unless explicitly superseded. Immediate prior snapshot: `docs/history/2026-09-03-pre-233-DECISIONS.md`. Current incident detail: `docs/HANDOFF_LATEST.md`. `HANDOFF_LATEST / HANDOFF / STATUS / DECISIONS / TODO` are synchronized for cross-thread recovery.
 
 ## D-119 through D-123 — preserved
 
