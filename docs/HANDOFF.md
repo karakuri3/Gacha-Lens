@@ -1,5 +1,51 @@
 # Gacha Lens Canonical Handoff
 
+Updated: 2026-09-03 JST — #211 history buffer restored / Issue #212 canonical sync
+
+## Authoritative current checkpoint — supersedes historical “current” values below
+
+This top section is the current operational state. The full prior canonical snapshot is retained below for durable history; if any retained historical section uses words like “current” or “next” and conflicts with this section, **this section wins**.
+
+- pre-#212 canonical main: `d7955b285fccd93b327ffb8d80594d400660c68c`
+- #211 exact Production run: `33726009433`, job `100555009635`, **SUCCESS**
+- artifact: `9881996601`, digest `sha256:c48abfa07cfcf78b81b661b4a09e5d43399e057f8507733a9f27f12509effdbe`
+- Yahoo provider attempts: **10 total / exactly 1 per listing / retry0 / throttle0 / timeout0**
+- outcomes: **9 unchanged / 1 price_changed**
+- truthful price change: `yahoo-suruga-ya-601192353001` (伏黒恵) **1670 -> 1690 JPY**, active retained
+- resolver manifest preserved before RPC
+- exactly one verified `apply_market_reobservation_bounded_v1(jsonb)` RPC
+- Production: **127 listings / 149 observations / 22 re-observed / sold0**
+- repeated-history rate: **22/127 = 17.3228%**
+- all 10 deterministic rows present and every target now has exactly 2 observations
+- one-shot workflow cleanup commit: `4ddccbb062ed0aa54742a6f6be4bbea7232b4389`
+- final disposable branch file diff vs approved main: **0**
+- push-trigger runs on branch: **exactly 1**
+- #211 authority is **consumed/non-reusable**; never rerun `33726009433` by implication
+- R4 repository prerequisite is merged, but **R4 Production migration/function/RPC/candidate persistence remain unauthorized and unexecuted by #211**
+- #142/#137 F0 remains a separate Production-impact approval boundary
+
+### Mandatory next action after #212 reaches main
+
+1. Re-fetch current main and live Production.
+2. Recompute the Data Scale Scoreboard **SELECT-only**: history rate, fresh coverage, fresh depth x1/x2/x3+, source mix and any other required inputs.
+3. Do **not** run another history batch automatically; 17.32% is currently a material buffer.
+4. If the live Scoreboard selects `depth_insufficient`, fresh-rebind the #206 R3 candidate to the then-current main/Production state, rebuild the complete R4 manifest/digest, and request a **fresh R4-specific Production approval** before migration/RPC.
+5. If another bottleneck wins, follow current evidence instead of sunk-cost logic.
+6. After the next major Production milestone, force canonical sync again.
+
+### #212 self-referential sync rule
+
+- On branch `docs/canonical-sync-post-history-buffer-212` or its open PR, finish the docs-only exact-head validation/release flow first.
+- Once this content reaches `main`, #212 is complete by definition. Do not create another docs-only sync merely to record #212's own merge.
+
+---
+
+## Historical canonical snapshot retained verbatim below
+
+The following snapshot is retained to preserve earlier IDs, approvals, failures, decisions and operational evidence. Its historical “current” values are not authoritative over the checkpoint above.
+
+# Gacha Lens Canonical Handoff
+
 Updated: 2026-09-03 JST — R4 repository prerequisite merged / Issue #209 canonical sync
 
 This is the canonical operational handoff for Gacha Lens. Re-fetch live GitHub, Vercel, Supabase, provider, and GSC evidence before making any current-state decision.

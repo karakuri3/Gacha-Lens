@@ -1,5 +1,38 @@
 # Gacha Lens Status
 
+Updated: 2026-09-03 JST — #211 history buffer restored / Issue #212 canonical sync
+
+## Authoritative current checkpoint — supersedes historical “current” values below
+
+- pre-#212 canonical main: `d7955b285fccd93b327ffb8d80594d400660c68c`
+- #211 run `33726009433` / job `100555009635`: **SUCCESS**
+- artifact `9881996601`, digest `sha256:c48abfa07cfcf78b81b661b4a09e5d43399e057f8507733a9f27f12509effdbe`
+- Yahoo exact attempts: **10 / exactly1 each / retry0**
+- outcomes: **9 unchanged / 1 price_changed**
+- 伏黒恵 `yahoo-suruga-ya-601192353001`: **1670 -> 1690 JPY**, active retained
+- exactly one bounded RPC; listing delta0 / observation +10 / newly re-observed +10 / sold delta0
+- Production now: **127 listings / 149 observations / 22 re-observed / sold0**
+- history rate: **17.3228%**
+- deterministic rows: **10/10**; every #211 target exactly2 observations
+- cleanup commit `4ddccbb062ed0aa54742a6f6be4bbea7232b4389`; final branch diff0 / run count1 / never merged
+- #211 authority consumed/non-reusable
+- R4 Production function/migration/RPC/candidate persistence remain **unauthorized/unexecuted by #211**
+
+After #212 reaches main, the next action is **SELECT-only Data Scale Scoreboard reassessment**. Do not automatically run more history. If depth is selected, fresh-rebind #206 R3 evidence to the then-current main/Production and request a new R4-specific Production approval.
+
+### #212 sync rule
+
+- If this file is on branch `docs/canonical-sync-post-history-buffer-212` or its open PR, finish that docs-only release first.
+- If this content is on `main`, #212 is complete by definition; do not create a recursive sync just to record its merge.
+
+---
+
+## Historical canonical snapshot retained verbatim below
+
+Historical “current/next” language below is retained for auditability. The authoritative checkpoint above wins if values conflict.
+
+# Gacha Lens Status
+
 Updated: 2026-09-03 JST — R4 repository prerequisite merged / Issue #209 canonical sync
 
 This is the compact operational companion to `docs/HANDOFF.md`. Re-fetch live state before acting.

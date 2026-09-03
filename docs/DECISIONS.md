@@ -1,5 +1,52 @@
 # Gacha Lens Durable Decisions
 
+Updated: 2026-09-03 JST — #211 history buffer restored / Issue #212 canonical sync
+
+## Authoritative additions after the retained snapshot
+
+The full prior decisions file is retained verbatim below. These new decisions are additive and authoritative; where an older snapshot-specific statement conflicts with current facts, these additions win.
+
+### D-086 — #211 restored a material repeated-history buffer and is terminal evidence
+
+Exact identity:
+- approved main `d7955b285fccd93b327ffb8d80594d400660c68c`
+- observation key `reobs-v1:bounded-20260903-02`
+- digest `7435ea9e78f1ebf5b27667bd0c252d48fbc6ef952ceb35d34c850c61ba7e68e3`
+- run `33726009433`, job `100555009635`, artifact `9881996601`
+
+Result:
+- Yahoo attempts10 / exactly1 each / retry0 / throttle0 / timeout0
+- 9 unchanged / 1 price_changed
+- 伏黒恵 `yahoo-suruga-ya-601192353001`: 1670 -> 1690 JPY, active retained
+- pre-RPC resolver manifest preserved
+- exactly one verified generic bounded RPC
+- Production 127/139/12/sold0 -> **127/149/22/sold0**
+- repeated-history rate **17.3228%**
+- deterministic rows10/10 and all targets exactly2 observations
+- cleanup `4ddccbb062ed0aa54742a6f6be4bbea7232b4389`, final diff0/run count1/never merged
+
+The #211 provider/RPC/workflow authority is consumed and non-reusable. Never rerun `33726009433` merely to reconfirm evidence.
+
+### D-087 — A restored history buffer requires reassessment, not automatic additional history
+
+At the current 127-listing denominator, 22 re-observed listings provide a 17.3228% buffer over the first 10% history threshold. Therefore the next move after #212 is a fresh SELECT-only Data Scale Scoreboard reassessment, not another history batch by inertia.
+
+Prior depth evidence makes `depth_insufficient` likely, but the live Scoreboard must decide. If depth wins, fresh-rebind R4 to the then-current main and Production state and obtain new R4-specific Production authority. R4 repository readiness is not execution authority.
+
+### D-088 — Canonical syncs preserve durable history; newer top checkpoints supersede old snapshot language
+
+Do not shorten canonical files by deleting earlier durable run IDs, approvals, failures or decision rationale merely to make the docs cleaner. Prefer an authoritative current checkpoint plus retained historical snapshot. Historical words such as “current” or “next” are snapshot-relative and yield to newer explicitly marked checkpoints.
+
+### #212 sync rule
+
+Once these additions reach `main`, #212 is complete by definition. Do not create a recursive docs-only sync just to record the #212 merge.
+
+---
+
+## Historical durable decisions snapshot retained verbatim below
+
+# Gacha Lens Durable Decisions
+
 Updated: 2026-09-03 JST — R4 repository prerequisite merged / Issue #209 canonical sync
 
 This file records decisions that must survive thread changes. Reopen them only when new evidence justifies it.

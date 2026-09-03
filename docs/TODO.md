@@ -1,5 +1,105 @@
 # Gacha Lens Ordered TODO
 
+Updated: 2026-09-03 JST — #211 history buffer restored / Issue #212 canonical sync
+
+## Authoritative current queue — supersedes historical “NEXT/current” labels below
+
+Current umbrella: Issue #119 Data Scale.
+
+### P0 — Finish #212 canonical sync
+
+- [x] #211 run `33726009433` SUCCESS and independent DB postflight complete
+- [x] #211 workflow cleanup complete; final branch file diff0/run count1
+- [x] #211 closed; authority consumed/non-reusable
+- [x] #212 created and docs branch created from `d7955b285fccd93b327ffb8d80594d400660c68c`
+- [x] update canonical four with authoritative #211 checkpoint while retaining prior history
+- [ ] verify branch diff is exactly the canonical four docs and no durable history was lost
+- [ ] open docs-only PR closing #212
+- [ ] exact-head Code Quality SUCCESS
+- [ ] exact-head Vercel Preview READY
+- [ ] unresolved GitHub/Vercel threads0 and main drift0
+- [ ] record docs-only review/non-independence
+- [ ] squash merge
+- [ ] verify normal Git-triggered Vercel Production READY and #212 closed
+
+Do not create another sync merely to record #212's own merge.
+
+### P1 — Fresh SELECT-only Data Scale reassessment after #212
+
+Post-#211 checkpoint before docs merge:
+
+- listings **127**
+- observations **149**
+- re-observed **22**
+- history rate **17.3228%**
+- completed sold **0**
+
+After #212 reaches main:
+
+- [ ] re-fetch exact current main
+- [ ] re-fetch live listings/observations/re-observed/sold
+- [ ] recompute fresh <30d coverage
+- [ ] recompute fresh depth x1/x2/x3+, p50/p90/max
+- [ ] recompute source mix and other `DATA_SCALE_SCOREBOARD.md` inputs
+- [ ] determine the current automatic bottleneck from live evidence
+- [ ] do not automatically run more history; current history has a material buffer
+- [ ] pick exactly one next DATA move
+
+### P2 — If depth is selected, fresh-rebind R4
+
+Use #206 R3 evidence only after current-state rebinding:
+
+- candidate `yahoo-suruga-ya-601199451001`
+- variant `gashapon-4535123846069000-伏黒恵`
+- series `gashapon-4535123846069000`
+- evidence price 980
+- candidate key `1091dce22a0bf29f`
+- fingerprint `56e8f3798cbf366f3b2936ad2034600c27ed36bb5f33ff7c9a6f522a86748198`
+
+Fresh SELECT-only gates:
+
+- [ ] current main
+- [ ] target variant/series/review-safe state
+- [ ] exact current fresh depth and existing listing IDs
+- [ ] unresolved issue0
+- [ ] candidate listing/native/public URL collision0
+- [ ] deterministic initial observation collision0
+- [ ] R4 Production function present/absent directly verified
+- [ ] complete frozen R4 manifest/digest rebuilt for the then-current main
+
+Then request **fresh R4-specific Production authority** for migration application if absent + exactly one atomic RPC. Any credentialed one-shot workflow must also be explicitly included. No provider rediscovery is needed in R4 write mode.
+
+### P3 — If another bottleneck wins
+
+Follow current evidence rather than R4 sunk cost. Another history batch is allowed only if live history genuinely reopens as the reviewed P0 bottleneck and receives fresh exact authority.
+
+### P4 — When DATA thresholds are useful enough, move toward TRAFFIC -> CLICK -> REVENUE
+
+- [ ] restore/re-read current Search Console evidence through an authorized free/current path; do not pay for GSC Wizard without explicit cost approval
+- [ ] prioritize pages/queries already receiving impressions
+- [ ] preserve strict affiliate provenance and outbound-click attribution
+- [ ] measure real revenue conversion before adding paid tooling
+
+### Hold
+
+- R4 Production migration/RPC is not authorized now
+- no reuse of #211 or earlier provider/RPC/workflow authority
+- no F0/#142 implication
+- no Secrets/Variables or workflow/schedule changes by implication
+- no paid/destructive actions
+- NEVER touch `supabase/.temp/cli-latest`
+- keep `.github/workflows/gacha-ingestion.yml` disabled
+- no automatic RPC retry
+- do not scrape Mercari or Amazon
+
+---
+
+## Historical ordered TODO snapshot retained verbatim below
+
+Historical “current/NEXT” labels below are snapshot-relative. The authoritative queue above wins.
+
+# Gacha Lens Ordered TODO
+
 Updated: 2026-09-03 JST — R4 repository prerequisite merged / Issue #209 canonical sync
 
 Work top-to-bottom unless newer verified evidence changes priority. Current umbrella: Issue #119 Data Scale.
