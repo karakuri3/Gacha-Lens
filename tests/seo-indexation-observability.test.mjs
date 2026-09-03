@@ -134,14 +134,29 @@ test("observer XML is absolute, escaped, deterministic, and omits invalid timest
   assert.equal((xml.match(/<lastmod>/g) || []).length, 1);
 });
 
-test("root sitemap remains separate while observer routes use dynamic XML handlers", () => {
+test("root and observer sitemaps use daily cache boundaries without changing sitemap contracts", () => {
   const rootSitemap = source("app/sitemap.js");
   const seriesRoute = source("app/series-sitemap.xml/route.js");
   const variantRoute = source("app/variant-sitemap.xml/route.js");
+  assert.match(rootSitemap, /unstable_cache/);
+  assert.match(rootSitemap, /gacha-public-root-sitemap-v1/);
+  assert.match(rootSitemap, /export const revalidate = 86400/);
+  assert.match(rootSitemap, /getDailyPublicSitemapIdentifiers/);
   assert.match(rootSitemap, /getPublicSitemapIdentifiers/);
+  assert.match(rootSitemap, /Public sitemap exceeds/);
   assert.doesNotMatch(rootSitemap, /series-sitemap\.xml|variant-sitemap\.xml/);
+
+  assert.match(seriesRoute, /unstable_cache/);
+  assert.match(seriesRoute, /gacha-public-series-observer-sitemap-v1/);
+  assert.match(seriesRoute, /getDailySeriesObserverSitemapEntries/);
+  assert.match(variantRoute, /unstable_cache/);
+  assert.match(variantRoute, /gacha-public-variant-observer-sitemap-v1/);
+  assert.match(variantRoute, /getDailyVariantObserverSitemapEntries/);
+
   for (const route of [seriesRoute, variantRoute]) {
-    assert.match(route, /export const dynamic = "force-dynamic"/);
+    assert.match(route, /export const dynamic = "force-static"/);
+    assert.match(route, /export const revalidate = 86400/);
+    assert.doesNotMatch(route, /force-dynamic/);
     assert.match(route, /application\/xml; charset=utf-8/);
     assert.match(route, /buildObserverSitemapXml/);
   }
