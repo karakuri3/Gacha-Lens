@@ -1,8 +1,8 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-03 JST — Production R4 repair migration applied and verified / Issue #226 canonical sync
+Updated: 2026-09-03 JST — successful Production R4 one-candidate write / Issue #229 canonical sync
 
-This is the current operational handoff. The complete checkpoint immediately before #226 is preserved byte-for-byte at `docs/history/2026-09-03-pre-226-HANDOFF.md`; that snapshot links to pre-#224, pre-#222 and older history.
+This is the current operational handoff. The complete checkpoint immediately before #229 is preserved byte-for-byte at `docs/history/2026-09-03-pre-229-HANDOFF.md`; that snapshot links to pre-#226 and earlier history.
 
 ## Resume protocol
 
@@ -10,16 +10,15 @@ If a fresh thread receives only **「Gacha Lens続けて」**:
 
 1. Read this file plus `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/PRODUCTION_HISTORY_DEPTH_ROLLOUT_PLAN.md`, `docs/DATA_SCALE_SCOREBOARD.md`, `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
 2. Re-fetch current `main`, recent Issues/PRs/Actions, Vercel, and only the live Production evidence needed for the next decision.
-3. Do not repeat completed/failed R1/R2/R3/R4/history canaries merely to refresh context.
-4. Production data writes, new migrations/schema/backfills, provider execution, workflow dispatch/change, Secrets/Variables, paid/destructive actions, direct main pushes, and ineligible merges/releases require applicable explicit approval.
+3. Do not repeat completed or failed R1/R2/R3/R4/history canaries merely to refresh context.
+4. Production data writes, migrations/schema/backfills, approval-bound provider execution, workflow dispatch/change, Secrets/Variables, paid/destructive actions, direct main pushes, and ineligible merges/releases require applicable explicit approval.
 5. After each major Production/recovery/security/release milestone, synchronize `HANDOFF / STATUS / DECISIONS / TODO` before the next major phase.
 
 ## Repository / services
 
 - Repository: `karakuri3/Gacha-Lens`
-- Runtime main used for the Production repair: `b41382d3f8470edc68133a27d50892c016ea095f`
-- PR #218: **MERGED**; Issue #217: **CLOSED**
-- PR #225 / Issue #224: docs-only post-merge canonical sync complete before this Production repair
+- Exact runtime main approved and used for the successful R4 write: `8cc10b23236406b7bb3b9cec3db5e72574205196`
+- Vercel Production for that main: `dpl_6iZU7XNhmqM4ruxuVz9j77q3ZDnd` — READY
 - Production: `https://gachalens.com`
 - Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
 - Old inactive Supabase: `ihcudkfspzuixsqsvoku` — never confuse with Production
@@ -27,75 +26,110 @@ If a fresh thread receives only **「Gacha Lens続けて」**:
 
 ## Production R4 repair — COMPLETE
 
-Fresh human authorization allowed only the three reviewed Production repair migrations. No candidate persistence was authorized.
+The three reviewed repair migrations are already applied and verified in Production:
+- `20260903111455 market_observation_trigger_schema_qualification`
+- `20260903111513 market_observation_service_role_contract`
+- `20260903111600 market_depth_r4_postgres_regex_repair`
 
-Applied through Supabase migration mechanism, in reviewed order:
-1. `20260903111455 market_observation_trigger_schema_qualification`
-   - repository source: `20260903183500_market_observation_trigger_schema_qualification.sql`
-2. `20260903111513 market_observation_service_role_contract`
-   - repository source: `20260903183530_market_observation_service_role_contract.sql`
-3. `20260903111600 market_depth_r4_postgres_regex_repair`
-   - repository source: `20260903183600_market_depth_r4_postgres_regex_repair.sql`
+Authoritative callable state remains:
+- broken `{1,300}` guard occurrences: 0
+- explicit source-ID length 1..300 + PostgreSQL-safe allowlist present
+- trigger relation schema-qualified
+- SECURITY INVOKER
+- empty `search_path`
+- PUBLIC/anon/authenticated EXECUTE false
+- service_role EXECUTE true
+- service_role observation-table CRUD true
 
-Post-application verification:
-- market listings: **127 -> 127**
-- observations: **149 -> 149**
-- re-observed listings: **22 -> 22**
-- completed/sold: **0 -> 0**
-- R4 target candidate rows: **0**
-- deterministic R4 observation rows: **0**
-- runtime-proof series/variant/listing/observation residue: **0**
-- broken `{1,300}` source-ID guard occurrences: **1 -> 0**
-- explicit source-ID length `1..300` guard: **present**
-- PostgreSQL-safe `^[A-Za-z0-9:._-]+$` allowlist: **present**
-- unqualified trigger relation occurrences: **1 -> 0**
-- qualified `public.market_listing_observations` trigger relation: **present**
-- R4 function: **SECURITY INVOKER**
-- R4 function `search_path`: **empty**
-- R4 EXECUTE: PUBLIC=false / anon=false / authenticated=false / service_role=true
-- `service_role` CRUD on `public.market_listing_observations`: **true**
+The repair authorization is consumed/non-reusable.
 
-The third migration executed the real R4 success path under `service_role` inside its reviewed PL/pgSQL exception subtransaction, asserted result/depth behavior, rolled all fixture writes back, and also proved invalid length and invalid character failures. Independent post-migration SELECT confirmed zero residue and market-data delta0.
+## Production R4 candidate proof — SUCCESS
 
-## Supabase advisor note
+Issue #228 performed a fresh read-only rebind after repair and then received a new exact one-candidate human approval.
 
-Security and performance advisors were run after the DDL change. No new R4 callable-surface defect was found. Existing project-wide advisory debt remains, including RLS-enabled/no-policy INFO notices and GraphQL schema visibility warnings caused by existing `anon`/`authenticated` SELECT grants, plus performance notices such as unindexed foreign keys / unused indexes.
+Approved identity:
+- main `8cc10b23236406b7bb3b9cec3db5e72574205196`
+- observation key `depth-r4-v1:20260903-02`
+- batch digest `219f0f0f9d7019f38c2d6a6689921835247980c5f6d91c4a4ff175b8bce19a72`
+- target variant `gashapon-4535123846069000-伏黒恵`
+- candidate `yahoo-suruga-ya-601199451001`
+- candidate key `1091dce22a0bf29f`
+- selection fingerprint `56e8f3798cbf366f3b2936ad2034600c27ed36bb5f33ff7c9a6f522a86748198`
+- provider/native `yahoo_shopping:suruga-ya_601199451001`
+- evidence price/status `980 / active`
+- deterministic observation `market-depth-r4-54b6e36807377900ebcb5046cbdae9d8`
 
-Those were **not changed** under this repair-only authorization. Treat any access-model cleanup as a separate reviewed security task. Current Supabase guidance distinguishes table grants from RLS and now increasingly requires explicit grants for Data API exposure; do not change existing client access casually.
+Immutable source evidence reused without a new provider request:
+- R3 run `33665350076`
+- artifact `9860342840`
+- artifact SHA256 `a0fe9011e7b0102f8464835385746b0437fdebff74791e6db9d294d015df5e8a`
+- source main `b38f62ef81b8ec3a9cdf02395d4bdd678dadee31`
+- generated_at `2026-09-02T18:08:53.303Z`
+- downloaded ZIP digest independently matched and the Production 7-day freshness guard passed immediately before execution.
 
-## Consumed approval
+Immediate prewrite gate passed:
+- exact main unchanged
+- target variant/series exact, `variant_type=normal`, `review_required=false`
+- fresh safe target depth exactly 1 with existing ID [`yahoo-suruga-ya-601192353001`]
+- unresolved target issues0
+- listing/public URL/provider-native/observation collisions0
+- repaired function security/validator state intact
 
-The Production R4 repair migration authorization is **consumed/non-reusable**. It authorized only this migration set and its verification.
+The approved R4 function was invoked **exactly once** under `service_role`; no retry occurred.
 
-It did **not** authorize:
-- R4 candidate persistence or retry;
-- provider refresh;
-- another history write;
-- workflow dispatch/change;
-- Secrets/Variables changes;
-- F0/#142;
-- unrelated Production security/access changes.
+Synchronous result:
+- `inserted_count=1`
+- target depth `1 -> 2`
+- listing `yahoo-suruga-ya-601199451001`
+- observation `market-depth-r4-54b6e36807377900ebcb5046cbdae9d8`
 
-## Current true gate — fresh R4 candidate rebind
+Independent postwrite SELECT proved:
+- listings `132 -> 133`
+- observations `154 -> 155`
+- completed/sold remains 0
+- candidate row exactly 1
+- observation row exactly 1
+- target fresh IDs exactly [`yahoo-suruga-ya-601192353001`, `yahoo-suruga-ya-601199451001`]
+- candidate identity, 980/active state, classification, confidence and full R3/R4 provenance markers exactly match the approved manifest
+- after the immediate precheck timestamp, the only new market rows were this listing and this observation; no unrelated concurrent market write was observed.
 
-Production function repair is complete. The next phase is read-only preparation for a possible single R4 candidate write:
-1. re-fetch exact current main;
-2. recompute current Data Scale Scoreboard;
-3. re-read target variant/series/review/depth state;
-4. re-read current listing IDs and collision state;
-5. prove unresolved target issues0 and deterministic observation collision0;
-6. determine whether historical R3 evidence remains valid; do not silently refresh provider data;
-7. rebuild a complete frozen R4 manifest/digest against current Production;
-8. save durable resolution evidence;
-9. request a **fresh exact one-candidate Production write approval**.
+Issue #228 is CLOSED completed. The exact R4 candidate-write approval is consumed/non-reusable.
 
-No candidate write is authorized now. If later approved, invoke exactly once. Never automatically retry; ambiguous commit state must be resolved SELECT-only.
+## Current Data Scale checkpoint
 
-## Historical boundaries
+Fresh SELECT-only snapshot after the successful write:
+- series: **10,241**
+- variants: **23,808**
+- listings: **133**
+- observations: **155**
+- fresh <30d covered variants: **122**
+- depth: **120 x1 / 2 x2 / 0 x3+**
+- max fresh depth: **2**
+- re-observed listings: **22 / 133 = 16.5414%**
+- review-safe stock/restock: **0 / 0**
+- outbound clicks 7d: **10**
+- completed-sale evidence: **0**
 
-- #214 remains terminal fail-closed evidence for the old defective function and its consumed authority.
-- #218 repository repair and its one-time Reviewer/Verifier substitution are consumed/non-reusable.
-- Production repair now supersedes the previous quarantine state, but does not retroactively make #214 successful.
+The P0 Data Scale diagnosis remains **`depth_insufficient`** because 120/122 covered variants still have only one fresh listing.
+
+The increase from the repair-time 127/149 checkpoint to the pre-R4 132/154 checkpoint was independently explained by existing scheduled `Gacha Market P3 Bounded Seed V2 Automatic` run `33748940988`, which logged 10 database writes = 5 listings + 5 observations and did not touch the R4 target.
+
+## Current true gate — reassess bounded depth scaling
+
+The one-candidate R4 proof is complete. The next safe phase is read-only/product-level reassessment, not another automatic write.
+
+Recommended sequence:
+1. re-fetch live Scoreboard and recent automatic collection behavior before acting;
+2. determine whether the current P3 automatic collector is primarily increasing breadth while depth remains the dominant bottleneck;
+3. design the smallest bounded depth-scaling step that can improve existing covered variants without weakening matching/identity guards;
+4. keep provider calls, Production writes, workflow/schedule changes and any new execution approval as separate explicit boundaries;
+5. avoid endless infrastructure work if product/traffic/revenue work becomes higher leverage.
+
+No further R4 write, provider refresh, or workflow mutation is authorized by the completed #228 approval.
+
+## Separate security/performance debt
+
+Post-repair Supabase advisor findings remain separate work: RLS/no-policy notices, existing client/GraphQL visibility, public-schema extension warning, unindexed foreign keys and unused indexes. Do not change them by implication under Data Scale execution authority.
 
 ## Hard no-regression boundaries
 
@@ -112,7 +146,7 @@ No candidate write is authorized now. If later approved, invoke exactly once. Ne
 
 ## Canonical history
 
-Immediate pre-#226 checkpoint:
-- `docs/history/2026-09-03-pre-226-HANDOFF.md`
+Immediate pre-#229 checkpoint:
+- `docs/history/2026-09-03-pre-229-HANDOFF.md`
 
-Do not create a recursive canonical sync merely to record #226's own docs-only merge.
+Do not create a recursive canonical sync merely to record #229's own docs-only merge.
