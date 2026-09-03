@@ -23,7 +23,7 @@ P0-A sitemap mitigation is released and verified. P0-B has now proven a remainin
 - [x] prove facade is actually executed via identical hashed origin markers on both requests
 - [x] prove Supabase backend read set repeats on the second request at about `17:27:35-36Z` after first at about `17:25:52Z`
 - [x] close the alias/explicit-import hypothesis; do not spend another build on it
-- [x] create/update thread-independent live handoff in `docs/HANDOFF_LATEST.md`
+- [x] synchronize `HANDOFF_LATEST / HANDOFF / STATUS / DECISIONS / TODO` so a new thread can resume without user re-explanation
 
 ### Remaining blocking gates before normal development resumes
 
