@@ -50,8 +50,9 @@ GRANT EXECUTE ON FUNCTION public.apply_market_depth_r4_atomic_v1(jsonb) TO servi
 -- batch inside a PL/pgSQL exception subtransaction. A sentinel exception is raised
 -- only after all success assertions pass; PostgreSQL rolls every fixture/write from
 -- the inner block back before the handler swallows that one sentinel. Any function
--- error or assertion error is re-raised and fails the migration. This makes a fresh
--- disposable `db reset` exercise the actual callable path that static migration
+-- error or assertion error is re-raised and fails the migration. The actual R4 call
+-- runs under service_role so SECURITY INVOKER table privileges are exercised too.
+-- This makes a fresh disposable `db reset` cover the callable path static migration
 -- creation checks previously missed, while leaving zero durable fixture rows.
 DO $r4_runtime_proof$
 DECLARE
@@ -190,6 +191,9 @@ BEGIN
       ))
     );
 
+    -- SET LOCAL is part of this inner subtransaction and is automatically restored
+    -- when the sentinel exception rolls the proof block back.
+    SET LOCAL ROLE service_role;
     v_result := public.apply_market_depth_r4_atomic_v1(v_batch);
 
     IF v_result->>'kind' IS DISTINCT FROM 'market_depth_r4_atomic_v1'
@@ -237,6 +241,10 @@ BEGIN
       RAISE;
     END IF;
   END;
+
+  IF current_user <> session_user THEN
+    RAISE EXCEPTION 'market_depth_r4_runtime_proof_role_not_restored:%:%', current_user, session_user;
+  END IF;
 
   IF EXISTS (SELECT 1 FROM public.series WHERE id = v_series_id)
     OR EXISTS (SELECT 1 FROM public.variants WHERE id = v_variant_id)
