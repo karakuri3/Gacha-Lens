@@ -1,20 +1,20 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-03 JST — first successful reusable bounded history batch / Issue #204 canonical sync
+Updated: 2026-09-03 JST — R4 repository prerequisite merged / Issue #209 canonical sync
 
 Work top-to-bottom unless newer verified evidence changes priority. Current umbrella: Issue #119 Data Scale.
 
 ## Canonical-sync interpretation
 
-This file is authored by Issue #204.
+This file is authored by Issue #209.
 
-- On branch `docs/canonical-sync-post-bounded-success-204` or its open PR, finish the P0-P canonical-sync gate below.
-- Once this content is on `main`, treat P0-P as complete and resume at P1-J.
-- Do not create a recursive docs sync merely to mark #204's own merge.
+- On branch `docs/canonical-sync-post-r4-prereq-209` or its open PR, finish P0-R below first.
+- Once this content is on `main`, treat P0-R as complete and resume at **P1-L — fresh read-only Data Scale reassessment**.
+- Do not create a recursive docs sync merely to mark #209's own merge.
 
 ## P0-A — F0 separate approval boundary
 
-- [x] Prove scheduled F0 run `33484450472` failed closed with transaction not_started, DB writes/deletes 0.
+- [x] Prove scheduled F0 run `33484450472` failed closed with transaction not_started, DB writes/deletes0.
 - [x] Create Issue #137 / PR #142 repair and validate tests/lint/diff/Preview.
 - [ ] Obtain remaining required review/explicit approval before merging #142.
 - [ ] Do not manually rerun/dispatch F0 without separate approval.
@@ -29,176 +29,175 @@ This file is authored by Issue #204.
 - [x] #169 equal-time/null-time re-observation safety.
 - [x] #170 Production history/depth rollout plan.
 
-## P0-C — R1 / original R2 historical chain — complete
+## P0-C — R1 / R2 chain — complete historical evidence
 
-- [x] #172 R1 exact-provider canary completed, Production writes 0.
+- [x] #172 R1 exact-provider read-only canary completed, Production writes0.
 - [x] #173/#176 Yahoo JSONP exact-read repair merged and Production READY.
 - [x] #180/#182 original R2 atomic repository prerequisite completed.
 - [x] Original #179 Production attempt failed closed on first Rakuten not_found; remaining calls0/RPC0/writes0.
-- [x] Post-failed-attempt canonical sync completed.
+- [x] #187/#188 Yahoo-only R2 v2 repository prerequisite completed.
+- [x] Yahoo-only R2 v2 Actions `33621881117` succeeded: attempts4/1 each/retry0/all unchanged/one atomic RPC.
+- [x] Production 113/113/0 -> 113/117/4; sold0.
+- [x] R2 workflows removed and approvals consumed.
 
-Old R1/R2 approvals are consumed.
+Do not rerun R1/R2 merely to refresh evidence.
 
-## P0-D — Yahoo-only R2 v2 — complete SUCCESS
+## P0-M — Reusable bounded history prerequisite — complete
 
-- [x] #187/#188 Yahoo-only v2 repository prerequisite merged.
-- [x] Reviewed v2 Production migration applied; ledger `20260902095120 / r2_yahoo_only_reobservation_canary_v2`.
-- [x] Actions `33621881117` executed exactly once.
-- [x] Yahoo attempts 4 total / 1 each / retry0 / all unchanged.
-- [x] Exactly one verified atomic v2 RPC.
-- [x] Production 113/113/0 -> 113/117/4 for listings/observations/re-observed; sold0.
-- [x] Deterministic rows4/4; each target exactly two observations.
-- [x] Workflow removed; final branch diff0/run count1/never merged.
-- [x] Post-success canonical sync completed.
-
-Do not rerun R2 merely to refresh evidence.
-
-## P0-M — Reusable bounded re-observation repository prerequisite #196/#198 — complete
-
-- [x] #195 selects reusable history compounding before automatic R3.
-- [x] Add generic bounded domain/runner/SELECT-only resolver/migration.
-- [x] Explicit batch size 1..10.
-- [x] Yahoo + Rakuten exact persisted identity support.
-- [x] Exact-main/cohort/snapshot/prior-count digest + distinct approval namespace.
-- [x] Prior observation count >1 supported when exact.
+- [x] #196 / replacement PR #198 merged generic bounded re-observation v1.
+- [x] Explicit batch1..10, Yahoo+Rakuten exact identity, exact-main/full-snapshot digest.
 - [x] Dry-run provider/RPC/write0.
-- [x] Future approved write budget max3/listing / max30 total with provider pacing.
-- [x] Require all-safe before exactly one RPC.
-- [x] Require pre-RPC sanitized resolver manifest; no automatic retry.
-- [x] Exact listing/deterministic observation result sets.
-- [x] Separate canonical identity from persisted DB URL/raw identity.
-- [x] Protect listing/observation/import-issue race paths.
-- [x] Exact target invariants + concurrency-tolerant global count checks.
-- [x] No-sold/no-sold_at; SECURITY INVOKER; service_role-only.
-- [x] Focused tests and exact-head CI/Preview/disposable migration proof.
-- [x] Final implementation head `c6372d9f3a1857a2d18302c1a4118cf685e13ece`.
-- [x] Byte-identical replacement PR #198 merged as `9c74d243b5a8f43b49dc7fa649b4c4043bb4a82c` after Draft->Ready connector defect on #197.
-- [x] #196 closed.
+- [x] Approved write path max3/listing/max30, provider pacing, all-safe-before-one-RPC.
+- [x] Pre-RPC resolver manifest required; no automatic RPC retry.
+- [x] Exact deterministic observation IDs and target invariants.
+- [x] SECURITY INVOKER / empty search_path / service_role-only.
+- [x] Generic Production schema installed once: ledger `20260902165958 / market_reobservation_bounded_v1`.
 
-## P0-N — Post-prerequisite canonical sync #199/#200 — complete
+## P1-F through P1-I — First reusable bounded history batch — complete SUCCESS
 
-- [x] Canonical four updated.
-- [x] Code Quality `33656178555` SUCCESS.
-- [x] Preview `dpl_FRXK3zijJnjvamSAaRAmMrEJNg1P` READY.
-- [x] PR #200 merged; main became `0a509fe5813216b529b6192e41fb0875b28d10db`.
-- [x] Production deployment `dpl_EJRVBn8vH1ZE9eSB2F8divjangNh` READY.
-- [x] #199 closed.
+- [x] Freeze Yahoo8 and observation key `reobs-v1:bounded-20260903-01`.
+- [x] First manual digest `9940a558...` proved invalid; first run `33658579004` failed before provider loop with provider0/RPC0/writes0.
+- [x] Remove failed one-shot; authority consumed.
+- [x] Recompute complete merged-payload digest `1142a10b4c8818562b27f9222a388be073934ca83a33932c2dfca65a5d4782bf` against main `9859ab4d...`.
+- [x] Run `33660684355` exactly once.
+- [x] Yahoo attempts8 / exactly1 each / retry0 / rate-limit0 / timeout0.
+- [x] Outcomes7 unchanged / 1 truthful price_changed.
+- [x] `yahoo-toysanta-g-5l370018il-003-57693`: 568 -> 399, active remained active.
+- [x] Exactly one bounded RPC, applied_count8.
+- [x] Production 115/119/4 -> 115/127/12, sold0.
+- [x] Every frozen target exactly two observations.
+- [x] Remove workflow; cleanup `c4a058f5cda1ad770bd5340e9650217484a6028e`; final diff0/run count1/never merged.
+- [x] Authority consumed; never rerun `33660684355`.
 
-## P1-F — First reusable bounded batch planning #201 — complete
+## P0-P — Post-history canonical sync #204/#205 — complete
 
-- [x] Detect legitimate P3 breadth drift to 115 listings / 119 observations / 4 re-observed / sold0 via run `33655998914`.
-- [x] Freeze Yahoo cohort: Lead Netstore6 + Toysanta2.
-- [x] Freeze observation key `reobs-v1:bounded-20260903-01`.
-- [x] Require review-safe exact persisted identities, sold_at=null, prior count1, unresolved0.
-- [x] Compute deterministic IDs; collision0/8.
-- [x] Project all-safe +8 history => 12/115 = 10.43% at then-current denominator.
-- [x] First recorded digest `9940a558...` later proved incorrect; preserve as superseded audit evidence.
-- [x] Root cause: manual digest reproduction omitted persisted identity fields included by merged `frozenCohortEntry()`.
+- [x] Sync canonical four after #201 success.
+- [x] Record Production 115/127/12/sold0 and 10.43% history checkpoint.
+- [x] Merge docs-only PR #205.
+- [x] Normal Git-triggered Vercel Production release READY.
 
-## P1-G — First reusable bounded Production attempt #201 — migration SUCCESS / data execution FAIL-CLOSED
+## P1-J — Read-only post-history Scoreboard reassessment #206 — complete
 
-- [x] Apply reviewed generic bounded migration once.
-- [x] Verify ledger `20260902165958 / market_reobservation_bounded_v1`.
-- [x] Verify function SECURITY INVOKER / empty search_path / service_role-only.
-- [x] Verify migration alone leaves market data 115/119/4/sold0.
-- [x] First one-shot `33658579004` guard PASS.
-- [x] Fail closed at approval validation before provider loop due invalid digest.
-- [x] Prove provider0/RPC0/writes0.
-- [x] Do not rerun first one-shot.
-- [x] Remove first workflow; cleanup `772f687c339fd729f3e11c682649926e4ca52645`; final diff0/run count1/never merged.
-- [x] First exact approval consumed/non-reusable.
+- [x] Re-fetch Production at 115 listings / 127 observations / 12 re-observed / sold0.
+- [x] Confirm history 12/115 = 10.4348% passed first 10% threshold at that snapshot.
+- [x] Measure fresh depth: 104 variants x1 / 1 x2 / 0 x3+ among 105 fresh covered variants.
+- [x] Identify then-current automatic P0 bottleneck: **`depth_insufficient`**.
+- [x] Choose two explicit demand-weighted R3 read-only targets: Buzz Rakuten-first + 伏黒恵 Yahoo-first.
 
-## P0-O — Post-first-attempt canonical sync #202/#203 — complete
+## P1-K — R3 depth read-only execution #206 — complete SUCCESS
 
-- [x] Preserve invalid digest as superseded evidence.
-- [x] Record generic schema installed, data execution not yet successful.
-- [x] Record first run provider0/RPC0/writes0 and workflow cleanup.
-- [x] Recompute post-sync digest against main `9859ab4d1d92043cc914dd00ea5814eff614e6f3`.
-- [x] PR #203 merged; #202 closed.
-- [x] Production deployment for #203 READY.
+- [x] Exact approved main `b38f62ef81b8ec3a9cdf02395d4bdd678dadee31`.
+- [x] Disposable branch `ops/r3-depth-one-shot-206-20260903`.
+- [x] Actions `33665350076`, job `100365611263`: SUCCESS, attempt1.
+- [x] Artifact `r3-depth-206-evidence`, ID `9860342840`, digest `sha256:a0fe9011e7b0102f8464835385746b0437fdebff74791e6db9d294d015df5e8a`.
+- [x] Pre-provider exact-main/catalog/depth/unresolved gates PASS.
+- [x] Planner requests5 / HTTP attempts5 / retry0 / timeout0 / rate-limit0 / permanent failures0.
+- [x] Buzz: 3 requests, new strict-safe0, duplicate/existing1.
+- [x] 伏黒恵: 2 requests, raw5, new strict-safe1.
+- [x] Freeze candidate `yahoo-suruga-ya-601199451001`, native `yahoo_shopping:suruga-ya_601199451001`, price980, active.
+- [x] Candidate key `1091dce22a0bf29f` / fingerprint `56e8f3798cbf366f3b2936ad2034600c27ed36bb5f33ff7c9a6f522a86748198`.
+- [x] Production writes0 / RPC0 / migration0.
+- [x] Remove workflow; cleanup `4815827a911737eacb758845cf8d671c629a874e`; final diff0/run count1/never merged/no workflow_dispatch.
+- [x] #206 authority consumed; never rerun `33665350076` without new exact authorization.
 
-## P1-H — Post-sync #201 revalidation — complete
+## P0-Q — R4 atomic depth repository prerequisite #207/#208 — complete
 
-- [x] Re-fetch exact main `9859ab4d1d92043cc914dd00ea5814eff614e6f3`.
-- [x] Re-select same Yahoo8.
-- [x] Verify target snapshots exact, prior count1 each, unresolved0, collision0.
-- [x] Verify generic function/ledger/security; do not reapply migration.
-- [x] Compute repository-equivalent cohort digest `1142a10b4c8818562b27f9222a388be073934ca83a33932c2dfca65a5d4782bf`.
-- [x] Obtain fresh exact human approval for Yahoo8 max3 each/max24 total, >=1000ms pacing, one RPC iff all safe, no RPC retry, SELECT-only resolver if ambiguous, and one disposable push-trigger workflow.
+- [x] Add `market-depth-r4-persistence.js` domain contract.
+- [x] Add dry-run/one-RPC runner and SELECT-only resolver.
+- [x] Add migration `20260903033000_market_depth_r4_atomic_v1.sql`.
+- [x] Add focused persistence/resolver/runner tests.
+- [x] Freeze batch size1..10 / exact-main+manifest digest / unique approval namespace.
+- [x] Require exact catalog/depth/unresolved/collision preconditions.
+- [x] Insert listing + initial observation atomically in one RPC transaction.
+- [x] No UPDATE/DELETE/completed sold/sold_at.
+- [x] SECURITY INVOKER / empty search_path / service_role-only.
+- [x] Pre-RPC resolver manifest mandatory / no automatic write retry.
+- [x] Final exact PR head `e46b0c8c2e40b6f0b464cac703b982891a2d239c`.
+- [x] Diff exactly7 added files / existing-file modifications0 / deletions0.
+- [x] Code Quality `33670220550`: SUCCESS; 2062/2062 tests, lint, diff check PASS.
+- [x] Exact-head Preview `dpl_2ejC77ayiEVzXBBhUA1w2Zt7K5y2`: READY.
+- [x] Foundation `33670220535`: all12 migrations including R4 applied and DB reset completed; known stale expected-8 assertion then failed.
+- [x] Strengthened self-review `5093856424`, no blocking finding; independent status not faked.
+- [x] Receive one-time #208-only review substitution.
+- [x] Record substitution limitation in PR and consume it on merge.
+- [x] Mark Ready and squash merge with expected head.
+- [x] Main becomes `10e097eaf11e70814a2d25bc1227e950f6b69d0f`; #207 closes.
+- [x] Normal Git-triggered Production deployment `dpl_J3RwK5mbkfuyCPENVQFXEpCAwNgK` READY.
+- [x] Confirm Supabase Production R4 function absent and candidate absent after repository release.
 
-## P1-I — First reusable generic bounded data execution — complete SUCCESS
+## P0-R — Post-R4-prerequisite canonical sync #209 — current phase gate
 
-- [x] Create disposable branch `ops/bounded-reobs-one-shot-201-retry-20260903` from exact approved main.
-- [x] Add exactly one branch-only push-trigger workflow using existing Secrets only.
-- [x] Run Actions `33660684355` exactly once; job `100350188660`.
-- [x] Exact-main + one-file branch guard PASS.
-- [x] Yahoo provider attempts **8 total / exactly 1 each / retry0**.
-- [x] Rate-limit0 / timeout0.
-- [x] Outcomes **7 unchanged / 1 price_changed**.
-- [x] Truthful price change: `yahoo-toysanta-g-5l370018il-003-57693` **568 -> 399**, status active.
-- [x] Pre-RPC resolution manifest preserved.
-- [x] Invoke exactly one bounded RPC after all eight safe plans.
-- [x] RPC verified, applied_count8.
-- [x] Exact lane deltas: listings0 / observations+8 / re-observed+8 / sold0.
-- [x] Independent Production SELECT verifies 115 listings / 127 observations / 12 re-observed / sold0.
-- [x] Deterministic rows8/8; every frozen target exactly two observations.
-- [x] History coverage reaches **12/115 ~=10.43%**, crossing first 10% Scoreboard threshold.
-- [x] Artifact ID `9858557931` saved.
-- [x] Remove workflow immediately; cleanup `c4a058f5cda1ad770bd5340e9650217484a6028e`.
-- [x] Verify disposable branch final file diff0, push-trigger run count1, never merged.
-- [x] Mark retry approval/token/workflow authority consumed/non-reusable.
-- [x] Never rerun `33660684355`.
-
-## P0-P — Post-success canonical sync #204 — current phase gate
-
-- [x] Add durable success evidence to #201.
-- [x] Create Issue #204.
-- [x] Create branch `docs/canonical-sync-post-bounded-success-204` from main `9859ab4d...`.
-- [x] Update exactly `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`.
-- [x] Record 8 attempts / 1 each / retry0 and exact provider outcomes.
-- [x] Record one truthful price change 568 -> 399.
-- [x] Record exactly one RPC +8 observations/+8 re-observed/sold0.
-- [x] Record Production 115/127/12/sold0 and 10.43% history coverage.
-- [x] Record workflow cleanup/final diff0/run count1/non-merge.
-- [x] Record retry approval consumed and no rerun.
+- [x] Create Issue #209.
+- [x] Create branch `docs/canonical-sync-post-r4-prereq-209` from `10e097eaf11e70814a2d25bc1227e950f6b69d0f`.
+- [x] Re-fetch current Production counts.
+- [x] Detect denominator growth to **127 listings / 139 observations / 12 re-observed / sold0**.
+- [x] Record current history ratio **12/127 ~=9.45%**, below the first 10% threshold again.
+- [x] Confirm R4 function absent / candidate absent / target existing fresh depth unchanged.
+- [x] Update `HANDOFF.md`.
+- [x] Update `STATUS.md`.
+- [x] Update `DECISIONS.md`.
+- [x] Update `TODO.md`.
 - [ ] Cross-file consistency self-review; disclose docs-only non-independence.
+- [ ] Verify branch diff exactly these four docs-only files.
+- [ ] Open docs-only PR `Closes #209`.
 - [ ] Exact-head PR Code Quality PASS.
 - [ ] Exact-head Vercel Preview READY.
-- [ ] Confirm no unresolved GitHub/Vercel threads and main drift safe.
-- [ ] Squash merge if docs-only gates pass.
-- [ ] Verify normal Git-triggered Vercel Production READY.
+- [ ] Confirm no unresolved GitHub/Vercel threads and safe main/base drift.
+- [ ] Squash merge under docs-only safe auto-merge policy if all gates pass.
+- [ ] Verify #209 closed and normal Git-triggered Vercel Production READY.
 
-Once this content reaches `main`, P0-P is closed by definition; do not create a recursive sync merely to record #204's merge.
+Once this content reaches `main`, P0-R is complete by definition. Do not create another sync merely to record #209's own merge.
 
-## P1-J — Reassess Data Scale bottleneck after history threshold — next after #204
+## P1-L — Fresh read-only Data Scale reassessment — NEXT after #209
 
-**Read-only first.**
+**Do this before any R4 Production request.**
 
-Goal: determine the single next DATA move after repeated-history coverage crossed the first 10% threshold.
+Current reason: the live denominator changed after R3. History was 10.43% at 115 listings but is now about 9.45% at 127 listings.
 
-- [ ] Re-fetch current main and live Production counts.
-- [ ] Re-run/re-read the current Data Scale Scoreboard inputs without writing Production data.
-- [ ] Confirm live history coverage remains above the first threshold after any independent P3 breadth growth.
-- [ ] Measure current breadth, repeated-history, depth and source/provenance gaps separately.
-- [ ] Compare at least four options: more bounded history, R3 depth read-only, lawful breadth expansion, source/provenance quality repair.
-- [ ] Rank by expected user value and revenue leverage under DATA -> TRAFFIC -> CLICK -> REVENUE.
-- [ ] Choose one next DATA experiment only after evidence identifies the bottleneck.
-- [ ] If the defined useful Data Scale threshold is now sufficient, shift priority to TRAFFIC/GSC/affiliate click evidence rather than continued infrastructure.
-- [ ] Keep all Production/provider execution fresh-approval-only.
+- [ ] Re-fetch exact current main after #209 merge.
+- [ ] Re-fetch live Production listings / observations / re-observed / completed-sold.
+- [ ] Recompute current fresh safe depth distribution (x1/x2/x3+), depth p50/p90/max.
+- [ ] Recompute fresh catalog/source coverage and other Scoreboard inputs needed by `docs/DATA_SCALE_SCOREBOARD.md`.
+- [ ] Determine the current reviewed automatic P0 bottleneck from live data; do not carry forward `depth_insufficient` by assumption.
+- [ ] Inspect recent approved P3 breadth runs only enough to understand denominator growth; do not over-attribute without run evidence.
+- [ ] Compare expected user/revenue leverage of: another bounded history batch, R4 depth persistence, lawful breadth/source work, or transition toward TRAFFIC/CLICK/REVENUE.
+- [ ] Pick exactly one next DATA move.
 
-## P2 — R3/R4 depth rollout — future separately approved
+## P1-M — R4 Production depth persistence — conditional future boundary
 
-Do not advance automatically because history threshold passed.
+Proceed only if P1-L fresh evidence says depth/R4 is still the highest-leverage next move.
 
-- [ ] Re-evaluate R3 priority only after P1-J evidence.
-- [ ] R3 candidate: bounded read-only depth collection for explicit variants; separately authorize applicable live provider/search envelope; Production writes0.
-- [ ] R4 candidate: persist only strict-safe R3 subset; separate Production DB approval.
+- [ ] Fresh SELECT-only preflight on current main and current Production.
+- [ ] Confirm target variant/series/review-safe state unchanged.
+- [ ] Confirm 伏黒恵 fresh safe depth exact expected listing set.
+- [ ] Confirm unresolved target issues0.
+- [ ] Confirm candidate listing/observation/provider-native/public-URL collisions0.
+- [ ] Confirm R4 function Production presence/absence directly.
+- [ ] Rebuild complete frozen R4 manifest + batch digest against the then-current main.
+- [ ] Request fresh exact human approval for R4 Production migration application (if absent) + exactly one atomic RPC for the frozen batch.
+- [ ] If a disposable credentialed one-shot workflow is necessary, obtain separate explicit workflow authorization.
+- [ ] No provider discovery inside write mode.
+- [ ] Preserve resolver manifest before RPC.
+- [ ] No automatic RPC retry; ambiguous outcome -> SELECT-only resolver.
+- [ ] After any successful/failed Production milestone, force canonical sync again before next major phase.
+
+## P1-N — Additional bounded history — conditional alternative
+
+If P1-L says history is again the reviewed P0 bottleneck:
+
+- [ ] Do not execute R4 by sunk-cost logic.
+- [ ] Select a fresh review-safe cohort under generic bounded v1.
+- [ ] Freeze exact current main, snapshots, prior observation counts and full persisted identities.
+- [ ] Build digest only with merged repository semantics.
+- [ ] Request a fresh exact provider/RPC approval and any necessary one-shot workflow authority.
+- [ ] Never reuse #201 approvals/tokens/workflows.
 
 ## Separate known workflow debt
 
 - [x] #182: 9 migrations applied before stale expected-8 failure.
-- [x] #188: 10 migrations applied before stale expected-8 failure.
-- [x] #197/#198: 11 migrations applied before stale expected-8 failure.
+- [x] #188: 10 applied.
+- [x] #197/#198: 11 applied.
+- [x] #208: **12 applied**, including R4.
 - [ ] Repair `.github/workflows/foundation-baseline.yml` only as a separate bounded Production-capable workflow-change task with applicable approval.
 
 ## P3 — Licensed completed-sale / source expansion
@@ -219,6 +218,7 @@ Do not advance automatically because history threshold passed.
 - [ ] Preserve root/series/variant sitemap separation.
 - [ ] Measure search impressions/clicks before pruning.
 - [ ] Preserve strict affiliate provenance and provider+variant click attribution.
+- [ ] If P1-L shows useful Data Scale sufficient, move here instead of extending infrastructure for its own sake.
 
 ## Hold — do not do without explicit approval/new evidence
 
@@ -228,14 +228,16 @@ Do not advance automatically because history threshold passed.
 - [ ] Do NOT rerun successful R2 v2 `33621881117`.
 - [ ] Do NOT rerun failed first generic run `33658579004`.
 - [ ] Do NOT rerun successful generic run `33660684355`.
-- [ ] Do NOT reuse either #201 approval/token/workflow authorization.
+- [ ] Do NOT rerun R3 `33665350076` under consumed #206 authority.
+- [ ] Do NOT reuse #201 or #206 provider/workflow authority.
+- [ ] Do NOT reuse #208 review substitution for any future PR or Production action.
 - [ ] Do NOT invoke old R2 RPCs merely because functions exist.
 - [ ] Do NOT reapply R2 migrations or generic bounded v1 migration.
+- [ ] Do NOT apply R4 Production migration or invoke R4 RPC without fresh exact approval.
 - [ ] Do NOT make new generic Yahoo/Rakuten provider calls or bounded RPC writes without fresh exact approval.
-- [ ] Do NOT execute R3/R4 by implication.
 - [ ] Do NOT change Production-capable workflows/schedules or dispatch them without applicable approval.
 - [ ] Do NOT change Secrets/Variables by implication.
-- [ ] Do NOT enable Kitan/Qualia automatic writes.
+- [ ] Do NOT enable Kitan/Qualia automatic writes by implication.
 - [ ] Do NOT weaken the strict matcher.
 - [ ] Do NOT mix completed/sold with active/sold_out evidence.
 - [ ] Do NOT scrape Mercari or Amazon.
