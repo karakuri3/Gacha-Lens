@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import ProductImage from "@/components/ProductImage";
@@ -27,8 +27,7 @@ import {
   watchScore,
 } from "@/lib/domain/public-display-clean";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 1800;
 
 const getVariantDetail = cache((slug) => getSeriesBySlug(slug));
 
