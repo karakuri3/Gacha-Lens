@@ -1,39 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import {
-  getCurrentDataSourceOperation,
-  runDataSourceOperation,
-} from "../lib/data/data-source-policy.js";
 
-const serviceRoleSource = readFileSync(new URL("../lib/supabase/service-role-client.js", import.meta.url), "utf8");
+const facadeSource = readFileSync(new URL("../lib/public-series-cache.js", import.meta.url), "utf8");
+const jsconfigSource = readFileSync(new URL("../jsconfig.json", import.meta.url), "utf8");
 
-test("data-source operation context survives async work and is isolated between concurrent requests", async () => {
-  assert.equal(getCurrentDataSourceOperation(), null);
-
-  const [variantOperation, relatedOperation] = await Promise.all([
-    runDataSourceOperation("variant-detail", async () => {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      return getCurrentDataSourceOperation();
-    }),
-    runDataSourceOperation("related-variants", async () => {
-      await Promise.resolve();
-      return getCurrentDataSourceOperation();
-    }),
-  ]);
-
-  assert.equal(variantOperation, "variant-detail");
-  assert.equal(relatedOperation, "related-variants");
-  assert.equal(getCurrentDataSourceOperation(), null);
+test("public series facade caches only completed detail results for 30 minutes", () => {
+  assert.match(facadeSource, /PUBLIC_DETAIL_CACHE_SECONDS = 1800/);
+  assert.match(facadeSource, /getSeriesBySlugUncached\(normalizedSlug\)/);
+  assert.match(facadeSource, /getRelatedSeriesUncached\(normalizedSlug, limit\)/);
+  assert.match(facadeSource, /tags: \["gacha-public-variant"\]/);
+  assert.match(facadeSource, /tags: \["gacha-public-related"\]/);
 });
 
-test("service-role cache is limited to public detail GET/HEAD reads with fixed ASCII metadata", () => {
-  assert.match(serviceRoleSource, /PUBLIC_DETAIL_READ_CACHE_SECONDS = 1800/);
-  assert.match(serviceRoleSource, /PUBLIC_DETAIL_READ_CACHE_TAG = "gacha-public-detail-read"/);
-  assert.match(serviceRoleSource, /new Set\(\["variant-detail", "related-variants"\]\)/);
-  assert.match(serviceRoleSource, /method === "GET" \|\| method === "HEAD"/);
-  assert.match(serviceRoleSource, /cache: "force-cache"/);
-  assert.match(serviceRoleSource, /tags: \[PUBLIC_DETAIL_READ_CACHE_TAG\]/);
-  assert.match(serviceRoleSource, /global:\s*\{\s*fetch: serviceRoleFetch/s);
-  assert.doesNotMatch(serviceRoleSource, /PUBLIC_DETAIL_READ_CACHE_TAG\s*=\s*[^\n]*[ぁ-んァ-ヶ一-龠]/);
+test("public detail cache identity contains no raw Japanese slug", () => {
+  assert.match(facadeSource, /createHash\("sha256"\)/);
+  assert.match(facadeSource, /digest\("hex"\)/);
+  assert.match(facadeSource, /\["gacha-public-variant-detail-v1", cacheIdentity\]/);
+  assert.match(facadeSource, /\["gacha-public-related-detail-v1", cacheIdentity\]/);
+  assert.doesNotMatch(facadeSource, /tags:\s*\[[^\]]*normalizedSlug/);
+});
+
+test("application imports resolve through the transparent public series facade", () => {
+  const config = JSON.parse(jsconfigSource);
+  assert.deepEqual(config.compilerOptions.paths["@/lib/series"], ["./lib/public-series-cache.js"]);
+  assert.deepEqual(config.compilerOptions.paths["@/*"], ["./*"]);
+  assert.match(facadeSource, /export \* from "\.\/series\.js"/);
 });

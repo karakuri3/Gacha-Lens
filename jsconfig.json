@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "paths": {
+      "@/lib/series": ["./lib/public-series-cache.js"],
       "@/*": ["./*"]
     }
   }
