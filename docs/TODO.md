@@ -1,123 +1,65 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-03 JST — P0-A Supabase egress mitigation released / Issue #233 canonical sync
+Updated: 2026-09-04 JST — P0-B public-detail read amplification
 
-The complete ordered TODO checkpoint immediately before this sync is preserved byte-for-byte at `docs/history/2026-09-03-pre-233-TODO.md`.
+Read `docs/HANDOFF_LATEST.md` first for the exact live checkpoint. Historical pre-P0-B TODO is preserved at `docs/history/2026-09-03-pre-233-TODO.md`.
 
-## P0 — Issue #219 shared Supabase Egress risk — CURRENT
+## P0 — Issue #219 / #239 — CURRENT BLOCKER
 
-P0-A is released; the incident is **not yet closed** because billed-byte recovery has not been observed.
+P0-A sitemap mitigation is released and verified. P0-B has now proven a remaining repeated product-detail Supabase read path. Normal feature/Data Scale development stays behind this reliability gate.
 
-Completed P0-A:
-- [x] identify high-confidence sitemap/public-read amplification mechanism
-- [x] create and review PR #231
-- [x] exact-head Code Quality #116 / `33754793103` SUCCESS
-- [x] exact-head Preview `dpl_GVNunr8mDJ54FE5a6nr3mD5Hi4Qj` READY
-- [x] prove root/series/variant sitemaps Static with `1d` revalidation
-- [x] preserve sitemap population/XML/>50k fail-closed semantics
-- [x] full five-file strengthened Lead self-review; explicitly non-independent; findings0
-- [x] pre-merge threads0 and main drift0
-- [x] squash merge #231 as `8048a19ad478672a9d887d77073597ee95dc27d3`
-- [x] normal Vercel Production `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G` READY
-- [x] live Production smoke root/series/variant sitemap endpoints
-- [x] record durable P0-A checkpoint on Issue #219
+### Completed P0-B diagnosis
 
-Next true gate — read-only observation:
-- [ ] observe current Supabase uncached Egress trajectory without resetting counters
-- [ ] compare post-release large-read/request shape with pre-release evidence
-- [ ] determine whether sitemap amplification materially declined
-- [ ] keep #219 open until Fair Use/402 risk is credibly controlled
+- [x] attribute the product-detail target/sibling/signal/related read set
+- [x] reject `revalidate=1800` alone after repeated backend reads
+- [x] reject full-route `force-static` after Japanese slug HTTP 500 / invalid cache-tag metadata
+- [x] reject operation-scoped Supabase fetch caching after exact Preview backend repetition
+- [x] reject completed-result `unstable_cache` facade after exact Preview backend repetition
+- [x] instrument `unstable_cache` origin without raw slug/secrets
+- [x] exact-head `a02e69285ebcc9c06e1be67f2e066d8460e57e68` CI `33784381137` SUCCESS
+- [x] exact-head Preview `dpl_BagCivrtVobFkZum27Stg2PridsS` READY
+- [x] fresh Japanese request #1 HTTP 200
+- [x] identical request #2 HTTP 200
+- [x] prove facade is actually executed via identical hashed origin markers on both requests
+- [x] prove Supabase backend read set repeats on the second request at about `17:27:35-36Z` after first at about `17:25:52Z`
+- [x] close the alias/explicit-import hypothesis; do not spend another build on it
+- [x] create/update thread-independent live handoff in `docs/HANDOFF_LATEST.md`
 
-If Egress remains materially high — P0-B:
-- [ ] attribute remaining public request paths using Vercel/Supabase evidence
-- [ ] quantify product/detail/category signal-table/full-loader reads
-- [ ] identify unnecessary `raw`/wide-column hydration where applicable
-- [ ] bound/filter/cache remaining public reads without semantic regression
-- [ ] use exact-head CI + Preview + Production smoke + post-release measurement for each mitigation
+### Remaining blocking gates before normal development resumes
 
-Do not solve avoidable amplification merely by buying a paid plan. Any plan upgrade requires exact current cost/terms evidence and explicit owner approval.
+1. [ ] Compare official current semantics/cost/limits/portability and select **one** architecture: portable Runtime Cache adapter, safe response/CDN cache boundary, or reduced/precomputed public-detail read model.
+2. [ ] Implement the smallest safe reversible candidate; remove temporary `unstable_cache` diagnostic code and avoid raw service-role/admin/write caching.
+3. [ ] Pass fresh exact-head CI + Vercel Preview + Japanese slug two-request test + Vercel runtime evidence + Supabase backend evidence.
+4. [ ] Complete final full-diff/security review, unresolved-thread/runtime-error check, and current-main drift check.
+5. [ ] Obtain/apply the applicable Production approval, merge/release through the normal path, and pass Production smoke.
+6. [ ] Perform short read-only post-release Supabase egress/read observation; keep #219 open until the Fair Use/availability risk is credibly controlled.
 
-## P1 — Business/reliability Scoreboard reassessment — NEXT AFTER #219 IS CONTROLLED
+Most of the six gates are assistant-executable. The owner should only be interrupted for an actual approval/human-only boundary.
 
-Do not automatically return to depth scaling. Re-rank work using:
+### Acceptance criteria
+
+- same public Japanese product page must remain correct;
+- second request must avoid or materially reduce the expensive detail read set as designed;
+- no raw service-role/admin/write data in shared cache;
+- freshness target remains aligned to intended ingestion cadence (about 30 minutes unless evidence justifies otherwise);
+- cache failure must degrade safely;
+- no paid dependency or plan change without explicit approval;
+- account for Cloudflare migration portability and cold-origin duplicate work.
+
+## P1 — Resume product development after #219 is controlled
+
+When the six gates above pass, immediately re-rank normal work using:
 
 **Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
 
-Measure/re-fetch as available:
-- [ ] Search Console impressions / clicks / CTR / indexation
-- [ ] product/series page traffic and top landing/search pages
-- [ ] outbound shop clicks and click-through rate
-- [ ] affiliate conversion / revenue instrumentation and actual revenue where available
-- [ ] data freshness / coverage quality
-- [ ] Supabase/Vercel request efficiency and cost trajectory
-- [ ] identify the single highest-leverage bottleneck and choose one bounded experiment
+Do not automatically return to Data Scale. Re-fetch Search Console/product traffic/outbound click/affiliate/freshness/cost evidence and choose the single highest-leverage product experiment.
 
-The goal is not to maximize variants/listings/depth in isolation. The next experiment must state which user/business metric it is expected to improve and how success/failure will be measured.
+## Separate work / HOLD
 
-## P2 — Data Scale depth work — HOLD UNTIL P1 CHOICE
-
-Last canonical Data Scale evidence remains:
-- variants 23,808
-- listings 133
-- observations 155
-- fresh covered variants 122
-- depth 120 x1 / 2 x2 / 0 x3+
-- re-observed 22/133
-- clicks7d 10
-- completed sales0
-
-`depth_insufficient` is still a technical diagnosis, not authorization and not guaranteed to be the next business priority.
-
-If P1 later proves depth scaling is highest leverage:
-- [ ] design the smallest bounded cohort for already-covered depth1 variants
-- [ ] preserve strict variant/parent/provider/native/public-URL identity and collision guards
-- [ ] define provider/request/write ceilings and fail-closed behavior
-- [ ] define before/after user/business as well as Data Scale evidence
-- [ ] prove repository/disposable behavior before Production execution
-- [ ] obtain independent review or an explicitly authorized substitution when required
-- [ ] obtain separate explicit approval for provider execution, workflow mutation, migration/schema action or Production write
-
-No #228 authority may be reused.
-
-## P3 — Product value / traffic / revenue path
-
-Once reliability is stable, actively test the reason a user should open Gacha Lens. Candidate user-visible jobs include understanding current price, where an item can be obtained, and whether/when it is restocked or rereleased.
-
-- [ ] use behavior/search evidence to identify the strongest primary user job
-- [ ] improve the smallest page/feature/SEO path that supports that job
-- [ ] preserve outbound-click measurement
-- [ ] connect traffic and click evidence to monetization rather than assuming more infrastructure creates revenue
-- [ ] prefer measurable experiments over broad speculative feature expansion
-
-## Separate work / debt
-
-- PR #232 technology-intelligence docs lane is separate Draft work and lower priority than #219; require current-main drift/rebase proof before merge.
-- #137/#142 F0 remains a separate approval boundary.
-- Supabase advisor findings remain separate behavior-impact work; do not change RLS/policies/grants/extensions/indexes by implication.
-- unused branch cleanup remains subject to applicable cleanup policy; do not delete unrelated branches by implication.
-
-## HOLD — explicit prohibitions now
-
-- [ ] DO NOT invoke another R4 write under consumed #228 approval
-- [ ] DO NOT retry #214 or #228
-- [ ] DO NOT reuse Production repair authority or prior review substitutions
-- [ ] DO NOT make new provider calls under consumed authority
-- [ ] DO NOT run another history/depth batch automatically
-- [ ] DO NOT dispatch/change workflows without applicable approval
-- [ ] DO NOT change Secrets/Variables by implication
-- [ ] DO NOT merge/dispatch F0/#142 without its boundary
-- [ ] DO NOT remediate advisor findings by implication
-- [ ] DO NOT invoke paid reviewer/actions or paid plan changes without approval
-- [ ] DO NOT use destructive actions without approval
-- [ ] DO NOT weaken strict matcher/identity guards
-- [ ] DO NOT scrape Mercari or Amazon
-- [ ] DO NOT touch `supabase/.temp/cli-latest`
-- [ ] keep `.github/workflows/gacha-ingestion.yml` disabled
-- [ ] no automatic RPC retry
-- [ ] no direct main push
-
-## Canonical history
-
-`docs/history/2026-09-03-pre-233-TODO.md`
-
-Once this exact sync reaches `main`, Issue #233 is complete by definition; do not create a recursive sync solely for its own docs-only merge.
+- Cloudflare Workers/vinext POC PR #235 remains Draft/non-Production and should inform portability but not interrupt P0.
+- branch-protection hardening Issue #236 remains open.
+- Data Scale/history/provider writes stay on hold; exact #228 authority is consumed/non-reusable.
+- Supabase advisor remediation remains separate behavior-impact work.
+- no workflow dispatch/change, Secrets/Variables change, paid/destructive action, direct-main push, or Production DB/schema/data write by implication.
+- never touch `supabase/.temp/cli-latest`.
+- keep `.github/workflows/gacha-ingestion.yml` disabled.
