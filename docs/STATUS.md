@@ -1,87 +1,92 @@
 # Gacha Lens Status
 
-Updated: 2026-09-03 JST — Production R4 repair complete / Issue #226 canonical sync
+Updated: 2026-09-03 JST — successful Production R4 one-candidate write / Issue #229 canonical sync
 
-The complete status checkpoint immediately before #226 is preserved byte-for-byte at `docs/history/2026-09-03-pre-226-STATUS.md`.
+The complete status checkpoint immediately before #229 is preserved byte-for-byte at `docs/history/2026-09-03-pre-229-STATUS.md`.
 
 ## Current repository / release
 
-- runtime main used for repair: `b41382d3f8470edc68133a27d50892c016ea095f`
-- PR #218: **MERGED**
-- Issue #217: **CLOSED**
+- exact runtime main used for the successful R4 write: `8cc10b23236406b7bb3b9cec3db5e72574205196`
+- Vercel Production for that main: `dpl_6iZU7XNhmqM4ruxuVz9j77q3ZDnd` — READY
 - Production domain: `gachalens.com`
 - Supabase Production: `vxbrnvfhmzcxehuuzzum`
+- Issue #228: **CLOSED completed**
 
-## Production R4 repair status — SUCCESS
+## Production R4 repair status — VERIFIED
 
-Applied Production migrations:
-- `20260903111455 market_observation_trigger_schema_qualification`
-- `20260903111513 market_observation_service_role_contract`
-- `20260903111600 market_depth_r4_postgres_regex_repair`
+The three reviewed repair migrations remain applied and verified. Installed R4 callable state remains SECURITY INVOKER, empty search_path, service_role-only EXECUTE, repaired PostgreSQL-safe source-ID validation and schema-qualified observation trigger path.
 
-Verified outcome:
-- listings **127**
-- observations **149**
-- re-observed listings **22**
+Repair authority is consumed/non-reusable.
+
+## Production R4 candidate proof — SUCCESS
+
+Fresh approval identity:
+- main `8cc10b23236406b7bb3b9cec3db5e72574205196`
+- digest `219f0f0f9d7019f38c2d6a6689921835247980c5f6d91c4a4ff175b8bce19a72`
+- observation key `depth-r4-v1:20260903-02`
+- target `gashapon-4535123846069000-伏黒恵`
+- candidate `yahoo-suruga-ya-601199451001`
+- deterministic observation `market-depth-r4-54b6e36807377900ebcb5046cbdae9d8`
+- evidence price/status `980 / active`
+
+The function was invoked exactly once under `service_role`; no retry occurred.
+
+Verified result:
+- target depth **1 -> 2**
+- listings **132 -> 133**
+- observations **154 -> 155**
 - sold/completed **0**
-- R4 candidate **0**
-- deterministic R4 observation **0**
-- runtime proof residue **0**
-- broken regex guard **0**
-- explicit length 1..300 guard **present**
-- safe allowlist **present**
-- unqualified observation-trigger relation **0**
-- qualified public relation **present**
-- R4 SECURITY INVOKER **true**
-- R4 empty search_path **true**
-- R4 PUBLIC/anon/authenticated EXECUTE **false**
-- R4 service_role EXECUTE **true**
-- service_role observation CRUD **true**
+- candidate rows **1**
+- deterministic observation rows **1**
+- exact fresh target IDs now [`yahoo-suruga-ya-601192353001`, `yahoo-suruga-ya-601199451001`]
+- listing/observation identity and R3/R4 provenance markers exact
+- only the expected listing + observation were created after the immediate precheck timestamp.
 
-Market-data delta from the repair itself: **0**.
+The one-candidate write approval is **consumed/non-reusable**.
 
-## Approval state
+## Current Data Scale state
 
-The Production repair-migration approval has been **consumed**. It cannot be reused.
+Postwrite SELECT-only snapshot:
+- series **10,241**
+- variants **23,808**
+- listings **133**
+- observations **155**
+- fresh <30d covered variants **122**
+- depth **120 x1 / 2 x2 / 0 x3+**
+- max depth **2**
+- re-observed **22 / 133 = 16.5414%**
+- stock/restock **0 / 0**
+- clicks 7d **10**
+- completed sales **0**
 
-Not authorized now:
-- R4 candidate persistence/retry
-- provider refresh
-- new history write
-- workflow dispatch/change
-- Secrets/Variables changes
-- F0/#142
-- unrelated Production access/security modifications
+P0 remains **`depth_insufficient`**.
 
 ## Current true gate
 
-Next phase is read-only R4 candidate rebind and manifest reconstruction against current state. Only after that evidence is complete may a fresh exact one-candidate Production write approval be requested.
+Next safe work is read-only reassessment of bounded depth scaling versus other business/product priorities. Another provider execution, Production market write, workflow/schedule change or R4 batch is not authorized by #228.
 
-No R4 candidate write is authorized now.
+The existing scheduled P3 V2 automatic collector recently added 5 listings + 5 observations without touching the R4 target. Before changing collection behavior, verify whether it is increasing breadth more than depth and design the smallest bounded improvement.
 
-## Advisor state
+## Separate advisor debt
 
-Post-DDL Supabase security/performance advisors were run. Existing project-wide advisories remain, including RLS-enabled/no-policy notices, GraphQL schema visibility from existing client SELECT grants, unindexed foreign keys, and unused indexes. No such unrelated access/performance change was made under this repair-only authority.
-
-## History lane
-
-Generic bounded history remains **127 / 149 / 22 / sold0**. Historical provider/workflow approvals remain consumed.
+Supabase advisor findings outside R4 remain separate scoped work. Do not silently change RLS/policies, existing client grants, extension placement or indexes under Data Scale authority.
 
 ## Hard holds
 
-- no R4 candidate write/retry without fresh exact approval
+- no further R4 write/retry without a new current-state bind and fresh exact approval
+- no automatic RPC retry
 - no provider refresh under consumed authority
 - no workflow dispatch/change by implication
 - no Secrets/Variables changes
 - no F0/#142 implication
+- no advisor remediation by implication
 - no paid/destructive action without approval
 - never touch `supabase/.temp/cli-latest`
 - keep `.github/workflows/gacha-ingestion.yml` disabled
-- no automatic RPC retry
 - no direct main push
 
 ## Canonical history
 
-`docs/history/2026-09-03-pre-226-STATUS.md`
+`docs/history/2026-09-03-pre-229-STATUS.md`
 
-Do not create a recursive canonical sync merely to record #226's own docs-only merge.
+Do not create a recursive canonical sync merely to record #229's own docs-only merge.
