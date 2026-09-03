@@ -1,85 +1,113 @@
 # Gacha Lens Status
 
-Updated: 2026-09-03 JST — successful Production R4 one-candidate write / Issue #229 canonical sync
+Updated: 2026-09-03 JST — P0-A Supabase egress mitigation released / Issue #233 canonical sync
 
-The complete status checkpoint immediately before #229 is preserved byte-for-byte at `docs/history/2026-09-03-pre-229-STATUS.md`.
+The complete status checkpoint immediately before this sync is preserved byte-for-byte at `docs/history/2026-09-03-pre-233-STATUS.md`.
 
 ## Current repository / release
 
-- exact runtime main used for the successful R4 write: `8cc10b23236406b7bb3b9cec3db5e72574205196`
-- Vercel Production for that main: `dpl_6iZU7XNhmqM4ruxuVz9j77q3ZDnd` — READY
+- current main: `8048a19ad478672a9d887d77073597ee95dc27d3`
 - Production domain: `gachalens.com`
+- Vercel Production: `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G` — **READY**
 - Supabase Production: `vxbrnvfhmzcxehuuzzum`
-- Issue #228: **CLOSED completed**
+- PR #231: **CLOSED merged**
+- Issue #219: **OPEN P0**
 
-## Production R4 repair status — VERIFIED
+## Current P0 — uncached Egress / availability risk
 
-The three reviewed repair migrations remain applied and verified. Installed R4 callable state remains SECURITY INVOKER, empty search_path, service_role-only EXECUTE, repaired PostgreSQL-safe source-ID validation and schema-qualified observation trigger path.
+Shared Supabase Free Plan billing evidence captured 2026-09-03:
+- Egress **24.614 / 5 GB (~492%)**;
+- overage **19.61 GB**;
+- cached Egress about **0.053 / 5 GB**;
+- Fair Use grace end **2026-09-19**;
+- possible HTTP 402 request restriction if the organization remains over the applicable limit.
 
-Repair authority is consumed/non-reusable.
+Evidence points strongly to Gacha Lens server-side/public read amplification, including large variant pagination and repeated broad public reads. Exact project-only billed GB remains unproven and must not be invented.
 
-## Production R4 candidate proof — SUCCESS
+## P0-A sitemap mitigation — LIVE
 
-Fresh approval identity:
-- main `8cc10b23236406b7bb3b9cec3db5e72574205196`
-- digest `219f0f0f9d7019f38c2d6a6689921835247980c5f6d91c4a4ff175b8bce19a72`
-- observation key `depth-r4-v1:20260903-02`
-- target `gashapon-4535123846069000-伏黒恵`
-- candidate `yahoo-suruga-ya-601199451001`
-- deterministic observation `market-depth-r4-54b6e36807377900ebcb5046cbdae9d8`
-- evidence price/status `980 / active`
+PR #231 bounded the identified sitemap amplification path.
 
-The function was invoked exactly once under `service_role`; no retry occurred.
+Verified gates:
+- exact PR head `fc091f32ae216779e782eef84fc2701fbc769492`;
+- PR Code Quality #116 / `33754793103`: **SUCCESS**;
+- exact-head Preview `dpl_GVNunr8mDJ54FE5a6nr3mD5Hi4Qj`: **READY**;
+- build route table: root, series-observer, variant-observer sitemaps all **Static / 1d**;
+- complete five-file strengthened Lead self-review, explicitly non-independent, findings0;
+- unresolved GitHub/Vercel threads0 and main drift0 before merge;
+- squash merge `8048a19ad478672a9d887d77073597ee95dc27d3`;
+- normal Production `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G`: READY;
+- live Production sitemap smoke passed for all three sitemap endpoints.
 
-Verified result:
-- target depth **1 -> 2**
-- listings **132 -> 133**
-- observations **154 -> 155**
-- sold/completed **0**
-- candidate rows **1**
-- deterministic observation rows **1**
-- exact fresh target IDs now [`yahoo-suruga-ya-601192353001`, `yahoo-suruga-ya-601199451001`]
-- listing/observation identity and R3/R4 provenance markers exact
-- only the expected listing + observation were created after the immediate precheck timestamp.
-
-The one-candidate write approval is **consumed/non-reusable**.
-
-## Current Data Scale state
-
-Postwrite SELECT-only snapshot:
-- series **10,241**
-- variants **23,808**
-- listings **133**
-- observations **155**
-- fresh <30d covered variants **122**
-- depth **120 x1 / 2 x2 / 0 x3+**
-- max depth **2**
-- re-observed **22 / 133 = 16.5414%**
-- stock/restock **0 / 0**
-- clicks 7d **10**
-- completed sales **0**
-
-P0 remains **`depth_insufficient`**.
+No Production DB/schema/data mutation, provider call, workflow/schedule change or dispatch, Secrets/Variables change, paid/destructive action, or direct-main push was part of P0-A.
 
 ## Current true gate
 
-Next safe work is read-only reassessment of bounded depth scaling versus other business/product priorities. Another provider execution, Production market write, workflow/schedule change or R4 batch is not authorized by #228.
+**Read-only post-release Egress observation.**
 
-The existing scheduled P3 V2 automatic collector recently added 5 listings + 5 observations without touching the R4 target. Before changing collection behavior, verify whether it is increasing breadth more than depth and design the smallest bounded improvement.
+Do not treat Static/1d build proof as proof of billed-byte recovery. Keep #219 open until observed traffic/Egress evidence shows the shared organization is no longer at credible Fair Use/402 risk.
 
-## Separate advisor debt
+If Egress remains materially high, P0-B is next:
+- attribute remaining public request paths;
+- quantify expensive signal-table/full-loader reads;
+- remove unnecessary fields/full hydration;
+- add safe caching/server-side filtering/bounds where semantics allow;
+- preserve SEO/public semantics and ingestion/write isolation.
 
-Supabase advisor findings outside R4 remain separate scoped work. Do not silently change RLS/policies, existing client grants, extension placement or indexes under Data Scale authority.
+If the trajectory normalizes, leave reliability emergency mode and choose the next product experiment by business leverage rather than Data Scale counts alone.
+
+## Product / business priority model after #219
+
+Next-phase prioritization must compare:
+
+**Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
+
+Data Scale is a means to improve product usefulness, traffic/conversion, or monetization — not an end state.
+
+Key next measurements after the reliability gate include:
+- search impressions/clicks/CTR/indexation;
+- product/series page traffic;
+- outbound shop clicks and click-through rate;
+- affiliate conversion/revenue where available;
+- ingestion/data freshness and coverage quality;
+- Supabase/Vercel cost and request efficiency.
+
+## Last verified Data Scale state
+
+Pre-Egress-P0 canonical checkpoint remains:
+- series **10,241**;
+- variants **23,808**;
+- listings **133**;
+- observations **155**;
+- fresh <30d covered variants **122**;
+- depth **120 x1 / 2 x2 / 0 x3+**;
+- max depth **2**;
+- re-observed **22 / 133 = 16.5414%**;
+- stock/restock **0 / 0**;
+- clicks 7d **10**;
+- completed sales **0**.
+
+The technical diagnosis `depth_insufficient` still describes this snapshot, but it is not currently the highest-priority operational issue and does not authorize additional writes.
+
+## R4 state
+
+Production R4 repair and the one-candidate proof remain **SUCCESS / VERIFIED**. Exact #228 write authority is consumed/non-reusable.
+
+Hard hold remains:
+- no further R4 write/retry without a new current-state bind and fresh applicable approval;
+- no provider refresh under consumed authority;
+- no automatic RPC retry.
+
+## Separate work
+
+- PR #232 is a separate Draft technology-intelligence docs lane; it must not preempt #219 P0 and requires current-main drift/rebase evidence before any merge.
+- #137/#142 F0 remains separate.
+- Supabase advisor findings remain separate behavior-impact work.
 
 ## Hard holds
 
-- no further R4 write/retry without a new current-state bind and fresh exact approval
-- no automatic RPC retry
-- no provider refresh under consumed authority
 - no workflow dispatch/change by implication
-- no Secrets/Variables changes
-- no F0/#142 implication
-- no advisor remediation by implication
+- no Secrets/Variables changes by implication
 - no paid/destructive action without approval
 - never touch `supabase/.temp/cli-latest`
 - keep `.github/workflows/gacha-ingestion.yml` disabled
@@ -87,6 +115,6 @@ Supabase advisor findings outside R4 remain separate scoped work. Do not silentl
 
 ## Canonical history
 
-`docs/history/2026-09-03-pre-229-STATUS.md`
+`docs/history/2026-09-03-pre-233-STATUS.md`
 
-Do not create a recursive canonical sync merely to record #229's own docs-only merge.
+Once this exact sync reaches `main`, Issue #233 is complete by definition; do not create a recursive sync solely for its own merge.
