@@ -1,77 +1,94 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-03 JST — Production R4 repair complete / Issue #226 canonical sync
+Updated: 2026-09-03 JST — successful Production R4 one-candidate write / Issue #229 canonical sync
 
-The complete durable-decisions checkpoint immediately before #226 is preserved byte-for-byte at `docs/history/2026-09-03-pre-226-DECISIONS.md`. Decisions D-001 through D-107 remain authoritative unless explicitly superseded below.
+The complete durable-decisions checkpoint immediately before #229 is preserved byte-for-byte at `docs/history/2026-09-03-pre-229-DECISIONS.md`. Decisions D-001 through D-112 remain authoritative unless explicitly superseded below.
 
 ## Authoritative additions
 
-### D-108 — The reviewed Production R4 repair set has been applied successfully
+### D-113 — A repaired R4 Production writer is not considered proven until a real bounded candidate succeeds
 
-Under a fresh explicit human approval limited to the Production R4 repair purpose, the three reviewed repository repairs were applied in order to Supabase Production `vxbrnvfhmzcxehuuzzum` through the migration mechanism.
+After the repository repair and Production repair migrations were independently verified, R4 still required one real, explicitly approved candidate persistence proof. Issue #228 completed that proof successfully against exact main `8cc10b23236406b7bb3b9cec3db5e72574205196`.
 
-Production migration ledger identities are:
-1. `20260903111455 market_observation_trigger_schema_qualification`
-2. `20260903111513 market_observation_service_role_contract`
-3. `20260903111600 market_depth_r4_postgres_regex_repair`
+The approved identity was:
+- observation key `depth-r4-v1:20260903-02`
+- digest `219f0f0f9d7019f38c2d6a6689921835247980c5f6d91c4a4ff175b8bce19a72`
+- candidate `yahoo-suruga-ya-601199451001`
+- observation `market-depth-r4-54b6e36807377900ebcb5046cbdae9d8`
+- target `gashapon-4535123846069000-伏黒恵`
+- evidence price/status `980 / active`.
 
-Their repository source files remain the reviewed `20260903183500`, `20260903183530`, and `20260903183600` migrations merged by #218. Do not rewrite already-applied repository or Production ledger history merely to align timestamps.
+The function was invoked exactly once under `service_role`, returned `inserted_count=1`, and reported target depth 1 -> 2.
 
-### D-109 — Production R4 repair must prove market-data delta0 and zero runtime-proof residue
+### D-114 — Every R4 Production write approval is exact, single-use and non-transferable
 
-The repair is considered successful only because independent post-application SELECT verification proved:
-- listings 127 -> 127;
-- observations 149 -> 149;
-- re-observed listings 22 -> 22;
-- completed/sold 0 -> 0;
-- target candidate0 and deterministic target observation0;
-- runtime-proof series/variant/listing/observation residue0.
+The #228 human approval was bound to one exact main, one digest and one frozen candidate. It did not authorize a second invocation, another candidate, provider refresh, workflow action, or future batch.
 
-The reviewed runtime proof intentionally exercised the repaired writer under `service_role` and rolled its fixture writes back. This controlled proof is not candidate persistence.
+The approval is now consumed/non-reusable. A future R4 write requires a new current-state rebind, new collision/drift checks, new manifest/digest and a fresh explicit approval.
 
-### D-110 — The repaired Production callable contract is now the authoritative R4 function state
+Automatic RPC retry remains prohibited. If a future invocation has ambiguous transport/commit state, resolve only with SELECT until state is known.
 
-After repair:
-- broken `{1,300}` source-ID regex guard occurrences = 0;
-- explicit source-ID length 1..300 guard is present;
-- PostgreSQL-safe ASCII allowlist `^[A-Za-z0-9:._-]+$` is present;
-- trigger unqualified `market_listing_observations` relation occurrences = 0;
-- qualified `public.market_listing_observations` relation is present;
-- R4 is SECURITY INVOKER with empty search_path;
-- PUBLIC/anon/authenticated do not have R4 EXECUTE;
-- service_role has R4 EXECUTE and required observation-table CRUD.
+### D-115 — A successful R4 response must still be independently resolved against Production
 
-Future R4 work must preserve these contracts.
+The synchronous function result alone was not treated as sufficient. Independent postwrite SELECT proved:
+- listings 132 -> 133;
+- observations 154 -> 155;
+- sold/completed stayed 0;
+- candidate row exactly 1;
+- deterministic observation row exactly 1;
+- target fresh depth exactly 2 with the expected two listing IDs;
+- candidate and observation identities, price/status, classification, confidence and R3/R4 provenance markers exactly matched the approved manifest.
 
-### D-111 — Production repair authority is consumed and does not authorize candidate persistence
+The immediate precheck timestamp was also used to prove the only newly created market rows were the approved listing and observation, so no unrelated concurrent market write was observed during the execution window.
 
-The approval that applied the three repair migrations is consumed/non-reusable.
+### D-116 — Immutable R3 source evidence may be reused only while all freshness and drift contracts still pass
 
-A candidate write now requires a new boundary after read-only current-state rebind, collision checks, Scoreboard review, evidence-validity review, manifest/digest reconstruction, and durable resolution evidence. The eventual write approval must identify the exact single candidate. No automatic retry is allowed.
+The successful #228 write reused R3 run `33665350076` and artifact `9860342840` without a new provider request. The artifact ZIP SHA256 was rechecked against `a0fe9011e7b0102f8464835385746b0437fdebff74791e6db9d294d015df5e8a`, and its `2026-09-02T18:08:53.303Z` source time passed the Production function's seven-day freshness guard immediately before execution.
 
-### D-112 — Supabase advisor findings outside the R4 repair are separate security/performance debt
+Reuse was acceptable only because the current target catalog/depth/collision state was freshly rebound. Historical provider evidence never grants permission to ignore current Production drift.
 
-Post-DDL Supabase advisors reported project-wide items including RLS-enabled/no-policy notices, GraphQL schema visibility from existing anon/authenticated SELECT grants, unindexed foreign keys, unused indexes, and a public-schema extension warning.
+### D-117 — After the successful R4 proof, Data Scale remains depth-constrained
 
-The repair migration did not broaden client table grants; pre-repair checks already showed existing client SELECT access on `market_listing_observations`. These advisor findings must not be silently remediated under the R4 repair authority. Any access-model or index change requires a separate scoped review because it can alter application behavior.
+The postwrite SELECT-only Data Scale checkpoint is:
+- 10,241 series;
+- 23,808 variants;
+- 133 listings;
+- 155 observations;
+- 122 fresh <30d covered variants;
+- depth 120 x1 / 2 x2 / 0 x3+;
+- max depth 2;
+- 22 re-observed listings / 133 = 16.5414%;
+- stock/restock 0 / 0;
+- outbound clicks 7d 10;
+- completed-sale evidence 0.
+
+Therefore the current P0 diagnosis remains `depth_insufficient`. The next default engineering investigation should test bounded depth scaling on already-covered variants rather than assume more breadth-only collection is the highest-leverage move. This is a diagnostic priority, not authorization for provider calls, Production writes, or workflow changes.
+
+### D-118 — Existing scheduled collection growth must be separated from manual/approved R4 effects
+
+Between the repair-time 127/149 checkpoint and the pre-R4 132/154 checkpoint, existing scheduled `Gacha Market P3 Bounded Seed V2 Automatic` run `33748940988` completed successfully and logged 10 database writes = 5 listings + 5 observations. It did not affect the R4 target.
+
+Production state changes from existing authorized automation must not be misattributed to repair migrations or a later one-candidate R4 write. Always bind before/after evidence to timestamps and exact target identities.
 
 ## Current durable state
 
-- runtime main at repair: `b41382d3f8470edc68133a27d50892c016ea095f`
-- #218 merged; #217 closed
+- runtime main used for the successful R4 write: `8cc10b23236406b7bb3b9cec3db5e72574205196`
 - Production R4 repair: **APPLIED AND VERIFIED**
-- Production market state: **127 / 149 / 22 / sold0**
-- target candidate/observation: **absent**
-- Production R4 callable contract: **repaired and verified**
-- repair approval: **consumed/non-reusable**
-- next true gate: fresh read-only R4 rebind, then separate one-candidate write approval
+- R4 one-candidate Production proof: **SUCCESS**
+- Issue #228: **CLOSED completed**
+- Production market state immediately after proof: **133 listings / 155 observations / sold0**
+- fresh depth distribution: **120 x1 / 2 x2 / 0 x3+**
+- target 伏黒恵 depth: **2**
+- exact #228 write approval: **consumed/non-reusable**
+- current P0: **depth_insufficient**
+- next true gate: read-only reassessment/design for bounded depth scaling versus product/traffic/revenue priorities
 
 ## Approval state
 
-Consumed/non-reusable includes all previously recorded R1/R2/#201/#206/#208/#211/#214 authorities, the one-time review substitutions, and the Production R4 repair migration approval.
+Consumed/non-reusable includes all previously recorded R1/R2/#201/#206/#208/#211/#214 authorities, one-time review substitutions, the Production R4 repair migration approval, and the exact #228 one-candidate R4 write approval.
 
 Not authorized now:
-- R4 candidate write/retry
+- another R4 write/retry
 - provider refresh under consumed authority
 - another history write by implication
 - workflow dispatch/change
@@ -93,8 +110,8 @@ Not authorized now:
 
 ## Canonical history
 
-Immediate pre-#226 decisions snapshot:
+Immediate pre-#229 decisions snapshot:
 
-`docs/history/2026-09-03-pre-226-DECISIONS.md`
+`docs/history/2026-09-03-pre-229-DECISIONS.md`
 
-Do not create a recursive canonical sync merely to record #226's own docs-only merge.
+Do not create a recursive canonical sync merely to record #229's own docs-only merge.
