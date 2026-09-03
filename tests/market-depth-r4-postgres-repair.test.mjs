@@ -36,6 +36,10 @@ test("R4 repair reasserts the reviewed callable security surface", () => {
   assert.match(repairMigration, /from anon/i);
   assert.match(repairMigration, /from authenticated/i);
   assert.match(repairMigration, /grant execute on function public\.apply_market_depth_r4_atomic_v1\(jsonb\) to service_role/i);
+  assert.match(repairMigration, /aclexplode\(coalesce\(p\.proacl, acldefault\('f', p\.proowner\)\)\)/i);
+  assert.match(repairMigration, /acl\.grantee\s*=\s*0/i);
+  assert.match(repairMigration, /v_public_execute is distinct from false/i);
+  assert.doesNotMatch(repairMigration, /has_function_privilege\('PUBLIC'/i);
   assert.match(repairMigration, /has_function_privilege\('service_role'/i);
 });
 
