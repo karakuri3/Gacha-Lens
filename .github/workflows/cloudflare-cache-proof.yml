@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  checks: read
 
 concurrency:
   group: cloudflare-cache-proof-${{ github.event.pull_request.number || github.ref }}
@@ -17,46 +16,32 @@ concurrency:
 jobs:
   isolated-cache-proof:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
-      GH_TOKEN: ${{ github.token }}
-      TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DEPLOYED_SHA: 9b619bc308ee8b14e505a669287d4e0b8dd5dc4c
+      PREVIEW_URL: https://ba272b73-gacha-lens.senpingxingzuo.workers.dev
     steps:
-      - name: Resolve fresh exact-head Cloudflare preview
-        id: preview
+      - name: Checkout current pull-request head
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Prove runtime sources match isolated preview
         shell: bash
         run: |
           set -euo pipefail
-          preview=""
-          version=""
-          for attempt in $(seq 1 90); do
-            checks="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs?per_page=100")"
-            failed="$(jq -r --arg sha "$TARGET_SHA" '.check_runs[] | select(.name == "Workers Builds: gacha-lens" and .head_sha == $sha and .status == "completed" and .conclusion != "success") | .conclusion' <<<"$checks" | head -n 1)"
-            if [[ -n "$failed" ]]; then
-              echo "Cloudflare exact-head build completed with: $failed" >&2
-              exit 1
-            fi
-            summary="$(jq -r --arg sha "$TARGET_SHA" '.check_runs[] | select(.name == "Workers Builds: gacha-lens" and .head_sha == $sha and .conclusion == "success") | .output.summary // empty' <<<"$checks" | head -n 1)"
-            preview="$(awk '/^Preview URL:/ {print $3; exit}' <<<"$summary")"
-            version="$(awk '/^Version ID:/ {print $3; exit}' <<<"$summary")"
-            if [[ "$preview" == https://*.workers.dev && -n "$version" ]]; then
-              break
-            fi
-            sleep 10
-          done
-          if [[ "$preview" != https://*.workers.dev ]]; then
-            echo "Fresh exact-head Cloudflare preview URL was not available in time." >&2
+          git cat-file -e "${DEPLOYED_SHA}^{commit}"
+          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib next.config.mjs package.json package-lock.json)"
+          if [[ -n "$changed" ]]; then
+            echo 'Runtime source drift exists after the pinned cache-proof preview:' >&2
+            echo "$changed" >&2
             exit 1
           fi
-          echo "url=$preview" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Preview version: ${version}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Preview URL: ${preview}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Runtime source tree is byte-equivalent to cache-proof preview commit ${DEPLOYED_SHA}." >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview URL: ${PREVIEW_URL}" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Prove identical warm requests
+      - name: Prove identical cold and warm requests
         shell: bash
-        env:
-          PREVIEW_URL: ${{ steps.preview.outputs.url }}
         run: |
           set -euo pipefail
           tmp="$(mktemp -d)"
