@@ -1,0 +1,97 @@
+name: Cloudflare cache proof
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/cloudflare-cache-proof.yml"
+      - ".github/workflows/cloudflare-runtime-smoke.yml"
+      - "worker/**"
+
+permissions:
+  contents: read
+
+# Both live-preview workflows hit the same isolated Worker/Supabase runtime.
+# Serialize them so CI does not manufacture origin pressure that normal smoke
+# traffic is not intended to test.
+concurrency:
+  group: cloudflare-live-preview-proof-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  isolated-cache-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEPLOYED_SHA: 3798e0f73606bfdc7652d546f977ef184c56f13a
+      PREVIEW_URL: https://1b3fd533-gacha-lens.senpingxingzuo.workers.dev
+    steps:
+      - name: Checkout current pull-request head
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Prove runtime sources match isolated preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${DEPLOYED_SHA}^{commit}"
+          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib worker next.config.mjs package.json package-lock.json)"
+          if [[ -n "$changed" ]]; then
+            echo 'Runtime source drift exists after the pinned cache-proof preview:' >&2
+            echo "$changed" >&2
+            exit 1
+          fi
+          echo "Runtime source tree is byte-equivalent to cache-proof preview commit ${DEPLOYED_SHA}." >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview URL: ${PREVIEW_URL}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prove cold-to-warm edge cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          product_path="/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC?cacheproof=stage4-worker-cache-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          start="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          echo "Proof window start: ${start}" | tee -a "$GITHUB_STEP_SUMMARY"
+          declare -a statuses
+          first_hash=""
+
+          for n in 1 2 3; do
+            body="$tmp/body-${n}"
+            headers="$tmp/headers-${n}"
+            metrics="$(curl --silent --show-error --max-time 90 -H 'Accept: text/html' --dump-header "$headers" --output "$body" --write-out '%{http_code} %{time_total} %{size_download}' "${PREVIEW_URL}${product_path}")"
+            code="${metrics%% *}"
+            [[ "$code" == "200" ]] || { echo "request ${n} returned ${code}" >&2; exit 1; }
+            grep -Fq 'ディズニー マリー' "$body" || { echo "request ${n} missing Japanese product marker" >&2; exit 1; }
+
+            hash="$(sha256sum "$body" | awk '{print $1}')"
+            if [[ -z "$first_hash" ]]; then
+              first_hash="$hash"
+            else
+              [[ "$hash" == "$first_hash" ]] || { echo "cached response body drift on request ${n}" >&2; exit 1; }
+            fi
+
+            cf_status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$headers")"
+            cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cache-control:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+            age="$(awk 'BEGIN{IGNORECASE=1} /^age:/ {gsub("\r", ""); print $2; exit}' "$headers")"
+            policy="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-edge-cache-policy:/ {gsub("\r", ""); print $2; exit}' "$headers")"
+            set_cookie_presence="none"
+            if grep -qi '^set-cookie:' "$headers"; then set_cookie_presence='present'; fi
+
+            statuses[$n]="${cf_status:-none}"
+            line="Request ${n}: ${metrics} | sha256=${hash} | cf-cache-status=${cf_status:-none} | cache-control=${cache_control:-none} | age=${age:-none} | edge-policy=${policy:-none} | set-cookie=${set_cookie_presence}"
+            echo "$line" | tee -a "$GITHUB_STEP_SUMMARY"
+
+            [[ "$policy" == 'series-detail-1800-v1' ]] || { echo "request ${n} missing edge-cache policy marker" >&2; exit 1; }
+            [[ "$set_cookie_presence" == 'none' ]] || { echo "request ${n} unexpectedly set a cookie" >&2; exit 1; }
+            sleep 2
+          done
+
+          [[ "${statuses[1]}" == 'MISS' ]] || { echo "cold request was ${statuses[1]}, expected MISS" >&2; exit 1; }
+          [[ "${statuses[2]}" == 'HIT' ]] || { echo "warm request 2 was ${statuses[2]}, expected HIT" >&2; exit 1; }
+          [[ "${statuses[3]}" == 'HIT' ]] || { echo "warm request 3 was ${statuses[3]}, expected HIT" >&2; exit 1; }
+
+          end="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          echo "Proof window end: ${end}" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo 'Cold MISS followed by two byte-identical HITs: warm identical HTML requests are served by Workers Cache before the Worker/Supabase render path.' | tee -a "$GITHUB_STEP_SUMMARY"

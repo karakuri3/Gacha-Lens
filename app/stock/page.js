@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
-import { getRankingSeries } from "@/lib/series";
+import { createGachaRepository, getRankingSeries } from "@/lib/series";
+import { getReleasedStockFeedRecords } from "@/lib/data/public-stock-feed";
 import { variantHref } from "@/lib/variant-url";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
@@ -18,7 +19,10 @@ export default async function StockPage({ searchParams }) {
   const q = String(params?.q || "").trim().toLowerCase();
   const region = String(params?.region || "").trim();
   const status = String(params?.status || "").trim();
-  const items = await getRankingSeries("released");
+  const optimizedRecords = await getReleasedStockFeedRecords();
+  const items = optimizedRecords
+    ? createGachaRepository(optimizedRecords).listVariants()
+    : await getRankingSeries("released");
   const allRows = dedupeReports(items.flatMap((item) => (item.stock_reports ?? []).map((report) => ({ item, report }))))
     .filter(({ report }) => !report.review_required)
     .sort((a, b) => dateValue(b.report.reported_at) - dateValue(a.report.reported_at));

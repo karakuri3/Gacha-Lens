@@ -27,8 +27,12 @@ import {
   watchScore,
 } from "@/lib/domain/public-display-clean";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+// Cloudflare POC: vinext's Workers Cache CDN adapter caches this public page at
+// the page boundary, so warm hits bypass Worker/Supabase reads. Keep privileged
+// or user-specific state out of this cached server render; client actions remain
+// separate. Thirty minutes bounds staleness between ingestion refreshes.
+export const dynamic = "force-static";
+export const revalidate = 1800;
 
 const getVariantDetail = cache((slug) => getSeriesBySlug(slug));
 
@@ -90,7 +94,7 @@ export default async function VariantDetailPage({ params }) {
             {siblingImages.length > 1 ? (
               <div className="detail-thumbnails" aria-label="同じシリーズの画像">
                 {siblingImages.map((entry) => (
-                  <Link key={entry.id} href={variantHref(entry)} title={entry.name}>
+                  <Link key={entry.id} href={variantHref(entry)} title={entry.name} prefetch={false}>
                     <ProductImage item={entry} alt={entry.name} />
                   </Link>
                 ))}
@@ -175,7 +179,7 @@ export default async function VariantDetailPage({ params }) {
             <h2>同じシリーズの単品</h2>
             <div className="lineup-grid">
               {(item.sibling_variants ?? []).map((entry) => (
-                <Link key={entry.id} href={variantHref(entry)}>
+                <Link key={entry.id} href={variantHref(entry)} prefetch={false}>
                   <span className="lineup-grid__image">
                     {entry.image_scope === "series_fallback"
                       ? <span className="lineup-grid__series-fallback">シリーズ</span>

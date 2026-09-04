@@ -17,7 +17,11 @@ export default function SeriesCard({ series, priority = false, scope = "variant"
   const tags = customerTags(series, isReleased);
 
   return (
-    <Link href={isSeries ? seriesHref(series) : variantHref(series)} className="card product-card">
+    <Link
+      href={isSeries ? seriesHref(series) : variantHref(series)}
+      className="card product-card"
+      prefetch={false}
+    >
       <div className="product-image">
         <ProductImage
           item={isSeries ? undefined : series}

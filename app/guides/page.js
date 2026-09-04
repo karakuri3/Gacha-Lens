@@ -2,6 +2,9 @@ import Link from "next/link";
 import { getEditorialGuides } from "@/lib/domain/editorial-guides";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = buildPageMetadata({
   title: "ガチャ相場・データの見方ガイド | Gacha Lens",
   description: "Gacha Lensで表示される相場、価格履歴、ランキング、在庫・再入荷情報の読み方をまとめたガイドです。",
