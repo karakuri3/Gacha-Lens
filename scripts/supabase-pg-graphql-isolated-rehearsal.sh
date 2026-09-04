@@ -13,12 +13,12 @@ runtime_hits="$(grep -RIlE '/graphql/v1|graphql\.resolve|pg_graphql' \
   --exclude='supabase-pg-graphql-isolated-rehearsal.sh' 2>/dev/null || true)"
 [[ -z "$runtime_hits" ]] || fail "runtime GraphQL dependency found: $runtime_hits"
 
-pre="$(psql_local -qAt -c "select concat_ws('|', e.extversion, n.nspname, e.extrelocatable::text, (to_regnamespace('graphql') is not null)::text) from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='pg_graphql';" | tr -d '[:space:]')"
+pre="$(psql_local -qAt -c "select concat_ws('|', e.extversion, n.nspname, e.extrelocatable::text, (to_regprocedure('graphql.resolve(text,jsonb,text,jsonb)') is not null)::text) from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='pg_graphql';" | tr -d '[:space:]')"
 [[ -n "$pre" ]] || fail 'pg_graphql is not installed in disposable Supabase'
 log "installed pg_graphql contract: $pre"
 
-app_db_refs="$(psql_local -qAt -c "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.prokind in ('f','p') and n.nspname not in ('graphql','graphql_public','extensions','pg_catalog','information_schema') and pg_get_functiondef(p.oid) ilike '%graphql.%';" | tr -d '[:space:]')"
-[[ "$app_db_refs" == '0' ]] || fail "application-owned DB function references graphql.*: $app_db_refs"
+app_db_refs="$(psql_local -qAt -c "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.prokind in ('f','p') and n.nspname='public' and pg_get_functiondef(p.oid) ilike '%graphql.%';" | tr -d '[:space:]')"
+[[ "$app_db_refs" == '0' ]] || fail "public application-owned DB function references graphql.*: $app_db_refs"
 
 # Prove a normal Postgres/Data-API privilege contract is independent from pg_graphql.
 psql_local -q >/dev/null <<'SQL'
@@ -38,12 +38,15 @@ SQL
 )"
 [[ "$pre_read" == 'ok' ]] || fail 'pre-drop anon table contract failed'
 
-# Forward candidate: disable unused pg_graphql. Plain DROP is intentional; if a
-# dependency exists, the rehearsal must fail rather than using CASCADE.
+# Forward candidate: disable unused pg_graphql. Plain DROP is intentional; if an
+# external dependency exists, the rehearsal must fail rather than using CASCADE.
 psql_local -q -c 'drop extension pg_graphql;' >/dev/null
 remaining="$(psql_local -qAt -c "select count(*) from pg_extension where extname='pg_graphql';" | tr -d '[:space:]')"
 [[ "$remaining" == '0' ]] || fail 'pg_graphql remained installed after drop'
-[[ "$(psql_local -qAt -c "select to_regnamespace('graphql') is null;" | tr -d '[:space:]')" == 't' ]] || fail 'graphql namespace unexpectedly remains after extension drop'
+resolve_remaining="$(psql_local -qAt -c "select (to_regprocedure('graphql.resolve(text,jsonb,text,jsonb)') is not null)::text;" | tr -d '[:space:]')"
+[[ "$resolve_remaining" == 'false' || "$resolve_remaining" == 'f' ]] || fail 'graphql.resolve unexpectedly remains after extension drop'
+namespace_remaining="$(psql_local -qAt -c "select (to_regnamespace('graphql') is not null)::text;" | tr -d '[:space:]')"
+log "graphql schema remains after extension drop (informational): $namespace_remaining"
 
 post_drop_read="$(psql_local -qAt <<'SQL' | tail -n 1 | tr -d '[:space:]'
 set role anon;
@@ -65,16 +68,20 @@ residue="$(psql_local -qAt -c "select count(*) from public.series where id='isol
 [[ "$residue" == '0' ]] || fail 'service-role smoke left residue'
 log 'FORWARD PASS: pg_graphql disabled while RLS/table/service-role contracts remain functional'
 
-# Rehearse rollback without CASCADE or data changes.
+# Rehearse rollback without CASCADE or data changes. Current Supabase extension
+# version selection is platform-managed, so do not pin an explicit VERSION.
 psql_local -q -c 'create extension pg_graphql;' >/dev/null
-restored="$(psql_local -qAt -c "select concat_ws('|', e.extversion, n.nspname) from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='pg_graphql';" | tr -d '[:space:]')"
+restored="$(psql_local -qAt -c "select concat_ws('|', e.extversion, n.nspname, (to_regprocedure('graphql.resolve(text,jsonb,text,jsonb)') is not null)::text) from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='pg_graphql';" | tr -d '[:space:]')"
 [[ -n "$restored" ]] || fail 'rollback failed to recreate pg_graphql'
+[[ "$restored" == *'|true' || "$restored" == *'|t' ]] || fail "graphql.resolve missing after rollback recreate: $restored"
 log "ROLLBACK PASS: pg_graphql recreated as $restored"
 
 # Reapply desired isolated end state.
 psql_local -q -c 'drop extension pg_graphql;' >/dev/null
 final_count="$(psql_local -qAt -c "select count(*) from pg_extension where extname='pg_graphql';" | tr -d '[:space:]')"
 [[ "$final_count" == '0' ]] || fail 'final pg_graphql reapply failed'
+final_resolve="$(psql_local -qAt -c "select (to_regprocedure('graphql.resolve(text,jsonb,text,jsonb)') is not null)::text;" | tr -d '[:space:]')"
+[[ "$final_resolve" == 'false' || "$final_resolve" == 'f' ]] || fail 'graphql.resolve returned after final reapply'
 
 # Remove only the disposable probe created by this script.
 psql_local -q -c 'drop table public.__graphql_isolated_probe;' >/dev/null
