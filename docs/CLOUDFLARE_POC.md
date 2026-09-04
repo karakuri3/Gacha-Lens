@@ -35,6 +35,8 @@ No Cloudflare account credentials, production DNS, or custom-domain mutations ar
 
 Cloudflare dashboard runtime variables and secrets remain the source of truth for the POC preview. The non-Production Version command must upload the generated Worker with `wrangler versions upload --keep-vars --config dist/server/wrangler.json` so dashboard-managed runtime variables are preserved when vinext regenerates `dist/server/wrangler.json`.
 
+Because Next.js inlines `NEXT_PUBLIC_*` values during the build, Cloudflare Builds must also define the non-secret build variables `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` with the same values as their runtime counterparts. `SUPABASE_SERVICE_ROLE_KEY` must never be added as a build variable; it remains a runtime Secret only.
+
 Do not place privileged Supabase credentials in repository files or build logs. Server-only credentials remain Cloudflare Secrets, and preview versions must not be promoted to Production traffic during this proof.
 
 ## Acceptance gates before a real preview deployment
