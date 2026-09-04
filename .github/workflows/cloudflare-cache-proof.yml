@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DEPLOYED_SHA: e71dca9a6bd2d2ec54a73ff6dd492137b1ba963e
-      PREVIEW_URL: https://d75d3195-gacha-lens.senpingxingzuo.workers.dev
+      DEPLOYED_SHA: 571fb3f42c3c9bce70a53656ab8825fe991f086d
+      PREVIEW_URL: https://e5a2a3cc-gacha-lens.senpingxingzuo.workers.dev
     steps:
       - name: Checkout current pull-request head
         uses: actions/checkout@v7
@@ -46,11 +46,10 @@ jobs:
           set -euo pipefail
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
-          product_path='/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC?cacheproof=stage4-cdn-v1'
+          product_path='/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC?cacheproof=stage4-cdn-v2'
           start="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           echo "Proof window start: ${start}" | tee -a "$GITHUB_STEP_SUMMARY"
           declare -a statuses
-          first_hash=""
 
           for n in 1 2 3; do
             body="$tmp/body-${n}"
@@ -61,7 +60,6 @@ jobs:
             grep -Fq 'ディズニー マリー' "$body" || { echo "request ${n} missing Japanese product marker" >&2; exit 1; }
 
             hash="$(sha256sum "$body" | awk '{print $1}')"
-            if [[ -z "$first_hash" ]]; then first_hash="$hash"; fi
             cf_status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$headers")"
             cdn_cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cdn-cache-control:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
             cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cache-control:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
