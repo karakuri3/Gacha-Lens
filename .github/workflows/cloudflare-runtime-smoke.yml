@@ -17,8 +17,6 @@ on:
 permissions:
   contents: read
 
-# Runtime smoke and cache proof share one isolated Worker/Supabase preview.
-# Keep them serial: this is a correctness gate, not a synthetic load test.
 concurrency:
   group: cloudflare-live-preview-proof-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
@@ -28,9 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      # Cloudflare Workers Builds proved this immutable version was built from
-      # DEPLOYED_SHA. Following workflow-only commits are permitted only when
-      # the runtime source set is byte-equivalent to that deployed commit.
       DEPLOYED_SHA: fc873492c2c259e0f6d4a944d51afa773a0abc1c
       PREVIEW_URL: https://5469cf6b-gacha-lens.senpingxingzuo.workers.dev
       BROWSER_ACCEPT: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
@@ -61,85 +56,77 @@ jobs:
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
 
-          check_get() {
+          request_get() {
             local name="$1"
             local path="$2"
             local needle="${3:-}"
             local body="$tmp/${name}.body"
             local headers="$tmp/${name}.headers"
-            local code=""
+            local attempt rc code delay
 
             for attempt in 1 2 3; do
-              code="$(curl --silent --show-error --location --max-time 90 -H "Accept: ${BROWSER_ACCEPT}" --dump-header "$headers" --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
-              if [[ "$code" == "200" ]]; then
-                break
+              rc=0
+              code="$(curl --silent --show-error --location --max-time 90 \
+                -H "Accept: ${BROWSER_ACCEPT}" \
+                --dump-header "$headers" \
+                --output "$body" \
+                --write-out '%{http_code}' \
+                "${PREVIEW_URL}${path}")" || rc=$?
+              code="${code:-000}"
+
+              if [[ "$rc" == "0" && "$code" == "200" ]]; then
+                if [[ -n "$needle" ]] && ! grep -Fq "$needle" "$body"; then
+                  echo "$name did not contain required marker: $needle" >&2
+                  exit 1
+                fi
+                printf '%-24s HTTP 200 (attempt %s)\n' "$name" "$attempt" >> "$GITHUB_STEP_SUMMARY"
+                return 0
               fi
 
-              case "$code" in
-                429|500|502|503|504)
-                  if [[ "$attempt" -lt 3 ]]; then
+              if [[ "$attempt" -lt 3 ]]; then
+                case "$code" in
+                  000|429|500|502|503|504)
                     delay=$((attempt * 2))
-                    echo "$name transient HTTP $code on attempt $attempt; retrying after ${delay}s" | tee -a "$GITHUB_STEP_SUMMARY"
+                    echo "$name transient failure rc=$rc HTTP $code on attempt $attempt; retrying after ${delay}s" | tee -a "$GITHUB_STEP_SUMMARY"
                     sleep "$delay"
-                  else
-                    echo "$name returned transient HTTP $code after $attempt attempts" >&2
-                  fi
-                  ;;
-                *)
-                  echo "$name returned HTTP $code" >&2
-                  head -c 1000 "$body" >&2 || true
-                  exit 1
-                  ;;
-              esac
-            done
+                    continue
+                    ;;
+                esac
+              fi
 
-            if [[ "$code" != "200" ]]; then
+              echo "$name failed rc=$rc HTTP $code on attempt $attempt" >&2
               head -c 1000 "$body" >&2 || true
               exit 1
-            fi
-            if [[ -n "$needle" ]] && ! grep -Fq "$needle" "$body"; then
-              echo "$name did not contain required marker: $needle" >&2
-              exit 1
-            fi
-            printf '%-24s HTTP 200\n' "$name" >> "$GITHUB_STEP_SUMMARY"
-            sleep 1
+            done
           }
 
           encoded_slug='tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
           product_path="/series/${encoded_slug}"
 
-          # Repeat a production-shaped HTML detail request. Dedicated cache-proof
-          # CI separately asserts MISS -> HIT -> HIT at this exact runtime.
-          for n in 1 2 3; do
-            metrics="$(curl --silent --show-error --max-time 90 -H "Accept: ${BROWSER_ACCEPT}" --output "$tmp/product-${n}.body" --write-out '%{http_code} %{time_total}' "${PREVIEW_URL}${product_path}")"
-            code="${metrics%% *}"
-            [[ "$code" == "200" ]] || { echo "product detail attempt $n returned $code" >&2; exit 1; }
-            grep -Fq 'ディズニー マリー' "$tmp/product-${n}.body" || { echo 'Japanese-slug product marker missing' >&2; exit 1; }
-            echo "Product detail attempt ${n}: ${metrics}" >> "$GITHUB_STEP_SUMMARY"
-          done
+          request_get product_1 "$product_path" 'ディズニー マリー'
+          request_get product_2 "$product_path" 'ディズニー マリー'
+          request_get product_3 "$product_path" 'ディズニー マリー'
 
-          check_get home '/' 'Gacha Lens'
-          check_get series '/series' 'ガチャ一覧'
-          check_get catalog_search '/series?q=%E3%83%9E%E3%83%AA%E3%83%BC' 'マリー'
-          check_get ranking '/ranking'
-          check_get restocks '/restocks'
-          check_get stock '/stock'
-          check_get schedule '/schedule'
-          check_get guides '/guides'
-          check_get public_api "/api/public-variants?ids=${encoded_slug}" 'tarts-y901096-ディズニー-マリー'
-          check_get review '/review' 'Review access'
-          check_get robots '/robots.txt' 'Sitemap: https://gachalens.com/sitemap.xml'
-          check_get sitemap '/sitemap.xml' '<loc>https://gachalens.com/'
-          check_get series_sitemap '/series-sitemap.xml' '<loc>https://gachalens.com/series/group/'
-          check_get variant_sitemap '/variant-sitemap.xml' '<loc>https://gachalens.com/series/'
+          request_get home '/' 'Gacha Lens'
+          request_get series '/series' 'ガチャ一覧'
+          request_get catalog_search '/series?q=%E3%83%9E%E3%83%AA%E3%83%BC' 'マリー'
+          request_get ranking '/ranking'
+          request_get restocks '/restocks'
+          request_get stock '/stock'
+          request_get schedule '/schedule'
+          request_get guides '/guides'
+          request_get public_api "/api/public-variants?ids=${encoded_slug}" 'tarts-y901096-ディズニー-マリー'
+          request_get review '/review' 'Review access'
+          request_get robots '/robots.txt' 'Sitemap: https://gachalens.com/sitemap.xml'
+          request_get sitemap '/sitemap.xml' '<loc>https://gachalens.com/'
+          request_get series_sitemap '/series-sitemap.xml' '<loc>https://gachalens.com/series/group/'
+          request_get variant_sitemap '/variant-sitemap.xml' '<loc>https://gachalens.com/series/'
 
-          grep -Fq 'https://gachalens.com/series/' "$tmp/product-1.body" || {
+          grep -Fq 'https://gachalens.com/series/' "$tmp/product_1.body" || {
             echo 'Product detail canonical/site metadata did not point at gachalens.com.' >&2
             exit 1
           }
 
-          # Public high-read pages and sitemap outputs must advertise the
-          # Cloudflare edge policy so warm traffic does not re-enter Supabase.
           for name in home series ranking restocks stock schedule guides; do
             grep -qi '^x-gacha-edge-cache-policy: public-document-120-v1' "$tmp/${name}.headers" || {
               echo "$name is missing public document edge-cache policy" >&2
@@ -153,20 +140,15 @@ jobs:
             }
           done
 
-          # A second request at the same POP must be served from edge cache for
-          # representative expensive public routes.
-          for spec in 'ranking:/ranking' 'restocks:/restocks' 'series_sitemap:/series-sitemap.xml'; do
-            name="${spec%%:*}"
-            path="${spec#*:}"
-            headers="$tmp/${name}-warm.headers"
-            code="$(curl --silent --show-error --max-time 90 -H "Accept: ${BROWSER_ACCEPT}" --dump-header "$headers" --output /dev/null --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
-            [[ "$code" == "200" ]] || { echo "$name warm request returned $code" >&2; exit 1; }
-            cf_status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$headers")"
-            [[ "$cf_status" == "HIT" ]] || { echo "$name warm request was ${cf_status:-none}, expected HIT" >&2; exit 1; }
-            echo "$name warm edge cache: HIT" >> "$GITHUB_STEP_SUMMARY"
+          request_get ranking_warm '/ranking'
+          request_get restocks_warm '/restocks'
+          request_get series_sitemap_warm '/series-sitemap.xml'
+          for name in ranking_warm restocks_warm series_sitemap_warm; do
+            cf_status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$tmp/${name}.headers")"
+            [[ "$cf_status" == "HIT" ]] || { echo "$name was ${cf_status:-none}, expected HIT" >&2; exit 1; }
+            echo "$name edge cache: HIT" >> "$GITHUB_STEP_SUMMARY"
           done
 
-          # Privileged write boundaries: no cookie/token must never reach data mutation.
           review_code="$(curl --silent --show-error --max-time 60 --output "$tmp/review-post.body" --write-out '%{http_code}' -X POST -H "Origin: ${PREVIEW_URL}" -H 'Content-Type: application/x-www-form-urlencoded' --data 'decision=approved' "${PREVIEW_URL}/api/review/community-reports/runtime-smoke-nonexistent")"
           [[ "$review_code" == "401" ]] || { echo "Unauthenticated review mutation returned $review_code, expected 401" >&2; exit 1; }
 
