@@ -1,12 +1,19 @@
 import handler from "vinext/server/fetch-handler";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
+const NON_CACHEABLE_HTML_MARKERS = ["商品情報を取得できません"];
 
 const EDGE_CACHE_POLICIES = {
   seriesDetail: {
     cacheControl: "public, max-age=1800, stale-while-revalidate=60",
     cacheTag: "gacha-series-detail",
     marker: "series-detail-1800-v1",
+    contentTypes: ["text/html"],
+  },
+  discoveryIndex: {
+    cacheControl: "public, max-age=86400, stale-while-revalidate=300",
+    cacheTag: "gacha-discovery-index",
+    marker: "discovery-index-86400-v1",
     contentTypes: ["text/html"],
   },
   discoveryDocument: {
@@ -29,11 +36,14 @@ const EDGE_CACHE_POLICIES = {
   },
 };
 
-const DISCOVERY_DOCUMENT_PATHS = new Set([
-  "/series",
+const DISCOVERY_INDEX_PATHS = new Set([
   "/categories",
   "/brands",
   "/franchises",
+]);
+
+const DISCOVERY_DOCUMENT_PATHS = new Set([
+  "/series",
 ]);
 
 const PUBLIC_DOCUMENT_PATHS = new Set([
@@ -95,9 +105,20 @@ function getEdgeCachePolicy(request) {
     return null;
   }
 
-  // Discovery indexes and first-page facet landings are non-personalized but
-  // relatively expensive at origin. Cache only their no-query HTML forms so
-  // pagination/search variants cannot create unbounded cache-key cardinality.
+  // Discovery index roots are expensive to rebuild and their taxonomy/counts do
+  // not require sub-hour freshness. A daily edge boundary keeps their full-table
+  // origin work bounded to roughly the same cadence as the public sitemaps.
+  if (
+    url.searchParams.size === 0 &&
+    accept.includes("text/html") &&
+    DISCOVERY_INDEX_PATHS.has(url.pathname)
+  ) {
+    return EDGE_CACHE_POLICIES.discoveryIndex;
+  }
+
+  // The main series listing and first-page facet landings are non-personalized
+  // but change more often. Cache only their no-query HTML forms so pagination and
+  // search variants cannot create unbounded cache-key cardinality.
   if (
     url.searchParams.size === 0 &&
     accept.includes("text/html") &&
@@ -124,12 +145,22 @@ function getEdgeCachePolicy(request) {
   return null;
 }
 
-function canStoreResponse(response, policy) {
+async function canStoreResponse(response, policy) {
   if (!policy || response.status !== 200) return false;
   if (response.headers.has("set-cookie")) return false;
 
   const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
-  return policy.contentTypes.some((expected) => contentType.includes(expected));
+  if (!policy.contentTypes.some((expected) => contentType.includes(expected))) return false;
+
+  // Next.js error boundaries can render a branded error document while the outer
+  // HTTP response remains 200. Never let that transient document become the
+  // shared edge representation for an otherwise healthy public URL.
+  if (contentType.includes("text/html")) {
+    const body = await response.clone().text();
+    if (NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker))) return false;
+  }
+
+  return true;
 }
 
 export default {
@@ -137,7 +168,7 @@ export default {
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
 
-    if (!canStoreResponse(response, policy)) {
+    if (!(await canStoreResponse(response, policy))) {
       return response;
     }
 
