@@ -93,9 +93,11 @@ excluded_before="$(psql_local -qAt -c "
     and r.rolname in ('anon','authenticated','service_role');
 ")"
 
-# Reproduce the observed Production grant drift only inside this disposable database.
+# Reproduce the exact observed Production table ACL shape only inside this disposable database.
+# Read-only Production inspection on 2026-09-04 confirmed all 13 targets explicitly grant
+# table ALL to anon, authenticated, and service_role.
 for table in "${TARGETS[@]}"; do
-  psql_local -q -c "grant all privileges on table public.\"$table\" to anon, authenticated;" >/dev/null
+  psql_local -q -c "grant all privileges on table public.\"$table\" to anon, authenticated, service_role;" >/dev/null
 done
 
 broad_count="$(psql_local -qAt -c "
@@ -105,10 +107,11 @@ broad_count="$(psql_local -qAt -c "
   where n.nspname='public'
     and c.relname in ($TARGET_LIST)
     and has_table_privilege('anon', c.oid, 'SELECT')
-    and has_table_privilege('authenticated', c.oid, 'SELECT');
+    and has_table_privilege('authenticated', c.oid, 'SELECT')
+    and has_table_privilege('service_role', c.oid, 'SELECT,INSERT,UPDATE,DELETE');
 " | tr -d '[:space:]')"
-[[ "$broad_count" == "${#TARGETS[@]}" ]] || fail "failed to reproduce Production grant drift: $broad_count/${#TARGETS[@]}"
-log 'Production-like anon/authenticated grant drift reproduced on all 13 isolated targets'
+[[ "$broad_count" == "${#TARGETS[@]}" ]] || fail "failed to reproduce exact Production ACL shape: $broad_count/${#TARGETS[@]}"
+log 'Exact Production anon/authenticated/service_role ACL shape reproduced on all 13 isolated targets'
 
 # With grants present but no RLS policies, anon can resolve/query the relation but sees no rows.
 pre_hardening_anon="$(psql_local -qAt <<'SQL' | tail -n 1 | tr -d '[:space:]'
@@ -182,16 +185,17 @@ log 'hardening contract, service-role CRUD, anon denial, exclusions, and transac
 
 # Roll back to the exact broad table-grant shape observed in Production, then reapply.
 for table in "${TARGETS[@]}"; do
-  psql_local -q -c "grant all privileges on table public.\"$table\" to anon, authenticated;" >/dev/null
+  psql_local -q -c "grant all privileges on table public.\"$table\" to anon, authenticated, service_role;" >/dev/null
 done
 rollback_count="$(psql_local -qAt -c "
   select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='public' and c.relname in ($TARGET_LIST)
     and has_table_privilege('anon', c.oid, 'SELECT')
-    and has_table_privilege('authenticated', c.oid, 'SELECT');
+    and has_table_privilege('authenticated', c.oid, 'SELECT')
+    and has_table_privilege('service_role', c.oid, 'SELECT,INSERT,UPDATE,DELETE');
 " | tr -d '[:space:]')"
-[[ "$rollback_count" == "${#TARGETS[@]}" ]] || fail 'rollback did not restore Production-like grants'
-log 'ROLLBACK PASS: Production-like grant shape restored on all 13 targets'
+[[ "$rollback_count" == "${#TARGETS[@]}" ]] || fail 'rollback did not restore exact Production ACLs'
+log 'ROLLBACK PASS: exact Production ACL shape restored on all 13 targets'
 
 psql_local -q -f "$CANDIDATE" >/dev/null
 final_remaining="$(psql_local -qAt -c "
@@ -204,4 +208,12 @@ final_remaining="$(psql_local -qAt -c "
 " | tr -d '[:space:]')"
 [[ "$final_remaining" == '0' ]] || fail 'reapply left API-role table privileges'
 
-log 'PASS: reproduce Production drift -> harden -> regression -> rollback -> reapply verified on isolated Supabase'
+final_service_contract="$(psql_local -qAt -c "
+  select count(*)
+  from pg_class c join pg_namespace n on n.oid=c.relnamespace
+  where n.nspname='public' and c.relname in ($TARGET_LIST)
+    and has_table_privilege('service_role', c.oid, 'SELECT,INSERT,UPDATE,DELETE');
+" | tr -d '[:space:]')"
+[[ "$final_service_contract" == "${#TARGETS[@]}" ]] || fail "final reapply damaged service_role CRUD: $final_service_contract/${#TARGETS[@]}"
+
+log 'PASS: reproduce exact Production ACLs -> harden -> regression -> rollback -> reapply verified on isolated Supabase'
