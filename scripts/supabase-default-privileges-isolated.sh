@@ -14,7 +14,7 @@ function_acl_has_grantee() {
       and x.grantee = case when '$grantee'='PUBLIC' then 0 else (select oid from pg_roles where rolname='$grantee') end
     ), false)::text
     from pg_proc p
-    left join lateral aclexplode(p.proacl) x on true
+    left join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x on true
     where p.oid = '$signature'::regprocedure;
   " | tr -d '[:space:]'
 }
