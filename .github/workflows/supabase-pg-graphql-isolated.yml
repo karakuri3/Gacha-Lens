@@ -96,8 +96,22 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Build
-        run: npm run build
+      - name: Build against disposable Supabase
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +x
+          local_env="$RUNNER_TEMP/supabase-local.env"
+          npx --yes supabase@"$SUPABASE_CLI_VERSION" status -o env > "$local_env"
+          # shellcheck disable=SC1090
+          source "$local_env"
+          export NEXT_PUBLIC_SUPABASE_URL="$API_URL"
+          export SUPABASE_URL="$API_URL"
+          export SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY"
+          export GACHA_DATA_SOURCE=supabase
+          npm run build
+          rm -f "$local_env"
 
       - name: Stop disposable Supabase
         if: always()
