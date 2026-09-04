@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
 import { getRankingSeries } from "@/lib/series";
+import { getReleasedRestockFeed } from "@/lib/data/public-restock-feed";
 import { formatYen } from "@/lib/domain/public-display-clean";
 import { resolveRestockEventPresentation } from "@/lib/domain/restock-event-presentation";
 import { buildPageMetadata } from "@/lib/site-metadata";
@@ -15,7 +16,8 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function RestocksPage() {
-  const series = await getRankingSeries("released", "series");
+  const optimizedFeed = await getReleasedRestockFeed();
+  const series = optimizedFeed ?? await getRankingSeries("released", "series");
   const rows = dedupeEvents(series.flatMap((item) => (item.restock_events ?? []).map((event) => ({
     item,
     event,
