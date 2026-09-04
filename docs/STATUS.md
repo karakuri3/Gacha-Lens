@@ -1,12 +1,41 @@
 # Gacha Lens Status
 
-Updated: 2026-09-03 JST — P0-A Supabase egress mitigation released / Issue #233 canonical sync
+Updated: 2026-09-04 JST — Supabase hardening isolated validation lane active on Draft PRs only
 
-The complete status checkpoint immediately before this sync is preserved byte-for-byte at `docs/history/2026-09-03-pre-233-STATUS.md`.
+The complete status checkpoint immediately before this isolated hardening lane remains preserved at `docs/history/2026-09-03-pre-233-STATUS.md`. The Egress P0 state below is not superseded by this separate hardening work.
+
+## Company roadmap Stage 5 — Supabase hardening isolated validation
+
+Canonical evidence and resume instructions: `docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md`.
+
+Current isolated workstreams:
+- Draft PR #241 — 13 server-only table grants / GraphQL visibility boundary. Production actions0. Run #1 proved fresh disposable Supabase and stopped on the intentionally deferred `forecast_snapshots` object; the branch now synthesizes that read-only-verified Production shape only inside the disposable DB and is re-running exact-head validation.
+- Draft PR #242 — separate `pg_net` relocation rehearsal. Production read-only evidence is `pg_net` 0.20.4 / extension namespace `public` / `extrelocatable=false`, queue0 / recent responses0 / cron jobs0 / application-owned `net.*` database function references0. The Draft validates Supabase's drop/recreate-under-`extensions` path plus rollback/reverse/reapply on disposable Supabase only.
+- Beach Draft PR #216 is a separate repository lane for `rebuild_profile_stats_v1` / `user_id is ambiguous`; do not mix its code or rollout with Gacha.
+
+Hard boundary for this lane:
+- no Production Supabase DDL/DML;
+- no main merge;
+- no Production deploy;
+- no DNS / `gachalens.com` / Vercel cancellation / Gacha Cloudflare Production changes;
+- no secret display;
+- no paid Supabase branch. Development Branching was priced at `$0.01344/hour`, so no branch was created.
+
+Current preliminary classifications:
+- Gacha 13-table server-only API grant normalization: **Production適用推奨候補**, pending exact-head isolated green.
+- blanket revoke from intentional-public `series_*` tables: **不要**.
+- adding RLS policies merely to silence server-only `RLS enabled/no policy`: **不要**.
+- global `public` default-ACL rewrite: **保留**.
+- service-role boundary change: **不要**.
+- simple `ALTER EXTENSION pg_net SET SCHEMA`: **不要** because Production is non-relocatable.
+- pg_net drop/recreate relocation: **保留** until #242 proves forward + rollback.
+- all six FK indexes / advisor unused-index drops: **保留**; current tables are tiny/empty and workload evidence differs by object.
+- Egress: separate P0 observation lane; hardening is not evidence of billed-byte recovery.
 
 ## Current repository / release
 
-- current main: `8048a19ad478672a9d887d77073597ee95dc27d3`
+- current main at isolated-lane bind: `da506232472c22c909f95e5a855b1cfed8889e73`
+- prior P0-A canonical release main recorded below: `8048a19ad478672a9d887d77073597ee95dc27d3`
 - Production domain: `gachalens.com`
 - Vercel Production: `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G` — **READY**
 - Supabase Production: `vxbrnvfhmzcxehuuzzum`
@@ -102,7 +131,7 @@ Hard hold remains:
 
 - PR #232 is a separate Draft technology-intelligence docs lane; it must not preempt #219 P0 and requires current-main drift/rebase evidence before any merge.
 - #137/#142 F0 remains separate.
-- Supabase advisor findings remain separate behavior-impact work.
+- Supabase advisor findings are now being handled only inside the isolated Stage-5 lane described above; this does not authorize Production remediation.
 
 ## Hard holds
 
@@ -117,4 +146,4 @@ Hard hold remains:
 
 `docs/history/2026-09-03-pre-233-STATUS.md`
 
-Once this exact sync reaches `main`, Issue #233 is complete by definition; do not create a recursive sync solely for its own merge.
+The isolated hardening evidence file is `docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md`; use it as the Stage-5 resume source until this lane is closed or superseded.
