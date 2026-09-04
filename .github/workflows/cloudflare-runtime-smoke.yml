@@ -80,7 +80,6 @@ jobs:
                     delay=$((attempt * 2))
                     echo "$name transient HTTP $code on attempt $attempt; retrying after ${delay}s" | tee -a "$GITHUB_STEP_SUMMARY"
                     sleep "$delay"
-                    ;;
                   else
                     echo "$name returned transient HTTP $code after $attempt attempts" >&2
                   fi
