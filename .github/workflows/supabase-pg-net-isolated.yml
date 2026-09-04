@@ -1,0 +1,98 @@
+name: Supabase pg_net Isolated
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/supabase-pg-net-isolated.yml'
+      - 'scripts/supabase-pg-net-isolated-rehearsal.sh'
+      - 'supabase/migrations/**'
+      - 'docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md'
+      - 'docs/HANDOFF.md'
+      - 'docs/STATUS.md'
+      - 'docs/DECISIONS.md'
+      - 'docs/TODO.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-pg-net-isolated-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  SUPABASE_CLI_VERSION: '2.109.1'
+  PGHOST: 127.0.0.1
+  PGPORT: 54322
+  PGDATABASE: postgres
+  PGUSER: postgres
+  PGPASSWORD: postgres
+
+jobs:
+  pg-net-relocation-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Verify isolation contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$(git rev-parse HEAD)" == "${{ github.event.pull_request.head.sha }}" ]]
+          docker version >/dev/null
+          bash -n scripts/supabase-pg-net-isolated-rehearsal.sh
+          if grep -Eq '\$\{\{[[:space:]]*secrets\.' .github/workflows/supabase-pg-net-isolated.yml; then
+            echo 'pg_net isolated workflow must not consume GitHub secrets' >&2
+            exit 1
+          fi
+          version="$(npx --yes supabase@"$SUPABASE_CLI_VERSION" --version)"
+          [[ "$version" == "$SUPABASE_CLI_VERSION" ]]
+          echo "Supabase CLI $version"
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Start disposable Supabase
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          npx --yes supabase@"$SUPABASE_CLI_VERSION" start > "$RUNNER_TEMP/supabase-start.log" 2>&1
+          status=$?
+          set -e
+          if [[ "$status" -ne 0 ]]; then
+            sed -E 's/(ANON_KEY|SERVICE_ROLE_KEY|SECRET_KEY|ACCESS_KEY|JWT_SECRET|DB_URL|API_KEY)([=: ]+).*/\1\2[redacted]/Ig' "$RUNNER_TEMP/supabase-start.log"
+            exit "$status"
+          fi
+          echo 'Disposable Supabase started; generated local credentials were not printed.'
+
+      - name: Reset disposable database
+        run: npx --yes supabase@"$SUPABASE_CLI_VERSION" db reset --local --no-seed
+
+      - name: Rehearse pg_net relocation, rollback, reverse, and reapply
+        shell: bash
+        run: bash scripts/supabase-pg-net-isolated-rehearsal.sh
+
+      - name: Stop disposable Supabase
+        if: always()
+        shell: bash
+        run: npx --yes supabase@"$SUPABASE_CLI_VERSION" stop --no-backup || true
