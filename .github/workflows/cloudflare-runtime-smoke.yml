@@ -7,6 +7,7 @@ on:
       - "app/**"
       - "components/**"
       - "lib/**"
+      - "worker/**"
       - "next.config.mjs"
       - "package.json"
       - "package-lock.json"
@@ -25,10 +26,10 @@ jobs:
     timeout-minutes: 20
     env:
       # Cloudflare Workers Builds proved this immutable version was built from
-      # DEPLOYED_SHA. A following workflow-only commit is permitted only when
+      # DEPLOYED_SHA. Following workflow-only commits are permitted only when
       # the runtime source set is byte-equivalent to that deployed commit.
-      DEPLOYED_SHA: 571fb3f42c3c9bce70a53656ab8825fe991f086d
-      PREVIEW_URL: https://e5a2a3cc-gacha-lens.senpingxingzuo.workers.dev
+      DEPLOYED_SHA: e72087932172520b07282acf8428cc11adcb1790
+      PREVIEW_URL: https://323412c6-gacha-lens.senpingxingzuo.workers.dev
     steps:
       - name: Checkout current pull-request head
         uses: actions/checkout@v7
@@ -40,13 +41,14 @@ jobs:
         run: |
           set -euo pipefail
           git cat-file -e "${DEPLOYED_SHA}^{commit}"
-          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib next.config.mjs package.json package-lock.json)"
+          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib worker next.config.mjs package.json package-lock.json)"
           if [[ -n "$changed" ]]; then
             echo 'Runtime source drift exists after the pinned Cloudflare deployment:' >&2
             echo "$changed" >&2
             exit 1
           fi
           echo "Runtime source tree is byte-equivalent to deployed Cloudflare commit ${DEPLOYED_SHA}." >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview URL: ${PREVIEW_URL}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Smoke public runtime and boundaries
         shell: bash
@@ -78,8 +80,10 @@ jobs:
           encoded_slug='tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
           product_path="/series/${encoded_slug}"
 
+          # Repeat a production-shaped HTML detail request. Dedicated cache-proof
+          # CI separately asserts MISS -> HIT -> HIT at this exact runtime.
           for n in 1 2 3; do
-            metrics="$(curl --silent --show-error --max-time 90 --output "$tmp/product-${n}.body" --write-out '%{http_code} %{time_total}' "${PREVIEW_URL}${product_path}")"
+            metrics="$(curl --silent --show-error --max-time 90 -H 'Accept: text/html' --output "$tmp/product-${n}.body" --write-out '%{http_code} %{time_total}' "${PREVIEW_URL}${product_path}")"
             code="${metrics%% *}"
             [[ "$code" == "200" ]] || { echo "product detail attempt $n returned $code" >&2; exit 1; }
             grep -Fq 'ディズニー マリー' "$tmp/product-${n}.body" || { echo 'Japanese-slug product marker missing' >&2; exit 1; }
@@ -106,6 +110,7 @@ jobs:
             exit 1
           }
 
+          # Privileged write boundaries: no cookie/token must never reach data mutation.
           review_code="$(curl --silent --show-error --max-time 60 --output "$tmp/review-post.body" --write-out '%{http_code}' -X POST -H "Origin: ${PREVIEW_URL}" -H 'Content-Type: application/x-www-form-urlencoded' --data 'decision=approved' "${PREVIEW_URL}/api/review/community-reports/runtime-smoke-nonexistent")"
           [[ "$review_code" == "401" ]] || { echo "Unauthenticated review mutation returned $review_code, expected 401" >&2; exit 1; }
 
