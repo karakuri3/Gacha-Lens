@@ -1,120 +1,110 @@
 # Gacha Lens Status
 
-Updated: 2026-09-03 JST — P0-A Supabase egress mitigation released / Issue #233 canonical sync
+Updated: 2026-09-05 JST — Final Release/Cutover complete; normal development ready
 
-The complete status checkpoint immediately before this sync is preserved byte-for-byte at `docs/history/2026-09-03-pre-233-STATUS.md`.
+The complete status checkpoint immediately before this closeout is preserved byte-for-byte at `docs/history/2026-09-05-pre-final-cutover-STATUS.md`.
 
-## Current repository / release
+## Company infrastructure migration — COMPLETE
 
-- current main: `8048a19ad478672a9d887d77073597ee95dc27d3`
-- Production domain: `gachalens.com`
-- Vercel Production: `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G` — **READY**
+Final state:
+- Stage 1 Vercel waste control: complete; after this closeout automatic Vercel Git builds are unconditionally skipped.
+- Stage 2 Cloudflare parallel environment: complete.
+- Stage 3 Beach Cloudflare parity: previously passed/separated from this repository.
+- Stage 4 Gacha Lens Cloudflare runtime + portable P0 cache: PASS and released.
+- Stage 5 Supabase hardening isolated: PASS; scoped Production-recommended hardening applied and verified.
+- Final Release/Cutover: **PASS**.
+- Normal development gate: **OPEN / READY**.
+
+## Current Production runtime
+
+- Production URL: `https://gachalens.com`
+- Runtime: Cloudflare Worker `gacha-lens`
+- Verified cutover Worker version: `811ab60a` at 100% traffic
+- Cloudflare authoritative DNS: Active
+- Nameservers: `lady.ns.cloudflare.com`, `tony.ns.cloudflare.com`
+- apex: Worker Custom Domain -> `gacha-lens`
+- `www`: Cloudflare proxied `192.0.2.1` + Active 301 redirect to apex, preserving path/query
+- Vercel web A/wildcard routes: removed
+- Vercel remains domain registrar and non-live rollback artifact only
 - Supabase Production: `vxbrnvfhmzcxehuuzzum`
-- PR #231: **CLOSED merged**
-- Issue #219: **OPEN P0**
 
-## Current P0 — uncached Egress / availability risk
+## Final web verification
 
-Shared Supabase Free Plan billing evidence captured 2026-09-03:
-- Egress **24.614 / 5 GB (~492%)**;
-- overage **19.61 GB**;
-- cached Egress about **0.053 / 5 GB**;
-- Fair Use grace end **2026-09-19**;
-- possible HTTP 402 request restriction if the organization remains over the applicable limit.
+PASS after cutover:
+- `/`
+- `/ranking`
+- `/schedule`
+- `/series`
+- `/stock`
+- `/restocks`
+- `/robots.txt`
+- `/sitemap.xml`
+- representative Japanese `/series/[slug]` that previously failed on Vercel with an invalid `x-next-cache-tags` 500
+- `www` HTTP/HTTPS 301 redirect with path/query preservation
 
-Evidence points strongly to Gacha Lens server-side/public read amplification, including large variant pagination and repeated broad public reads. Exact project-only billed GB remains unproven and must not be invented.
+Negative routing proof:
+- removed Vercel wildcard DNS no longer catches arbitrary subdomains; an undeclared cutover-test hostname fails DNS resolution.
 
-## P0-A sitemap mitigation — LIVE
+Production observability at closeout:
+- Cloudflare error metrics: zero in the inspected cutover window.
+- Workers Logs: disabled; therefore log-stream review is not claimed.
+- Cloudflare deployment history exposes prior versions for rollback.
 
-PR #231 bounded the identified sitemap amplification path.
+## Supabase hardening — Production verified
 
-Verified gates:
-- exact PR head `fc091f32ae216779e782eef84fc2701fbc769492`;
-- PR Code Quality #116 / `33754793103`: **SUCCESS**;
-- exact-head Preview `dpl_GVNunr8mDJ54FE5a6nr3mD5Hi4Qj`: **READY**;
-- build route table: root, series-observer, variant-observer sitemaps all **Static / 1d**;
-- complete five-file strengthened Lead self-review, explicitly non-independent, findings0;
-- unresolved GitHub/Vercel threads0 and main drift0 before merge;
-- squash merge `8048a19ad478672a9d887d77073597ee95dc27d3`;
-- normal Production `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G`: READY;
-- live Production sitemap smoke passed for all three sitemap endpoints.
+Applied/verified:
+- direct `anon`/`authenticated` grants on 13 server-only target tables: 0
+- `service_role` CRUD target coverage: 13/13
+- intentional public tables preserved: 4/4
+- future default privileges: scoped Candidate A
+- unused `pg_graphql`: removed non-CASCADE after fresh dependency preflight
+- Production migration history synchronized to Git
 
-No Production DB/schema/data mutation, provider call, workflow/schedule change or dispatch, Secrets/Variables change, paid/destructive action, or direct-main push was part of P0-A.
+HOLD / intentionally not applied:
+- `pg_net` relocation
+- global Candidate B PUBLIC function-default revoke
+- FK/index optimizations not independently prioritized for current scale
+- unused-index cleanup
 
-## Current true gate
+## Vercel state
 
-**Read-only post-release Egress observation.**
+Vercel is no longer Production hosting for Gacha Lens.
 
-Do not treat Static/1d build proof as proof of billed-byte recovery. Keep #219 open until observed traffic/Egress evidence shows the shared organization is no longer at credible Fair Use/402 risk.
+- Project `gachalens` is `live: false` in the connected project snapshot.
+- No `gachalens.com` custom Production domain remains on the project; only Vercel-owned `.vercel.app` domains remain.
+- Latest observed target-production deployment was canceled/non-live.
+- Repository `vercel.json` is changed in this closeout to `ignoreCommand: "exit 0"`, so automatic Git-triggered Vercel builds are skipped. Manual rollback action is separate and explicit.
+- Registrar/renewal remains at Vercel; this is intentional and independent of web runtime.
 
-If Egress remains materially high, P0-B is next:
-- attribute remaining public request paths;
-- quantify expensive signal-table/full-loader reads;
-- remove unnecessary fields/full hydration;
-- add safe caching/server-side filtering/bounds where semantics allow;
-- preserve SEO/public semantics and ingestion/write isolation.
+## Current operational priority after cutover
 
-If the trajectory normalizes, leave reliability emergency mode and choose the next product experiment by business leverage rather than Data Scale counts alone.
-
-## Product / business priority model after #219
-
-Next-phase prioritization must compare:
+Infrastructure migration itself no longer blocks work. The existing priority model remains:
 
 **Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
 
-Data Scale is a means to improve product usefulness, traffic/conversion, or monetization — not an end state.
+Issue #219 Supabase uncached-Egress / Fair Use risk remains **open until read-only post-release measurement proves the trajectory is controlled**. The Cloudflare cutover and portable cache materially change the runtime architecture, but they do not by themselves prove billed-byte recovery.
 
-Key next measurements after the reliability gate include:
-- search impressions/clicks/CTR/indexation;
-- product/series page traffic;
-- outbound shop clicks and click-through rate;
-- affiliate conversion/revenue where available;
-- ingestion/data freshness and coverage quality;
-- Supabase/Vercel cost and request efficiency.
+If Egress remains materially high, continue bounded attribution/mitigation as P0. If it normalizes, reassess the next product/business experiment instead of automatically returning to Data Scale depth work.
 
-## Last verified Data Scale state
+## Existing approval boundaries remain
 
-Pre-Egress-P0 canonical checkpoint remains:
-- series **10,241**;
-- variants **23,808**;
-- listings **133**;
-- observations **155**;
-- fresh <30d covered variants **122**;
-- depth **120 x1 / 2 x2 / 0 x3+**;
-- max depth **2**;
-- re-observed **22 / 133 = 16.5414%**;
-- stock/restock **0 / 0**;
-- clicks 7d **10**;
-- completed sales **0**.
-
-The technical diagnosis `depth_insufficient` still describes this snapshot, but it is not currently the highest-priority operational issue and does not authorize additional writes.
-
-## R4 state
-
-Production R4 repair and the one-candidate proof remain **SUCCESS / VERIFIED**. Exact #228 write authority is consumed/non-reusable.
-
-Hard hold remains:
-- no further R4 write/retry without a new current-state bind and fresh applicable approval;
-- no provider refresh under consumed authority;
-- no automatic RPC retry.
-
-## Separate work
-
-- PR #232 is a separate Draft technology-intelligence docs lane; it must not preempt #219 P0 and requires current-main drift/rebase evidence before any merge.
-- #137/#142 F0 remains separate.
-- Supabase advisor findings remain separate behavior-impact work.
-
-## Hard holds
-
+- exact #228 R4 authority remains consumed/non-reusable
+- no provider refresh/write by implication
 - no workflow dispatch/change by implication
-- no Secrets/Variables changes by implication
-- no paid/destructive action without approval
-- never touch `supabase/.temp/cli-latest`
+- no Secrets/Variables change by implication
+- no paid/destructive action without applicable approval
+- no automatic RPC retry
 - keep `.github/workflows/gacha-ingestion.yml` disabled
+- never touch `supabase/.temp/cli-latest`
 - no direct main push
+
+## Separate non-blocking debt
+
+- Workers Logs/observability policy
+- Stage 5 HOLD items
+- cleanup/closure of historical isolated Draft PRs
+- Vercel rollback artifact retirement after an appropriate stabilization period, if/when separately approved
 
 ## Canonical history
 
-`docs/history/2026-09-03-pre-233-STATUS.md`
-
-Once this exact sync reaches `main`, Issue #233 is complete by definition; do not create a recursive sync solely for its own merge.
+`docs/history/2026-09-05-pre-final-cutover-STATUS.md`

@@ -1,84 +1,86 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-03 JST — P0-A Supabase egress mitigation released / Issue #233 canonical sync
+Updated: 2026-09-05 JST — company infrastructure Final Release/Cutover complete
 
-The complete durable-decisions checkpoint immediately before this sync is preserved byte-for-byte at `docs/history/2026-09-03-pre-233-DECISIONS.md`. Decisions D-001 through D-118 remain authoritative unless explicitly superseded below.
+The complete decisions checkpoint immediately before this closeout is preserved byte-for-byte at `docs/history/2026-09-05-pre-final-cutover-DECISIONS.md`. Decisions D-001 through D-123 remain authoritative unless explicitly superseded below.
 
 ## Authoritative additions
 
-### D-119 — Reliability and cost risk outrank Data Scale when shared infrastructure faces credible restriction
+### D-124 — Cloudflare is the Production web runtime and authoritative DNS for Gacha Lens
 
-The prior technical Data Scale diagnosis `depth_insufficient` remains valid for the last measured market snapshot, but it is not the business goal and does not permanently own P0 priority.
+The Stage 4 Cloudflare runtime/P0 cache proof has been promoted to Production and the final domain cutover has passed.
 
-On 2026-09-03, authenticated Supabase billing evidence showed shared Free Plan uncached Egress at 24.614 / 5 GB with Fair Use grace ending 2026-09-19 and possible HTTP 402 restriction. That availability/cost risk became the true P0 and correctly preempted further R4/depth execution.
+Production web requests for `gachalens.com` terminate on Cloudflare and are served by Worker `gacha-lens`. The cutover verified Worker version `811ab60a` at 100% traffic, the apex Custom Domain, representative P0 routes, and the Japanese series URL that previously returned a Vercel `x-next-cache-tags` 500.
 
-Future prioritization must similarly allow reliability, cost, user value, traffic, click or revenue evidence to supersede a lower-level infrastructure metric.
+Future normal releases target Cloudflare. Vercel is not the routine Production runtime.
 
-### D-120 — P0-A sitemap caching is proven released, but #219 is not proven solved until observed Egress improves
+### D-125 — Domain registrar, authoritative DNS, and application runtime are intentionally separated
 
-PR #231 changed the public sitemap execution model from request-driven dynamic/short-cache amplification to daily static/ISR plus outer-cache boundaries while preserving sitemap population and fail-closed contracts.
+`gachalens.com` remains registered/renewed through Vercel while authoritative DNS is Cloudflare (`lady.ns.cloudflare.com`, `tony.ns.cloudflare.com`) and application runtime is Cloudflare Workers.
 
-Exact evidence:
-- final head `fc091f32ae216779e782eef84fc2701fbc769492`;
-- Code Quality #116 / `33754793103` SUCCESS;
-- Preview `dpl_GVNunr8mDJ54FE5a6nr3mD5Hi4Qj` READY;
-- all three sitemap routes Static with `1d` revalidation in Vercel Build;
-- five-file strengthened Lead self-review, explicitly non-independent, findings0;
-- merge/main `8048a19ad478672a9d887d77073597ee95dc27d3`;
-- Production `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G` READY;
-- live Production sitemap smoke passed.
+This separation does not weaken domain ownership and is intentional. `_domainconnect.gachalens.com -> _domainconnect.vercel-dns.com` may remain while Vercel is registrar because it is not a web-traffic dependency.
 
-This proves code/release correctness, not exact billed-byte savings. Issue #219 remains open until read-only post-release evidence shows the Egress trajectory is compatible with the chosen plan or an explicit alternative plan decision is made.
+Mail/verification records must remain independent of hosting changes; ImproveMX MX/SPF, Google verification TXT, and CAA records were preserved during cutover.
 
-### D-121 — If P0-A is insufficient, remaining public read amplification becomes P0-B before more market writes
+### D-126 — `www` canonicalization is a Cloudflare edge redirect, not a Vercel fallback
 
-If post-release Egress remains materially high, the next engineering lane is remaining public runtime read attribution/mitigation, especially broad signal-table/full-loader reads, unnecessary large fields, repeated hydration, and cacheable request paths.
+`www.gachalens.com` uses a proxied placeholder A record (`192.0.2.1`) and an Active Cloudflare Redirect Rule issuing 301 to the apex while preserving path and query string.
 
-P0-B must remain measured and fail-safe: preserve SEO/public semantics, market/stock/restock/trend behavior, and ingestion/write isolation. Do not buy a paid plan or weaken functionality by implication merely to hide avoidable read amplification.
+Old Vercel `www` and wildcard web A records are removed. Arbitrary undeclared subdomains must not silently fall through to Vercel.
 
-### D-122 — Product prioritization uses a business/reliability scoreboard, not Data Scale counts alone
+### D-127 — Automatic Vercel Git builds are disabled after cutover; Vercel is retained only as a non-live rollback artifact
 
-After the reliability gate, the ordered decision model is:
+The Vercel project is no longer live for `gachalens.com` and has no custom Production domain. To prevent migration completion from recreating avoidable Vercel build cost, repository `vercel.json` uses `ignoreCommand: "exit 0"`; Vercel documents exit code 0 as skipping the build.
+
+The Vercel project and Vercel-owned deployment domains may remain temporarily as an explicit rollback/stabilization artifact. Routine Preview/Production builds must not be generated there. Any future reactivation is a deliberate rollback/platform decision, not normal release behavior.
+
+### D-128 — Stage 5 Production hardening is independently durable and is not coupled to application rollback
+
+The Production-recommended subset of Stage 5 was applied after fresh preflight and postflight:
+- direct anon/authenticated grants removed from 13 server-only targets;
+- service-role CRUD preserved 13/13;
+- four intentional public tables preserved;
+- scoped future-default Candidate A applied;
+- unused `pg_graphql` removed non-CASCADE after zero dependency preflight.
+
+These database controls are independently verified. Rolling back a Cloudflare application version does not imply rolling back database hardening. A DB rollback requires a concrete compatibility defect and the item-specific rollback contract.
+
+The following remain HOLD: `pg_net` relocation, Candidate B global PUBLIC function-default revoke, FK/index work not separately prioritized for current scale, and unused-index cleanup.
+
+### D-129 — Final infrastructure cutover completion unblocks normal development without closing unrelated reliability or approval gates
+
+The company infrastructure migration is complete when Cloudflare Production/domain routing, scoped Supabase hardening, P0 smoke, rollback evidence, Vercel build-cost shutdown, and canonical state are all closed.
+
+That completion means infrastructure migration no longer blocks normal development. It does **not** mean:
+- Issue #219 billed Egress is proven solved;
+- old Production/provider/write approvals become reusable;
+- Stage 5 HOLD items are automatically authorized;
+- monitoring debt must be fixed before all product work.
+
+The existing prioritization remains:
 
 **Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
 
-Data Scale is a supporting capability. A future depth/breadth/history experiment must explain which user/business outcome it is expected to improve and how that improvement will be measured. Listing/depth counts alone are insufficient justification for continued infrastructure work.
+### D-130 — Cutover observability evidence must distinguish metrics from logs
 
-Relevant evidence includes search impressions/clicks/CTR/indexation, page traffic, outbound shop clicks and CTR, affiliate conversion/revenue where available, data freshness/coverage quality, and Supabase/Vercel cost/request efficiency.
+At closeout, Cloudflare error metrics showed zero errors in the inspected window, but Workers Logs were disabled. Durable records must say exactly that; they must not claim a log-stream review that did not occur.
 
-### D-123 — The completed #228 R4 authority remains consumed across the P0 reprioritization
-
-Moving focus to #219 does not reopen or broaden any previous Production authority. The successful R4 repair and one-candidate proof remain historical verified state, and the exact #228 approval remains consumed/non-reusable.
-
-No further R4 write/retry, provider refresh, workflow mutation or Production market write is authorized by this reprioritization. A future write requires a new current-state bind and fresh applicable approval.
+Deployment history/prior Worker versions are the primary immediate application rollback mechanism. Enabling Workers Logs/retention is separate observability work and should be justified by operational value/cost.
 
 ## Current durable state
 
-- current main: `8048a19ad478672a9d887d77073597ee95dc27d3`
-- Production: `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G` — READY
-- Issue #219: **OPEN P0**
-- P0-A sitemap mitigation: **RELEASED / VERIFIED**
-- P0-A billed-Egress outcome: **NOT YET PROVEN**
-- next true gate: **read-only post-release Egress observation**
-- if still high: **P0-B remaining public-loader attribution/mitigation**
-- if normalized: **business-scoreboard reassessment before choosing the next product/Data Scale experiment**
-- Production R4 repair: **APPLIED AND VERIFIED**
-- R4 one-candidate proof: **SUCCESS**
-- exact #228 write authority: **consumed/non-reusable**
-- last canonical market snapshot: **133 listings / 155 observations / 120x1 / 2x2 / 0x3+ / clicks7d10 / sold0**
-
-## Approval state
-
-Not authorized now:
-- another R4 write/retry
-- provider refresh under consumed authority
-- another history write by implication
-- workflow dispatch/change
-- Secrets/Variables changes
-- F0/#142
-- unrelated advisor remediation
-- paid/destructive actions
-- Supabase paid-plan upgrade without exact current price/terms and explicit owner approval
+- infrastructure migration: **COMPLETE**
+- normal development: **READY**
+- Production web runtime: Cloudflare Worker `gacha-lens`
+- cutover Worker version: `811ab60a` at 100% traffic
+- authoritative DNS: Cloudflare
+- registrar: Vercel
+- Vercel hosting: non-live rollback artifact; automatic Git builds skipped
+- Supabase Production: `vxbrnvfhmzcxehuuzzum`
+- Stage 5 recommended Production subset: applied/verified
+- Stage 5 HOLD items: unchanged
+- Issue #219: remains open pending measured Egress trajectory
+- exact #228 authority: consumed/non-reusable
 
 ## Hard durable constraints
 
@@ -90,11 +92,10 @@ Not authorized now:
 - completed sold evidence remains separate from asking-price evidence
 - do not scrape Mercari or Amazon
 - direct main pushes remain prohibited
+- no paid/destructive action without applicable approval
 
 ## Canonical history
 
-Immediate pre-#233 decisions snapshot:
+Immediate pre-final-cutover decisions snapshot:
 
-`docs/history/2026-09-03-pre-233-DECISIONS.md`
-
-Once this exact sync reaches `main`, Issue #233 is complete by definition and does not trigger another recursive canonical sync solely to record its own merge.
+`docs/history/2026-09-05-pre-final-cutover-DECISIONS.md`
