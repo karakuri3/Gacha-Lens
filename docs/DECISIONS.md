@@ -1,8 +1,8 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-03 JST — P0-A Supabase egress mitigation released / Issue #233 canonical sync
+Updated: 2026-09-04 JST — Supabase hardening isolated validation decisions added
 
-The complete durable-decisions checkpoint immediately before this sync is preserved byte-for-byte at `docs/history/2026-09-03-pre-233-DECISIONS.md`. Decisions D-001 through D-118 remain authoritative unless explicitly superseded below.
+The complete durable-decisions checkpoint immediately before this lane is preserved byte-for-byte at `docs/history/2026-09-03-pre-233-DECISIONS.md`. Decisions D-001 through D-123 remain authoritative unless explicitly superseded below.
 
 ## Authoritative additions
 
@@ -52,33 +52,66 @@ Moving focus to #219 does not reopen or broaden any previous Production authorit
 
 No further R4 write/retry, provider refresh, workflow mutation or Production market write is authorized by this reprioritization. A future write requires a new current-state bind and fresh applicable approval.
 
+### D-124 — Stage-5 Supabase hardening validation is isolated-only and cannot borrow Production authority from another lane
+
+The company-roadmap Stage-5 lane may use read-only Production inspection plus disposable local Supabase CI, but it may not mutate Production, merge to main, deploy Production, change DNS/Cloudflare/Vercel Production configuration, display secrets, or create paid Supabase branches without explicit approval.
+
+This lane is explicitly separate from the Cloudflare Workers runtime migration and from Egress #219 execution authority.
+
+### D-125 — Paid Supabase Development Branching is not required for current hardening rehearsal
+
+Current branch pricing was inspected at `$0.01344/hour`. No paid branch was created. GitHub-hosted ephemeral runners with disposable local Supabase are the selected isolated environment because they satisfy rehearsal/regression/rollback needs without Production credentials or remote paid resources.
+
+### D-126 — Server-only Gacha tables should be normalized explicitly, not by globally rewriting public-schema default ACLs
+
+Production read-only inspection found 13 RLS-enabled/zero-policy server-only tables with broad `anon` / `authenticated` grants and matching GraphQL/API discovery warnings. Current application data access is server-side through the `server-only` service-role boundary.
+
+Four separate `series_*` tables have intentional public read policies. Therefore:
+- explicit revoke on the 13 server-only objects is a valid isolated candidate;
+- blanket revocation from intentional-public objects is rejected;
+- global default-ACL rewriting is held because it could break legitimate future public objects;
+- zero-policy RLS on server-only tables is not itself a defect once direct browser grants are absent.
+
+### D-127 — `forecast_snapshots` Production drift may be synthesized only as a disposable test fixture
+
+`forecast_snapshots` exists in Production but is intentionally absent from the canonical fresh migration chain. Its Production schema was re-verified read-only and matches the legacy source description.
+
+Stage-5 CI may recreate that exact object only inside a disposable local database to test the real Production grant set. This does not authorize adding the table to the canonical migration chain or changing Production.
+
+### D-128 — `pg_net` must be treated as a drop/recreate candidate, not a simple relocation
+
+Production reports `pg_net` 0.20.4 with extension namespace `public` and `extrelocatable=false`. A simple `ALTER EXTENSION ... SET SCHEMA` is therefore rejected.
+
+Supabase documentation/troubleshooting supports testing drop/recreate under `extensions` when dependencies permit. Draft PR #242 is the dedicated isolated rehearsal. Production relocation remains **保留** until forward, rollback, reverse, and reapply paths are proven and a fresh Production dependency/queue/cron preflight is clean.
+
 ## Current durable state
 
-- current main: `8048a19ad478672a9d887d77073597ee95dc27d3`
+- Stage-5 canonical evidence: `docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md`
+- Gacha Draft PR #241: server-only grant hardening isolated rehearsal, unmerged
+- Gacha Draft PR #242: pg_net isolated relocation rehearsal, unmerged
+- paid Supabase branch created: **NO**
+- Production Supabase mutations under Stage 5: **0**
+- current main at Stage-5 bind: `da506232472c22c909f95e5a855b1cfed8889e73`
 - Production: `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G` — READY
-- Issue #219: **OPEN P0**
+- Issue #219: **OPEN P0 / separate lane**
 - P0-A sitemap mitigation: **RELEASED / VERIFIED**
 - P0-A billed-Egress outcome: **NOT YET PROVEN**
-- next true gate: **read-only post-release Egress observation**
-- if still high: **P0-B remaining public-loader attribution/mitigation**
-- if normalized: **business-scoreboard reassessment before choosing the next product/Data Scale experiment**
 - Production R4 repair: **APPLIED AND VERIFIED**
-- R4 one-candidate proof: **SUCCESS**
 - exact #228 write authority: **consumed/non-reusable**
-- last canonical market snapshot: **133 listings / 155 observations / 120x1 / 2x2 / 0x3+ / clicks7d10 / sold0**
 
 ## Approval state
 
 Not authorized now:
+- any Stage-5 Production DDL/DML or Auth setting change
+- merge of #241/#242
 - another R4 write/retry
 - provider refresh under consumed authority
 - another history write by implication
 - workflow dispatch/change
 - Secrets/Variables changes
 - F0/#142
-- unrelated advisor remediation
 - paid/destructive actions
-- Supabase paid-plan upgrade without exact current price/terms and explicit owner approval
+- Supabase paid-plan/paid-branch action without exact current price/terms and explicit owner approval
 
 ## Hard durable constraints
 
@@ -93,8 +126,8 @@ Not authorized now:
 
 ## Canonical history
 
-Immediate pre-#233 decisions snapshot:
+Immediate pre-Stage-5 decisions snapshot:
 
 `docs/history/2026-09-03-pre-233-DECISIONS.md`
 
-Once this exact sync reaches `main`, Issue #233 is complete by definition and does not trigger another recursive canonical sync solely to record its own merge.
+Stage-5 detailed evidence and resume instructions live in `docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md`.
