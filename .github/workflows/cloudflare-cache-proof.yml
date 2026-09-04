@@ -5,13 +5,18 @@ on:
   pull_request:
     paths:
       - ".github/workflows/cloudflare-cache-proof.yml"
+      - ".github/workflows/cloudflare-runtime-smoke.yml"
+      - "worker/**"
 
 permissions:
   contents: read
 
+# Both live-preview workflows hit the same isolated Worker/Supabase runtime.
+# Serialize them so CI does not manufacture origin pressure that normal smoke
+# traffic is not intended to test.
 concurrency:
-  group: cloudflare-cache-proof-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cloudflare-live-preview-proof-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
 
 jobs:
   isolated-cache-proof:

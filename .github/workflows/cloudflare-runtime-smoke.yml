@@ -12,13 +12,16 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/cloudflare-runtime-smoke.yml"
+      - ".github/workflows/cloudflare-cache-proof.yml"
 
 permissions:
   contents: read
 
+# Runtime smoke and cache proof share one isolated Worker/Supabase preview.
+# Keep them serial: this is a correctness gate, not a synthetic load test.
 concurrency:
-  group: cloudflare-runtime-smoke-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cloudflare-live-preview-proof-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
 
 jobs:
   exact-head-runtime:
@@ -63,10 +66,34 @@ jobs:
             local needle="${3:-}"
             local body="$tmp/${name}.body"
             local headers="$tmp/${name}.headers"
-            local code
-            code="$(curl --silent --show-error --location --max-time 90 --dump-header "$headers" --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
+            local code=""
+
+            for attempt in 1 2 3; do
+              code="$(curl --silent --show-error --location --max-time 90 --dump-header "$headers" --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
+              if [[ "$code" == "200" ]]; then
+                break
+              fi
+
+              case "$code" in
+                429|500|502|503|504)
+                  if [[ "$attempt" -lt 3 ]]; then
+                    delay=$((attempt * 2))
+                    echo "$name transient HTTP $code on attempt $attempt; retrying after ${delay}s" | tee -a "$GITHUB_STEP_SUMMARY"
+                    sleep "$delay"
+                    ;;
+                  else
+                    echo "$name returned transient HTTP $code after $attempt attempts" >&2
+                  fi
+                  ;;
+                *)
+                  echo "$name returned HTTP $code" >&2
+                  head -c 1000 "$body" >&2 || true
+                  exit 1
+                  ;;
+              esac
+            done
+
             if [[ "$code" != "200" ]]; then
-              echo "$name returned HTTP $code" >&2
               head -c 1000 "$body" >&2 || true
               exit 1
             fi
@@ -75,6 +102,7 @@ jobs:
               exit 1
             fi
             printf '%-24s HTTP 200\n' "$name" >> "$GITHUB_STEP_SUMMARY"
+            sleep 1
           }
 
           encoded_slug='tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
@@ -109,6 +137,34 @@ jobs:
             echo 'Product detail canonical/site metadata did not point at gachalens.com.' >&2
             exit 1
           }
+
+          # Public high-read pages and sitemap outputs must advertise the
+          # Cloudflare edge policy so warm traffic does not re-enter Supabase.
+          for name in home series ranking restocks stock schedule guides; do
+            grep -qi '^x-gacha-edge-cache-policy: public-document-120-v1' "$tmp/${name}.headers" || {
+              echo "$name is missing public document edge-cache policy" >&2
+              exit 1
+            }
+          done
+          for name in robots sitemap series_sitemap variant_sitemap; do
+            grep -qi '^x-gacha-edge-cache-policy: public-sitemap-86400-v1' "$tmp/${name}.headers" || {
+              echo "$name is missing public sitemap edge-cache policy" >&2
+              exit 1
+            }
+          done
+
+          # A second request at the same POP must be served from edge cache for
+          # representative expensive public routes.
+          for spec in 'ranking:/ranking' 'restocks:/restocks' 'series_sitemap:/series-sitemap.xml'; do
+            name="${spec%%:*}"
+            path="${spec#*:}"
+            headers="$tmp/${name}-warm.headers"
+            code="$(curl --silent --show-error --max-time 90 --dump-header "$headers" --output /dev/null --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
+            [[ "$code" == "200" ]] || { echo "$name warm request returned $code" >&2; exit 1; }
+            cf_status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$headers")"
+            [[ "$cf_status" == "HIT" ]] || { echo "$name warm request was ${cf_status:-none}, expected HIT" >&2; exit 1; }
+            echo "$name warm edge cache: HIT" >> "$GITHUB_STEP_SUMMARY"
+          done
 
           # Privileged write boundaries: no cookie/token must never reach data mutation.
           review_code="$(curl --silent --show-error --max-time 60 --output "$tmp/review-post.body" --write-out '%{http_code}' -X POST -H "Origin: ${PREVIEW_URL}" -H 'Content-Type: application/x-www-form-urlencoded' --data 'decision=approved' "${PREVIEW_URL}/api/review/community-reports/runtime-smoke-nonexistent")"
