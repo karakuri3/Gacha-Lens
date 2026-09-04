@@ -33,6 +33,7 @@ jobs:
       # the runtime source set is byte-equivalent to that deployed commit.
       DEPLOYED_SHA: fc873492c2c259e0f6d4a944d51afa773a0abc1c
       PREVIEW_URL: https://5469cf6b-gacha-lens.senpingxingzuo.workers.dev
+      BROWSER_ACCEPT: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
     steps:
       - name: Checkout current pull-request head
         uses: actions/checkout@v7
@@ -69,7 +70,7 @@ jobs:
             local code=""
 
             for attempt in 1 2 3; do
-              code="$(curl --silent --show-error --location --max-time 90 --dump-header "$headers" --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
+              code="$(curl --silent --show-error --location --max-time 90 -H "Accept: ${BROWSER_ACCEPT}" --dump-header "$headers" --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
               if [[ "$code" == "200" ]]; then
                 break
               fi
@@ -110,7 +111,7 @@ jobs:
           # Repeat a production-shaped HTML detail request. Dedicated cache-proof
           # CI separately asserts MISS -> HIT -> HIT at this exact runtime.
           for n in 1 2 3; do
-            metrics="$(curl --silent --show-error --max-time 90 -H 'Accept: text/html' --output "$tmp/product-${n}.body" --write-out '%{http_code} %{time_total}' "${PREVIEW_URL}${product_path}")"
+            metrics="$(curl --silent --show-error --max-time 90 -H "Accept: ${BROWSER_ACCEPT}" --output "$tmp/product-${n}.body" --write-out '%{http_code} %{time_total}' "${PREVIEW_URL}${product_path}")"
             code="${metrics%% *}"
             [[ "$code" == "200" ]] || { echo "product detail attempt $n returned $code" >&2; exit 1; }
             grep -Fq 'ディズニー マリー' "$tmp/product-${n}.body" || { echo 'Japanese-slug product marker missing' >&2; exit 1; }
@@ -158,7 +159,7 @@ jobs:
             name="${spec%%:*}"
             path="${spec#*:}"
             headers="$tmp/${name}-warm.headers"
-            code="$(curl --silent --show-error --max-time 90 --dump-header "$headers" --output /dev/null --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
+            code="$(curl --silent --show-error --max-time 90 -H "Accept: ${BROWSER_ACCEPT}" --dump-header "$headers" --output /dev/null --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
             [[ "$code" == "200" ]] || { echo "$name warm request returned $code" >&2; exit 1; }
             cf_status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$headers")"
             [[ "$cf_status" == "HIT" ]] || { echo "$name warm request was ${cf_status:-none}, expected HIT" >&2; exit 1; }
