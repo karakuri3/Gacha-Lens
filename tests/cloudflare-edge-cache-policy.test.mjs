@@ -14,7 +14,7 @@ test("Cloudflare discovery cache is a bounded no-query public HTML policy", () =
     assert.match(source, new RegExp(`"${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
   }
 
-  assert.match(source, /\^\\\/(?:categories\|brands\|franchises)\\\/\[\^\/\]\+\$/);
+  assert.ok(source.includes('return /^\\/(?:categories|brands|franchises)\\/[^/]+$/.test(pathname);'));
   assert.match(source, /url\.searchParams\.size === 0/);
   assert.match(source, /accept\.includes\("text\/html"\)/);
 });
