@@ -1,0 +1,112 @@
+name: Supabase Hardening Isolated
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/supabase-hardening-isolated.yml'
+      - 'scripts/supabase-hardening-isolated-gacha.sh'
+      - 'supabase/verification/20260904_service_role_only_candidate.sql'
+      - 'supabase/migrations/**'
+      - 'supabase/foundation-baseline-check.sql'
+      - 'tests/foundation-baseline.test.mjs'
+      - 'tests/**data-source**'
+      - 'docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md'
+      - 'docs/HANDOFF.md'
+      - 'docs/STATUS.md'
+      - 'docs/DECISIONS.md'
+      - 'docs/TODO.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-hardening-isolated-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  SUPABASE_CLI_VERSION: '2.109.1'
+  PGHOST: 127.0.0.1
+  PGPORT: 54322
+  PGDATABASE: postgres
+  PGUSER: postgres
+  PGPASSWORD: postgres
+
+jobs:
+  grant-hardening-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify isolation contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$(git rev-parse HEAD)" == "${{ github.event.pull_request.head.sha }}" ]]
+          docker version >/dev/null
+          bash -n scripts/supabase-hardening-isolated-gacha.sh
+          if grep -Eq '\$\{\{[[:space:]]*secrets\.' .github/workflows/supabase-hardening-isolated.yml; then
+            echo 'isolated hardening workflow must not consume GitHub secrets' >&2
+            exit 1
+          fi
+          version="$(npx --yes supabase@"$SUPABASE_CLI_VERSION" --version)"
+          [[ "$version" == "$SUPABASE_CLI_VERSION" ]]
+          echo "Supabase CLI $version"
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Start disposable Supabase
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          npx --yes supabase@"$SUPABASE_CLI_VERSION" start > "$RUNNER_TEMP/supabase-start.log" 2>&1
+          status=$?
+          set -e
+          if [[ "$status" -ne 0 ]]; then
+            sed -E 's/(ANON_KEY|SERVICE_ROLE_KEY|SECRET_KEY|ACCESS_KEY|JWT_SECRET|DB_URL|API_KEY)([=: ]+).*/\1\2[redacted]/Ig' "$RUNNER_TEMP/supabase-start.log"
+            exit "$status"
+          fi
+          echo 'Disposable Supabase stack started; generated local credentials were not printed.'
+
+      - name: Reset disposable database
+        shell: bash
+        run: npx --yes supabase@"$SUPABASE_CLI_VERSION" db reset --local --no-seed
+
+      - name: Rehearse Production-like grant drift, hardening, regression, rollback, reapply
+        shell: bash
+        run: bash scripts/supabase-hardening-isolated-gacha.sh
+
+      - name: Run Foundation static contract tests
+        run: npm run test:foundation-baseline
+
+      - name: Run data-source contract tests
+        run: npm run test:data-source
+
+      - name: Stop disposable Supabase
+        if: always()
+        shell: bash
+        run: npx --yes supabase@"$SUPABASE_CLI_VERSION" stop --no-backup || true
