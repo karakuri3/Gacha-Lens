@@ -1,13 +1,12 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-04 JST — company-roadmap Stage-5 Supabase hardening isolated validation active
+Updated: **2026-09-04 JST — company-roadmap Stage-5 Supabase hardening isolated validation finalized on Draft PRs; Production changes 0.**
 
-The complete checkpoint immediately before this isolated lane is preserved at `docs/history/2026-09-03-pre-233-HANDOFF.md`. Earlier canonical history remains linked from that snapshot.
+The complete pre-Stage-5 checkpoint is preserved at `docs/history/2026-09-03-pre-233-HANDOFF.md`. Fresh GitHub / Supabase / deployment evidence always wins over this file.
 
-## Stage-5 resume protocol — highest priority for this isolated thread
+## Resume order
 
-If a fresh thread is specifically assigned **「Supabase hardening isolated検証」**, read these first:
-
+For a thread assigned **Supabase hardening isolated検証**:
 1. `docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md`
 2. this file
 3. `docs/STATUS.md`
@@ -16,139 +15,96 @@ If a fresh thread is specifically assigned **「Supabase hardening isolated検�
 6. `docs/INFRA_AUDIT_FINDINGS_2026-09-03.md`
 7. `AGENTS.md` / `docs/AGENT_OS.md`
 
-Then re-fetch exact current heads and Actions for:
-- Gacha Draft PR #241 — server-only grant/GraphQL boundary rehearsal;
-- Gacha Draft PR #242 — `pg_net` relocation rehearsal;
-- Beach Draft PR #216 — separate-repository `rebuild_profile_stats_v1` ambiguity rehearsal.
+For a general **Gacha Lens続けて** thread, also read the existing product/data/release policy docs named by the pre-Stage-5 checkpoint.
 
-Do not merge any of them under the validation task.
-
-Absolute Stage-5 prohibitions:
-- no Production Supabase DDL/DML;
-- no main merge;
-- no Production deploy;
-- no DNS / `gachalens.com` changes;
-- no Vercel cancellation;
-- no Gacha Cloudflare Production config changes;
-- no secret display;
-- no paid Supabase branch without explicit approval.
-
-Supabase Development Branching was inspected at `$0.01344/hour`; none was created. The selected isolation mechanism is GitHub-hosted ephemeral CI + disposable local Supabase with no Production credentials.
-
-Current provisional conclusions:
-- 13 Gacha server-only tables: explicit API-role revoke is **Production適用推奨候補**, final exact-head green pending.
-- intentional-public `series_*` tables: blanket revoke **不要**.
-- server-only RLS/no-policy: adding policies merely to silence advisor **不要**.
-- global public default ACL rewrite: **保留**.
-- service-role boundary change: **不要**.
-- simple `pg_net ALTER EXTENSION ... SET SCHEMA`: **不要** because `extrelocatable=false`.
-- `pg_net` drop/recreate under `extensions`: **保留** until #242 proves forward/rollback/reverse/reapply.
-- six FK indexes and unused-index removals: **保留** pending specific workload/scale evidence.
-- Egress #219 remains separate; advisor hardening does not prove billed-byte recovery.
-
-## General resume protocol
-
-If a fresh thread receives only **「Gacha Lens続けて」** rather than the Stage-5 assignment:
-
-1. Read this file plus `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/DATA_SCALE_SCOREBOARD.md`, `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
-2. Re-fetch current `main`, open/recent Issues and PRs, exact-head Actions, Vercel Production, and the minimum live Supabase evidence needed for the current gate.
-3. **Do not resume Data Scale writes merely because the old technical diagnosis was `depth_insufficient`.** Issue #219 reliability/cost P0 currently outranks further market-depth expansion until post-release egress is measured.
-4. Do not repeat completed R1/R2/R3/R4/history canaries merely to refresh context.
-5. Production data writes, migrations/schema/backfills, approval-bound provider execution, workflow dispatch/change, Secrets/Variables, paid/destructive actions, direct main pushes, and ineligible merges/releases require the applicable explicit approval.
-6. After each major Production/recovery/security/release milestone, synchronize `HANDOFF / STATUS / DECISIONS / TODO` before the next major phase.
-
-## Repository / services
+## Current identity
 
 - Repository: `karakuri3/Gacha-Lens`
 - Stage-5 main bind: `da506232472c22c909f95e5a855b1cfed8889e73`
-- Production domain: `https://gachalens.com`
-- Vercel Production: `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G` — **READY**
 - Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
-- Old inactive Supabase: `ihcudkfspzuixsqsvoku` — never confuse with Production
-- Preferred local path: `C:\dev\Gacha-Lens`
+- old inactive Supabase: `ihcudkfspzuixsqsvoku`
+- Production domain: `https://gachalens.com`
+- Stage-5 canonical Draft: PR #241
+- all Gacha Stage-5 PRs #241-#246: **Draft / open / unmerged**
+- Production Supabase mutations under Stage 5: **0**
+- Production deploys under Stage 5: **0**
+- paid Supabase branch: **0**
 
-## Current P0 — shared Supabase uncached Egress risk
+## Stage-5 exact evidence
 
-Issue #219 is **OPEN** and remains a separate operational gate.
+- #241 13-table grant rehearsal head `cf57582404023853738b19ba18c45a05fe56687e`: isolated `33855152896` SUCCESS; Code Quality `33855152742` SUCCESS.
+- #242 `pg_net` relocation head `5c5c4b063eacf7d9a852fda275cb565a8637b8d6`: isolated `33855189033` SUCCESS; Code Quality `33855189058` SUCCESS.
+- #243 `pg_graphql` disable head `2c787dc6a482feb978fab6b506f2a45d05fbe175`: isolated `33857636302` SUCCESS; Code Quality `33857636272` SUCCESS.
+- #244 service-role boundary head `3f96b259b162dab3657738b7415159733658c51e`: Code Quality `33854491517` SUCCESS.
+- #245 market-listings index head `c0c93f4af23d6a8cb476348ee7a5f4e4b11fc457`: isolated `33855753155` SUCCESS; Code Quality `33855753047` SUCCESS.
+- #246 default-privilege hardening head `784f3740bd9adbf3894265749250eb555627d355`: isolated `33859987774` SUCCESS; Code Quality `33859987765` SUCCESS.
+- review threads on #241-#246: **0** at final audit.
 
-Authenticated billing evidence captured on 2026-09-03 showed:
-- uncached Egress **24.614 / 5 GB (~492%)** for the shared Free Plan organization;
-- overage **19.61 GB**;
-- cached Egress only about **0.053 / 5 GB**;
-- grace period end **2026-09-19** with possible HTTP 402 request restriction if Fair Use restriction is applied.
+Beach is a separate repository. Beach Draft #216 final docs-sync head `95d092551893207ebeaf9e34c3ed44a2c6c5e6a3` passed isolated workflow `33859304627` including DB rehearsal, runtime, rollback/reapply, Unit, Lint, Build, cleanup. The normal Quality Gate hit npm advisory endpoint network failures and is recorded separately; it was not weakened.
 
-Live-log/repository evidence strongly implicated repeated Gacha Lens server-side public reads, including large variant pagination and public SEO/sitemap traversal. The evidence is strong for mechanism/root-cause direction but does **not** establish an exact Gacha Lens-only billed-GB amount.
+## Final Stage-5 recommendations
 
-## P0-A sitemap mitigation — RELEASED
+### Production適用推奨
+- targeted revoke of `anon` / `authenticated` privileges from the 13 Gacha server-only tables (#241)
+- explicit `server-only` marker for `lib/data/ingestion-run-store.js` (#244)
+- schema-scoped future-object default hardening for role `postgres` in schema `public` (#246 Candidate A)
+- explicit per-function PUBLIC/API-role revoke as the migration standard for sensitive future functions
+- disable unused `pg_graphql` with the non-CASCADE preflight/rollback procedure proven in #243
+- Beach: `rebuild_profile_stats_v1` constraint-target correctness fix, in its own repository/approval lane
 
-PR #231 completed the first free mitigation.
+### 保留
+- `pg_net` drop/recreate relocation despite successful isolated proof: low current usage/urgency versus extension-recreation risk
+- global future-function PUBLIC default revoke: all-schema blast radius including future `extensions` functions
+- `market_listings(series_id)` index: real hot call count but current ~141-row table averages ~0.2404 ms on dominant path
+- other five unindexed FK candidates
+- advisor-unused index removals
+- Beach leaked-password protection: security-beneficial but current Supabase organization is Free and the feature is paid-plan dependent; no plan upgrade is authorized
 
-Exact release evidence recorded by the prior canonical checkpoint:
-- final PR head `fc091f32ae216779e782eef84fc2701fbc769492`;
-- exact-head PR Code Quality `33754793103`: **SUCCESS**;
-- exact-head Preview `dpl_GVNunr8mDJ54FE5a6nr3mD5Hi4Qj`: **READY**;
-- all sitemap routes Static with `1d` revalidation;
-- strengthened Lead self-review findings0;
-- normal Production `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G`: READY;
-- live Production sitemap smoke passed.
+### 不要
+- blanket revoke from the four intentional-public `series_*` tables
+- adding RLS policies to the 13 server-only tables merely to silence `RLS enabled/no policy`
+- simple `ALTER EXTENSION pg_net SET SCHEMA` because Production reports `extrelocatable=false`
+- treating Stage-5 hardening as proof that Egress #219 is solved
+- mechanical Gacha default-ACL changes on Beach; the projects have different current privilege states
 
-P0-A is not proof that #219 is solved. The true gate remains read-only post-release Egress observation.
+Full evidence/rollback/order: `docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md`.
 
-## Product strategy after the reliability gate
+## Production application order — NOT AUTHORIZED BY THIS FILE
 
-Use:
+After future independent approvals:
+1. Beach profile-stats minimal correctness fix + immediate postflight.
+2. Gacha #244 server-only code boundary.
+3. Gacha #241 targeted current-table grant normalization.
+4. application regression + Supabase advisor rerun.
+5. Gacha #246 Candidate A future-object defaults; keep explicit sensitive-function revokes.
+6. fresh dependency preflight, then Gacha #243 non-CASCADE `pg_graphql` disable.
+7. application regression + advisor rerun.
+8. leave `pg_net`, global PUBLIC default revoke, index additions/removals on HOLD until new evidence supports them.
 
-**Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
+Do not bundle these into one change window by implication.
 
-Data Scale is infrastructure, not the business goal. Do not mechanically chase listing/depth counts while user acquisition, click-through, conversion, monetization, or reliability is the larger bottleneck.
+## Separate active lanes — do not conflate
 
-## Last verified Data Scale checkpoint
+- Cloudflare Workers runtime migration remains completely separate.
+- Supabase Egress #219 remains separate and is not solved by Stage 5.
+- PR #240 P0 public-read-cache experiments remain separate.
+- Beach R5-03C remains separate and requires its own compatibility-soak/Production authorization.
+- #137/#142 F0 remains separate.
+- PR #232 technology-intelligence work remains separate.
 
-The latest canonical market checkpoint before the Egress P0 intervention remains:
-- series **10,241**;
-- variants **23,808**;
-- listings **133**;
-- observations **155**;
-- fresh <30d covered variants **122**;
-- depth **120 x1 / 2 x2 / 0 x3+**;
-- max depth **2**;
-- re-observed **22 / 133 = 16.5414%**;
-- stock/restock **0 / 0**;
-- outbound clicks 7d **10**;
-- completed-sale evidence **0**.
+## Hard boundaries
 
-The old technical diagnosis `depth_insufficient` remains useful evidence, but it does not authorize a write and does not outrank current reliability/cost evidence.
+- no Production DB/schema/data/Auth mutation without fresh explicit authorization
+- no direct push to main
+- no Production-impacting merge/deploy by implication
+- no Secrets/Variables or workflow mutation by implication
+- no paid/destructive action without approval
+- never touch `supabase/.temp/cli-latest`
+- keep `.github/workflows/gacha-ingestion.yml` disabled
+- no automatic RPC retry
+- do not weaken strict market identity/matching guards
+- do not scrape Mercari or Amazon
 
-## R4 state remains closed/consumed
+## Stage-5 close gate
 
-The repaired Production R4 writer and one-candidate proof remain successfully completed as documented in prior history.
-
-No further R4 write, retry, provider refresh, or workflow mutation is authorized by the consumed #228 approval. A future Production market write requires a new current-state bind and fresh applicable approval.
-
-## Separate work / concurrency
-
-- Cloudflare Workers runtime migration is a different workstream and must not be modified from this Stage-5 hardening lane.
-- PR #232 is a separate Draft technology-intelligence docs lane.
-- #137/#142 F0 remains a separate Production-impact boundary.
-- Beach hardening code stays in the Beach repository; only cross-repo result/status may be referenced here.
-
-## Hard no-regression boundaries
-
-- NEVER touch `supabase/.temp/cli-latest`.
-- Keep `.github/workflows/gacha-ingestion.yml` disabled.
-- No automatic RPC retry.
-- Do not manually repair Supabase migration ledger timestamps.
-- Do not weaken strict market matching/identity guards for coverage.
-- Keep completed sold evidence separate from active/sold_out asking-price evidence.
-- Do not scrape Mercari or Amazon.
-- Do not infer merchant equivalence from display names.
-- No direct push to `main`.
-- No paid/destructive action without explicit applicable approval.
-
-## Canonical history
-
-Immediate pre-Stage-5 checkpoint:
-- `docs/history/2026-09-03-pre-233-HANDOFF.md`
-
-Stage-5 detailed evidence/resume file:
-- `docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md`
+The final canonical-docs head on Draft PR #241 must itself pass exact-head `Supabase Hardening Isolated` and PR Code Quality. Once that is green and main has not drifted, Stage 5 may be declared **validation complete** while all Production changes remain unapplied.
