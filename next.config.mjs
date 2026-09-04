@@ -9,7 +9,7 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: "/series/:slug",
+        source: "/series/(.*)",
         headers: [
           {
             key: "CDN-Cache-Control",
