@@ -9,6 +9,12 @@ const EDGE_CACHE_POLICIES = {
     marker: "series-detail-1800-v1",
     contentTypes: ["text/html"],
   },
+  discoveryDocument: {
+    cacheControl: "public, max-age=1800, stale-while-revalidate=60",
+    cacheTag: "gacha-discovery-document",
+    marker: "discovery-document-1800-v1",
+    contentTypes: ["text/html"],
+  },
   publicDocument: {
     cacheControl: "public, max-age=120, stale-while-revalidate=30",
     cacheTag: "gacha-public-document",
@@ -23,9 +29,15 @@ const EDGE_CACHE_POLICIES = {
   },
 };
 
+const DISCOVERY_DOCUMENT_PATHS = new Set([
+  "/series",
+  "/categories",
+  "/brands",
+  "/franchises",
+]);
+
 const PUBLIC_DOCUMENT_PATHS = new Set([
   "/",
-  "/series",
   "/ranking",
   "/restocks",
   "/stock",
@@ -56,6 +68,11 @@ function isPublicCacheCandidate(request) {
   return !isNextInternalRequest(request);
 }
 
+function isDiscoveryDocumentPath(pathname) {
+  if (DISCOVERY_DOCUMENT_PATHS.has(pathname)) return true;
+  return /^\/(?:categories|brands|franchises)\/[^/]+$/.test(pathname);
+}
+
 function getEdgeCachePolicy(request) {
   if (!isPublicCacheCandidate(request)) return null;
 
@@ -78,9 +95,20 @@ function getEdgeCachePolicy(request) {
     return null;
   }
 
-  // Public document pages are cacheable only without query parameters. Search,
-  // filter and pagination variants intentionally bypass edge storage so user-
-  // controlled cache-key cardinality stays bounded.
+  // Discovery indexes and first-page facet landings are non-personalized but
+  // relatively expensive at origin. Cache only their no-query HTML forms so
+  // pagination/search variants cannot create unbounded cache-key cardinality.
+  if (
+    url.searchParams.size === 0 &&
+    accept.includes("text/html") &&
+    isDiscoveryDocumentPath(url.pathname)
+  ) {
+    return EDGE_CACHE_POLICIES.discoveryDocument;
+  }
+
+  // Other shared public document pages are cacheable only without query
+  // parameters. Search, filter and pagination variants intentionally bypass edge
+  // storage so user-controlled cache-key cardinality stays bounded.
   if (
     url.searchParams.size === 0 &&
     accept.includes("text/html") &&
