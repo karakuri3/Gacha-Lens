@@ -27,8 +27,8 @@ jobs:
       # Cloudflare Workers Builds proved this immutable version was built from
       # DEPLOYED_SHA. A following workflow-only commit is permitted only when
       # the runtime source set is byte-equivalent to that deployed commit.
-      DEPLOYED_SHA: 6c484b2f6fd0d80de228a54fce18d0e2743355e2
-      PREVIEW_URL: https://275b2391-gacha-lens.senpingxingzuo.workers.dev
+      DEPLOYED_SHA: e71dca9a6bd2d2ec54a73ff6dd492137b1ba963e
+      PREVIEW_URL: https://d75d3195-gacha-lens.senpingxingzuo.workers.dev
     steps:
       - name: Checkout current pull-request head
         uses: actions/checkout@v7
@@ -78,8 +78,6 @@ jobs:
           encoded_slug='tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
           product_path="/series/${encoded_slug}"
 
-          # Exercise the high-cost public detail first, then repeat it twice so
-          # Supabase logs can independently prove cold versus warm behavior.
           for n in 1 2 3; do
             metrics="$(curl --silent --show-error --max-time 90 --output "$tmp/product-${n}.body" --write-out '%{http_code} %{time_total}' "${PREVIEW_URL}${product_path}")"
             code="${metrics%% *}"
@@ -108,7 +106,6 @@ jobs:
             exit 1
           }
 
-          # Privileged write boundaries: no cookie/token must never reach data mutation.
           review_code="$(curl --silent --show-error --max-time 60 --output "$tmp/review-post.body" --write-out '%{http_code}' -X POST -H "Origin: ${PREVIEW_URL}" -H 'Content-Type: application/x-www-form-urlencoded' --data 'decision=approved' "${PREVIEW_URL}/api/review/community-reports/runtime-smoke-nonexistent")"
           [[ "$review_code" == "401" ]] || { echo "Unauthenticated review mutation returned $review_code, expected 401" >&2; exit 1; }
 
