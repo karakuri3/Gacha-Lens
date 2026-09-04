@@ -19,7 +19,7 @@ drop schema if exists net cascade;
 create extension pg_net schema public;
 SQL
 
-pre_contract="$(psql_local -qAt -c "select concat_ws('|', n.nspname, e.extversion, e.extrelocatable::text, to_regprocedure('net.http_get(text,jsonb,jsonb,integer)') is not null, to_regprocedure('net.http_post(text,jsonb,jsonb,jsonb,integer)') is not null) from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='pg_net';" | tr -d '[:space:]')"
+pre_contract="$(psql_local -qAt -c "select concat_ws('|', n.nspname, e.extversion, e.extrelocatable::text, (to_regprocedure('net.http_get(text,jsonb,jsonb,integer)') is not null)::text, (to_regprocedure('net.http_post(text,jsonb,jsonb,jsonb,integer)') is not null)::text) from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='pg_net';" | tr -d '[:space:]')"
 [[ "$pre_contract" == public\|*\|false\|true\|true ]] || fail "failed to reproduce Production-like pg_net placement: $pre_contract"
 
 queue_before="$(psql_local -qAt -c "select count(*) from net.http_request_queue;" | tr -d '[:space:]')"
@@ -57,7 +57,7 @@ $block$;
 rollback;
 SQL
 
-rollback_contract="$(psql_local -qAt -c "select concat_ws('|', n.nspname, e.extversion, e.extrelocatable::text, to_regnamespace('net') is not null) from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='pg_net';" | tr -d '[:space:]')"
+rollback_contract="$(psql_local -qAt -c "select concat_ws('|', n.nspname, e.extversion, e.extrelocatable::text, (to_regnamespace('net') is not null)::text) from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='pg_net';" | tr -d '[:space:]')"
 [[ "$rollback_contract" == public\|*\|false\|true ]] || fail "transaction rollback did not restore Production-like placement: $rollback_contract"
 log 'ROLLBACK PASS: transactional rehearsal restored original public placement'
 
@@ -71,7 +71,7 @@ create extension pg_net schema extensions;
 commit;
 SQL
 
-post_contract="$(psql_local -qAt -c "select concat_ws('|', n.nspname, e.extversion, e.extrelocatable::text, to_regprocedure('net.http_get(text,jsonb,jsonb,integer)') is not null, to_regprocedure('net.http_post(text,jsonb,jsonb,jsonb,integer)') is not null) from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='pg_net';" | tr -d '[:space:]')"
+post_contract="$(psql_local -qAt -c "select concat_ws('|', n.nspname, e.extversion, e.extrelocatable::text, (to_regprocedure('net.http_get(text,jsonb,jsonb,integer)') is not null)::text, (to_regprocedure('net.http_post(text,jsonb,jsonb,jsonb,integer)') is not null)::text) from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='pg_net';" | tr -d '[:space:]')"
 [[ "$post_contract" == extensions\|*\|false\|true\|true ]] || fail "reapply contract failed: $post_contract"
 
 queue_after="$(psql_local -qAt -c "select count(*) from net.http_request_queue;" | tr -d '[:space:]')"
