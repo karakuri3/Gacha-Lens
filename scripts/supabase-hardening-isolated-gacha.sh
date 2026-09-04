@@ -20,12 +20,8 @@ TARGETS=(
   variants
   x_reactions
 )
-EXCLUDED_PUBLIC=(
-  series_lineup
-  series_price_history
-  series_restock_info
-  series_stock_reports
-)
+TARGET_LIST="'community_reports','forecast_snapshots','import_issues','ingestion_runs','market_listing_observations','market_listings','outbound_clicks','restock_events','series','source_weights','stock_reports','variants','x_reactions'"
+EXCLUDED_LIST="'series_lineup','series_price_history','series_restock_info','series_stock_reports'"
 
 log() { printf '[gacha-supabase-hardening-isolated] %s\n' "$*"; }
 fail() { printf '[gacha-supabase-hardening-isolated] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -33,11 +29,6 @@ fail() { printf '[gacha-supabase-hardening-isolated] ERROR: %s\n' "$*" >&2; exit
 command -v psql >/dev/null 2>&1 || fail 'psql is required'
 [[ -s "$CANDIDATE" ]] || fail 'isolated candidate SQL is missing'
 mkdir -p "$WORK_ROOT"
-
-csv_targets="$(IFS=,; printf "'%s'" "${TARGETS[*]// /','}")"
-# The shell join above is intentionally avoided for SQL correctness; build a literal list safely from fixed identifiers.
-TARGET_LIST="'community_reports','forecast_snapshots','import_issues','ingestion_runs','market_listing_observations','market_listings','outbound_clicks','restock_events','series','source_weights','stock_reports','variants','x_reactions'"
-EXCLUDED_LIST="'series_lineup','series_price_history','series_restock_info','series_stock_reports'"
 
 # Confirm the isolated schema matches the Production classification boundary.
 policy_findings="$(psql -X --no-psqlrc -qAt -v ON_ERROR_STOP=1 -c "
