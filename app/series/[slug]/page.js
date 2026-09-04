@@ -27,8 +27,13 @@ import {
   watchScore,
 } from "@/lib/domain/public-display-clean";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+// The Cloudflare POC is built with vinext's Workers Cache CDN adapter and no
+// data-cache adapter. Keep the cache at the public page boundary so a warm hit
+// bypasses the Worker/Supabase read path entirely. The page contains no
+// request-specific server state; favorites and reports remain client/action
+// concerns. Thirty minutes bounds staleness to the ingestion operating window.
+export const dynamic = "force-static";
+export const revalidate = 1800;
 
 const getVariantDetail = cache((slug) => getSeriesBySlug(slug));
 
@@ -258,71 +263,63 @@ function MarketBreakdown({ item }) {
   const summary = item.market_summary || {};
   const evidence = item.market_evidence || summary.evidence || {};
   return (
-    <div className="metric-grid">
-      <Metric label={evidence.label || "データ不足"} value={formatMarketEvidenceValue(evidence)} meta={evidence.explanation} tone="highlight" />
-      <EvidenceMetric stats={summary.type_stats?.rare_single} fallbackLabel="レア単品" />
-      <EvidenceMetric stats={summary.type_stats?.secret_single} fallbackLabel="シークレット" />
-      <Metric label="出品数" value={(summary.active_listing_count ?? 0).toLocaleString("ja-JP")} />
-      <Metric label="売れた数" value={(summary.sold_count ?? 0).toLocaleString("ja-JP")} />
-      <Metric label="信頼度" value={summary.price_confidence?.label ?? "データ不足"} />
-      <Metric label="直近更新" value={formatObservedAt(summary.last_observed_at)} />
+    <div className="market-breakdown">
+      <p>{evidence.summary || "観測データが増えると相場の内訳が表示されます。"}</p>
+      <dl className="detail-facts">
+        <div><dt>観測件数</dt><dd>{summary.observed_count ?? 0}</dd></div>
+        <div><dt>出品中</dt><dd>{summary.active_count ?? 0}</dd></div>
+        <div><dt>売れた数</dt><dd>{summary.sold_count ?? 0}</dd></div>
+        <div><dt>参考相場</dt><dd>{formatMarketEvidenceValue(evidence)}</dd></div>
+      </dl>
     </div>
   );
 }
 
 function UpcomingNotice({ item }) {
   return (
-    <div>
-      <p className="section-sub">
-        発売前の商品は成約相場や利益を表示しません。予約・出品価格は3件以上確認できた場合だけ、参考情報として区別して表示します。
-      </p>
-      {item.official_url ? (
-        <div className="tag-row" style={{ marginTop: 14 }}>
-          <Link href={item.official_url} className="button-link" target="_blank" rel="noreferrer">公式ページ</Link>
-        </div>
-      ) : null}
+    <div className="market-breakdown">
+      <p>発売前スコアは注目度・入手難度などを比較するための参考指標です。価格や入手可否を保証するものではありません。</p>
+      <dl className="detail-facts">
+        <div><dt>先行注目度</dt><dd>{formatScore(item.forecast_score)}</dd></div>
+        <div><dt>入手難度</dt><dd>{formatScore(scarcityScore(item))}</dd></div>
+        <div><dt>ウォッチ</dt><dd>{formatScore(watchScore(item))}</dd></div>
+        <div><dt>発売</dt><dd>{formatSchedule(item)}</dd></div>
+      </dl>
     </div>
   );
 }
 
 function StockPanel({ item }) {
-  const summary = item.stock_summary || item.availability_summary;
-  const label = stockStatusLabel(summary);
+  const reports = item.stock_reports ?? [];
   return (
     <div id="stock" className="card panel">
       <h2>在庫状況</h2>
-      <div className={`stock-signal stock-signal--${summary?.latest_stock_status || "unknown"}`} style={{ marginBottom: 12 }}>
-        <strong>{label}</strong>
-        <span>{label === "未取得" ? "データ不足" : "動きあり"}</span>
-      </div>
-      <p className="section-sub">
-        店頭やオンラインで確認できた在庫の動きを表示します。
-      </p>
-      {(item.stock_reports ?? []).length ? (
-        <div className="detail-signal-list">
-          {(item.stock_reports ?? []).slice(0, 5).map((report) => (
-            <div key={report.id || report.reported_at}>
-              <strong>{report.status_label || stockStatusLabel({ latest_stock_status: report.status })}</strong>
-              <span>{[report.region, report.shop_name].filter(Boolean).join(" / ") || "場所未登録"}</span>
-              <time>{formatObservedAt(report.reported_at)}</time>
+      {reports.length ? (
+        <div className="stack-list">
+          {reports.slice(0, 8).map((report) => (
+            <div key={report.id} className="stack-list__item">
+              <strong>{stockStatusLabel(report.status)}</strong>
+              <span>{report.shop_name || report.region || "場所未登録"}</span>
+              <small>{report.reported_at ? new Date(report.reported_at).toLocaleString("ja-JP") : "時刻未登録"}</small>
             </div>
           ))}
         </div>
-      ) : null}
+      ) : <p className="empty">在庫報告はまだありません。</p>}
     </div>
   );
 }
 
 function RestockPanel({ item }) {
+  const events = item.restock_events ?? [];
   return (
     <div id="restock" className="card panel">
       <h2>再販・再入荷</h2>
-      <div className="detail-signal-list">
-        {(item.restock_events ?? []).slice(0, 5).map((event) => (
-          <div key={event.id || event.reported_at}>
-            <strong>{event.event_label || (event.event_type === "refill" ? "補充" : "再入荷")}</strong>
-            <span>{[event.region, event.shop_name].filter(Boolean).join(" / ") || "場所未登録"}</span>
-            <time>{formatObservedAt(event.reported_at)}</time>
+      <div className="stack-list">
+        {events.slice(0, 8).map((event) => (
+          <div key={event.id} className="stack-list__item">
+            <strong>{event.event_label || event.event_type || "再入荷情報"}</strong>
+            <span>{event.shop_name || event.region || "場所未登録"}</span>
+            <small>{event.reported_at ? new Date(event.reported_at).toLocaleString("ja-JP") : "時刻未登録"}</small>
           </div>
         ))}
       </div>
@@ -330,22 +327,11 @@ function RestockPanel({ item }) {
   );
 }
 
-function Metric({ label, value, tone = "", meta = "" }) {
+function Metric({ label, value, tone = "" }) {
   return (
-    <div className="metric">
-      <div className="metric__label">{label}</div>
-      <div className={`metric__value ${tone ? `is-${tone}` : ""}`}>{value}</div>
-      {meta ? <small>{meta}</small> : null}
+    <div className={`metric ${tone ? `metric--${tone}` : ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
-}
-
-function EvidenceMetric({ stats, fallbackLabel }) {
-  if (!stats || (!Number.isFinite(stats.primary_price) && stats.listing_count === 0)) return null;
-  return <Metric label={stats.label || fallbackLabel} value={formatYen(stats.primary_price)} meta={stats.explanation} />;
-}
-
-function formatObservedAt(value) {
-  if (!value) return "未取得";
-  return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" }).format(new Date(value));
 }
