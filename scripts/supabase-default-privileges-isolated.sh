@@ -5,6 +5,15 @@ set +x
 log() { printf '[default-privileges-isolated] %s\n' "$*"; }
 fail() { printf '[default-privileges-isolated] ERROR: %s\n' "$*" >&2; exit 1; }
 psql_local() { psql -X --no-psqlrc -v ON_ERROR_STOP=1 "$@"; }
+public_exec_acl() {
+  local signature="$1"
+  psql_local -qAt -c "
+    select coalesce(bool_or(x.grantee = 0 and x.privilege_type = 'EXECUTE'), false)::text
+    from pg_proc p
+    left join lateral aclexplode(p.proacl) x on true
+    where p.oid = '$signature'::regprocedure;
+  " | tr -d '[:space:]'
+}
 
 command -v psql >/dev/null 2>&1 || fail 'psql is required'
 
@@ -43,7 +52,7 @@ for role in anon authenticated service_role; do
   seq_before="$(psql_local -qAt -c "select pg_get_serial_sequence('public.__default_acl_before','id');" | tr -d '[:space:]')"
   [[ "$(psql_local -qAt -c "select has_sequence_privilege('$role','$seq_before','USAGE,SELECT');" | tr -d '[:space:]')" == 't' ]] || fail "Production-like sequence access missing for $role"
 done
-[[ "$(psql_local -qAt -c "select has_function_privilege('public','public.__default_fn_before()','EXECUTE');" | tr -d '[:space:]')" == 'f' ]] || fail 'Production-like baseline unexpectedly grants function EXECUTE to PUBLIC'
+[[ "$(public_exec_acl 'public.__default_fn_before()')" == 'false' ]] || fail 'Production-like baseline unexpectedly grants function EXECUTE to PUBLIC ACL'
 psql_local -q -c 'drop function public.__default_fn_before(); drop table public.__default_acl_before;' >/dev/null
 log 'Exact observed Production-style postgres default ACL reproduced in disposable DB'
 
@@ -71,7 +80,7 @@ for role in anon authenticated service_role; do
   [[ "$(psql_local -qAt -c "select has_table_privilege('$role','public.__default_acl_hardened','DELETE');" | tr -d '[:space:]')" == 'f' ]] || fail "future table DELETE remained auto-granted to $role"
   [[ "$(psql_local -qAt -c "select has_function_privilege('$role','public.__default_fn_hardened()','EXECUTE');" | tr -d '[:space:]')" == 'f' ]] || fail "future function EXECUTE remained auto-granted to $role"
 done
-[[ "$(psql_local -qAt -c "select has_function_privilege('public','public.__default_fn_hardened()','EXECUTE');" | tr -d '[:space:]')" == 'f' ]] || fail 'future function EXECUTE remained granted to PUBLIC'
+[[ "$(public_exec_acl 'public.__default_fn_hardened()')" == 'false' ]] || fail 'future function EXECUTE remained granted to PUBLIC ACL'
 
 seq_name="$(psql_local -qAt -c "select pg_get_serial_sequence('public.__default_acl_hardened','id');" | tr -d '[:space:]')"
 [[ -n "$seq_name" ]] || fail 'identity sequence not found'
@@ -129,7 +138,7 @@ for role in anon authenticated service_role; do
   [[ "$(psql_local -qAt -c "select has_function_privilege('$role','public.__default_fn_rollback()','EXECUTE');" | tr -d '[:space:]')" == 't' ]] || fail "rollback did not restore function EXECUTE for $role"
   [[ "$(psql_local -qAt -c "select has_sequence_privilege('$role','$rollback_seq','USAGE,SELECT');" | tr -d '[:space:]')" == 't' ]] || fail "rollback did not restore sequence access for $role"
 done
-[[ "$(psql_local -qAt -c "select has_function_privilege('public','public.__default_fn_rollback()','EXECUTE');" | tr -d '[:space:]')" == 'f' ]] || fail 'rollback did not restore Production-like PUBLIC function denial'
+[[ "$(public_exec_acl 'public.__default_fn_rollback()')" == 'false' ]] || fail 'rollback did not restore Production-like PUBLIC function denial in ACL'
 psql_local -q -c 'drop function public.__default_fn_rollback(); drop table public.__default_acl_rollback;' >/dev/null
 log 'ROLLBACK PASS: exact Production-style auto-grant behavior restored'
 
@@ -150,6 +159,7 @@ for role in anon authenticated service_role; do
   [[ "$(psql_local -qAt -c "select has_table_privilege('$role','public.__default_acl_final','SELECT');" | tr -d '[:space:]')" == 'f' ]] || fail "final table reapply failed for $role"
   [[ "$(psql_local -qAt -c "select has_function_privilege('$role','public.__default_fn_final()','EXECUTE');" | tr -d '[:space:]')" == 'f' ]] || fail "final function reapply failed for $role"
 done
+[[ "$(public_exec_acl 'public.__default_fn_final()')" == 'false' ]] || fail 'final function reapply left PUBLIC EXECUTE in ACL'
 psql_local -q -c 'drop function public.__default_fn_final(); drop table public.__default_acl_final;' >/dev/null
 
 log 'PASS: exact Production baseline -> official hardening -> explicit allowlist -> rollback -> reapply verified'
