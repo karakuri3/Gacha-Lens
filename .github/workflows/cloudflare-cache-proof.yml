@@ -46,7 +46,7 @@ jobs:
           set -euo pipefail
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
-          product_path='/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC?cacheproof=stage4-worker-cache-v1'
+          product_path="/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC?cacheproof=stage4-worker-cache-${GITHUB_RUN_ID}"
           start="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           echo "Proof window start: ${start}" | tee -a "$GITHUB_STEP_SUMMARY"
           declare -a statuses
