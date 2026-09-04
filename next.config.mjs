@@ -9,6 +9,15 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: "/series/:slug",
+        headers: [
+          {
+            key: "CDN-Cache-Control",
+            value: "public, max-age=1800, stale-while-revalidate=60",
+          },
+        ],
+      },
+      {
         source: "/(.*)",
         headers: [
           {
