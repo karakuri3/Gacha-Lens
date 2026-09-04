@@ -31,6 +31,12 @@ The POC also removes ingestion script directories from Next.js output-file traci
 
 No Cloudflare account credentials, production DNS, or custom-domain mutations are used by this workflow.
 
+## Preview runtime configuration
+
+Cloudflare dashboard runtime variables and secrets remain the source of truth for the POC preview. The non-Production Version command must upload the generated Worker with `wrangler versions upload --keep-vars --config dist/server/wrangler.json` so dashboard-managed runtime variables are preserved when vinext regenerates `dist/server/wrangler.json`.
+
+Do not place privileged Supabase credentials in repository files or build logs. Server-only credentials remain Cloudflare Secrets, and preview versions must not be promoted to Production traffic during this proof.
+
 ## Acceptance gates before a real preview deployment
 
 1. Existing Next.js tests, lint and build remain green.
