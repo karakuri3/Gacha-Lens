@@ -1,0 +1,85 @@
+name: Supabase Default Privileges Isolated
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/supabase-default-privileges-isolated.sh'
+      - '.github/workflows/supabase-default-privileges-isolated.yml'
+      - 'supabase/**'
+
+permissions:
+  contents: read
+
+jobs:
+  default-privileges-rehearsal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+      SUPABASE_CLI_VERSION: '2.109.1'
+      PGHOST: 127.0.0.1
+      PGPORT: '54322'
+      PGDATABASE: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Verify isolation contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$(git rev-parse HEAD)" == "${{ github.event.pull_request.head.sha }}" ]]
+          docker version >/dev/null
+          bash -n scripts/supabase-default-privileges-isolated.sh
+          if grep -Eq '\$\{\{[[:space:]]*secrets\.' .github/workflows/supabase-default-privileges-isolated.yml; then
+            echo 'default privilege isolated workflow must not consume GitHub secrets' >&2
+            exit 1
+          fi
+          version="$(npx --yes supabase@"$SUPABASE_CLI_VERSION" --version)"
+          [[ "$version" == "$SUPABASE_CLI_VERSION" ]]
+          echo "Supabase CLI $version"
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Start disposable Supabase
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          npx --yes supabase@"$SUPABASE_CLI_VERSION" start > "$RUNNER_TEMP/supabase-start.log" 2>&1
+          status=$?
+          set -e
+          if [[ "$status" -ne 0 ]]; then
+            sed -E 's/(ANON_KEY|SERVICE_ROLE_KEY|SECRET_KEY|ACCESS_KEY|JWT_SECRET|DB_URL|API_KEY)([=: ]+).*/\1\2[redacted]/Ig' "$RUNNER_TEMP/supabase-start.log"
+            exit "$status"
+          fi
+          echo 'Disposable Supabase started; generated local credentials were not printed.'
+
+      - name: Reset disposable database
+        run: npx --yes supabase@"$SUPABASE_CLI_VERSION" db reset --local --no-seed
+
+      - name: Rehearse default privilege hardening and rollback
+        shell: bash
+        run: bash scripts/supabase-default-privileges-isolated.sh
+
+      - name: Stop disposable Supabase
+        if: always()
+        shell: bash
+        run: npx --yes supabase@"$SUPABASE_CLI_VERSION" stop --no-backup || true
