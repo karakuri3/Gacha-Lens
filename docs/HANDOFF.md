@@ -1,12 +1,54 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-03 JST — P0-A Supabase egress mitigation released / Issue #233 canonical sync
+Updated: 2026-09-04 JST — company-roadmap Stage-5 Supabase hardening isolated validation active
 
-The complete checkpoint immediately before this sync is preserved byte-for-byte at `docs/history/2026-09-03-pre-233-HANDOFF.md`. Earlier canonical history remains linked from that snapshot.
+The complete checkpoint immediately before this isolated lane is preserved at `docs/history/2026-09-03-pre-233-HANDOFF.md`. Earlier canonical history remains linked from that snapshot.
 
-## Resume protocol
+## Stage-5 resume protocol — highest priority for this isolated thread
 
-If a fresh thread receives only **「Gacha Lens続けて」**:
+If a fresh thread is specifically assigned **「Supabase hardening isolated検証」**, read these first:
+
+1. `docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md`
+2. this file
+3. `docs/STATUS.md`
+4. `docs/DECISIONS.md`
+5. `docs/TODO.md`
+6. `docs/INFRA_AUDIT_FINDINGS_2026-09-03.md`
+7. `AGENTS.md` / `docs/AGENT_OS.md`
+
+Then re-fetch exact current heads and Actions for:
+- Gacha Draft PR #241 — server-only grant/GraphQL boundary rehearsal;
+- Gacha Draft PR #242 — `pg_net` relocation rehearsal;
+- Beach Draft PR #216 — separate-repository `rebuild_profile_stats_v1` ambiguity rehearsal.
+
+Do not merge any of them under the validation task.
+
+Absolute Stage-5 prohibitions:
+- no Production Supabase DDL/DML;
+- no main merge;
+- no Production deploy;
+- no DNS / `gachalens.com` changes;
+- no Vercel cancellation;
+- no Gacha Cloudflare Production config changes;
+- no secret display;
+- no paid Supabase branch without explicit approval.
+
+Supabase Development Branching was inspected at `$0.01344/hour`; none was created. The selected isolation mechanism is GitHub-hosted ephemeral CI + disposable local Supabase with no Production credentials.
+
+Current provisional conclusions:
+- 13 Gacha server-only tables: explicit API-role revoke is **Production適用推奨候補**, final exact-head green pending.
+- intentional-public `series_*` tables: blanket revoke **不要**.
+- server-only RLS/no-policy: adding policies merely to silence advisor **不要**.
+- global public default ACL rewrite: **保留**.
+- service-role boundary change: **不要**.
+- simple `pg_net ALTER EXTENSION ... SET SCHEMA`: **不要** because `extrelocatable=false`.
+- `pg_net` drop/recreate under `extensions`: **保留** until #242 proves forward/rollback/reverse/reapply.
+- six FK indexes and unused-index removals: **保留** pending specific workload/scale evidence.
+- Egress #219 remains separate; advisor hardening does not prove billed-byte recovery.
+
+## General resume protocol
+
+If a fresh thread receives only **「Gacha Lens続けて」** rather than the Stage-5 assignment:
 
 1. Read this file plus `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/DATA_SCALE_SCOREBOARD.md`, `docs/DATA_SOURCE_CAPABILITY_MATRIX.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
 2. Re-fetch current `main`, open/recent Issues and PRs, exact-head Actions, Vercel Production, and the minimum live Supabase evidence needed for the current gate.
@@ -18,7 +60,7 @@ If a fresh thread receives only **「Gacha Lens続けて」**:
 ## Repository / services
 
 - Repository: `karakuri3/Gacha-Lens`
-- Current main after P0-A release: `8048a19ad478672a9d887d77073597ee95dc27d3`
+- Stage-5 main bind: `da506232472c22c909f95e5a855b1cfed8889e73`
 - Production domain: `https://gachalens.com`
 - Vercel Production: `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G` — **READY**
 - Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
@@ -27,7 +69,7 @@ If a fresh thread receives only **「Gacha Lens続けて」**:
 
 ## Current P0 — shared Supabase uncached Egress risk
 
-Issue #219 is **OPEN** and is now the highest-priority operational gate.
+Issue #219 is **OPEN** and remains a separate operational gate.
 
 Authenticated billing evidence captured on 2026-09-03 showed:
 - uncached Egress **24.614 / 5 GB (~492%)** for the shared Free Plan organization;
@@ -39,43 +81,26 @@ Live-log/repository evidence strongly implicated repeated Gacha Lens server-side
 
 ## P0-A sitemap mitigation — RELEASED
 
-PR #231 `P0: bound sitemap-driven Supabase egress amplification` completed the first free mitigation.
+PR #231 completed the first free mitigation.
 
-Exact release evidence:
+Exact release evidence recorded by the prior canonical checkpoint:
 - final PR head `fc091f32ae216779e782eef84fc2701fbc769492`;
-- exact-head PR Code Quality run #116 / `33754793103`: **SUCCESS**;
+- exact-head PR Code Quality `33754793103`: **SUCCESS**;
 - exact-head Preview `dpl_GVNunr8mDJ54FE5a6nr3mD5Hi4Qj`: **READY**;
-- Vercel Build proved `/sitemap.xml`, `/series-sitemap.xml`, `/variant-sitemap.xml` are Static with `1d` revalidation;
-- complete five-file diff received strengthened Lead self-review, explicitly non-independent, with blocking/major/minor findings0;
-- pre-merge GitHub/Vercel unresolved threads0 and main drift0;
-- squash merge `8048a19ad478672a9d887d77073597ee95dc27d3`;
-- normal Git-triggered Production `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G`: READY;
-- live Production root/series/variant sitemap smoke passed.
+- all sitemap routes Static with `1d` revalidation;
+- strengthened Lead self-review findings0;
+- normal Production `dpl_7KLUH7bP8JNESPndzQYhzE4jQn9G`: READY;
+- live Production sitemap smoke passed.
 
-Behavior now intentionally bounds sitemap source work using daily static/ISR plus outer cache boundaries rather than the previous request-driven dynamic/5-minute amplification path. Existing sitemap URL/publication and >50,000 fail-closed contracts remain preserved.
-
-## P0-A is not the same as #219 success
-
-Do **not** close #219 or claim the billing problem is solved merely because the code/build/release is correct.
-
-The next true gate is **read-only post-release measurement**:
-1. observe Supabase uncached Egress trajectory without resetting useful counters;
-2. correlate Vercel/public request behavior where possible;
-3. confirm whether the sitemap mitigation materially reduces the expensive read pattern;
-4. if Egress remains materially high, continue #219 as P0-B and attribute/mitigate remaining public runtime full-loaders/signal-table reads;
-5. only after reliability/cost risk is controlled should a lower-priority product/Data Scale experiment become the next execution target.
-
-No paid Supabase plan change is implied. A plan upgrade requires current cost/terms evidence and explicit owner approval.
+P0-A is not proof that #219 is solved. The true gate remains read-only post-release Egress observation.
 
 ## Product strategy after the reliability gate
 
-Data Scale is infrastructure, not the business goal. Once #219 is no longer a credible availability/cost risk, choose the next experiment by comparing:
+Use:
 
 **Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
 
-Use Data Scale only when evidence shows it is the highest-leverage way to improve those outcomes. In particular, do not mechanically chase listing/depth counts while user acquisition, click-through, conversion, or monetization is the larger bottleneck.
-
-The product must become progressively better at answering a user-visible job such as: what a desired gacha costs now, where it can be obtained, and whether/when it is being restocked or rereleased. The exact primary value proposition should be validated with behavior/search data rather than assumed from infrastructure completeness.
+Data Scale is infrastructure, not the business goal. Do not mechanically chase listing/depth counts while user acquisition, click-through, conversion, monetization, or reliability is the larger bottleneck.
 
 ## Last verified Data Scale checkpoint
 
@@ -92,19 +117,20 @@ The latest canonical market checkpoint before the Egress P0 intervention remains
 - outbound clicks 7d **10**;
 - completed-sale evidence **0**.
 
-The old technical Data Scale diagnosis `depth_insufficient` remains useful evidence, but it no longer grants P0 priority over the live Egress/reliability risk and never authorizes a write by itself.
+The old technical diagnosis `depth_insufficient` remains useful evidence, but it does not authorize a write and does not outrank current reliability/cost evidence.
 
 ## R4 state remains closed/consumed
 
-The repaired Production R4 writer and one-candidate proof remain successfully completed as documented in `docs/history/2026-09-03-pre-233-HANDOFF.md`.
+The repaired Production R4 writer and one-candidate proof remain successfully completed as documented in prior history.
 
 No further R4 write, retry, provider refresh, or workflow mutation is authorized by the consumed #228 approval. A future Production market write requires a new current-state bind and fresh applicable approval.
 
 ## Separate work / concurrency
 
-- PR #232 (`docs: add external technology intelligence gate`) is a separate Draft documentation/operating-procedure lane and must not distract from #219 P0. Because it was opened from the pre-#231 base, its merge gates must use current-main drift/rebase evidence before any future merge decision.
+- Cloudflare Workers runtime migration is a different workstream and must not be modified from this Stage-5 hardening lane.
+- PR #232 is a separate Draft technology-intelligence docs lane.
 - #137/#142 F0 remains a separate Production-impact boundary.
-- Supabase advisor debt remains separate scoped work; do not remediate RLS/policies/grants/extensions/indexes by implication under #219 or Data Scale authority.
+- Beach hardening code stays in the Beach repository; only cross-repo result/status may be referenced here.
 
 ## Hard no-regression boundaries
 
@@ -121,7 +147,8 @@ No further R4 write, retry, provider refresh, or workflow mutation is authorized
 
 ## Canonical history
 
-Immediate pre-#233 checkpoint:
+Immediate pre-Stage-5 checkpoint:
 - `docs/history/2026-09-03-pre-233-HANDOFF.md`
 
-Once this exact sync reaches `main`, Issue #233 is complete by definition. Do not create another recursive canonical sync merely to record #233's own docs-only merge.
+Stage-5 detailed evidence/resume file:
+- `docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md`
