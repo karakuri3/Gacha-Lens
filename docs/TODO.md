@@ -1,10 +1,51 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-03 JST — P0-A Supabase egress mitigation released / Issue #233 canonical sync
+Updated: 2026-09-04 JST — Stage-5 Supabase hardening isolated validation added as a separate lane
 
-The complete ordered TODO checkpoint immediately before this sync is preserved byte-for-byte at `docs/history/2026-09-03-pre-233-TODO.md`.
+The complete ordered TODO checkpoint immediately before this lane is preserved byte-for-byte at `docs/history/2026-09-03-pre-233-TODO.md`.
 
-## P0 — Issue #219 shared Supabase Egress risk — CURRENT
+## Stage 5 — Supabase hardening isolated validation — ACTIVE / NO PRODUCTION AUTHORITY
+
+Canonical evidence: `docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md`.
+
+Gacha grant/GraphQL boundary — Draft PR #241:
+- [x] re-fetch Production security/performance advisors read-only
+- [x] prove 13 target tables are RLS-enabled / zero-policy and have broad API-role grants in Production
+- [x] prove 4 separate `series_*` tables have intentional public read policies and exclude them from blanket revoke
+- [x] verify current application uses the server-only service-role boundary and repository search shows no GraphQL client path
+- [x] prove paid Supabase Branching is unnecessary for this rehearsal; no paid branch created
+- [x] create disposable exact-head CI with no Production credentials / no GitHub Secrets
+- [x] identify `forecast_snapshots` as deferred from the fresh chain and read-only verify its exact Production shape
+- [x] update isolated CI to synthesize only that deferred table in the disposable DB
+- [ ] require exact-head #241 grant rehearsal PASS for reproduce -> revoke -> service-role regression -> rollback -> reapply
+- [ ] require exact-head PR Code Quality PASS after final evidence/docs changes
+- [ ] record final run IDs/SHA and lock Production classification
+
+`pg_net` — Draft PR #242:
+- [x] verify Production version/schema/non-relocatable state read-only
+- [x] verify queue0 / recent-response0 / cron-job0 and application-owned DB `net.*` dependencies0 at inspection time
+- [x] confirm Supabase documentation supports drop/recreate-under-`extensions` troubleshooting path
+- [x] create a separate disposable-only relocation/rollback/reverse/reapply Draft PR
+- [ ] require exact-head #242 isolated PASS; if extension semantics/dependencies block it, keep Production change on HOLD rather than weakening the gate
+- [ ] record final run IDs/SHA and final `Production適用推奨 / 保留 / 不要` decision
+
+Performance:
+- [x] re-fetch the six unindexed-FK advisor notices and unused-index notices
+- [x] capture current target row counts/relation size and a representative `market_listings.series_id` read-only plan
+- [x] confirm workload analysis ranks the FK candidates differently
+- [ ] keep all index DDL on HOLD unless a specific index gets a workload/scale/plan justification plus rollback
+- [ ] do not drop unused indexes from advisor output alone
+
+Cross-repo dependency:
+- [ ] fetch Beach Draft PR #216 exact-head isolated result and keep its rollout independent from Gacha
+
+Hard completion gate for Stage 5:
+- [ ] classify every hardening candidate as **Production適用推奨 / 保留 / 不要**
+- [ ] attach evidence, rollback, preflight, and application order
+- [ ] update canonical `HANDOFF / STATUS / DECISIONS / TODO` on the isolated Draft branch
+- [ ] do not merge or apply Production changes under this validation task
+
+## P0 — Issue #219 shared Supabase Egress risk — CURRENT / SEPARATE
 
 P0-A is released; the incident is **not yet closed** because billed-byte recovery has not been observed.
 
@@ -89,15 +130,11 @@ Once reliability is stable, actively test the reason a user should open Gacha Le
 - [ ] connect traffic and click evidence to monetization rather than assuming more infrastructure creates revenue
 - [ ] prefer measurable experiments over broad speculative feature expansion
 
-## Separate work / debt
-
-- PR #232 technology-intelligence docs lane is separate Draft work and lower priority than #219; require current-main drift/rebase proof before merge.
-- #137/#142 F0 remains a separate approval boundary.
-- Supabase advisor findings remain separate behavior-impact work; do not change RLS/policies/grants/extensions/indexes by implication.
-- unused branch cleanup remains subject to applicable cleanup policy; do not delete unrelated branches by implication.
-
 ## HOLD — explicit prohibitions now
 
+- [ ] DO NOT apply Stage-5 Supabase changes to Production
+- [ ] DO NOT merge #241 or #242 under this validation task
+- [ ] DO NOT create a paid Supabase branch without explicit owner approval
 - [ ] DO NOT invoke another R4 write under consumed #228 approval
 - [ ] DO NOT retry #214 or #228
 - [ ] DO NOT reuse Production repair authority or prior review substitutions
@@ -106,9 +143,8 @@ Once reliability is stable, actively test the reason a user should open Gacha Le
 - [ ] DO NOT dispatch/change workflows without applicable approval
 - [ ] DO NOT change Secrets/Variables by implication
 - [ ] DO NOT merge/dispatch F0/#142 without its boundary
-- [ ] DO NOT remediate advisor findings by implication
 - [ ] DO NOT invoke paid reviewer/actions or paid plan changes without approval
-- [ ] DO NOT use destructive actions without approval
+- [ ] DO NOT use destructive Production actions without approval
 - [ ] DO NOT weaken strict matcher/identity guards
 - [ ] DO NOT scrape Mercari or Amazon
 - [ ] DO NOT touch `supabase/.temp/cli-latest`
@@ -120,4 +156,4 @@ Once reliability is stable, actively test the reason a user should open Gacha Le
 
 `docs/history/2026-09-03-pre-233-TODO.md`
 
-Once this exact sync reaches `main`, Issue #233 is complete by definition; do not create a recursive sync solely for its own docs-only merge.
+Stage-5 detailed resume source: `docs/SUPABASE_HARDENING_ISOLATED_2026-09-04.md`.
