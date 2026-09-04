@@ -27,8 +27,8 @@ jobs:
       # Cloudflare Workers Builds proved this immutable version was built from
       # DEPLOYED_SHA. A following workflow-only commit is permitted only when
       # the runtime source set is byte-equivalent to that deployed commit.
-      DEPLOYED_SHA: 7e93a12b88560cbb916278f4ce04ec891831a9d2
-      PREVIEW_URL: https://5e661d68-gacha-lens.senpingxingzuo.workers.dev
+      DEPLOYED_SHA: 69b54f4bc622024259ab9f6c7156116bf3f25a9f
+      PREVIEW_URL: https://dcc2bd3c-gacha-lens.senpingxingzuo.workers.dev
     steps:
       - name: Checkout current pull-request head
         uses: actions/checkout@v7
