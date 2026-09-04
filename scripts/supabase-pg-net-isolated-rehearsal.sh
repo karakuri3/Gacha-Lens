@@ -77,8 +77,15 @@ post_contract="$(psql_local -qAt -c "select concat_ws('|', n.nspname, e.extversi
 queue_after="$(psql_local -qAt -c "select count(*) from net.http_request_queue;" | tr -d '[:space:]')"
 [[ "$queue_after" == '0' ]] || fail 'relocation rehearsal unexpectedly queued HTTP requests'
 
-app_deps="$(psql_local -qAt -c "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.prokind in ('f','p') and n.nspname not in ('net','extensions','pg_catalog','information_schema') and pg_get_functiondef(p.oid) ilike '%net.%';" | tr -d '[:space:]')"
-[[ "$app_deps" == '0' ]] || fail "application-owned functions reference net.* after relocation: $app_deps"
+# Gacha application-owned database functions live in public. Local Supabase also
+# ships platform/internal functions in other schemas; those are not application
+# dependencies and must not be misclassified as Gacha-owned merely because their
+# generated definition mentions net.*.
+app_deps="$(psql_local -qAt -c "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.prokind in ('f','p') and n.nspname='public' and pg_get_functiondef(p.oid) ilike '%net.%';" | tr -d '[:space:]')"
+[[ "$app_deps" == '0' ]] || fail "public application-owned functions reference net.* after relocation: $app_deps"
+
+non_public_refs="$(psql_local -qAt -c "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.prokind in ('f','p') and n.nspname <> 'public' and n.nspname not in ('net','extensions','pg_catalog','information_schema') and pg_get_functiondef(p.oid) ilike '%net.%';" | tr -d '[:space:]')"
+log "Non-public local platform function refs containing net.* (informational): $non_public_refs"
 
 # Prove the operational reverse procedure too, then reapply the desired state.
 psql_local -q >/dev/null <<'SQL'
