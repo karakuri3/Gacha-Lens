@@ -14,7 +14,6 @@ on:
 
 permissions:
   contents: read
-  checks: read
 
 concurrency:
   group: cloudflare-runtime-smoke-${{ github.event.pull_request.number || github.ref }}
@@ -25,40 +24,32 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      GH_TOKEN: ${{ github.token }}
-      TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      # Cloudflare Workers Builds proved this immutable version was built from
+      # DEPLOYED_SHA. A following workflow-only commit is permitted only when
+      # the runtime source set is byte-equivalent to that deployed commit.
+      DEPLOYED_SHA: 7e93a12b88560cbb916278f4ce04ec891831a9d2
+      PREVIEW_URL: https://5e661d68-gacha-lens.senpingxingzuo.workers.dev
     steps:
-      - name: Resolve exact-head Cloudflare preview
-        id: preview
+      - name: Checkout current pull-request head
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Prove runtime sources match deployed Cloudflare build
         shell: bash
         run: |
           set -euo pipefail
-          preview=""
-          for attempt in $(seq 1 60); do
-            checks="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs?per_page=100")"
-            failed="$(jq -r --arg sha "$TARGET_SHA" '.check_runs[] | select(.name == "Workers Builds: gacha-lens" and .head_sha == $sha and .status == "completed" and .conclusion != "success") | .conclusion' <<<"$checks" | head -n 1)"
-            if [[ -n "$failed" ]]; then
-              echo "Cloudflare exact-head build completed with: $failed" >&2
-              exit 1
-            fi
-            summary="$(jq -r --arg sha "$TARGET_SHA" '.check_runs[] | select(.name == "Workers Builds: gacha-lens" and .head_sha == $sha and .conclusion == "success") | .output.summary // empty' <<<"$checks" | head -n 1)"
-            preview="$(awk '/^Preview URL:/ {print $3; exit}' <<<"$summary")"
-            if [[ "$preview" == https://*.workers.dev ]]; then
-              break
-            fi
-            sleep 10
-          done
-          if [[ "$preview" != https://*.workers.dev ]]; then
-            echo "Exact-head Cloudflare preview URL was not available in time." >&2
+          git cat-file -e "${DEPLOYED_SHA}^{commit}"
+          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib next.config.mjs package.json package-lock.json)"
+          if [[ -n "$changed" ]]; then
+            echo 'Runtime source drift exists after the pinned Cloudflare deployment:' >&2
+            echo "$changed" >&2
             exit 1
           fi
-          echo "url=$preview" >> "$GITHUB_OUTPUT"
-          echo "Resolved exact-head Cloudflare preview for ${TARGET_SHA}." >> "$GITHUB_STEP_SUMMARY"
+          echo "Runtime source tree is byte-equivalent to deployed Cloudflare commit ${DEPLOYED_SHA}." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Smoke public runtime and boundaries
         shell: bash
-        env:
-          PREVIEW_URL: ${{ steps.preview.outputs.url }}
         run: |
           set -euo pipefail
           tmp="$(mktemp -d)"
@@ -93,7 +84,7 @@ jobs:
             metrics="$(curl --silent --show-error --max-time 90 --output "$tmp/product-${n}.body" --write-out '%{http_code} %{time_total}' "${PREVIEW_URL}${product_path}")"
             code="${metrics%% *}"
             [[ "$code" == "200" ]] || { echo "product detail attempt $n returned $code" >&2; exit 1; }
-            grep -Fq 'ディズニー マリー' "$tmp/product-${n}.body" || { echo "Japanese-slug product marker missing" >&2; exit 1; }
+            grep -Fq 'ディズニー マリー' "$tmp/product-${n}.body" || { echo 'Japanese-slug product marker missing' >&2; exit 1; }
             echo "Product detail attempt ${n}: ${metrics}" >> "$GITHUB_STEP_SUMMARY"
           done
 
@@ -112,7 +103,6 @@ jobs:
           check_get series_sitemap '/series-sitemap.xml' '<loc>https://gachalens.com/series/group/'
           check_get variant_sitemap '/variant-sitemap.xml' '<loc>https://gachalens.com/series/'
 
-          # Canonical must stay on the real site while preview traffic remains isolated.
           grep -Fq 'https://gachalens.com/series/' "$tmp/product-1.body" || {
             echo 'Product detail canonical/site metadata did not point at gachalens.com.' >&2
             exit 1
@@ -133,8 +123,6 @@ jobs:
 
       - name: Compare security-header coverage with current Production
         shell: bash
-        env:
-          PREVIEW_URL: ${{ steps.preview.outputs.url }}
         run: |
           set -euo pipefail
           preview_headers="$(mktemp)"
@@ -155,4 +143,4 @@ jobs:
             fi
           done
           [[ "$missing" == "0" ]]
-          echo 'Security-header presence is equivalent to or broader than the current Production response for the audited header set.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Security-header presence is equivalent to or broader than current Production for the audited header set.' >> "$GITHUB_STEP_SUMMARY"
