@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DEPLOYED_SHA: d6a19ce64777ead04ab3613f4b7e3ff070b4e387
-      PREVIEW_URL: https://32d3e79e-gacha-lens.senpingxingzuo.workers.dev
+      DEPLOYED_SHA: e71dca9a6bd2d2ec54a73ff6dd492137b1ba963e
+      PREVIEW_URL: https://d75d3195-gacha-lens.senpingxingzuo.workers.dev
     steps:
       - name: Checkout current pull-request head
         uses: actions/checkout@v7
@@ -40,15 +40,17 @@ jobs:
           echo "Runtime source tree is byte-equivalent to cache-proof preview commit ${DEPLOYED_SHA}." >> "$GITHUB_STEP_SUMMARY"
           echo "Preview URL: ${PREVIEW_URL}" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Diagnose cold and warm cache headers
+      - name: Prove cold-to-warm edge cache
         shell: bash
         run: |
           set -euo pipefail
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
-          product_path='/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
+          product_path='/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC?cacheproof=stage4-cdn-v1'
           start="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           echo "Proof window start: ${start}" | tee -a "$GITHUB_STEP_SUMMARY"
+          declare -a statuses
+          first_hash=""
 
           for n in 1 2 3; do
             body="$tmp/body-${n}"
@@ -59,21 +61,27 @@ jobs:
             grep -Fq 'ディズニー マリー' "$body" || { echo "request ${n} missing Japanese product marker" >&2; exit 1; }
 
             hash="$(sha256sum "$body" | awk '{print $1}')"
+            if [[ -z "$first_hash" ]]; then first_hash="$hash"; fi
             cf_status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$headers")"
-            cache_status="$(awk 'BEGIN{IGNORECASE=1} /^cache-status:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
             cdn_cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cdn-cache-control:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
             cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cache-control:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
-            cache_tag="$(awk 'BEGIN{IGNORECASE=1} /^cache-tag:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
             age="$(awk 'BEGIN{IGNORECASE=1} /^age:/ {gsub("\r", ""); print $2; exit}' "$headers")"
-            vary="$(awk 'BEGIN{IGNORECASE=1} /^vary:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
             set_cookie_presence="none"
             if grep -qi '^set-cookie:' "$headers"; then set_cookie_presence='present'; fi
 
-            line="Request ${n}: ${metrics} | sha256=${hash} | cf-cache-status=${cf_status:-none} | cache-status=${cache_status:-none} | cdn-cache-control=${cdn_cache_control:-none} | cache-control=${cache_control:-none} | cache-tag=${cache_tag:-none} | age=${age:-none} | vary=${vary:-none} | set-cookie=${set_cookie_presence}"
+            statuses[$n]="${cf_status:-none}"
+            line="Request ${n}: ${metrics} | sha256=${hash} | cf-cache-status=${cf_status:-none} | cdn-cache-control=${cdn_cache_control:-none} | cache-control=${cache_control:-none} | age=${age:-none} | set-cookie=${set_cookie_presence}"
             echo "$line" | tee -a "$GITHUB_STEP_SUMMARY"
+
+            [[ "$cdn_cache_control" == *'max-age=1800'* ]] || { echo "request ${n} missing 1800s CDN cache policy" >&2; exit 1; }
+            [[ "$set_cookie_presence" == 'none' ]] || { echo "request ${n} unexpectedly set a cookie" >&2; exit 1; }
             sleep 2
           done
 
+          [[ "${statuses[1]}" == 'MISS' ]] || { echo "cold request was ${statuses[1]}, expected MISS" >&2; exit 1; }
+          [[ "${statuses[2]}" == 'HIT' ]] || { echo "warm request 2 was ${statuses[2]}, expected HIT" >&2; exit 1; }
+          [[ "${statuses[3]}" == 'HIT' ]] || { echo "warm request 3 was ${statuses[3]}, expected HIT" >&2; exit 1; }
+
           end="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           echo "Proof window end: ${end}" | tee -a "$GITHUB_STEP_SUMMARY"
-          echo 'All three identical Japanese-slug requests were HTTP 200 with the required semantic marker. Body hashes are diagnostic only because server-render serialization may vary.' | tee -a "$GITHUB_STEP_SUMMARY"
+          echo 'Cold MISS followed by two HITs: warm identical requests are served at the Cloudflare cache boundary without rerunning the Worker.' | tee -a "$GITHUB_STEP_SUMMARY"
