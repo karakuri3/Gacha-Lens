@@ -1,34 +1,47 @@
-# Supabase Hardening Isolated Validation — 2026-09-04
+# Gacha Lens — Supabase Hardening Isolated Validation — 2026-09-04
 
-## Scope and hard boundary
+## Outcome
 
-This document is the canonical checkpoint for company-roadmap Stage 5: **Supabase hardening isolated validation**.
+Company-roadmap Stage 5 for Gacha Lens is **isolated-validation complete at the technical-evidence level**. This document records recommendations only and does **not** authorize Production execution.
 
-This lane is intentionally separate from the Gacha Lens Cloudflare Workers runtime migration.
+Hard boundary maintained throughout:
+- Production Supabase DDL/DML: **0**
+- main merges: **0**
+- Production deploys: **0**
+- DNS / `gachalens.com` changes: **0**
+- Vercel cancellation / Gacha Cloudflare Production changes: **0**
+- Production secrets consumed/displayed by isolated CI: **0**
+- paid Supabase development branches: **0**
 
-Forbidden in this lane:
-- Production Supabase DDL/DML;
-- merge to `main`;
-- Production deploy;
-- DNS / `gachalens.com` changes;
-- Vercel cancellation;
-- Gacha Cloudflare Production configuration changes;
-- secret display;
-- paid Supabase branch creation without explicit approval.
+Supabase hosted Branching was not created because the inspected organization cost was `$0.01344/hour`. The organization is on the Free plan. GitHub-hosted ephemeral runners + disposable local Supabase were sufficient for all rehearsals.
 
-As of this checkpoint, all forbidden-action counts are **0**.
+## Canonical identity
 
-## Environment decision
+- Repository: `karakuri3/Gacha-Lens`
+- Stage-5 main bind: `da506232472c22c909f95e5a855b1cfed8889e73`
+- Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
+- old inactive Supabase: `ihcudkfspzuixsqsvoku` — never use as Production
+- Stage-5 canonical Draft: PR #241 / `codex/supabase-hardening-isolated-gacha-20260904`
+- Production remained unchanged during the lane.
 
-Supabase Development Branching is not free for this organization at the inspected price (`$0.01344/hour`). No remote development branch was created.
+## Final exact isolated evidence
 
-The approved isolated substitute is a GitHub-hosted ephemeral runner with a disposable local Supabase stack, exact PR-head checkout, no Production credentials, no GitHub Secrets, and guaranteed local cleanup.
+| Draft | Candidate | Exact head | Isolated / Quality evidence |
+| --- | --- | --- | --- |
+| #241 | 13 server-only table grant normalization | `cf57582404023853738b19ba18c45a05fe56687e` | isolated `33855152896` SUCCESS; Code Quality `33855152742` SUCCESS |
+| #242 | `pg_net` drop/recreate relocation | `5c5c4b063eacf7d9a852fda275cb565a8637b8d6` | isolated `33855189033` SUCCESS; Code Quality `33855189058` SUCCESS |
+| #243 | unused `pg_graphql` disable | `2c787dc6a482feb978fab6b506f2a45d05fbe175` | isolated `33857636302` SUCCESS; Code Quality `33857636272` SUCCESS |
+| #244 | explicit `server-only` boundary for ingestion service-role store | `3f96b259b162dab3657738b7415159733658c51e` | Code Quality `33854491517` SUCCESS |
+| #245 | `market_listings(series_id)` index rehearsal | `c0c93f4af23d6a8cb476348ee7a5f4e4b11fc457` | isolated `33855753155` SUCCESS; Code Quality `33855753047` SUCCESS |
+| #246 | future-object default-privilege hardening | `784f3740bd9adbf3894265749250eb555627d355` | isolated `33859987774` SUCCESS; Code Quality `33859987765` SUCCESS |
 
-## Production read-only evidence
+All six Gacha PRs remain **Draft / open / unmerged**. Review-thread count was rechecked as **0** across #241-#246.
 
-### Server-only table / GraphQL grant drift
+## Final Production read-only evidence
 
-The following 13 Production tables are RLS-enabled with zero policies but have broad `anon` / `authenticated` table grants and are therefore discoverable through the Supabase API/GraphQL permission surface:
+### 1. Current server-only table grant drift
+
+The following 13 Production tables are RLS-enabled with zero policies but currently have broad `anon` and `authenticated` table privileges:
 
 - `community_reports`
 - `forecast_snapshots`
@@ -44,46 +57,72 @@ The following 13 Production tables are RLS-enabled with zero policies but have b
 - `variants`
 - `x_reactions`
 
-Current application data paths are server-side and use the `server-only` service-role client. Repository search found no application GraphQL client usage.
+This creates unnecessary API/GraphQL discoverability even though RLS/no-policy prevents browser rows. Current application data paths are server-side. The Foundation migration already expresses service-role-only intent for the original core set.
 
-Four separate Production tables have intentional public read policies and must NOT be swept into a blanket revoke:
-
+Four separate tables intentionally expose public reads and are excluded from blanket remediation:
 - `series_lineup`
 - `series_price_history`
 - `series_restock_info`
 - `series_stock_reports`
 
-The public-schema default ACL grants new tables/functions broadly to Supabase API roles. Do not globally rewrite default privileges in this lane; normalize server-only objects explicitly instead.
+### 2. Deferred `forecast_snapshots`
 
-### Deferred Production object
+`forecast_snapshots` exists in Production but is intentionally absent from the canonical fresh migration chain. Its Production shape was re-verified read-only and synthesized only inside disposable CI. Stage 5 does not authorize adding it to the canonical migration chain.
 
-`forecast_snapshots` exists in Production but is intentionally absent from the canonical fresh migration chain. Its Production shape was re-verified read-only and matches the legacy source description:
+### 3. `pg_graphql`
 
-- `id uuid primary key default gen_random_uuid()`
-- `variant_id text not null -> variants(id) on delete cascade`
-- integer columns `total`, `complete`, `ace`, `compatibility`, `limited`, `preorder`, `x`
-- `breakdown jsonb not null default '{}'`
-- `calculated_at timestamptz not null default now()`
-- RLS enabled, zero policy
+Production has `pg_graphql` installed, while repository runtime search found no GraphQL client path and Production database search found no Gacha application-owned function dependency on `graphql.*`.
 
-Isolated rehearsal may synthesize only this deferred object in the disposable database. It must not be added to the canonical migration chain by implication.
+Draft #243 successfully rehearsed a plain non-CASCADE `DROP EXTENSION pg_graphql`, preserved representative anon+RLS and service-role application behavior, recreated the extension as rollback, dropped it again, then passed Foundation/data-source/lint/build regressions against disposable Supabase.
 
-### `pg_net`
+### 4. `pg_net`
 
-Production read-only inspection:
-- version `0.20.4`;
-- extension namespace recorded as `public`;
-- `extrelocatable = false`;
-- `net.http_request_queue = 0` at inspection time;
-- recent `net._http_response = 0` at inspection time;
-- `cron.job = 0`;
-- no application-owned database function was found referencing `net.*`.
+Production read-only evidence:
+- `pg_net` version `0.20.4`
+- extension namespace recorded as `public`
+- `extrelocatable = false`
+- `net.http_request_queue = 0`
+- recent `net._http_response = 0`
+- `cron.job = 0`
+- Gacha application-owned `net.*` database-function dependencies = 0 at inspection time
 
-A simple `ALTER EXTENSION pg_net SET SCHEMA ...` is therefore not the selected candidate. Supabase documentation/troubleshooting describes drop/recreate under `extensions` as the path to test when dependencies permit it.
+Draft #242 proved drop/recreate under `extensions`, rollback to the public placement, reverse, and reapply on disposable Supabase. No HTTP request was issued.
 
-### Performance advisor
+### 5. Service-role boundary
 
-Unindexed FKs currently reported:
+The canonical service-role client already imports `server-only`. `lib/data/ingestion-run-store.js` also reads the service-role key and was the remaining module without an explicit marker. Draft #244 adds only the marker + regression test; current consumer remains Node-only.
+
+Existing sensitive writer RPCs were read-only checked and already deny PUBLIC/anon/authenticated while allowing service-role execution. `sync_market_observation_links()` is a trigger-returning, non-SECURITY-DEFINER trigger helper with pinned empty search_path; it is not treated as an authenticated RPC endpoint candidate.
+
+### 6. Default privileges / future drift
+
+Read-only Production inspection showed role `postgres`, schema `public` currently defaults new:
+- tables broadly to `anon`, `authenticated`, `service_role`
+- functions directly to those API roles
+- sequences broadly to those API roles
+
+PostgreSQL also has a hard-wired function default including `PUBLIC EXECUTE` when no object ACL overrides it.
+
+Draft #246 proved two distinct scopes:
+
+**Candidate A — schema-scoped future-object hardening**
+- revoke automatic public-table CRUD defaults from `anon`, `authenticated`, `service_role`
+- revoke direct public-function EXECUTE defaults from those API roles
+- revoke public-sequence USAGE/SELECT defaults from those API roles
+- existing intentional-public ACLs remain unchanged
+- explicit service-role and intentional-public grants continue to work
+- rollback restores the observed Production-style defaults
+
+**Candidate B — global PUBLIC function default revoke**
+- removing hard-wired PUBLIC EXECUTE requires role-global default-privilege change
+- isolated proof showed that this affects future postgres-owned functions outside `public` as well, including `extensions`
+- therefore it has a materially larger blast radius and is not bundled with Candidate A
+
+Sensitive future functions must continue to use explicit per-function `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated` + explicit intended grants rather than relying on Candidate A alone.
+
+### 7. Performance
+
+Final advisor snapshot still reports six unindexed FKs:
 - `community_reports.series_id`
 - `forecast_snapshots.variant_id`
 - `market_listings.series_id`
@@ -91,103 +130,88 @@ Unindexed FKs currently reported:
 - `stock_reports.series_id`
 - `x_reactions.series_id`
 
-Production scale at inspection time:
-- `community_reports`: ~0 rows
-- `forecast_snapshots`: ~0 rows
-- `market_listings`: ~141 rows, ~384 KiB total relation size
-- `restock_events`: ~0 rows
-- `stock_reports`: ~0 rows
-- `x_reactions`: ~0 rows
+Five target tables are currently empty/nearly empty. `market_listings` has only about 141 rows.
 
-`market_listings.series_id` currently plans as a sequential scan for a representative equality predicate. Existing workload analysis ranks that path materially above `community_reports.series_id` and `forecast_snapshots.variant_id`, but current Production scale is still tiny. Do not add all six indexes mechanically.
+The `market_listings.series_id` path is real and hot by call count. Final read-only `pg_stat_statements` evidence showed the dominant path at approximately:
+- calls: **219,852**
+- total execution: **52,841.92 ms**
+- mean execution: **0.2404 ms**
 
-Unused-index advisor output is informational only and does not authorize drops.
+Draft #245 proved that `market_listings_series_id_idx` is selected at a synthetic 100,000-row scale and that FK behavior survives create/drop/reapply. However current Production latency/scale does not justify immediate DDL solely to silence the advisor.
 
-### Egress
+Unused-index advisor output remains informational only and does not authorize drops.
 
-Supabase Egress issue #219 is a separate reliability/cost lane. The prior sitemap mitigation is live, and the true gate is read-only post-release Egress observation. No hardening item in this document may be described as having solved Egress without billing/traffic evidence.
+### 8. Egress
 
-## Isolated workstreams
+Issue #219 / shared Supabase Egress remains a separate reliability/cost lane. Stage-5 grant/extension/index hardening is not evidence that billed Egress has recovered.
 
-### Draft PR #241 — server-only grants / GraphQL visibility boundary
+## Final classification
 
-Branch: `codex/supabase-hardening-isolated-gacha-20260904`
-
-Goal:
-1. fresh disposable Supabase + all repository migrations;
-2. synthesize only the deferred `forecast_snapshots` Production shape locally;
-3. reproduce broad Production-like API grants on the 13 server-only targets;
-4. apply the isolated revoke candidate;
-5. verify `anon` / `authenticated` table privileges are removed;
-6. verify `service_role` CRUD remains;
-7. statically and dynamically protect intentional-public tables;
-8. run service-role CRUD in a transaction with zero residue;
-9. restore Production-like grants as rollback rehearsal;
-10. reapply hardening and re-verify.
-
-Run #1 proved exact checkout, isolation contract, local stack startup, and complete fresh `db reset`, then correctly stopped because `forecast_snapshots` is deferred from the fresh chain.
-
-The branch now contains the verified disposable-only `forecast_snapshots` fixture. Exact-head run #2 is the current gate.
-
-### Draft PR #242 — `pg_net` relocation rehearsal
-
-Branch: `codex/supabase-pg-net-isolated-20260904`
-
-Goal:
-1. reproduce Production-like `pg_net` public/non-relocatable placement locally;
-2. transactionally drop/recreate under `extensions`;
-3. verify required `net.http_get` / `net.http_post` catalog functions;
-4. rollback and prove original placement restoration;
-5. apply relocation in disposable DB;
-6. prove no queued HTTP request and no application-owned `net.*` function dependency;
-7. rehearse reverse procedure back to `public`;
-8. reapply desired isolated state.
-
-No HTTP request is intentionally issued.
-
-## Current classification — pending final exact-head evidence
-
-| Item | Current classification | Reason |
+| Item | Classification | Decision |
 | --- | --- | --- |
-| Revoke `anon` / `authenticated` privileges from the 13 server-only Gacha tables | **Production適用推奨候補** | Matches current server-only application boundary and removes unintended GraphQL/API discovery; final isolated run pending. |
-| Revoke public access from the 4 intentional-public policy tables | **不要** | Would contradict current public-data contract. |
-| Add RLS policies to the 13 server-only tables merely to silence `rls_enabled_no_policy` | **不要** | RLS + zero policy is the intended deny-all browser boundary once direct grants are removed. |
-| Globally change `public` default ACL | **保留** | Could break future intentional public objects; explicit object grants are safer. |
-| Change the service-role application boundary | **不要** | Current `server-only` boundary is intentional and should be preserved. |
-| Simple `ALTER EXTENSION pg_net SET SCHEMA` | **不要** | Production reports `extrelocatable=false`. |
-| Drop/recreate `pg_net` under `extensions` | **保留** | Dedicated isolated PR #242 must prove relocation + rollback first. |
-| Add all six advisor FK indexes | **保留** | Current tables are tiny/empty and workload value differs by FK. |
-| `market_listings(series_id)` index | **保留（優先評価）** | Actual query path exists, but current table is tiny; benchmark/growth threshold evidence should precede Production DDL. |
-| Drop advisor-reported unused indexes | **保留** | Advisor zero-use counters alone are insufficient evidence. |
-| Treat hardening as Egress fix | **不要** | Egress is a separate P0 observation lane. |
+| Revoke `anon` / `authenticated` privileges from the 13 server-only tables | **Production適用推奨** | Directly matches the server-only architecture; #241 reproduce/revoke/regression/rollback/reapply all PASS. |
+| Blanket revoke from the 4 intentional-public `series_*` tables | **不要** | Would break the intentional public-read contract. |
+| Add RLS policies to the 13 server-only tables merely to silence `RLS enabled/no policy` | **不要** | RLS + zero policy is the intended browser deny-all state once direct grants are removed. |
+| #244 explicit `server-only` marker for `ingestion-run-store` | **Production適用推奨** | Low-risk code-only defense-in-depth; locks remaining service-role-key module to server context. |
+| Disable unused `pg_graphql` | **Production適用推奨** | No app/DB dependency found; non-CASCADE drop + rollback + full application regressions PASS. |
+| Simple `ALTER EXTENSION pg_net SET SCHEMA` | **不要** | Production reports `extrelocatable=false`; this is not a valid plan. |
+| Drop/recreate `pg_net` under `extensions` | **保留** | Technically proven, but current usage/queue/cron/dependency evidence shows low urgency versus extension-recreation risk. |
+| Schema-scoped future-object default hardening for `postgres/public` (Candidate A) | **Production適用推奨** | Prevents recurrence of broad direct Data API grants while leaving current objects unchanged; rollback proven. |
+| Global future-function `PUBLIC EXECUTE` default revoke (Candidate B) | **保留** | Correctly removes implicit PUBLIC execution but affects future postgres-owned functions in every schema, including `extensions`; wider blast radius needs separate architecture decision. |
+| Explicit per-function PUBLIC/API-role revoke for sensitive future functions | **Production適用推奨（migration standard）** | Required because Candidate A alone does not remove hard-wired PUBLIC EXECUTE. |
+| `market_listings(series_id)` index | **保留** | Future-scale value proven, but current ~141-row table averages ~0.2404 ms on the dominant path. Re-evaluate when real latency/CPU/scale evidence changes. |
+| Other five advisor FK indexes | **保留** | Current target tables are empty/nearly empty; no workload justification yet. |
+| Drop advisor-unused indexes | **保留** | Zero-use counters alone are insufficient evidence. |
+| Treat Stage-5 hardening as the Egress fix | **不要** | Egress is a separate P0 observation/mitigation lane. |
 
 ## Rollback contracts
 
-### Server-only grant hardening
-Emergency rollback is explicit per-table restoration of the pre-change grants for exactly the affected target set. Intentional-public tables are not part of either forward or reverse set. Reapply is the explicit revoke candidate.
+### #244 service-role code boundary
+Forward: add `import "server-only";` + regression test. Rollback: revert that code-only change. No database state is involved.
 
-### `pg_net`
-If isolated proof succeeds, forward procedure is drop extension + remove leftover `net` schema if necessary + recreate `pg_net` under `extensions`. Reverse procedure recreates the original public extension placement. Production execution would require a fresh dependency/queue/cron preflight and backup/recovery gate; isolated success alone does not authorize Production.
+### #241 13-table grants
+Forward: revoke browser/API-role privileges only from the 13 target server-only tables while preserving service-role access and intentional-public tables.
 
-### Index additions
-A future index addition must have a matching explicit `DROP INDEX` rollback, lock/build strategy, and query-plan evidence. No index DDL is authorized by this checkpoint.
+Emergency rollback: restore the exact pre-change `anon` / `authenticated` table privileges only on those 13 targets. Do not touch the four intentional-public tables. Reapply is the explicit targeted revoke.
 
-## Proposed Production order after isolated validation
+### #246 Candidate A defaults
+Forward: schema-scoped revoke of future `postgres/public` automatic table/function/sequence grants from API roles. Existing objects do not change.
 
-1. Beach independent `rebuild_profile_stats_v1` runtime bug fix, once its own isolated regression/rollback is green.
-2. Gacha 13-table server-only grant normalization, if #241 is fully green.
-3. Re-run Supabase security advisors and application regression after grant normalization.
-4. Auth leaked-password protection for Beach as a separate Auth control-plane change, with its own approval/verification.
-5. `pg_net` relocation only if #242 proves forward + rollback and a fresh Production dependency preflight remains clean.
-6. Performance indexes one-by-one only when workload/scale evidence crosses a useful threshold.
-7. Unused-index cleanup last, and only with sustained usage evidence.
+Rollback: restore the observed Production-style schema defaults for those API roles. New objects created while the hardened defaults were active must be reviewed explicitly; changing defaults does not retroactively change existing objects.
 
-## Resume point
+Candidate B is not part of this forward/rollback set.
 
-On a new thread, start here:
-1. fetch exact current heads and CI for Gacha Draft PR #241 and #242;
-2. never merge either PR under this validation task;
-3. if #241 fails, inspect the isolated rehearsal job only and repair the Draft branch;
-4. if #242 fails, inspect whether failure proves a dependency/extension constraint; do not weaken the test to force green;
-5. fetch Beach Draft PR #216 separately for the profile-stats candidate;
-6. update this document with final run IDs, exact SHAs, final classifications, and Production rollback gates.
+### #243 `pg_graphql`
+Forward: after a fresh dependency preflight, plain `DROP EXTENSION pg_graphql` with **no CASCADE**. Any dependency failure is a stop condition.
+
+Rollback: recreate `pg_graphql` using the same extension contract proven in #243, then verify API/application behavior. Re-run current advisors/dependency checks after either direction.
+
+### `pg_net` hold candidate
+If later approved, fresh queue/response/cron/dependency preflight is mandatory before drop/recreate. Reverse is recreate the prior public placement. A non-empty queue, active cron use, or new dependency cancels the change.
+
+### Index hold candidates
+Future index work needs current query-plan/latency/CPU evidence plus explicit create/drop rollback. No index DDL is authorized by Stage 5.
+
+## Proposed Production application order — requires new approvals
+
+Cross-company sequence after separate Production approvals:
+1. Beach: apply the bounded `rebuild_profile_stats_v1` correctness fix and immediately postflight it.
+2. Gacha: deploy #244 service-role server-only defense before narrowing database/API grants.
+3. Gacha: apply #241 targeted 13-table browser/API-role grant normalization.
+4. Re-run current application regressions + Supabase advisors.
+5. Gacha: apply #246 Candidate A future-object defaults to prevent recurrence, while retaining explicit per-function PUBLIC/API-role revokes as the migration standard.
+6. Gacha: after a fresh no-dependency preflight, disable unused `pg_graphql` via the non-CASCADE procedure proven in #243.
+7. Re-run application regression + advisors again.
+8. Keep `pg_net`, global PUBLIC function default revoke, FK indexes, and unused-index cleanup on HOLD until their specific new evidence gates are met.
+
+Do not bundle these into one large migration. Each item has its own approval, rollback, and postflight boundary.
+
+## Final completion / resume rule
+
+Before Stage 5 is declared fully closed, the final canonical-docs head on Draft PR #241 must itself pass exact-head `Supabase Hardening Isolated` and PR Code Quality. That final run proves the checkpoint branch remains reproducible after documentation synchronization.
+
+On a future thread:
+1. read this file, `HANDOFF.md`, `STATUS.md`, `DECISIONS.md`, `TODO.md`;
+2. re-fetch current main and all relevant PR heads before any action;
+3. treat every Production recommendation above as **not authorized until a fresh explicit Production approval is obtained**;
+4. keep Cloudflare runtime migration, Egress #219, and Beach R5-03C separate from this lane.
