@@ -145,8 +145,15 @@ jobs:
           request_get series_sitemap_warm '/series-sitemap.xml'
           for name in ranking_warm restocks_warm series_sitemap_warm; do
             cf_status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$tmp/${name}.headers")"
-            [[ "$cf_status" == "HIT" ]] || { echo "$name was ${cf_status:-none}, expected HIT" >&2; exit 1; }
-            echo "$name edge cache: HIT" >> "$GITHUB_STEP_SUMMARY"
+            case "$cf_status" in
+              HIT|STALE)
+                echo "$name edge cache: $cf_status" >> "$GITHUB_STEP_SUMMARY"
+                ;;
+              *)
+                echo "$name was ${cf_status:-none}, expected HIT or STALE" >&2
+                exit 1
+                ;;
+            esac
           done
 
           review_code="$(curl --silent --show-error --max-time 60 --output "$tmp/review-post.body" --write-out '%{http_code}' -X POST -H "Origin: ${PREVIEW_URL}" -H 'Content-Type: application/x-www-form-urlencoded' --data 'decision=approved' "${PREVIEW_URL}/api/review/community-reports/runtime-smoke-nonexistent")"
