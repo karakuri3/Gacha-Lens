@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/cloudflare-cache-proof.yml"
       - ".github/workflows/cloudflare-runtime-smoke.yml"
+      - "jsconfig.json"
       - "worker/**"
 
 permissions:
@@ -23,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DEPLOYED_SHA: e66823b05444f37ec4b98ebf9a6b6d8adacf1e59
-      PREVIEW_URL: https://39b0b620-gacha-lens.senpingxingzuo.workers.dev
+      DEPLOYED_SHA: b2b65f85756f87a9059710a5ee08445975091d00
+      PREVIEW_URL: https://59f2edaa-gacha-lens.senpingxingzuo.workers.dev
     steps:
       - name: Checkout current pull-request head
         uses: actions/checkout@v7
@@ -36,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           git cat-file -e "${DEPLOYED_SHA}^{commit}"
-          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib worker next.config.mjs package.json package-lock.json)"
+          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib worker jsconfig.json next.config.mjs package.json package-lock.json)"
           if [[ -n "$changed" ]]; then
             echo 'Runtime source drift exists after the pinned cache-proof preview:' >&2
             echo "$changed" >&2
