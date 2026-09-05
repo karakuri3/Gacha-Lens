@@ -11,13 +11,53 @@ test("series alias routes public callers through the edge-safe wrapper", () => {
   assert.deepEqual(config.compilerOptions.paths["@/lib/series"], ["./lib/edge-safe-series.js"]);
 });
 
-test("edge-safe variant detail bypasses Next unstable_cache and fetches the bounded catalog directly", () => {
+test("edge-safe detail and related reads bypass Next unstable_cache and use scoped Supabase helpers", () => {
   const wrapper = source("lib/edge-safe-series.js");
-  assert.match(wrapper, /fetchSupabaseCatalogVariant\(serviceRoleSupabase, normalizedSlug\)/);
+  assert.match(wrapper, /fetchSupabaseScopedVariantDetail\(serviceRoleSupabase, normalizedSlug\)/);
+  assert.match(wrapper, /fetchSupabaseScopedRelatedCatalog\(/);
   assert.match(wrapper, /createGachaRepository\(records\)\.findVariantBySlug\(normalizedSlug\)/);
+  assert.match(wrapper, /createGachaRepository\(records\)\.getRelatedVariants\(normalizedSlug, limit\)/);
+  assert.doesNotMatch(wrapper, /fetchSupabaseCatalogVariant/);
+  assert.doesNotMatch(wrapper, /fetchSupabaseRelatedCatalog/);
   assert.doesNotMatch(wrapper, /from\s+["']next\/cache["']/);
   assert.doesNotMatch(wrapper, /\bunstable_cache\s*\(/);
   assert.match(wrapper, /export \* from "\.\/series\.js"/);
+});
+
+test("scoped detail data source limits signal reads to relevant variants plus series-level set listings", () => {
+  const scoped = source("lib/data/supabase-public-variant-detail.js");
+
+  assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.marketListings, MARKET_LISTING_PUBLIC_SELECT, "variant_id", ids\)/);
+  assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.marketListings, MARKET_LISTING_PUBLIC_SELECT, "matched_variant_id", ids\)/);
+  assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.xReactions, TABLE_SELECTS\.xReactions, "variant_id", ids\)/);
+  assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.restockEvents, TABLE_SELECTS\.restockEvents, "matched_variant_id", ids\)/);
+  assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.stockReports, TABLE_SELECTS\.stockReports, "variant_id", ids\)/);
+  assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.stockReports, TABLE_SELECTS\.stockReports, "matched_variant_id", ids\)/);
+  assert.match(scoped, /\.is\("variant_id", null\)/);
+  assert.match(scoped, /LISTING_TYPES\.COMPLETE_SET/);
+  assert.match(scoped, /LISTING_TYPES\.PARTIAL_SET/);
+  assert.match(scoped, /LISTING_TYPES\.POPULAR_SET/);
+  assert.doesNotMatch(scoped, /fetchSignalsForCatalog/);
+  assert.doesNotMatch(scoped, /fetchTable\(/);
+});
+
+test("public scoped reads omit removable raw payload but retain verified set safety payload", () => {
+  const scoped = source("lib/data/supabase-public-variant-detail.js");
+  const publicSelect = scoped.match(/const MARKET_LISTING_PUBLIC_SELECT = "([^"]+)";/)?.[1] || "";
+  const restockSelect = scoped.match(/restockEvents: "([^"]+)"/)?.[1] || "";
+
+  assert.ok(publicSelect);
+  assert.doesNotMatch(publicSelect, /(^|,)raw(,|$)/);
+  assert.ok(restockSelect);
+  assert.doesNotMatch(restockSelect, /(^|,)raw(,|$)/);
+  assert.match(scoped, /const MARKET_LISTING_SET_SELECT = `\$\{MARKET_LISTING_PUBLIC_SELECT\},raw`/);
+  assert.match(scoped, /\.select\(MARKET_LISTING_SET_SELECT\)/);
+});
+
+test("scoped variant detail preserves sibling lineup while market observations stay target-only", () => {
+  const scoped = source("lib/data/supabase-public-variant-detail.js");
+  assert.match(scoped, /\.eq\("series_id", target\.series_id\)/);
+  assert.match(scoped, /TABLE_MAP\.marketObservations,[\s\S]*?"variant_id",[\s\S]*?\[target\.id\]/);
 });
 
 test("variant detail page stays framework-dynamic while Cloudflare owns shared reuse", () => {
