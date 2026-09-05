@@ -32,6 +32,7 @@ test("scoped detail data source limits signal reads to relevant variants plus se
   assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.xReactions, TABLE_SELECTS\.xReactions, "variant_id", ids\)/);
   assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.restockEvents, TABLE_SELECTS\.restockEvents, "matched_variant_id", ids\)/);
   assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.stockReports, TABLE_SELECTS\.stockReports, "variant_id", ids\)/);
+  assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.stockReports, TABLE_SELECTS\.stockReports, "matched_variant_id", ids\)/);
   assert.match(scoped, /\.is\("variant_id", null\)/);
   assert.match(scoped, /LISTING_TYPES\.COMPLETE_SET/);
   assert.match(scoped, /LISTING_TYPES\.PARTIAL_SET/);
