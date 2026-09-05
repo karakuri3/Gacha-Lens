@@ -58,8 +58,8 @@ export async function GET(request) {
 
     const oldItem = oldRepository.findVariantBySlug(TARGET_SLUG);
     const scopedItem = scopedRepository.findVariantBySlug(TARGET_SLUG);
-    const oldRelated = oldRelatedRepository.getRelatedVariants(TARGET_SLUG, 4).map(relatedSnapshot);
-    const scopedRelated = scopedRelatedRepository.getRelatedVariants(TARGET_SLUG, 4).map(relatedSnapshot);
+    const oldRelated = renderedRelatedSnapshot(oldRelatedRepository, oldItem);
+    const scopedRelated = renderedRelatedSnapshot(scopedRelatedRepository, scopedItem);
 
     return Response.json({
       status: "ok",
@@ -78,6 +78,10 @@ export async function GET(request) {
         semanticSnapshotEqual: JSON.stringify(oldRelated) === JSON.stringify(scopedRelated),
         oldSemanticSnapshot: oldRelated,
         semanticSnapshot: scopedRelated,
+      },
+      rawColumnOpportunity: {
+        detail: rawOpportunity(scopedRecords),
+        related: rawOpportunity(scopedRelatedRecords),
       },
     }, { headers: noStoreHeaders() });
   } catch (error) {
@@ -130,6 +134,16 @@ function semanticSnapshot(item) {
   };
 }
 
+function renderedRelatedSnapshot(repository, item) {
+  if (!repository || !item) return [];
+  const isReleased = Boolean(item.is_released);
+  return repository
+    .getRelatedVariants(TARGET_SLUG, 8)
+    .filter((entry) => Boolean(entry.is_released) === isReleased)
+    .slice(0, 3)
+    .map(relatedSnapshot);
+}
+
 function relatedSnapshot(item) {
   return {
     slug: item.slug,
@@ -140,6 +154,26 @@ function relatedSnapshot(item) {
     circulation_score: item.circulation_score,
     market_price_median: item.market_price_median,
   };
+}
+
+function rawOpportunity(records) {
+  const market = Array.isArray(records?.marketListings) ? records.marketListings : [];
+  const restock = Array.isArray(records?.restockEvents) ? records.restockEvents : [];
+  const variantMarket = market.filter((row) => row.variant_id || row.matched_variant_id);
+  const seriesSetMarket = market.filter((row) => !row.variant_id && !row.matched_variant_id);
+  return {
+    variantMarketRows: variantMarket.length,
+    variantMarketRawJsonBytes: nestedRawBytes(variantMarket),
+    seriesSetMarketRows: seriesSetMarket.length,
+    seriesSetMarketRawJsonBytes: nestedRawBytes(seriesSetMarket),
+    restockRows: restock.length,
+    restockRawJsonBytes: nestedRawBytes(restock),
+    removableRawJsonBytesEstimate: nestedRawBytes(variantMarket) + nestedRawBytes(restock),
+  };
+}
+
+function nestedRawBytes(rows) {
+  return (rows ?? []).reduce((sum, row) => sum + (row?.raw == null ? 0 : jsonBytes(row.raw)), 0);
 }
 
 function jsonBytes(value) {
