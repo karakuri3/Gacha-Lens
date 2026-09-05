@@ -1,92 +1,115 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-05 JST — company infrastructure Final Release/Cutover complete; normal development ready
+Updated: 2026-09-06 JST — Supabase Egress P0-B is live in Production; final post-release Usage evidence pending
 
-The complete canonical checkpoint immediately before this closeout is preserved byte-for-byte at `docs/history/2026-09-05-pre-final-cutover-HANDOFF.md`. Earlier history remains linked from that snapshot.
+The company infrastructure Final Release/Cutover remains complete. The pre-final-cutover checkpoint is preserved at `docs/history/2026-09-05-pre-final-cutover-HANDOFF.md` and in Git history.
 
 ## Resume protocol
 
 If a fresh thread receives only **「Gacha Lens続けて」**:
 
 1. Read this file plus `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/FINAL_CUTOVER_2026-09-05.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
-2. Re-fetch current `main`, open/recent Issues and PRs, current Cloudflare Production state, and only the minimum Supabase evidence needed for the next gate.
-3. **Do not resume the Stage 4/Stage 5 migration. It is complete.** Cloudflare is now the Production web runtime and Cloudflare authoritative DNS is live.
-4. Issue #219 Supabase Egress observation remains a separate reliability/cost lane. Final infrastructure cutover does not prove billed-byte recovery and does not close #219.
-5. Production data writes, migrations/schema/backfills, approval-bound provider execution, workflow dispatch/change, Secrets/Variables, paid/destructive actions, and ineligible merges/releases still require their applicable approval. The consumed #228 authority remains non-reusable.
-6. After each future major Production/recovery/security/release milestone, synchronize `HANDOFF / STATUS / DECISIONS / TODO` before the next major phase.
+2. Re-fetch current `main`, Issues #219/#238/#239, recent PRs, Cloudflare Production state, and the minimum Supabase evidence needed for the next gate.
+3. **Do not resume the company infrastructure migration. It is complete.** Cloudflare is the Production runtime and authoritative DNS.
+4. The current blocking lane is Issue #219 Supabase Egress. PR #249 is already merged and live; do not recreate or re-run the P0-B implementation unless new evidence shows a defect.
+5. Issue #238 remains the active change freeze until #219 is evidence-backed closed. Infrastructure readiness does not override this freeze.
+6. Production data writes, migrations/schema/backfills, provider execution, workflow dispatch/change, Secrets/Variables, paid/destructive actions, and ineligible merges/releases still require their applicable approval. Consumed #228 authority remains non-reusable.
+7. After every future major Production/recovery/security/release milestone, synchronize `HANDOFF / STATUS / DECISIONS / TODO` before the next major phase.
 
-## Final Production infrastructure state
+## Current Production state
 
 - Repository: `karakuri3/Gacha-Lens`
-- Final cutover source main: `dfd70c59d1d880643f3658510a8a4c363eccc2a7`; always re-fetch current main after this canonical-sync PR merges.
-- Production domain: `https://gachalens.com`
-- Production web runtime: Cloudflare Worker `gacha-lens`.
-- Verified active Cloudflare Worker version at cutover: `811ab60a`, 100% traffic.
-- `gachalens.com`: Cloudflare Worker Custom Domain, Production.
-- `www.gachalens.com`: Cloudflare proxied redirect host (`192.0.2.1`) with an Active 301 rule to apex; path and query string preservation verified for HTTP and HTTPS.
-- Authoritative DNS: Cloudflare (`lady.ns.cloudflare.com`, `tony.ns.cloudflare.com`).
-- Domain registrar/renewal: Vercel remains registrar. Registrar ownership is separate from DNS/runtime and must not be treated as a Production Vercel dependency.
-- Mail/verification DNS preserved: ImproveMX MX, SPF TXT, Google site-verification TXT, and CAA records.
-- `_domainconnect.gachalens.com -> _domainconnect.vercel-dns.com` is intentionally retained while Vercel remains registrar; it is not a web-traffic route.
-- Vercel project `gachalens`: retained non-live as a rollback/stabilization artifact, with no `gachalens.com` custom Production domain. Automatic Git builds are disabled by repository `ignoreCommand: "exit 0"` after this closeout lands.
-- Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1).
-- Old inactive Supabase: `ihcudkfspzuixsqsvoku` — never confuse with Production.
+- current P0-B merge commit: `397584fabe633b511cc060ae85335dc4e85fa81d`
+- Production URL: `https://gachalens.com`
+- Production runtime: Cloudflare Worker `gacha-lens`
+- P0-B Production build: `f1d61310-7e7e-44f5-8c3e-4eb791aca5ac` — successful
+- authoritative DNS: Cloudflare
+- registrar: Vercel; hosting is non-live rollback artifact only
+- Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
+- old inactive Supabase project `ihcudkfspzuixsqsvoku`: never confuse with Production
 
-## Final Cutover verification
+## P0-B result
 
-Verified after authoritative-DNS and Worker Custom Domain cutover:
+PR #249 was explicitly approved for Production and merged through GitHub PR, not by direct main push.
 
-- Cloudflare zone: Active.
-- Worker Production deployment: active at 100% traffic.
-- P0 live smoke: `/`, `/ranking`, `/schedule`, `/series`, `/stock`, `/restocks`, `/robots.txt`, `/sitemap.xml`.
-- Representative `/series/[slug]` that previously returned a Vercel `x-next-cache-tags` 500 now renders successfully on `gachalens.com` through Cloudflare.
-- `www` redirect: 301 to apex with path/query preserved on both HTTP and HTTPS.
-- Old Vercel apex/www/wildcard web A records removed. A random undeclared subdomain now fails DNS resolution instead of reaching Vercel.
-- Cloudflare error metrics showed zero errors in the inspected cutover window. Workers Logs are currently disabled, so do not claim a log-stream review that did not occur.
-- Cloudflare prior versions remain available from Deployments as the primary application rollback path.
+What is now live:
+- expensive discovery roots `/categories`, `/brands`, `/franchises`: 24h shared Cloudflare Workers Cache
+- `/series` no-query and first-page facet landings: 30m shared cache
+- series detail: 30m shared cache
+- sitemap documents: 24h shared cache
+- query/search/pagination variants remain outside discovery shared cache
+- authorization/cookie/Next-internal boundaries remain excluded
+- known branded Next error HTML is not cacheable at the shared edge
+- public Supabase coordinates resolve environment-first with safe public fallback; service-role credentials remain environment-only
 
-## Supabase Stage 5 Production result
+Pre-Production proof:
+- repository Code Quality: PASS
+- vinext compatibility/build: PASS
+- exact Cloudflare runtime smoke: PASS
+- isolated cache proof: PASS
+- strict cache proof: byte-identical `MISS -> HIT -> HIT`
+- Japanese variant diagnostic: detail/related/display/structuredData all `ok`
 
-The isolated PASS was converted to the scoped Production changes that were explicitly classified as recommended:
+Post-Production proof:
+- Cloudflare main build for `397584f` succeeded
+- `/brands` renders the expected manufacturer index
+- representative Japanese variant detail renders full live data
+- a fresh identical Production series-detail request repeated three times produced one correlated cold Supabase API Gateway bundle and no second/third backend bundle for the warm repeats
 
-- server-only target tables with direct `anon`/`authenticated` API grants: **0**;
-- `service_role` CRUD target coverage: **13/13** preserved;
-- intentional public tables: **4/4** preserved;
-- future-object default privileges: Candidate A only applied;
-- `pg_graphql`: removed by non-CASCADE drop after fresh zero-dependency preflight;
-- migration ledger/Git history synchronized for Production migrations `20260904152326`, `20260904152339`, `20260904152405`.
+Workers Logs remain disabled; this handoff does **not** claim a Workers log-stream review.
 
-Still HOLD / not changed by this cutover:
-- `pg_net` relocation;
-- Candidate B role-global PUBLIC function-default revoke;
-- FK-index work including `market_listings(series_id)` unless separately reprioritized;
-- unused-index cleanup.
+## Supabase Egress final gate
 
-## Rollback boundaries
+Immediate post-release baseline:
+- Free plan
+- cycle 2026-08-12–2026-09-12
+- uncached Egress: **25.108 GB / 5 GB**
+- Cached Egress: **0.085 GB / 5 GB**
+- Fair Use grace date: **2026-09-06**
 
-- Application rollback: use a known-good prior Cloudflare Worker version/deployment.
-- DNS/runtime rollback: restore prior web records/provider routing only if a concrete incident requires it; do not casually revert authoritative DNS after successful cutover.
-- Vercel remains available as a non-live rollback artifact during stabilization, but routine Production traffic must not be routed there.
-- Stage 5 database hardening is independently verified and **must not be automatically rolled back** merely because application runtime is rolled back. Revert a DB hardening item only for a concrete compatibility defect with its own preflight/rollback contract.
+Supabase states Usage may take up to **1 hour** to refresh. The unchanged number immediately after release is therefore not enough to certify the next-cycle burn rate.
 
-## Normal-development gate
+Current classification:
+- P0-B implementation: **DONE / Production PASS**
+- runtime/cache/backend suppression: **PASS**
+- Free-plan sustainability: **PENDING refreshed post-release Egress evidence**
+- paid plan required: **NOT ESTABLISHED**
+- #219: OPEN
+- #238: ACTIVE freeze
+- #239: OPEN, implementation content superseded by merged #249; close/supersede only when #219 resolves
 
-**PASS — normal development may resume.**
+### Next action when resuming
 
-The company infrastructure migration is no longer a blocking project. Future work is prioritized under the existing model:
+Read a refreshed Supabase Usage measurement and compare its delta from the 25.108 GB release baseline with elapsed time and API Gateway request shape. Do not infer safety from a stale counter.
 
-**Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
+If evidence supports Free-plan sustainability:
+1. record final evidence on #219;
+2. close #219;
+3. release/close #238 and formally reopen normal development;
+4. close/supersede #239;
+5. synchronize canonical docs again.
 
-Normal development does not loosen Production approval boundaries or authorize old/consumed market-write/provider/workflow permissions.
+If evidence does not support sustainability:
+1. keep #219/#238 open;
+2. attribute the remaining uncached path/read mix;
+3. implement the smallest bounded mitigation with exact-head Preview/CI proof;
+4. do not upgrade merely to hide avoidable amplification.
 
-## Remaining operational lanes (non-blocking to infrastructure cutover)
+## Infrastructure and rollback boundaries remain unchanged
 
-- Issue #219: continue read-only Supabase Egress trajectory observation; do not claim solved until measured.
-- Cloudflare Workers Logs are disabled; enabling/retention policy may be evaluated as separate observability work if justified.
-- Stage 5 HOLD items remain separate debt and require fresh evidence/priority before Production changes.
-- Old isolated Draft PRs may be closed/preserved as historical evidence; they must not be merged by implication.
+- Cloudflare Worker prior versions are the primary application rollback path.
+- Vercel is not the routine Production runtime.
+- Stage 5 DB hardening is independently verified and must not be rolled back merely because application runtime changes.
+- `www` canonical redirect and Cloudflare authoritative DNS remain the established Production routing.
 
-## Canonical history
+## Hard boundaries
 
-Immediate pre-final-cutover snapshot:
-- `docs/history/2026-09-05-pre-final-cutover-HANDOFF.md`
+- no direct main push
+- no paid/destructive action without applicable approval
+- no Production DB/schema/data mutation by implication
+- no provider refresh/write by implication
+- no workflow dispatch/change by implication
+- no Secrets/Variables change by implication
+- keep `.github/workflows/gacha-ingestion.yml` disabled
+- never touch `supabase/.temp/cli-latest`
+- no automatic RPC retry
