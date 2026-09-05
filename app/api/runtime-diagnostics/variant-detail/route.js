@@ -21,21 +21,26 @@ export async function GET(request) {
     return new Response(null, { status: 404 });
   }
 
-  const stages = {};
+  const config = {
+    supabaseUrlPresent: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    serviceRoleKeyPresent: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    dataSourcePresent: Boolean(process.env.GACHA_DATA_SOURCE),
+  };
+  const stages = { config: "checked" };
   let item;
 
   try {
     item = await getSeriesBySlug(TARGET_SLUG);
     stages.detail = item?.name === TARGET_NAME ? "ok" : item ? "unexpected-item" : "missing";
   } catch (error) {
-    return diagnosticResponse(stages, "detail", error);
+    return diagnosticResponse(config, stages, "detail", error);
   }
 
   try {
     const related = await getRelatedSeries(TARGET_SLUG, 8);
     stages.related = Array.isArray(related) ? "ok" : "unexpected-result";
   } catch (error) {
-    return diagnosticResponse(stages, "related", error);
+    return diagnosticResponse(config, stages, "related", error);
   }
 
   try {
@@ -46,7 +51,7 @@ export async function GET(request) {
     JSON.stringify(item);
     stages.display = "ok";
   } catch (error) {
-    return diagnosticResponse(stages, "display", error);
+    return diagnosticResponse(config, stages, "display", error);
   }
 
   try {
@@ -65,13 +70,13 @@ export async function GET(request) {
     });
     stages.structuredData = "ok";
   } catch (error) {
-    return diagnosticResponse(stages, "structured-data", error);
+    return diagnosticResponse(config, stages, "structured-data", error);
   }
 
-  return Response.json({ status: "ok", stages }, { headers: noStoreHeaders() });
+  return Response.json({ status: "ok", config, stages }, { headers: noStoreHeaders() });
 }
 
-function diagnosticResponse(stages, failedStage, error) {
+function diagnosticResponse(config, stages, failedStage, error) {
   const safeError = error && typeof error === "object"
     ? {
         name: String(error.name || "Error").slice(0, 80),
@@ -80,7 +85,7 @@ function diagnosticResponse(stages, failedStage, error) {
       }
     : { name: "Error", code: null, operation: null };
   return Response.json(
-    { status: "failed", failedStage, stages, error: safeError },
+    { status: "failed", config, failedStage, stages, error: safeError },
     { status: 200, headers: noStoreHeaders() }
   );
 }
