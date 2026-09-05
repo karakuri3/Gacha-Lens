@@ -108,8 +108,19 @@ jobs:
             done
           }
 
+          edge_policy() {
+            local name="$1"
+            awk 'BEGIN{IGNORECASE=1} /^x-gacha-edge-cache-policy:/ {gsub("\r", ""); print $2; exit}' "$tmp/${name}.headers"
+          }
+
+          cf_cache_status() {
+            local name="$1"
+            awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$tmp/${name}.headers"
+          }
+
           encoded_slug='tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
           product_path="/series/${encoded_slug}"
+          category_path='/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3'
 
           request_get product_1 "$product_path" 'ディズニー マリー'
           request_get product_2 "$product_path" 'ディズニー マリー'
@@ -117,6 +128,10 @@ jobs:
 
           request_get home '/' 'Gacha Lens'
           request_get series '/series' 'ガチャ一覧'
+          request_get categories '/categories' 'カテゴリから探す'
+          request_get brands '/brands'
+          request_get franchises '/franchises'
+          request_get category_detail "$category_path" 'ガシャポン'
           request_get catalog_search '/series?q=%E3%83%9E%E3%83%AA%E3%83%BC' 'マリー'
           request_get ranking '/ranking'
           request_get restocks '/restocks'
@@ -135,29 +150,55 @@ jobs:
             exit 1
           }
 
-          for name in home series ranking restocks stock schedule guides; do
-            grep -qi '^x-gacha-edge-cache-policy: public-document-120-v1' "$tmp/${name}.headers" || {
+          for name in product_1 product_2 product_3; do
+            [[ "$(edge_policy "$name")" == 'series-detail-1800-v1' ]] || {
+              echo "$name is missing series-detail edge-cache policy" >&2
+              exit 1
+            }
+          done
+
+          for name in categories brands franchises; do
+            [[ "$(edge_policy "$name")" == 'discovery-index-86400-v1' ]] || {
+              echo "$name is missing daily discovery-index edge-cache policy" >&2
+              exit 1
+            }
+          done
+
+          for name in series category_detail; do
+            [[ "$(edge_policy "$name")" == 'discovery-document-1800-v1' ]] || {
+              echo "$name is missing discovery-document edge-cache policy" >&2
+              exit 1
+            }
+          done
+
+          for name in home ranking restocks stock schedule guides; do
+            [[ "$(edge_policy "$name")" == 'public-document-120-v1' ]] || {
               echo "$name is missing public document edge-cache policy" >&2
               exit 1
             }
           done
+
           for name in robots sitemap series_sitemap variant_sitemap; do
-            grep -qi '^x-gacha-edge-cache-policy: public-sitemap-86400-v1' "$tmp/${name}.headers" || {
+            [[ "$(edge_policy "$name")" == 'public-sitemap-86400-v1' ]] || {
               echo "$name is missing public sitemap edge-cache policy" >&2
               exit 1
             }
           done
 
+          [[ -z "$(edge_policy catalog_search)" ]] || {
+            echo 'Query/search variant unexpectedly received a shared edge-cache policy.' >&2
+            exit 1
+          }
+
+          request_get categories_warm '/categories' 'カテゴリから探す'
+          request_get series_warm '/series' 'ガチャ一覧'
+          request_get category_detail_warm "$category_path" 'ガシャポン'
           request_get ranking_warm '/ranking'
           request_get restocks_warm '/restocks'
           request_get series_sitemap_warm '/series-sitemap.xml'
 
-          # Strictly prove representative document + sitemap cache paths. The
-          # restocks page has its own bounded origin-read path, and preview
-          # requests can legitimately land on a cold cache shard, so record its
-          # cache status without treating a MISS as a runtime-parity failure.
-          for name in ranking_warm series_sitemap_warm; do
-            cf_status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$tmp/${name}.headers")"
+          for name in categories_warm series_warm category_detail_warm ranking_warm series_sitemap_warm; do
+            cf_status="$(cf_cache_status "$name")"
             case "$cf_status" in
               HIT|STALE)
                 echo "$name edge cache: $cf_status" >> "$GITHUB_STEP_SUMMARY"
@@ -168,7 +209,8 @@ jobs:
                 ;;
             esac
           done
-          restocks_status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$tmp/restocks_warm.headers")"
+
+          restocks_status="$(cf_cache_status restocks_warm)"
           case "$restocks_status" in
             MISS|HIT|STALE)
               echo "restocks_warm edge cache observation: $restocks_status; bounded origin path already verified HTTP 200." >> "$GITHUB_STEP_SUMMARY"
