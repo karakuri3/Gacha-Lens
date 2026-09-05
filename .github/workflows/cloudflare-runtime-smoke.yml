@@ -8,6 +8,7 @@ on:
       - "components/**"
       - "lib/**"
       - "worker/**"
+      - "jsconfig.json"
       - "next.config.mjs"
       - "package.json"
       - "package-lock.json"
@@ -26,8 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      DEPLOYED_SHA: 6262f7bb988b005692682c4759c184f86a9d4556
-      PREVIEW_URL: https://cc19da30-gacha-lens.senpingxingzuo.workers.dev
+      DEPLOYED_SHA: b2b65f85756f87a9059710a5ee08445975091d00
+      PREVIEW_URL: https://59f2edaa-gacha-lens.senpingxingzuo.workers.dev
       BROWSER_ACCEPT: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
     steps:
       - name: Checkout current pull-request head
@@ -40,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           git cat-file -e "${DEPLOYED_SHA}^{commit}"
-          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib worker next.config.mjs package.json package-lock.json)"
+          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib worker jsconfig.json next.config.mjs package.json package-lock.json)"
           if [[ -n "$changed" ]]; then
             echo 'Runtime source drift exists after the pinned Cloudflare deployment:' >&2
             echo "$changed" >&2
