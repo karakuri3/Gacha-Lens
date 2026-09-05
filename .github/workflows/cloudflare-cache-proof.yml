@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/cloudflare-cache-proof.yml"
       - ".github/workflows/cloudflare-runtime-smoke.yml"
+      - "jsconfig.json"
       - "worker/**"
 
 permissions:
@@ -23,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DEPLOYED_SHA: 3798e0f73606bfdc7652d546f977ef184c56f13a
-      PREVIEW_URL: https://1b3fd533-gacha-lens.senpingxingzuo.workers.dev
+      DEPLOYED_SHA: c5886989ab8483f2782b22cb927c1cff074ee5e0
+      PREVIEW_URL: https://5a70e56c-gacha-lens.senpingxingzuo.workers.dev
     steps:
       - name: Checkout current pull-request head
         uses: actions/checkout@v7
@@ -36,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           git cat-file -e "${DEPLOYED_SHA}^{commit}"
-          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib worker next.config.mjs package.json package-lock.json)"
+          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib worker jsconfig.json next.config.mjs package.json package-lock.json)"
           if [[ -n "$changed" ]]; then
             echo 'Runtime source drift exists after the pinned cache-proof preview:' >&2
             echo "$changed" >&2
@@ -44,6 +45,19 @@ jobs:
           fi
           echo "Runtime source tree is byte-equivalent to cache-proof preview commit ${DEPLOYED_SHA}." >> "$GITHUB_STEP_SUMMARY"
           echo "Preview URL: ${PREVIEW_URL}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Probe bounded variant-detail diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          code="$(curl --silent --show-error --max-time 90 --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}/api/runtime-diagnostics/variant-detail")"
+          echo "Diagnostic HTTP ${code}" >> "$GITHUB_STEP_SUMMARY"
+          [[ "$code" == "200" ]] || { echo "diagnostic returned HTTP ${code}" >&2; cat "$body" >&2; exit 1; }
+          compact="$(tr -d '\n\r' < "$body")"
+          echo "Diagnostic payload: ${compact}" | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -Fq '"status":"ok"' "$body" || { echo 'variant-detail diagnostic isolated a failing stage' >&2; exit 1; }
 
       - name: Prove cold-to-warm edge cache
         shell: bash

@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "paths": {
+      "@/lib/series": ["./lib/edge-safe-series.js"],
       "@/*": ["./*"]
     }
   }
