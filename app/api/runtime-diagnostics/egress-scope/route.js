@@ -1,6 +1,12 @@
 import { createGachaRepository } from "@/lib/series";
-import { fetchSupabaseCatalogVariant } from "@/lib/data/supabase-gacha-repository";
-import { fetchSupabaseScopedVariantDetail } from "@/lib/data/supabase-public-variant-detail";
+import {
+  fetchSupabaseCatalogVariant,
+  fetchSupabaseRelatedCatalog,
+} from "@/lib/data/supabase-gacha-repository";
+import {
+  fetchSupabaseScopedRelatedCatalog,
+  fetchSupabaseScopedVariantDetail,
+} from "@/lib/data/supabase-public-variant-detail";
 import {
   hasServiceRoleSupabaseConfig,
   serviceRoleSupabase,
@@ -30,28 +36,48 @@ export async function GET(request) {
   try {
     // Intentionally bounded one-shot A/B measurement. This route is temporary
     // and must be removed before the candidate can become Production-ready.
-    const oldRecords = await fetchSupabaseCatalogVariant(serviceRoleSupabase, TARGET_SLUG);
-    const scopedRecords = await fetchSupabaseScopedVariantDetail(serviceRoleSupabase, TARGET_SLUG);
-    if (!oldRecords || !scopedRecords) {
+    const [oldRecords, scopedRecords, oldRelatedRecords, scopedRelatedRecords] = await Promise.all([
+      fetchSupabaseCatalogVariant(serviceRoleSupabase, TARGET_SLUG),
+      fetchSupabaseScopedVariantDetail(serviceRoleSupabase, TARGET_SLUG),
+      fetchSupabaseRelatedCatalog(serviceRoleSupabase, TARGET_SLUG, { candidateLimit: 24 }),
+      fetchSupabaseScopedRelatedCatalog(serviceRoleSupabase, TARGET_SLUG, { candidateLimit: 24 }),
+    ]);
+    if (!oldRecords || !scopedRecords || !oldRelatedRecords || !scopedRelatedRecords) {
       return Response.json({ status: "failed", reason: "target-missing" }, { headers: noStoreHeaders() });
     }
 
     const oldSummary = summarizeRecords(oldRecords);
     const scopedSummary = summarizeRecords(scopedRecords);
-    const oldItem = createGachaRepository(oldRecords).findVariantBySlug(TARGET_SLUG);
-    const scopedItem = createGachaRepository(scopedRecords).findVariantBySlug(TARGET_SLUG);
+    const oldRelatedSummary = summarizeRecords(oldRelatedRecords);
+    const scopedRelatedSummary = summarizeRecords(scopedRelatedRecords);
+
+    const oldRepository = createGachaRepository(oldRecords);
+    const scopedRepository = createGachaRepository(scopedRecords);
+    const oldRelatedRepository = createGachaRepository(oldRelatedRecords);
+    const scopedRelatedRepository = createGachaRepository(scopedRelatedRecords);
+
+    const oldItem = oldRepository.findVariantBySlug(TARGET_SLUG);
+    const scopedItem = scopedRepository.findVariantBySlug(TARGET_SLUG);
+    const oldRelated = oldRelatedRepository.getRelatedVariants(TARGET_SLUG, 4).map(relatedSnapshot);
+    const scopedRelated = scopedRelatedRepository.getRelatedVariants(TARGET_SLUG, 4).map(relatedSnapshot);
 
     return Response.json({
       status: "ok",
       target: TARGET_SLUG,
-      old: oldSummary,
-      scoped: scopedSummary,
-      reduction: {
-        signalRows: ratioReduction(oldSummary.signalRows, scopedSummary.signalRows),
-        signalJsonBytes: ratioReduction(oldSummary.signalJsonBytes, scopedSummary.signalJsonBytes),
+      detail: {
+        old: oldSummary,
+        scoped: scopedSummary,
+        reduction: reductionSummary(oldSummary, scopedSummary),
+        semanticSnapshotEqual: JSON.stringify(semanticSnapshot(oldItem)) === JSON.stringify(semanticSnapshot(scopedItem)),
+        semanticSnapshot: semanticSnapshot(scopedItem),
       },
-      semanticSnapshotEqual: JSON.stringify(semanticSnapshot(oldItem)) === JSON.stringify(semanticSnapshot(scopedItem)),
-      semanticSnapshot: semanticSnapshot(scopedItem),
+      related: {
+        old: oldRelatedSummary,
+        scoped: scopedRelatedSummary,
+        reduction: reductionSummary(oldRelatedSummary, scopedRelatedSummary),
+        semanticSnapshotEqual: JSON.stringify(oldRelated) === JSON.stringify(scopedRelated),
+        semanticSnapshot: scopedRelated,
+      },
     }, { headers: noStoreHeaders() });
   } catch (error) {
     return Response.json({
@@ -77,6 +103,13 @@ function summarizeRecords(records) {
   };
 }
 
+function reductionSummary(before, after) {
+  return {
+    signalRows: ratioReduction(before.signalRows, after.signalRows),
+    signalJsonBytes: ratioReduction(before.signalJsonBytes, after.signalJsonBytes),
+  };
+}
+
 function semanticSnapshot(item) {
   if (!item) return null;
   return {
@@ -93,6 +126,18 @@ function semanticSnapshot(item) {
     trend_score: item.trend_score,
     circulation_score: item.circulation_score,
     sibling_count: Array.isArray(item.sibling_variants) ? item.sibling_variants.length : 0,
+  };
+}
+
+function relatedSnapshot(item) {
+  return {
+    slug: item.slug,
+    name: item.name,
+    series_id: item.series_id,
+    is_released: item.is_released,
+    trend_score: item.trend_score,
+    circulation_score: item.circulation_score,
+    market_price_median: item.market_price_median,
   };
 }
 
