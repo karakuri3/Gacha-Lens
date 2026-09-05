@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
+const variantDetailSource = readFileSync(new URL("../app/series/[slug]/page.js", import.meta.url), "utf8");
 
 const DAILY_DISCOVERY_INDEXES = ["/categories", "/brands", "/franchises"];
 
@@ -47,6 +48,14 @@ test("known Next.js error documents cannot become shared edge cache entries", ()
   assert.match(source, /response\.clone\(\)\.text\(\)/);
   assert.match(source, /NON_CACHEABLE_HTML_MARKERS\.some\(\(marker\) => body\.includes\(marker\)\)/);
   assert.match(source, /await canStoreResponse\(response, policy\)/);
+});
+
+test("variant detail stays framework-dynamic and delegates shared reuse to Workers Cache", () => {
+  assert.match(variantDetailSource, /export const dynamic = "force-dynamic"/);
+  assert.match(variantDetailSource, /export const revalidate = 0/);
+  assert.doesNotMatch(variantDetailSource, /export const dynamic = "force-static"/);
+  assert.match(source, /marker: "series-detail-1800-v1"/);
+  assert.match(source, /cacheControl: "public, max-age=1800, stale-while-revalidate=60"/);
 });
 
 test("series detail and sitemap cache contracts remain unchanged", () => {
