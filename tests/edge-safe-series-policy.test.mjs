@@ -15,7 +15,8 @@ test("edge-safe variant detail bypasses Next unstable_cache and fetches the boun
   const wrapper = source("lib/edge-safe-series.js");
   assert.match(wrapper, /fetchSupabaseCatalogVariant\(serviceRoleSupabase, normalizedSlug\)/);
   assert.match(wrapper, /createGachaRepository\(records\)\.findVariantBySlug\(normalizedSlug\)/);
-  assert.doesNotMatch(wrapper, /unstable_cache/);
+  assert.doesNotMatch(wrapper, /from\s+["']next\/cache["']/);
+  assert.doesNotMatch(wrapper, /\bunstable_cache\s*\(/);
   assert.match(wrapper, /export \* from "\.\/series\.js"/);
 });
 
