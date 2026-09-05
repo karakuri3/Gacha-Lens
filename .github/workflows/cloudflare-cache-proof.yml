@@ -23,8 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DEPLOYED_SHA: 6262f7bb988b005692682c4759c184f86a9d4556
-      PREVIEW_URL: https://cc19da30-gacha-lens.senpingxingzuo.workers.dev
+      DEPLOYED_SHA: e66823b05444f37ec4b98ebf9a6b6d8adacf1e59
+      PREVIEW_URL: https://39b0b620-gacha-lens.senpingxingzuo.workers.dev
     steps:
       - name: Checkout current pull-request head
         uses: actions/checkout@v7
@@ -44,6 +44,19 @@ jobs:
           fi
           echo "Runtime source tree is byte-equivalent to cache-proof preview commit ${DEPLOYED_SHA}." >> "$GITHUB_STEP_SUMMARY"
           echo "Preview URL: ${PREVIEW_URL}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Probe bounded variant-detail diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          code="$(curl --silent --show-error --max-time 90 --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}/api/runtime-diagnostics/variant-detail")"
+          echo "Diagnostic HTTP ${code}" >> "$GITHUB_STEP_SUMMARY"
+          [[ "$code" == "200" ]] || { echo "diagnostic returned HTTP ${code}" >&2; cat "$body" >&2; exit 1; }
+          compact="$(tr -d '\n\r' < "$body")"
+          echo "Diagnostic payload: ${compact}" | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -Fq '"status":"ok"' "$body" || { echo 'variant-detail diagnostic isolated a failing stage' >&2; exit 1; }
 
       - name: Prove cold-to-warm edge cache
         shell: bash
