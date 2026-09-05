@@ -7,6 +7,7 @@ import {
 } from "@/lib/domain/public-display-clean";
 import { buildVariantDetailStructuredData } from "@/lib/domain/public-detail-structured-data";
 import { absoluteSiteUrl } from "@/lib/site-metadata";
+import { hasServiceRoleSupabaseConfig } from "@/lib/supabase/service-role-client";
 import { variantHref } from "@/lib/variant-url";
 
 export const dynamic = "force-dynamic";
@@ -22,8 +23,9 @@ export async function GET(request) {
   }
 
   const config = {
-    supabaseUrlPresent: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    supabaseUrlEnvPresent: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL),
     serviceRoleKeyPresent: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    serviceRoleSupabaseReady: hasServiceRoleSupabaseConfig,
     dataSourcePresent: Boolean(process.env.GACHA_DATA_SOURCE),
   };
   const stages = { config: "checked" };
