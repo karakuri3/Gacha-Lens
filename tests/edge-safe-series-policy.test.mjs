@@ -27,8 +27,8 @@ test("edge-safe detail and related reads bypass Next unstable_cache and use scop
 test("scoped detail data source limits signal reads to relevant variants plus series-level set listings", () => {
   const scoped = source("lib/data/supabase-public-variant-detail.js");
 
-  assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.marketListings, TABLE_SELECTS\.marketListings, "variant_id", ids\)/);
-  assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.marketListings, TABLE_SELECTS\.marketListings, "matched_variant_id", ids\)/);
+  assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.marketListings, MARKET_LISTING_PUBLIC_SELECT, "variant_id", ids\)/);
+  assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.marketListings, MARKET_LISTING_PUBLIC_SELECT, "matched_variant_id", ids\)/);
   assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.xReactions, TABLE_SELECTS\.xReactions, "variant_id", ids\)/);
   assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.restockEvents, TABLE_SELECTS\.restockEvents, "matched_variant_id", ids\)/);
   assert.match(scoped, /fetchRowsForColumn\(client, TABLE_MAP\.stockReports, TABLE_SELECTS\.stockReports, "variant_id", ids\)/);
@@ -39,6 +39,19 @@ test("scoped detail data source limits signal reads to relevant variants plus se
   assert.match(scoped, /LISTING_TYPES\.POPULAR_SET/);
   assert.doesNotMatch(scoped, /fetchSignalsForCatalog/);
   assert.doesNotMatch(scoped, /fetchTable\(/);
+});
+
+test("public scoped reads omit removable raw payload but retain verified set safety payload", () => {
+  const scoped = source("lib/data/supabase-public-variant-detail.js");
+  const publicSelect = scoped.match(/const MARKET_LISTING_PUBLIC_SELECT = "([^"]+)";/)?.[1] || "";
+  const restockSelect = scoped.match(/restockEvents: "([^"]+)"/)?.[1] || "";
+
+  assert.ok(publicSelect);
+  assert.doesNotMatch(publicSelect, /(^|,)raw(,|$)/);
+  assert.ok(restockSelect);
+  assert.doesNotMatch(restockSelect, /(^|,)raw(,|$)/);
+  assert.match(scoped, /const MARKET_LISTING_SET_SELECT = `\$\{MARKET_LISTING_PUBLIC_SELECT\},raw`/);
+  assert.match(scoped, /\.select\(MARKET_LISTING_SET_SELECT\)/);
 });
 
 test("scoped variant detail preserves sibling lineup while market observations stay target-only", () => {
