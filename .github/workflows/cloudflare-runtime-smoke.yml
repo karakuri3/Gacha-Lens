@@ -77,6 +77,8 @@ jobs:
               if [[ "$rc" == "0" && "$code" == "200" ]]; then
                 if [[ -n "$needle" ]] && ! grep -Fq "$needle" "$body"; then
                   echo "$name did not contain required marker: $needle" >&2
+                  echo 'Bounded public HTML diagnostic (first 2000 bytes):' >&2
+                  head -c 2000 "$body" >&2 || true
                   exit 1
                 fi
                 printf '%-24s HTTP 200 (attempt %s)\n' "$name" "$attempt" >> "$GITHUB_STEP_SUMMARY"
