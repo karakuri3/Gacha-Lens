@@ -27,12 +27,12 @@ import {
   watchScore,
 } from "@/lib/domain/public-display-clean";
 
-// Cloudflare POC: vinext's Workers Cache CDN adapter caches this public page at
-// the page boundary, so warm hits bypass Worker/Supabase reads. Keep privileged
-// or user-specific state out of this cached server render; client actions remain
-// separate. Thirty minutes bounds staleness between ingestion refreshes.
-export const dynamic = "force-static";
-export const revalidate = 1800;
+// Keep variant details framework-dynamic. A previous force-static design was
+// rejected because normal Japanese slugs could break cache metadata at runtime.
+// Shared 30-minute reuse is enforced at the Cloudflare Workers Cache boundary
+// in worker/index.js, where auth/cookie/internal/query safety is explicit.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const getVariantDetail = cache((slug) => getSeriesBySlug(slug));
 
