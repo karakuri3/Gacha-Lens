@@ -76,6 +76,7 @@ export async function GET(request) {
         scoped: scopedRelatedSummary,
         reduction: reductionSummary(oldRelatedSummary, scopedRelatedSummary),
         semanticSnapshotEqual: JSON.stringify(oldRelated) === JSON.stringify(scopedRelated),
+        oldSemanticSnapshot: oldRelated,
         semanticSnapshot: scopedRelated,
       },
     }, { headers: noStoreHeaders() });
