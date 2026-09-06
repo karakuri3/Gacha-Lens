@@ -7,7 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- BEGIN:agent-os-v1 -->
 # Gacha Lens Agent OS v1
 
-Read `docs/AGENT_OS.md` before planning or changing this repository. For a queue run, also read `docs/AGENT_QUEUE.md`; it is an operating procedure inside these existing permissions, not a grant of additional authority. Also read `docs/AUTO_MERGE_POLICY.md`, `docs/PRODUCTION_RELEASE_POLICY.md`, and the canonical project state in `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, and `docs/TODO.md`. Repository-specific safety decisions in those files override general autonomy below. For merge/release decisions, the Auto-Merge and Production Release policies are the explicit repository exceptions and override older lower-precedence statements that require a human to perform every safe merge or routine Vercel release.
+Read `docs/AGENT_OS.md` before planning or changing this repository. For a queue run, also read `docs/AGENT_QUEUE.md`; it is an operating procedure inside these existing permissions, not a grant of additional authority. Also read `docs/AUTO_MERGE_POLICY.md`, `docs/PRODUCTION_RELEASE_POLICY.md`, `docs/VERCEL_COST_CONTROL.md`, and the canonical project state in `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, and `docs/TODO.md`. Repository-specific safety decisions in those files override general autonomy below. For merge/release decisions, the Auto-Merge and Production Release policies are the explicit repository exceptions and override older lower-precedence statements that require a human to perform every safe merge or routine Cloudflare release.
 
 ## AUTONOMOUSLY ALLOWED
 
@@ -19,32 +19,33 @@ Read `docs/AGENT_OS.md` before planning or changing this repository. For a queue
 - Failure diagnosis, bounded self-repair, re-validation, diff inspection, and self-review.
 - Creating and updating a Draft PR for the task branch.
 - Marking an eligible PR ready and merging it to `main` only when every condition in `docs/AUTO_MERGE_POLICY.md` passes.
-- Allowing the normal Vercel Production deployment triggered by an eligible merge only when every condition in `docs/PRODUCTION_RELEASE_POLICY.md` also passes.
+- Allowing the normal Cloudflare Production application release triggered by an eligible merge only when every condition in `docs/PRODUCTION_RELEASE_POLICY.md` also passes.
 
 ## HUMAN APPROVAL REQUIRED
 
 - Direct push to `main` or history rewriting of a shared branch.
 - Any merge that is not eligible under `docs/AUTO_MERGE_POLICY.md`.
 - Any Production deployment/release that is not eligible under `docs/PRODUCTION_RELEASE_POLICY.md`.
-- Production DB writes, Production migrations, Production gate changes, or other direct Production mutation outside the eligible normal Vercel release.
+- Production DB writes, Production migrations, Production gate changes, or other direct Production mutation outside the eligible normal Cloudflare release.
 - Any GitHub Actions `workflow_dispatch`, including read-only diagnostics.
 - Repository or hosting Secrets / Variables changes.
 - External-service paid operations.
 - Repository, data, worktree, or external-state cleanup/delete unless explicitly and narrowly approved in the task; irreversible or destructive actions.
+- Authentication/authorization architecture changes or meaningful security-boundary weakening.
 - Major product or specification changes.
 - Changes to Agent OS, Auto-Merge, or Production Release safety/approval boundaries unless the current human request explicitly authorizes that policy change.
 
 ## AUTONOMOUS CONTINUATION
 
-For a safe failure such as a test, lint, build, ordinary implementation, Preview, or review failure, do not stop merely because it failed. Investigate the cause, form an evidence-based repair, make the smallest safe correction, and re-run the relevant validation. Repeat while each iteration is safe and provides a new reasonable path. Separate regressions caused by the task from known baseline or environment failures and record the evidence.
+For a safe failure such as a test, lint, build, ordinary implementation, Cloudflare Preview/version proof, runtime/cache/security proof, or review failure, do not stop merely because it failed. Investigate the cause, form an evidence-based repair, make the smallest safe correction, and re-run the relevant validation. Repeat while each iteration is safe and provides a new reasonable path. Separate regressions caused by the task from known baseline or environment failures and record the evidence.
 
 ## STOP CONDITIONS
 
-Return to the human only when an ineligible Production action, a destructive operation, a Secrets / Variables change, a paid operation, an ineligible merge/release, or a major product decision is required; requirements are materially ambiguous and no safe assumption exists; specifications conflict in a way that changes product direction; or reasonable safe self-repair paths have been exhausted with evidence.
+Return to the human only when an ineligible Production action, a destructive operation, a Secrets / Variables change, a paid operation, an ineligible merge/release, an authentication/security-boundary change, or a major product decision is required; requirements are materially ambiguous and no safe assumption exists; specifications conflict in a way that changes product direction; or reasonable safe self-repair paths have been exhausted with evidence.
 
 ## AGENT DONE GATE
 
-Before claiming completion, apply the gate in `docs/AGENT_OS.md`: confirm acceptance criteria, focused and regression tests, lint, applicable typecheck, build, `git diff --check`, expected diff only, secret and Production safety, no destructive actions, no unresolved major review findings, and no material conflict with canonical docs. A check may be `N/A` only with a concrete reason. Never collapse a known baseline/environment limitation into an unexplained “failed”. If the task is eligible for autonomous merge, also apply `docs/AUTO_MERGE_POLICY.md`. If that merge triggers Vercel Production, also apply `docs/PRODUCTION_RELEASE_POLICY.md`.
+Before claiming completion, apply the gate in `docs/AGENT_OS.md`: confirm acceptance criteria, focused and regression tests, lint, applicable typecheck, build, `git diff --check`, expected diff only, secret and Production safety, no destructive actions, no unresolved major review findings, and no material conflict with canonical docs. A check may be `N/A` only with a concrete reason. Never collapse a known baseline/environment limitation into an unexplained “failed”. If the task is eligible for autonomous merge, also apply `docs/AUTO_MERGE_POLICY.md`. If that merge triggers Cloudflare Production, also apply `docs/PRODUCTION_RELEASE_POLICY.md`.
 
 ## AGENT TASK CONTRACT
 
@@ -66,21 +67,23 @@ The short instruction grants no new permission. Every HUMAN APPROVAL REQUIRED it
 - Parallel Builders must own disjoint files or use separate branches/worktrees. Serialize overlapping files. The Lead resolves integration and re-validates the combined diff.
 - Re-fetch and compare `origin/main` before work and before PR merge. Reconcile a stale base without force-pushing shared history.
 
-## COST-AWARE PUSH / VERCEL PREVIEW POLICY
+## COST-AWARE PUSH / CLOUDFLARE PREVIEW POLICY
 
-- Local commits and local validation may be granular, but remote pushes must be checkpointed. Do not push every micro-edit merely to obtain another Vercel deployment.
+- Local commits and local validation may be granular, but remote pushes must be checkpointed. Do not push every micro-edit merely to obtain another hosted validation build.
 - Batch logically related code/test changes and safe self-repair into one materially testable remote checkpoint whenever possible.
 - Run focused tests, lint/typecheck/build as applicable before the next remote push when those checks can catch the issue locally or in existing CI.
-- Vercel Preview is a validation resource, not a per-edit feedback loop. Prefer one Preview for a stable candidate or required exact-head verification point rather than one Preview per intermediate commit.
-- Never weaken an explicit exact-head Preview, release, security, or Production evidence requirement. When exact-head Preview evidence is required, create/push the stable candidate and verify that exact SHA.
-- Markdown-only documentation commits may be pushed normally; `vercel.json` intentionally skips their Vercel build. If that guard stops working, treat repeated docs-only builds as a cost regression.
+- Cloudflare non-Production Preview/version proof is a validation resource, not a per-edit feedback loop. Prefer one exact-head proof for a stable candidate or required verification point rather than one hosted build per intermediate commit.
+- Runtime-sensitive changes must also use the repository's exact-head Cloudflare runtime/cache/security proof appropriate to the diff. A failed or stale deployed-source pin is not green and must be repaired/revalidated before release.
+- Never weaken an explicit exact-head Cloudflare Preview/version, runtime/cache/security, release, or Production evidence requirement. When exact-head evidence is required, push the stable candidate and verify that exact SHA/version binding.
+- Routine Vercel Git builds remain intentionally skipped under `docs/VERCEL_COST_CONTROL.md`. Vercel deployment status is informational/non-authoritative while that documented skip is active; do not re-enable Vercel merely to manufacture Preview evidence.
+- Documentation/test/tooling-only changes with no application/runtime consequence may mark Cloudflare Preview/runtime proof `N/A` only with a concrete reason.
 - Preserve this policy when increasing agent parallelism: more agents must not translate into proportional remote-push/build churn.
 
 ## REPOSITORY HARD STOPS
 
 - Never touch `supabase/.temp/cli-latest`.
 - Do not dispatch workflows, migrate Production data/schema, change Secrets / Variables, or perform direct Production writes in autonomous work.
-- Do not manually invoke or bypass release controls for Production; only the normal Vercel deployment caused by an eligible merge may proceed under `docs/PRODUCTION_RELEASE_POLICY.md`.
+- Do not manually invoke, promote, or bypass release controls for Production; only the existing reviewed Cloudflare application release caused by an eligible merge may proceed under `docs/PRODUCTION_RELEASE_POLICY.md`.
 - Never bypass the Auto-Merge or Production Release Gate or use direct `main` pushes as a substitute for PR merge.
 - Keep `.github/workflows/gacha-ingestion.yml` disabled and do not casually change existing Production-capable workflows or automatic ingestion semantics.
 <!-- END:agent-os-v1 -->
