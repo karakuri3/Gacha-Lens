@@ -3,13 +3,19 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const migrationUrl = new URL("../supabase/migrations/20260907023500_affiliate_provider_read_authorization_ledger.sql", import.meta.url);
+const exhaustionGuardUrl = new URL("../supabase/migrations/20260907023600_affiliate_provider_read_attempt_exhaustion_guard.sql", import.meta.url);
 
 async function migration() {
   return readFile(migrationUrl, "utf8");
 }
 
+async function exhaustionGuard() {
+  return readFile(exhaustionGuardUrl, "utf8");
+}
+
 test("authorization ledger stays private, RLS-enabled and service-role-only", async () => {
   const sql = await migration();
+  const guard = await exhaustionGuard();
 
   assert.match(sql, /create schema if not exists private;/i);
   assert.match(sql, /create table if not exists private\.affiliate_provider_read_authorizations/i);
@@ -22,9 +28,12 @@ test("authorization ledger stays private, RLS-enabled and service-role-only", as
   assert.match(sql, /revoke all on table private\.affiliate_provider_read_attempts from authenticated;/i);
   assert.match(sql, /grant select, insert, update on table private\.affiliate_provider_read_authorizations to service_role;/i);
   assert.match(sql, /grant select, insert, update on table private\.affiliate_provider_read_attempts to service_role;/i);
-  assert.doesNotMatch(sql, /security definer/i);
+  assert.doesNotMatch(`${sql}\n${guard}`, /security definer/i);
   assert.match(sql, /security invoker/gi);
   assert.match(sql, /set search_path = ''/gi);
+  assert.match(guard, /security invoker/i);
+  assert.match(guard, /set search_path = ''/i);
+  assert.match(guard, /grant execute on function public\.reserve_affiliate_provider_read_attempt_v1\(text, text, text, integer\) to service_role;/i);
 });
 
 test("claim is exact-digest-bound and permanently rejects replay", async () => {
@@ -42,15 +51,17 @@ test("claim is exact-digest-bound and permanently rejects replay", async () => {
 
 test("attempt reservations enforce exact phases, three-attempt ceiling and serial recovery", async () => {
   const sql = await migration();
+  const guard = await exhaustionGuard();
 
   assert.match(sql, /phase in \('discovery', 'affiliate_enrichment'\)/);
   assert.match(sql, /attempt_no between 1 and 3/);
-  assert.match(sql, /affiliate_provider_read_attempt_outstanding_reservation/);
-  assert.match(sql, /affiliate_provider_read_attempt_batch_requires_terminalization/);
-  assert.match(sql, /affiliate_provider_read_attempt_discovery_not_complete/);
-  assert.match(sql, /affiliate_provider_read_attempt_phase_already_succeeded/);
-  assert.match(sql, /affiliate_provider_read_attempt_previous_not_retryable/);
-  assert.match(sql, /affiliate_provider_read_attempt_replay/);
+  assert.match(guard, /affiliate_provider_read_attempt_outstanding_reservation/);
+  assert.match(guard, /affiliate_provider_read_attempt_batch_requires_terminalization/);
+  assert.match(guard, /a\.attempt_no = 3 and a\.outcome = 'retryable_failure'/);
+  assert.match(guard, /affiliate_provider_read_attempt_discovery_not_complete/);
+  assert.match(guard, /affiliate_provider_read_attempt_phase_already_succeeded/);
+  assert.match(guard, /affiliate_provider_read_attempt_previous_not_retryable/);
+  assert.match(guard, /affiliate_provider_read_attempt_replay/);
 });
 
 test("terminalization is monotonic and distinguishes no-call from partial or ambiguous execution", async () => {
