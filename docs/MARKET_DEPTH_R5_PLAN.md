@@ -56,7 +56,9 @@ These names are evidence for the current checkpoint, not a frozen Production wri
 
 ## What this PR does
 
-The R5 planner is pure domain logic. It accepts snapshot rows and emits a deterministic plan. It performs:
+The R5 planner is pure domain logic. It accepts snapshot rows plus an **explicit valid planning timestamp (`now`)** and emits a deterministic plan. Missing or invalid `now` fails closed; the planner never substitutes wall-clock time implicitly. The same snapshot and same timestamp therefore produce the same freshness windows and ranking inputs.
+
+It performs:
 
 - **0 provider requests**
 - **0 Production writes**
