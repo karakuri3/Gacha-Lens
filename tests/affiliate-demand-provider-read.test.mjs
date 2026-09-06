@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  AFFILIATE_DEMAND_PROVIDER_QUERY_PROFILE,
+  AFFILIATE_DEMAND_PROVIDER_QUERY_STRATEGY_VERSION,
   AFFILIATE_DEMAND_PROVIDER_READ_CONFIRMATION,
   AFFILIATE_DEMAND_PROVIDER_READ_MAX_ATTEMPTS_PER_PHASE,
   buildAffiliateDemandProviderReadDigest,
@@ -101,6 +103,11 @@ test("binds an exact affiliate-demand provider-read envelope with bounded budget
   assert.deepEqual(plan.requests[1].required_configuration, ["YAHOO_SHOPPING_APP_ID", "YAHOO_AFFILIATE_TRACKING_ID"]);
   assert.equal(plan.requests[0].listing_evidence.length, 2);
   assert.equal(plan.requests[0].max_http_attempts_per_phase, AFFILIATE_DEMAND_PROVIDER_READ_MAX_ATTEMPTS_PER_PHASE);
+  assert.equal(plan.requests[0].search_query, "シリーズR おやすみ ガチャ");
+  assert.equal(plan.requests[1].search_query, "シリーズY タイムふろしき ガチャ");
+  assert.equal(plan.requests[0].query_strategy_version, AFFILIATE_DEMAND_PROVIDER_QUERY_STRATEGY_VERSION);
+  assert.equal(plan.requests[0].query_profile, AFFILIATE_DEMAND_PROVIDER_QUERY_PROFILE);
+  assert.equal(plan.requests[0].fallback_queries_allowed, false);
 });
 
 test("fails closed on catalog, listing, provider-native, URL, or affiliate drift", () => {
@@ -138,6 +145,19 @@ test("fails closed on catalog, listing, provider-native, URL, or affiliate drift
       },
     } : row),
   }), /listing drift/);
+});
+
+test("exact search query and request key cannot be broadened after binding", () => {
+  const input = fixture();
+  const plan = buildAffiliateDemandProviderReadPlan({ headSha: HEAD, ...input });
+  const broadened = JSON.parse(JSON.stringify(plan));
+  broadened.requests[0].search_query = "ガチャ";
+
+  assert.throws(() => buildAffiliateDemandProviderReadDigest({ headSha: HEAD, readPlan: broadened }), /request fields are invalid/);
+
+  const changedKey = JSON.parse(JSON.stringify(plan));
+  changedKey.requests[0].request_key = "affiliate-read-00000000000000000000";
+  assert.throws(() => buildAffiliateDemandProviderReadDigest({ headSha: HEAD, readPlan: changedKey }), /request fields are invalid/);
 });
 
 test("digest and approval token are stable and exactly head-bound", () => {
