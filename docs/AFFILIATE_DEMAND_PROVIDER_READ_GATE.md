@@ -1,7 +1,9 @@
 # P1 Affiliate Demand Provider-Read Gate
 
-Issue: #266  
-Stacked after: Draft PR #264 / Issue #263  
+Issue: #266
+
+Stacked after: Draft PR #264 / Issue #263
+
 Status: non-Production execution binding only
 
 ## Decision
