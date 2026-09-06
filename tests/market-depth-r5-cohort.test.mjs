@@ -143,6 +143,17 @@ test("keeps at most one variant per series in the initial cohort", () => {
   assert.equal(new Set(plan.targets.map((row) => row.series_id)).size, 2);
 });
 
+test("requires an explicit valid planning timestamp", () => {
+  assert.throws(
+    () => planMarketDepthR5Cohort({}),
+    /requires an explicit valid now timestamp/,
+  );
+  assert.throws(
+    () => planMarketDepthR5Cohort({ now: "not-a-date" }),
+    /requires an explicit valid now timestamp/,
+  );
+});
+
 test("rejects cohort sizes above the atomic safety ceiling", () => {
   assert.throws(
     () => planMarketDepthR5Cohort({ cohortSize: MARKET_DEPTH_R5_MAX_COHORT_SIZE + 1 }),
