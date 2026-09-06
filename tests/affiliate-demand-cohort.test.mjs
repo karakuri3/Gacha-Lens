@@ -69,7 +69,7 @@ test("selects clicked Rakuten and Yahoo demand with current safe listings and no
     click("v4", "mercari", "2026-09-06T11:45:00.000Z"),
   ];
   const marketListings = [
-    listing("l1", "v1", "rakuten_ichiba"),
+    listing("l1", "v1", "rakuten_ichiba", { source: "rakuten", raw: { provider: "rakuten_ichiba" } }),
     listing("l2", "v1", "rakuten_ichiba", { last_observed_at: "2026-09-06T08:00:00.000Z" }),
     listing("l3", "v2", "yahoo_shopping"),
     listing("l4", "v3", "rakuten_ichiba", { raw: affiliateRaw("rakuten_ichiba") }),
@@ -121,6 +121,33 @@ test("fails closed on stale, unsafe, unsupported, unknown, or already monetized 
 
   assert.equal(result.selected_count, 1);
   assert.equal(result.targets[0].variant_id, "eligible");
+  assert.equal(result.targets[0].provider, "rakuten");
+});
+
+test("rejects conflicting listing variant or provider identity", () => {
+  const variants = [variant("variant-conflict"), variant("provider-conflict"), variant("compatible")];
+  const outboundClicks = [
+    click("variant-conflict", "rakuten", "2026-09-06T10:00:00.000Z"),
+    click("provider-conflict", "yahoo", "2026-09-06T10:00:00.000Z"),
+    click("compatible", "rakuten", "2026-09-06T10:00:00.000Z"),
+  ];
+  const marketListings = [
+    listing("variant-conflict-listing", "variant-conflict", "rakuten_ichiba", {
+      matched_variant_id: "provider-conflict",
+    }),
+    listing("provider-conflict-listing", "provider-conflict", "yahoo_shopping", {
+      raw: { provider: "rakuten_ichiba" },
+    }),
+    listing("compatible-listing", "compatible", "rakuten_ichiba", {
+      source: "rakuten",
+      raw: { provider: "rakuten_ichiba" },
+    }),
+  ];
+
+  const result = buildAffiliateDemandCohort({ variants, outboundClicks, marketListings }, { now: NOW });
+
+  assert.equal(result.selected_count, 1);
+  assert.equal(result.targets[0].variant_id, "compatible");
   assert.equal(result.targets[0].provider, "rakuten");
 });
 
