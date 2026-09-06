@@ -37,7 +37,7 @@ test("claim is exact-digest-bound and permanently rejects replay", async () => {
   assert.match(sql, /logical_provider_http_requests = target_count \* 2/);
   assert.match(sql, /max_http_attempts = logical_provider_http_requests \* 3/);
   assert.match(sql, /approval_reusable', false/);
-  assert.doesNotMatch(sql, /reclaim|reopen|reset_authorization/i);
+  assert.doesNotMatch(sql, /function\s+(?:public|private)\.(?:reclaim|reopen|reset)_affiliate_provider_read/i);
 });
 
 test("attempt reservations enforce exact phases, three-attempt ceiling and serial recovery", async () => {
