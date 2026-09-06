@@ -84,7 +84,10 @@ The ledger enforces:
 - `affiliate_enrichment` cannot start until the same request's `discovery` phase has succeeded;
 - a successful phase cannot be retried;
 - attempt N>1 requires attempt N-1 to have finished specifically as `retryable_failure`;
-- any `terminal_failure` or `ambiguous` result stops further reservations for the batch.
+- any `terminal_failure` or `ambiguous` result stops further reservations for the batch;
+- a third `retryable_failure` exhausts that phase and also stops every further reservation for the batch.
+
+The third-attempt exhaustion rule lives in the immediately following repair migration `20260907023600_affiliate_provider_read_attempt_exhaustion_guard.sql`, so a repository migration reset proves the final function definition, not just the first draft of the RPC.
 
 This deliberately serializes the first experiment. The cohort is tiny and safety/replay clarity is more important than parallel throughput.
 
@@ -125,7 +128,7 @@ Allowed only when zero provider-attempt rows exist. Intended for configuration o
 
 ### `partial_or_ambiguous`
 
-Requires at least one reserved/finished attempt and permanently closes the approval after partial, terminal, ambiguous, or operator-stopped execution.
+Requires at least one reserved/finished attempt and permanently closes the approval after partial, terminal, ambiguous, exhausted-retry, or operator-stopped execution.
 
 Recovery requires a completely fresh data/head rebind and a new human approval. The old authorization is evidence only.
 
@@ -143,6 +146,28 @@ It:
 
 It performs no I/O.
 
+## Disposable Supabase verification
+
+The repository's existing `Foundation baseline` workflow starts a disposable local Supabase stack on the GitHub runner, applies every migration from an empty database, checks the final catalog, and then runs `npm run test:data-source` before lint/build.
+
+This branch extends `test:data-source` with `tests/affiliate-provider-read-authorization-ledger-db.test.mjs`. When the disposable stack starts successfully, that test executes the ledger as `service_role` inside transactions and verifies:
+
+- exact one-time claim and duplicate-claim rejection;
+- retryable discovery attempt 1 -> discovery attempt 2 success;
+- discovery-before-enrichment ordering;
+- successful completion only after both logical phases succeed;
+- terminal authorization rejects later attempts;
+- ambiguous transport blocks further reservation and can only close as partial/ambiguous;
+- zero-attempt claimed authorization can close only through the no-call terminal path;
+- a third retryable failure blocks every remaining request in the batch;
+- `anon` cannot access the private ledger or execute the claim RPC.
+
+The test rolls its ledger writes back and uses no Production database or provider network call.
+
+The connected hosted Supabase project currently has no development branches. Creating a hosted branch would require a separate cost confirmation, so this work does not create one. A successful disposable Foundation run is valid isolated local Postgres/Supabase execution evidence, but it is not hosted-branch or Production proof.
+
+If the Foundation runner cannot start its disposable Supabase stack, that CI result is infrastructure-unavailable evidence only; migration/RPC execution must remain unproven until a later successful disposable run or separately approved hosted branch test.
+
 ## Production and provider boundaries
 
 This implementation authorizes none of the following:
@@ -156,17 +181,11 @@ This implementation authorizes none of the following:
 - dispatching or changing workflows;
 - merging to `main` while #219/#238 remain active.
 
-The ledger migration itself is a future Production schema change and therefore requires its own explicit approval and exact isolated validation before application.
-
-## Isolated verification limitation
-
-At implementation time, the connected Supabase project reports no existing development branches. Creating a new Supabase branch requires a cost confirmation flow, so no branch is created by implication.
-
-Until an approved non-Production Supabase branch exists, validation is limited to repository tests/static migration hardening review plus exact-head CI. This must not be represented as successful migration/RPC execution proof.
+The ledger migration itself is a future Production schema change and therefore requires its own explicit approval after exact validation/review.
 
 ## Future executor gate
 
-A live executor may be built only after this ledger contract is independently reviewed and migration/RPC behavior is proven in an approved isolated Supabase environment.
+A live executor may be built only after this ledger contract is independently reviewed and migration/RPC behavior has valid isolated execution proof.
 
 The required order remains:
 
