@@ -116,9 +116,10 @@ test("new month-precision rerelease stays canonical through read-only audit and 
   const authorization = authorizeOfficialAutomaticWrite({ report, headSha: HEAD, originMainSha: HEAD });
   assert.equal(authorization.ok, true);
   assert.equal(authorization.decision, "write");
-  assert.equal(authorization.proposal.series_inserts, 1);
-  assert.equal(authorization.proposal.variant_inserts, 1);
-  assert.equal(authorization.proposal.restock_event_inserts, 1);
+  assert.equal(authorization.proposal.series.insert, 1);
+  assert.equal(authorization.proposal.variants.insert, 1);
+  assert.equal(authorization.proposal.restock_events.insert, 1);
+  assert.equal(authorization.proposal.database_writes, 3);
 });
 
 function source(name, provider, url, records, discoveredUrls, formalLineups) {
