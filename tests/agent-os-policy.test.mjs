@@ -33,11 +33,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
     "Never touch `supabase/.temp/cli-latest`",
     "docs/AUTO_MERGE_POLICY.md",
     "docs/PRODUCTION_RELEASE_POLICY.md",
+    "docs/VERCEL_COST_CONTROL.md",
     "docs/AGENT_QUEUE.md",
     "QUEUE / ORCHESTRATOR ENTRY",
+    "COST-AWARE PUSH / CLOUDFLARE PREVIEW POLICY",
+    "normal Cloudflare Production application release triggered by an eligible merge",
   ]) {
     assert.match(agents, new RegExp(requiredText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+
+  assert.ok(!agents.includes("normal Vercel Production deployment triggered by an eligible merge"));
 });
 
 test("Agent OS defines the complete operating contract", async () => {
@@ -83,6 +88,25 @@ test("Agent OS defines the complete operating contract", async () => {
 
   assert.ok(agentOs.includes("docs/AGENT_QUEUE.md"));
   assert.ok(agentOs.includes("Queue / Orchestrator v1"));
+  assert.ok(agentOs.includes("normal Git-triggered Cloudflare Production application release"));
+  assert.ok(!agentOs.includes("normal Git-triggered Vercel release"));
+  assert.ok(!agentOs.includes("resulting normal Vercel release"));
+});
+
+test("Agent Queue release wording follows the Cloudflare standing gate", async () => {
+  const queue = await readRepositoryFile("docs/AGENT_QUEUE.md");
+
+  for (const requiredText of [
+    "normal Git-triggered Cloudflare Production application release",
+    "exact-head Cloudflare Preview/version plus runtime/cache/security proof applicable to the diff",
+    "Normal Cloudflare Production application release after an eligible merge",
+    "docs/PRODUCTION_RELEASE_POLICY.md",
+  ]) {
+    assert.ok(queue.includes(requiredText), `Missing Agent Queue Cloudflare release text: ${requiredText}`);
+  }
+
+  assert.ok(!queue.includes("normal Git-triggered Vercel Production release"));
+  assert.ok(!queue.includes("Normal Vercel Production deployment after an eligible merge"));
 });
 
 test("Auto-Merge Policy allows routine safe merges while preserving hard stops", async () => {
@@ -101,22 +125,32 @@ test("Auto-Merge Policy allows routine safe merges while preserving hard stops",
     "destructive or irreversible actions: 0",
     "direct `main` pushes: 0",
     "docs/PRODUCTION_RELEASE_POLICY.md",
+    "docs/VERCEL_COST_CONTROL.md",
+    "normal Cloudflare release",
+    "exact-head Cloudflare Preview/version/runtime/cache/security evidence",
     "## Always require human approval",
     "changes to Agent OS, Auto-Merge, or Production Release safety/approval boundaries",
   ]) {
     assert.ok(policy.includes(requiredText), `Missing auto-merge policy text: ${requiredText}`);
   }
+
+  assert.ok(!policy.includes("eligible normal Vercel release"));
 });
 
-test("Standing Production Release Policy allows only gated normal Vercel releases", async () => {
+test("Standing Production Release Policy allows only gated normal Cloudflare releases", async () => {
   const agents = await readRepositoryFile("AGENTS.md");
   const policy = await readRepositoryFile("docs/PRODUCTION_RELEASE_POLICY.md");
+  const costControl = await readRepositoryFile("docs/VERCEL_COST_CONTROL.md");
 
-  assert.ok(agents.includes("normal Vercel Production deployment triggered by an eligible merge"));
+  assert.ok(agents.includes("normal Cloudflare Production application release triggered by an eligible merge"));
 
   for (const requiredText of [
+    "Status: authoritative standing approval for low-risk Cloudflare Production releases",
     "## Standing Production Release Gate",
-    "Vercel Preview",
+    "exact-head repository CI / code-quality checks",
+    "exact-head Cloudflare non-Production build / Preview or exact version artifact",
+    "runtime / cache / security proof appropriate to the diff",
+    "failed or stale deployed-source pin",
     "Production database writes/migrations/backfills/cleanup/schema actions: 0",
     "Secrets / Variables changes: 0",
     "workflow dispatches: 0",
@@ -124,14 +158,28 @@ test("Standing Production Release Policy allows only gated normal Vercel release
     "destructive or irreversible actions: 0",
     "no authentication/authorization policy change",
     "no payment/billing behavior change",
+    "docs/VERCEL_COST_CONTROL.md",
+    "Vercel deployment status is treated as informational/non-authoritative",
     "## Always require human approval",
-    "normal Vercel Production deployment caused by merging the PR",
+    "existing reviewed Cloudflare application release path",
   ]) {
     assert.ok(policy.includes(requiredText), `Missing production release policy text: ${requiredText}`);
   }
+
+  for (const requiredText of [
+    "Status: Production hosting migrated to Cloudflare on 2026-09-05.",
+    "routine Git pushes/PRs must not create Vercel builds",
+    "Vercel is **not** the Production runtime for `gachalens.com`.",
+    "Normal application Preview/Production validation now belongs to the Cloudflare release path and repository CI.",
+  ]) {
+    assert.ok(costControl.includes(requiredText), `Missing Vercel cost-control invariant: ${requiredText}`);
+  }
+
+  assert.ok(!policy.includes("Vercel Preview for the exact PR head SHA is successful"));
+  assert.ok(!policy.includes("normal Vercel Production deployment caused by merging the PR"));
 });
 
-test("Issue and PR templates require the Agent contract and release evidence", async () => {
+test("Issue and PR templates require the Agent contract and Cloudflare release evidence", async () => {
   const issueTemplate = await readRepositoryFile(".github/ISSUE_TEMPLATE/agent-task.yml");
   const prTemplate = await readRepositoryFile(".github/pull_request_template.md");
 
@@ -165,10 +213,16 @@ test("Issue and PR templates require the Agent contract and release evidence", a
     "No material conflict with canonical docs",
     "Auto-Merge Gate",
     "Standing Production Release Gate",
-    "Vercel Preview",
+    "Cloudflare exact-head validation",
+    "Vercel status",
+    "Normal Cloudflare Production application release expected after merge",
   ]) {
     assert.ok(prTemplate.includes(gate), `Missing PR gate ${gate}`);
   }
+
+  assert.ok(prTemplate.includes("informational/non-authoritative while `docs/VERCEL_COST_CONTROL.md` routine-build skip is active"));
+  assert.ok(!prTemplate.includes("Normal Vercel Production release expected after merge"));
+  assert.ok(!prTemplate.includes("| Vercel Preview |"));
 });
 
 test("package scripts provide focused and aggregate Agent validation entry points", async () => {
