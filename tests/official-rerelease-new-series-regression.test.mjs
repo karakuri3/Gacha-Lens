@@ -252,3 +252,60 @@ test("run #12 rerelease artifact shape stays canonical through read-only audit a
   assert.equal(authorization.proposal.restock_events.insert, 1);
   assert.equal(authorization.proposal.database_writes, 7);
 });
+
+test("existing catalog canonical release still overrides newer rerelease evidence", () => {
+  const existingSeries = {
+    id: SERIES_ID,
+    slug: RECORD.slug,
+    name: RECORD.name,
+    franchise: RECORD.franchise,
+    brand: RECORD.brand,
+    category: RECORD.category,
+    release_date: "2019-12-15",
+    release_month: "12月",
+    release_week: "未定",
+    price: RECORD.price,
+    image_url: RECORD.image_url,
+    official_url: RECORD.official_url,
+    released: true,
+    source_type: "official_site",
+    review_required: false,
+  };
+
+  const report = buildOfficialReadOnlyAudit({
+    snapshot: {
+      fetched_at: "2026-09-06T07:14:36.688Z",
+      sources: SOURCES,
+      discovery_records: [RECORD],
+      formal_records: [RECORD],
+      issue_codes: [],
+    },
+    catalog: { series: [existingSeries], variants: [], restock_events: [] },
+    databaseBefore: COUNTS,
+    databaseAfter: { ...COUNTS },
+    workflow: { run_id: "existing-series-regression", head_sha: HEAD, event_name: "test" },
+  });
+
+  assert.equal(report.final_verdict, "OFFICIAL_READ_ONLY_PLAN_READY");
+  assert.deepEqual(report.plan.blockers, []);
+  assert.equal(report.plan.candidate_count, 1);
+  assert.deepEqual(report.plan.candidates[0].canonical_release, {
+    year: 2019,
+    month: 12,
+    release_date: "2019-12-15",
+    release_month: "12月",
+    release_week: "未定",
+    precision: "day",
+    source: "existing_catalog",
+  });
+  assert.deepEqual(report.plan.candidates[0].restock_event.evidence.canonical_release, {
+    year: 2019,
+    month: 12,
+    release_date: "2019-12-15",
+    release_month: "12月",
+    release_week: "未定",
+    precision: "day",
+  });
+  assert.equal(report.plan.candidates[0].restock_event.evidence.canonical_source, "existing_catalog");
+  assert.equal(report.plan.candidates[0].restock_event.id, "official-rerelease-a03ff2f86a260bf8c12dc6d7");
+});
