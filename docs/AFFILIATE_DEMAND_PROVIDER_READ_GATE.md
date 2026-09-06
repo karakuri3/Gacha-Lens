@@ -36,6 +36,23 @@ For each target it fails closed unless:
 
 The plan binds series/variant names plus listing IDs, provider-native IDs and public URLs into deterministic request keys.
 
+## Exact query binding
+
+A future executor is **not allowed to choose its own broad search term**. Each target carries exactly one deterministic query:
+
+`<series name> <variant name> ガチャ`
+
+Contract:
+
+- query profile: `affiliate_demand_exact_variant_v1`;
+- query strategy version: `1`;
+- maximum query length: 120 characters; over-length input fails closed rather than truncating silently;
+- fallback queries: prohibited;
+- the exact query is part of the request key and final SHA-256 approval digest;
+- changing the query or request key after binding invalidates the plan.
+
+This deliberately avoids inheriting broad/rotating market-discovery behavior. The dedicated later executor must pass this exact single root query into the provider request path with no generated fallback expansion.
+
 ## Provider request budget
 
 A future dedicated executor may use only this two-phase sequence per target:
