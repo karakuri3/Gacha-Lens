@@ -77,13 +77,17 @@ After the billing-cycle gate clears:
 
 1. release #258 CI baseline repair first;
 2. rebase/revalidate and release #253 category-route fix;
-3. synchronize canonical state as required;
-4. merge/rebase #257 R5 cohort planner;
-5. retarget/revalidate this #259 provider-read binding on the resulting main;
-6. fresh-recompute Production Scoreboard and cohort;
-7. build the exact read plan/digest;
-8. request a fresh human provider-read approval token;
-9. execute only the approved bounded read-only provider batch;
-10. review results before any separate persistence proposal.
+3. rebase/revalidate and release #261 F0 official rerelease canonical-year repair;
+4. observe the next natural scheduled F0 run and verify successful bounded behavior with no unexpected delta or new blocker;
+5. synchronize canonical state after the Production F0 milestone as required;
+6. merge/rebase #257 R5 cohort planner;
+7. retarget/revalidate this #259 / Draft #260 provider-read binding on the resulting main;
+8. fresh-recompute Production Scoreboard and cohort;
+9. build the exact read plan/digest;
+10. request a fresh human provider-read approval token;
+11. execute only the approved bounded read-only provider batch;
+12. review results before any separate persistence proposal.
+
+The F0 repair is intentionally ahead of R5 because scheduled runs #10, #11 and #12 on 2026-09-04 through 2026-09-06 selected the same four new series / 16 variants / one rerelease event and failed closed on the same canonical-release mismatch with Production writes remaining zero. Catalog freshness is therefore the active user-value blocker; R5 remains a later Data Scale experiment.
 
 Provider success never implies Production write approval. Persistence remains a later independent gate using the existing atomic/fail-closed contracts.
