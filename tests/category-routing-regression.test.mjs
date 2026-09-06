@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  categoryDiscoveryLookupCandidates,
   collectPublicCategoryFacets,
   isMeaningfulCategoryFacetName,
 } from "../lib/domain/category-discovery.js";
@@ -26,6 +27,19 @@ test("navigation placeholders remain excluded from category discovery", () => {
   for (const name of ["all", "all categories", "category", "categories", "すべて", "全て", "全カテゴリ", "カテゴリ", "カテゴリー", "unknown", "未分類"]) {
     assert.equal(isMeaningfulCategoryFacetName(name), false, `${name} must remain excluded`);
   }
+});
+
+test("category lookup accepts both decoded and runtime percent-encoded Japanese params", () => {
+  assert.deepEqual(categoryDiscoveryLookupCandidates("ガチャ"), ["ガチャ"]);
+  assert.deepEqual(
+    categoryDiscoveryLookupCandidates("%E3%82%AC%E3%83%81%E3%83%A3"),
+    ["%E3%82%AC%E3%83%81%E3%83%A3", "ガチャ"],
+  );
+});
+
+test("category lookup preserves raw literal percent escapes before any decoded fallback", () => {
+  assert.deepEqual(categoryDiscoveryLookupCandidates("50%20OFF"), ["50%20OFF", "50 OFF"]);
+  assert.deepEqual(categoryDiscoveryLookupCandidates("foo%ZZ"), ["foo%ZZ"]);
 });
 
 test("stored gacha taxonomy labels can produce public category facets", () => {
