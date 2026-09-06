@@ -195,6 +195,50 @@ test("disposable Supabase fails closed after ambiguous transport and supports co
   }
 });
 
+test("disposable Supabase stops the whole batch after a phase exhausts all three retryable attempts", { skip: !DB_AVAILABLE }, async () => {
+  const client = new Client();
+  await client.connect();
+  await client.query("begin");
+
+  try {
+    await client.query("set local role service_role");
+
+    const firstRequest = "affiliate-read-11112222333344445555";
+    const secondRequest = "affiliate-read-66667777888899990000";
+    const exhausted = await claim(client, {
+      digest: "5".repeat(64),
+      requestKeys: [firstRequest, secondRequest],
+    });
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await client.query(
+        "select public.reserve_affiliate_provider_read_attempt_v1($1, $2, 'discovery', $3)",
+        [exhausted.authorization_id, firstRequest, attempt],
+      );
+      await client.query(
+        "select public.finish_affiliate_provider_read_attempt_v1($1, $2, 'discovery', $3, 'retryable_failure', null)",
+        [exhausted.authorization_id, firstRequest, attempt],
+      );
+    }
+
+    await expectDbError(
+      client,
+      "select public.reserve_affiliate_provider_read_attempt_v1($1, $2, 'discovery', 1)",
+      [exhausted.authorization_id, secondRequest],
+      /batch_requires_terminalization/,
+    );
+
+    const terminal = await client.query(
+      "select public.finalize_affiliate_provider_read_authorization_v1($1, 'partial_or_ambiguous', 'provider_terminal_failure') as result",
+      [exhausted.authorization_id],
+    );
+    assert.equal(terminal.rows[0].result.state, "partial_or_ambiguous");
+  } finally {
+    await client.query("rollback");
+    await client.end();
+  }
+});
+
 test("anon cannot access private ledger or execute authorization RPC", { skip: !DB_AVAILABLE }, async () => {
   const client = new Client();
   await client.connect();
