@@ -1,4 +1,5 @@
 import handler from "vinext/server/fetch-handler";
+import { runWithPublicDataSourceFailureTracking } from "../lib/data/public-data-source-failure-context.js";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const NON_CACHEABLE_HTML_MARKERS = ["商品情報を取得できません"];
@@ -147,22 +148,11 @@ function getEdgeCachePolicy(request) {
   return null;
 }
 
-async function inspectDegradedHtmlResponse(request, response) {
-  if (request.method !== "GET" || isNextInternalRequest(request)) {
-    return { degraded: false, htmlMarkerChecked: false };
-  }
-  if (response.status !== 200) return { degraded: false, htmlMarkerChecked: false };
-
+function isTrackedDataFailureHtmlResponse(request, response) {
+  if (request.method !== "GET" || isNextInternalRequest(request)) return false;
+  if (response.status !== 200) return false;
   const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
-  if (!contentType.includes("text/html")) {
-    return { degraded: false, htmlMarkerChecked: false };
-  }
-
-  const body = await response.clone().text();
-  return {
-    degraded: NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker)),
-    htmlMarkerChecked: true,
-  };
+  return contentType.includes("text/html");
 }
 
 function buildDegradedResponse(response) {
@@ -181,17 +171,16 @@ function buildDegradedResponse(response) {
   });
 }
 
-async function canStoreResponse(response, policy, { htmlMarkerChecked = false } = {}) {
+async function canStoreResponse(response, policy) {
   if (!policy || response.status !== 200) return false;
   if (response.headers.has("set-cookie")) return false;
 
   const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
   if (!policy.contentTypes.some((expected) => contentType.includes(expected))) return false;
 
-  // Next.js error boundaries can render a branded error document while the outer
-  // HTTP response remains 200. Never let that transient document become the
-  // shared edge representation for an otherwise healthy public URL.
-  if (contentType.includes("text/html") && !htmlMarkerChecked) {
+  // Defense in depth for framework-rendered branded error documents. The primary
+  // degraded-state signal is request-scoped DataSourceError tracking below.
+  if (contentType.includes("text/html")) {
     const body = await response.clone().text();
     if (NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker))) return false;
   }
@@ -202,21 +191,19 @@ async function canStoreResponse(response, policy, { htmlMarkerChecked = false } 
 export default {
   async fetch(request, env, ctx) {
     const policy = getEdgeCachePolicy(request);
-    const response = await handler.fetch(request, env, ctx);
-    const degradedInspection = await inspectDegradedHtmlResponse(request, response);
+    const tracked = await runWithPublicDataSourceFailureTracking(() => handler.fetch(request, env, ctx));
+    const response = tracked.response;
 
-    // Next.js can serialize the branded data-source error boundary inside an
-    // outer HTTP 200. Convert GET HTML responses carrying that known signature
-    // into a temporary service-unavailable response. Classification uses the
-    // actual response Content-Type rather than the request Accept header so bots
-    // and generic HTTP clients cannot bypass the degraded-state semantics.
-    // Internal Next/RSC requests are excluded, no origin retry is added, and no
-    // stale product/market data is fabricated.
-    if (degradedInspection.degraded) {
+    // Next/vinext can stream a Server Component failure inside an outer HTTP 200,
+    // while the client error boundary renders only after hydration. DataSourceError
+    // marks the current async request context before that serialization occurs, so
+    // we can fail closed on the actual service dependency without matching generic
+    // React/Next error text or hiding unrelated programmer errors.
+    if (tracked.failed && isTrackedDataFailureHtmlResponse(request, response)) {
       return buildDegradedResponse(response);
     }
 
-    if (!(await canStoreResponse(response, policy, { htmlMarkerChecked: degradedInspection.htmlMarkerChecked }))) {
+    if (!(await canStoreResponse(response, policy))) {
       return response;
     }
 
