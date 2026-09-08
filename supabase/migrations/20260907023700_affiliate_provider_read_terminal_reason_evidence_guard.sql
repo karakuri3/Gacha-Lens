@@ -164,7 +164,7 @@ revoke execute on function public.finalize_affiliate_provider_read_authorization
 revoke execute on function public.finalize_affiliate_provider_read_authorization_v1(text, text, text) from authenticated;
 grant execute on function public.finalize_affiliate_provider_read_authorization_v1(text, text, text) to service_role;
 
--- PostgreSQL truncates the original 69-character constraint identifier to 63 characters.
+-- PostgreSQL truncates the original 64-character constraint identifier to 63 characters.
 -- Rename that generated identifier to an explicit stable name so catalog checks and future
 -- migrations never depend on an implicit truncation rule.
 do $block$
