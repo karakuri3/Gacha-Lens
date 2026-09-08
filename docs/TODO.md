@@ -1,8 +1,8 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-06 JST — technical Egress mitigation complete; residual billing-cycle gate remains
+Updated: 2026-09-08 JST — active Supabase restriction; Production freeze; repository-only prerequisites validated
 
-The company infrastructure migration is complete. The pre-final-cutover ordered queue is preserved at `docs/history/2026-09-05-pre-final-cutover-TODO.md` and in Git history.
+The company infrastructure migration is complete. Do not restart it.
 
 ## DONE — company infrastructure migration
 
@@ -12,117 +12,179 @@ The company infrastructure migration is complete. The pre-final-cutover ordered 
 - [x] complete scoped Supabase Stage 5 hardening
 - [x] preserve rollback paths and final cutover evidence
 
-Do not restart the infrastructure migration.
+## DONE — technical Egress mitigation
 
-## DONE — Issue #219 technical Egress mitigation
+### #249 shared edge reuse
+- [x] release bounded shared Cloudflare cache policies
+- [x] prove strict Preview `MISS -> HIT -> HIT`
+- [x] release to Cloudflare Production
+- [x] verify warm same-URL requests do not repeat the former backend bundle
 
-### P0-A
-- [x] release sitemap/read-amplification mitigation via PR #231
-- [x] retain 24h sitemap-class caching
+### #251 unique-path cold-read scope
+- [x] scope public detail/related signal reads to relevant variant identities
+- [x] preserve required set-listing safety semantics
+- [x] preserve rendered semantics
+- [x] measure representative signal JSON reduction: detail -65.5%, related -48.1%
+- [x] remove temporary diagnostics before Production
+- [x] release to Cloudflare Production
 
-### P0-B / PR #249 — shared edge reuse
-- [x] identify remaining discovery/full-loader amplification
-- [x] implement bounded Cloudflare Workers Cache policy
-- [x] cache expensive `/categories`, `/brands`, `/franchises` roots for 24h
-- [x] cache `/series` and first-page facet landings for 30m
-- [x] cache series detail for 30m
-- [x] preserve query/search/pagination/auth/cookie/Next-internal exclusions
-- [x] reject branded error HTML from shared cache
-- [x] pass repository/Preview/runtime/cache proof
-- [x] obtain explicit Production approval
-- [x] merge PR #249 as main `397584fabe633b511cc060ae85335dc4e85fa81d`
-- [x] deploy Cloudflare Production build `f1d61310-7e7e-44f5-8c3e-4eb791aca5ac`
-- [x] prove Production warm requests do not repeat the same observed backend bundle
+### Post-release technical observation
+- [x] observe ~0.0104 GB/day org-wide burn before enforcement
+- [x] confirm known sitemap fingerprint remained nearly flat (`681,256 -> 681,290` over ~36.3h)
+- [x] classify original amplification as technically controlled
+- [x] keep paid-plan requirement unestablished
 
-### P0-C / PR #251 — unique-path cold cost
-- [x] identify residual cold detail series-wide signal hydration
-- [x] scope detail/related market/X/restock/stock reads to relevant variant identities
-- [x] retain series-level complete/partial/popular set safety semantics
-- [x] safely omit persisted `raw` from variant-specific public reads where unused
-- [x] preserve displayed detail/related semantics
-- [x] measure representative A/B reduction: detail -65.5%, related -48.1% signal JSON
-- [x] remove temporary diagnostic route before Production candidacy
-- [x] pass clean test/lint + compatibility + Cloudflare Preview
-- [x] obtain explicit Production approval
-- [x] squash-merge PR #251 as main `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
-- [x] deploy Cloudflare Production build `6a86ca27-a105-410b-8862-308e4a2aca8e`
-- [x] verify public Japanese detail after release
-- [x] close implementation Issue #239 as completed/superseded
+## INCIDENT — 2026-09-08 Fair Use restriction
 
-## ACTIVE — final operational P0 gate (#219 / #238)
+Provider evidence:
+- [x] record `All services are restricted`
+- [x] record reason `Egress Exceeded`
+- [x] record organization Egress `25.242 / 5 GB`
+- [x] obtain project attribution: Gacha `23.003 GB`, Beach `0.444 GB`
+- [x] determine restriction is best explained by historical current-cycle overage, not renewed post-fix burn
+- [x] update #219
+- [x] update #238 to Production-freeze state
+- [x] avoid speculative Production workaround / paid upgrade / transfer-as-evasion
 
-Current evidence:
-- post-#249 baseline: 25.108 GB uncached Egress
-- refreshed value: 25.114 GB
-- elapsed: ~13.78h
-- delta: +0.006 GB
-- observed rate: ~0.00044 GB/hour / ~0.0104 GB/day org-wide
-- conservative target: <=0.12 GB/day
-- Cached Egress: 0.085 GB
-- current cycle: 2026-08-12–2026-09-12
-- Supabase banner: Grace period is over
-- HTTP 402: not currently observed
+## ACTIVE P0 — mandatory 2026-09-12 reset gate (#219/#238)
 
-Interpretation:
-- [x] technical amplification controlled with large operating margin
-- [x] Free-plan technical burn appears sustainable
-- [x] paid plan requirement remains unestablished
-- [ ] clear historical current-cycle Fair Use/402 risk
-- [ ] verify 2026-09-12 billing-cycle reset
-- [ ] verify post-reset Egress remains on a low trajectory
-- [ ] close #219 on final operational PASS
-- [ ] close #238 and fully reopen Production runtime merges
-- [ ] finalize/merge canonical docs PR #250 under explicit merge approval
+Do not attempt to clear this before fresh provider evidence exists.
 
-If 402 appears before reset:
-- [ ] keep #219/#238 open
-- [ ] determine whether the billing-cycle reset clears the restriction
-- [ ] do not buy Pro without separate owner approval
+After reset and any short provider-side clear delay:
+- [ ] confirm organization/project restriction is cleared
+- [ ] confirm no HTTP 402 remains
+- [ ] read fresh-cycle **Gacha-filtered** uncached Egress
+- [ ] measure burn over a meaningful fresh interval
+- [ ] verify Free-plan-compatible burn with safety margin
+- [ ] perform minimal public/runtime smoke without load-heavy diagnostics
+- [ ] confirm no recurrence of the former sitemap/runtime amplifier
+- [ ] update #219 with fresh evidence
+- [ ] update #238 and close freeze only if all gates are green
+- [ ] synchronize #250 canonical docs from the fresh post-reset state
+- [ ] only then consider routine Production merges again
 
-If post-reset burn unexpectedly becomes unsafe:
-- [ ] attribute only the largest remaining request/read amplifier
-- [ ] implement the smallest bounded mitigation with exact-head Preview/Production proof
+If restriction does not clear after reset:
+- [ ] preserve freeze
+- [ ] obtain provider-side status/billing evidence before making changes
+- [ ] do not buy Pro without separate current-price/terms review + explicit approval
+- [ ] do not use organization/project transfer as quota evasion
 
-## Development gate
+## DONE — #273 repository technical validation
 
-### Allowed now
-- [x] non-Production feature/design/research work on isolated branches
-- [x] Cloudflare Preview validation
-- [x] tests, docs, reviews and planning
+Draft #273 exact head: `42c8f9934a92cda0be5fd58f2dccc7d4db17299c`.
 
-### Still frozen until #219 final PASS
-- [ ] Production runtime merges to `main`
-- [ ] Production DB/schema/data changes by implication
-- [ ] DNS/Auth/write/admin-surface changes by implication
-- [ ] Secrets/Variables changes by implication
-- [ ] unrelated Production load/migration experiments
+- [x] add `forecast_snapshots` fresh-replay baseline before hardening migration
+- [x] avoid editing already-applied historical migrations
+- [x] static schema/security/order tests
+- [x] DB-backed Production-contract parity proof on disposable Supabase
+- [x] Code Quality SUCCESS
+- [x] vinext SUCCESS
+- [x] Foundation SUCCESS
+- [x] prove downstream compatibility with current #269 in #279
+- [x] create independent Reviewer packet without moving head
 
-After #238 fully closes, resume company prioritization:
+Remaining #273 gates:
+- [ ] obtain independent review
+- [ ] wait for #219/#238 freeze clearance
+- [ ] re-read fresh Production catalog + migration history before any release
+- [ ] design/approve exact Production migration-history reconciliation
+- [ ] explicitly reject blind `db push` if remote/local history still differs
+- [ ] apply/reconcile only under a separate Production change approval
 
-**Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
+## DONE — #269 repository technical validation
 
-Then reassess Search Console, traffic, outbound shop clicks, affiliate conversion/revenue, data freshness, and request efficiency before choosing the next bounded product/business experiment.
+Draft #269 exact head: `574a9a4c10c3fd6cd275229c95c9b3adef8de84f`.
 
-## Separate non-blocking debt
+- [x] durable one-time authorization claim
+- [x] replay/reopen/reset prevention
+- [x] 1..10 target / 2-phase / 3-attempt budget enforcement
+- [x] serial provider-attempt reservation
+- [x] discovery-before-affiliate-enrichment
+- [x] whole-batch stop after terminal/ambiguous/exhausted retry
+- [x] service-role-only private ledger
+- [x] no plaintext approval persistence
+- [x] terminal reason/evidence binding including `retry_exhausted`
+- [x] stable explicit name for PostgreSQL-truncated constraint
+- [x] exact-head Code Quality run `34195356451` SUCCESS
+- [x] vinext `34195356549` SUCCESS
+- [x] #279 disposable Foundation `34195410881` SUCCESS including cleanup
+- [x] 22 migrations from empty DB
+- [x] Foundation 14/14 PASS, skip0
+- [x] data-source/ledger DB 11/11 PASS, skip0
+- [x] final catalog 0 findings
+- [x] Next build PASS
+- [x] create independent Reviewer packet without moving exact head
+- [x] close validation-only #278/#279 without merge
 
-- [ ] decide whether Workers Logs should be enabled and with what retention/cost policy
-- [ ] keep `pg_net` relocation HOLD until fresh evidence
-- [ ] keep Candidate B global PUBLIC function-default revoke HOLD
-- [ ] revisit FK/unused-index work only if current workload justifies it
-- [ ] retire Vercel rollback artifact only after a separate explicit stabilization decision
+Remaining #269 gates:
+- [ ] obtain independent review
+- [ ] obtain #273 independent review + approved release/reconciliation
+- [ ] wait for #219/#238 freeze clearance
+- [ ] fresh #264 cohort recompute after the relevant main/data state is final
+- [ ] fresh #267 provider-read plan bound to then-current main
+- [ ] configuration readiness check without exposing secrets
+- [ ] obtain exact new human provider-read approval
+- [ ] only then consider implementing/running a live provider executor under a separately bounded task
 
-## HOLD — hard prohibitions
+**No provider call or affiliate persistence is currently authorized.**
 
-- [ ] DO NOT reuse consumed #228 authority
-- [ ] DO NOT make provider calls/writes under old authority
-- [ ] DO NOT dispatch/change workflows without applicable approval
+## Independent review boundary
+
+- [x] strengthened Lead self-review completed
+- [x] reviewer packets posted on #273/#269
+- [ ] independent Reviewer approval #273
+- [ ] independent Reviewer approval #269
+
+Do not mark these complete using another Lead/self-review pass.
+
+GitHub Copilot code review has previously been treated as a billable AI-credit boundary in this repository. Request it only after explicit owner approval. If a non-billable genuinely independent reviewer becomes available, it may be used without weakening the review scope.
+
+## Canonical docs — #250
+
+- [x] update `HANDOFF.md` to 2026-09-08 restriction + #273/#269 state
+- [x] update `STATUS.md`
+- [x] update `DECISIONS.md`
+- [x] update `TODO.md`
+- [ ] keep #250 Draft while Production freeze is active
+- [ ] after post-reset P0 PASS, refresh once more with final evidence before any main merge
+
+## Cross-project failure-domain follow-up
+
+After restriction clears:
+- [ ] obtain a fresh complete Beach backup
+- [ ] verify backup is green
+- [ ] transfer the **existing** Beach Supabase project to a dedicated Free organization under the Beach workstream
+- [ ] verify Beach post-transfer health
+
+Do not create a replacement Beach database and do not transfer during active restriction as a quota-evasion tactic.
+
+## Allowed while freeze is active
+
+- [x] isolated non-main feature/design/research work
+- [x] disposable/local tests
+- [x] non-Production Preview validation
+- [x] docs, review and planning
+
+## HOLD — Production actions
+
+- [ ] DO NOT merge Production runtime changes to `main`
+- [ ] DO NOT apply Production DB/schema/data/migration-history changes
+- [ ] DO NOT change DNS/Auth/write/admin surfaces by implication
 - [ ] DO NOT change Secrets/Variables by implication
-- [ ] DO NOT make Production DB/schema/data mutations by implication
-- [ ] DO NOT invoke paid actions/plan changes without approval
-- [ ] DO NOT use destructive actions without approval
-- [ ] DO NOT touch unrelated #232/#142 by implication
+- [ ] DO NOT run provider/load-generating experiments
+- [ ] DO NOT perform paid plan/billing changes without explicit approval
+- [ ] DO NOT reuse consumed prior authority
+- [ ] DO NOT dispatch/change workflows without applicable approval
 - [ ] DO NOT scrape Mercari or Amazon
 - [ ] DO NOT touch `supabase/.temp/cli-latest`
 - [ ] keep `.github/workflows/gacha-ingestion.yml` disabled
 - [ ] no automatic RPC retry
 - [ ] no direct main push
+
+## After freeze clears
+
+Resume company prioritization in this order:
+
+**Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
+
+Reassess Search Console, traffic, outbound shop clicks, affiliate conversion/revenue, data freshness and request efficiency before choosing the next bounded Production experiment.
