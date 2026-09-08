@@ -10,7 +10,8 @@ Updated: 2026-09-08 JST — Production Supabase restriction active; non-Producti
 - Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`).
 - Issue #219: **OPEN — Fair Use restriction/post-reset gate**.
 - Issue #238: **OPEN — Production freeze ACTIVE**.
-- Issue #262: **OPEN — release-governance policy conflict; mandatory before relying on normal Cloudflare auto-release after freeze**.
+- Issue #262: **OPEN — replacement policy is implemented in authorized Draft #265, but independent review + post-freeze landing remain pending**.
+- Draft #265 exact head: `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a`; Code Quality PASS; independent Reviewer/Verifier pending.
 - P0 runtime amplification mitigation #249/#251: **RELEASED / TECHNICALLY PASS**.
 - Routine Production runtime/DB changes: **FROZEN**.
 - Isolated non-Production feature/research/docs/review/test work: **ALLOWED**.
@@ -69,21 +70,24 @@ Frozen:
 - paid billing/plan actions without explicit approval
 - provider experiments or load-generating diagnostics
 
-## Release-governance blocker — #262
+## Release governance — #262 / Draft #265
 
-Cloudflare is now the live Production runtime, but standing `docs/PRODUCTION_RELEASE_POLICY.md` still describes exact-head Vercel Preview and Vercel Production deployment as release prerequisites. Routine Vercel Git builds were intentionally disabled after cutover for cost control.
+Cloudflare is now the live Production runtime, but current main still carries standing Vercel-specific release wording. Routine Vercel Git builds remain intentionally disabled after cutover for cost control.
 
-Current classification: **POLICY CONFLICT / OPEN**.
+The replacement policy has already been implemented in **authorized Draft #265**:
+- exact head `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a`;
+- explicit #262 policy-change authorization is recorded in the PR;
+- seven active policy/test files aligned to Cloudflare;
+- Code Quality `34045587975`: SUCCESS;
+- self-review and independent Reviewer/Verifier packet present;
+- independent Reviewer/Verifier result: **PENDING**;
+- mergeable: true.
 
-This must not be silently reinterpreted. Even if #219/#238 clear after the billing reset, normal Cloudflare Production merges must not rely on standing auto-release authority until #262 is explicitly resolved.
+Current classification: **IMPLEMENTED / VALIDATED / NOT YET AUTHORITATIVE ON MAIN**.
 
-Required future resolution under the applicable policy-change approval:
-1. review current Cloudflare cutover and rollback evidence;
-2. explicitly define the Cloudflare exact-head Preview/runtime/cache/security evidence replacing the obsolete Vercel-hosting assumptions;
-3. update `PRODUCTION_RELEASE_POLICY.md` plus linked Agent/auto-merge documentation consistently;
-4. add tests/docs checks preventing Vercel-vs-Cloudflare authority drift.
+The narrow prior policy-change authorization does not bypass the active freeze or authorize #265 to merge/release itself. After #219/#238 clear, re-fetch main/head, refresh exact-head evidence if needed, obtain genuine independent review (or a fresh #265-specific substitution if explicitly granted), then land #265 through the applicable safe path. Only after that should #262 close and standing Cloudflare release authority be relied upon.
 
-Do not re-enable Vercel builds merely to satisfy stale wording, and do not treat Cloudflare success as implicit permission to bypass the standing release gate.
+Do not re-enable Vercel builds merely to satisfy stale wording.
 
 ## #273 Foundation repair
 
@@ -132,24 +136,26 @@ Remaining:
 - independent review
 - #273 release/reconciliation gate
 - #219/#238 freeze clearance
-- #262 release-governance resolution before standing release authority is usable
+- #265/#262 release-governance resolution before standing release authority is usable
 - fresh #264/#267 rebind
 - configuration readiness preflight
 - exact new human provider-read approval
 
 Provider calls/persistence are **NOT AUTHORIZED**.
 
-## Final P0 gate
+## Mandatory post-reset order
 
 After the **2026-09-12 reset** and any provider clear delay:
-1. confirm restriction cleared / no 402;
-2. read fresh-cycle Gacha-filtered Egress;
-3. prove low safe burn with margin;
-4. run minimal public/runtime smoke without heavy diagnostics;
-5. confirm no amplification recurrence;
-6. synchronize #219/#238/#250 canonical state;
-7. then resolve #262 under explicit policy-change approval before relying on normal auto-release;
-8. only after both gates are green should routine Production development be reopened.
+1. close the P0 evidence gate: no 402, fresh Gacha-filtered Egress low, minimal smoke green, no amplification recurrence; update #219/#238/#250;
+2. independently review/revalidate and land #265, then close #262;
+3. revalidate and land #258 so runtime/cache proof is pinned to the then-current deployed source, under its workflow-change boundary;
+4. independently review #273, re-read Production catalog/history, approve the exact reconciliation strategy, then land/reconcile without blind `db push`;
+5. rebase/revalidate #253 and release the Japanese stored-category routing fix;
+6. rebase/revalidate #261, obtain the applicable Production approval, release, then observe the next natural bounded F0 run without forcing it;
+7. recompute the business scorecard. If monetization coverage still dominates, proceed `#264 -> #267 -> #269` with fresh main/data binding and no reused approval token;
+8. keep R5 Data Scale `#257/#260` on HOLD unless fresh evidence makes depth expansion higher priority.
+
+This order does not itself authorize any merge, Production mutation, workflow change, provider call, Secret/Variable action, or paid operation.
 
 ## Production infrastructure remains otherwise valid
 
