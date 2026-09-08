@@ -47,13 +47,13 @@ test("known Next.js error documents cannot become shared edge cache entries", ()
   assert.match(source, /NON_CACHEABLE_HTML_MARKERS = \["商品情報を取得できません"\]/);
   assert.match(source, /response\.clone\(\)\.text\(\)/);
   assert.match(source, /NON_CACHEABLE_HTML_MARKERS\.some\(\(marker\) => body\.includes\(marker\)\)/);
-  assert.match(source, /await canStoreResponse\(response, policy, \{ htmlMarkerChecked: htmlDocumentRequest \}\)/);
+  assert.match(source, /await canStoreResponse\(response, policy, \{ htmlMarkerChecked: degradedInspection\.htmlMarkerChecked \}\)/);
 });
 
 test("known branded data-source error HTML becomes an explicit temporary 503 before cache storage", () => {
   assert.match(source, /DEGRADED_RESPONSE_MARKER = "data-source-error-503-v1"/);
   assert.match(source, /DEGRADED_RETRY_AFTER_SECONDS = "3600"/);
-  assert.match(source, /async function isDegradedHtmlResponse\(response\)/);
+  assert.match(source, /async function inspectDegradedHtmlResponse\(request, response\)/);
   assert.match(source, /response\.status !== 200/);
   assert.match(source, /contentType\.includes\("text\/html"\)/);
   assert.match(source, /function buildDegradedResponse\(response\)/);
@@ -63,17 +63,19 @@ test("known branded data-source error HTML becomes an explicit temporary 503 bef
   assert.match(source, /headers\.set\("X-Gacha-Degraded", DEGRADED_RESPONSE_MARKER\)/);
   assert.match(source, /status: 503/);
   assert.match(source, /statusText: "Service Unavailable"/);
-  const degradedCheck = source.indexOf("if (htmlDocumentRequest && await isDegradedHtmlResponse(response))");
-  const cacheCheck = source.indexOf("if (!(await canStoreResponse(response, policy, { htmlMarkerChecked: htmlDocumentRequest })))");
+  const degradedCheck = source.indexOf("if (degradedInspection.degraded)");
+  const cacheCheck = source.indexOf("if (!(await canStoreResponse(response, policy, { htmlMarkerChecked: degradedInspection.htmlMarkerChecked })))");
   assert.ok(degradedCheck > -1 && cacheCheck > degradedCheck);
 });
 
-test("degraded inspection is limited to top-level GET HTML and avoids duplicate healthy body scans", () => {
-  assert.match(source, /function isHtmlDocumentRequest\(request\)/);
+test("degraded inspection covers crawler GET HTML by response type while excluding Next internal requests", () => {
+  assert.match(source, /async function inspectDegradedHtmlResponse\(request, response\)/);
   assert.match(source, /request\.method !== "GET" \|\| isNextInternalRequest\(request\)/);
-  assert.match(source, /return accept\.includes\("text\/html"\)/);
-  assert.match(source, /const htmlDocumentRequest = isHtmlDocumentRequest\(request\)/);
-  assert.match(source, /htmlDocumentRequest && await isDegradedHtmlResponse\(response\)/);
+  assert.doesNotMatch(source, /function isHtmlDocumentRequest\(request\)/);
+  assert.match(source, /const contentType = \(response\.headers\.get\("content-type"\) \?\? ""\)\.toLowerCase\(\)/);
+  assert.match(source, /if \(!contentType\.includes\("text\/html"\)\)/);
+  assert.match(source, /htmlMarkerChecked: true/);
+  assert.match(source, /const degradedInspection = await inspectDegradedHtmlResponse\(request, response\)/);
   assert.match(source, /async function canStoreResponse\(response, policy, \{ htmlMarkerChecked = false \} = \{\}\)/);
   assert.match(source, /contentType\.includes\("text\/html"\) && !htmlMarkerChecked/);
 });
