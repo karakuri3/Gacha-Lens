@@ -1,6 +1,6 @@
 # Gacha Lens Status
 
-Updated: 2026-09-08 JST — Production Supabase restriction active; non-Production development allowed; #273/#269 repository proof complete
+Updated: 2026-09-08 JST — Production Supabase restriction active; non-Production development allowed; repository-only prerequisites validated
 
 ## Executive state
 
@@ -10,6 +10,7 @@ Updated: 2026-09-08 JST — Production Supabase restriction active; non-Producti
 - Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`).
 - Issue #219: **OPEN — Fair Use restriction/post-reset gate**.
 - Issue #238: **OPEN — Production freeze ACTIVE**.
+- Issue #262: **OPEN — release-governance policy conflict; mandatory before relying on normal Cloudflare auto-release after freeze**.
 - P0 runtime amplification mitigation #249/#251: **RELEASED / TECHNICALLY PASS**.
 - Routine Production runtime/DB changes: **FROZEN**.
 - Isolated non-Production feature/research/docs/review/test work: **ALLOWED**.
@@ -68,6 +69,22 @@ Frozen:
 - paid billing/plan actions without explicit approval
 - provider experiments or load-generating diagnostics
 
+## Release-governance blocker — #262
+
+Cloudflare is now the live Production runtime, but standing `docs/PRODUCTION_RELEASE_POLICY.md` still describes exact-head Vercel Preview and Vercel Production deployment as release prerequisites. Routine Vercel Git builds were intentionally disabled after cutover for cost control.
+
+Current classification: **POLICY CONFLICT / OPEN**.
+
+This must not be silently reinterpreted. Even if #219/#238 clear after the billing reset, normal Cloudflare Production merges must not rely on standing auto-release authority until #262 is explicitly resolved.
+
+Required future resolution under the applicable policy-change approval:
+1. review current Cloudflare cutover and rollback evidence;
+2. explicitly define the Cloudflare exact-head Preview/runtime/cache/security evidence replacing the obsolete Vercel-hosting assumptions;
+3. update `PRODUCTION_RELEASE_POLICY.md` plus linked Agent/auto-merge documentation consistently;
+4. add tests/docs checks preventing Vercel-vs-Cloudflare authority drift.
+
+Do not re-enable Vercel builds merely to satisfy stale wording, and do not treat Cloudflare success as implicit permission to bypass the standing release gate.
+
 ## #273 Foundation repair
 
 Draft #273 exact head: `42c8f9934a92cda0be5fd58f2dccc7d4db17299c`.
@@ -115,6 +132,7 @@ Remaining:
 - independent review
 - #273 release/reconciliation gate
 - #219/#238 freeze clearance
+- #262 release-governance resolution before standing release authority is usable
 - fresh #264/#267 rebind
 - configuration readiness preflight
 - exact new human provider-read approval
@@ -130,7 +148,8 @@ After the **2026-09-12 reset** and any provider clear delay:
 4. run minimal public/runtime smoke without heavy diagnostics;
 5. confirm no amplification recurrence;
 6. synchronize #219/#238/#250 canonical state;
-7. then decide whether routine Production development can reopen.
+7. then resolve #262 under explicit policy-change approval before relying on normal auto-release;
+8. only after both gates are green should routine Production development be reopened.
 
 ## Production infrastructure remains otherwise valid
 
