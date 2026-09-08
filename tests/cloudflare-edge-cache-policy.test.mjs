@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
 const variantDetailSource = readFileSync(new URL("../app/series/[slug]/page.js", import.meta.url), "utf8");
+const parentSeriesDetailSource = readFileSync(new URL("../app/series/group/[slug]/page.js", import.meta.url), "utf8");
 
 const DAILY_DISCOVERY_INDEXES = ["/categories", "/brands", "/franchises"];
 
@@ -50,12 +51,39 @@ test("known Next.js error documents cannot become shared edge cache entries", ()
   assert.match(source, /await canStoreResponse\(response, policy\)/);
 });
 
-test("variant detail stays framework-dynamic and delegates shared reuse to Workers Cache", () => {
+test("variant and parent-series details share only the bounded 30 minute detail cache policy", () => {
   assert.match(variantDetailSource, /export const dynamic = "force-dynamic"/);
   assert.match(variantDetailSource, /export const revalidate = 0/);
-  assert.doesNotMatch(variantDetailSource, /export const dynamic = "force-static"/);
+  assert.match(parentSeriesDetailSource, /export const dynamic = "force-dynamic"/);
+  assert.match(parentSeriesDetailSource, /export const revalidate = 0/);
+  assert.match(parentSeriesDetailSource, /getParentSeriesBySlug/);
+
+  assert.match(source, /function isSeriesDetailCachePath\(pathname\)/);
+  assert.ok(source.includes('return /^\\/series\\/(?:[^/]+|group\\/[^/]+)$/.test(pathname);'));
+  assert.match(source, /isSeriesDetailCachePath\(url\.pathname\)/);
   assert.match(source, /marker: "series-detail-1800-v1"/);
   assert.match(source, /cacheControl: "public, max-age=1800, stale-while-revalidate=60"/);
+
+  const helper = source.slice(
+    source.indexOf("function isSeriesDetailCachePath"),
+    source.indexOf("function getEdgeCachePolicy")
+  );
+  assert.match(helper, /\^\\\/series/);
+  assert.match(helper, /group\\\/\[\^\/\]\+/);
+  assert.match(helper, /\$\/\.test\(pathname\)/);
+  assert.doesNotMatch(helper, /\.\*/);
+});
+
+test("series detail cache keeps production query variants ineligible and cacheproof preview-only", () => {
+  const detailBlock = source.slice(
+    source.indexOf("if (isSeriesDetailCachePath(url.pathname)"),
+    source.indexOf("// Discovery index roots")
+  );
+  assert.match(detailBlock, /url\.searchParams\.size === 0/);
+  assert.match(detailBlock, /url\.hostname\.endsWith\(PREVIEW_HOST_SUFFIX\)/);
+  assert.match(detailBlock, /url\.searchParams\.size === 1/);
+  assert.match(detailBlock, /url\.searchParams\.has\("cacheproof"\)/);
+  assert.match(detailBlock, /return null/);
 });
 
 test("series detail and sitemap cache contracts remain unchanged", () => {
