@@ -144,6 +144,19 @@ function isTrackedDataFailureHtmlResponse(request, response) {
   return contentType.includes("text/html");
 }
 
+async function fetchWithTrackedDataFailure(request, env, ctx) {
+  return runWithPublicDataSourceFailureTracking(async () => {
+    const response = await handler.fetch(request, env, ctx);
+    if (isTrackedDataFailureHtmlResponse(request, response)) {
+      // vinext/Next may resolve the Response before streamed Server Components
+      // finish rendering. Drain one clone while the AsyncLocalStorage context is
+      // still active so late DataSourceError construction marks this request.
+      await response.clone().text();
+    }
+    return response;
+  });
+}
+
 async function inspectDegradedHtmlResponse(request, response) {
   if (request.method !== "GET" || isNextInternalRequest(request)) {
     return { degraded: false, htmlMarkerChecked: false };
@@ -209,13 +222,13 @@ async function runP0281HandlerProbe(request, env, ctx) {
       "user-agent": "gacha-lens-p0-281-preview-probe",
     },
   });
-  const tracked = await runWithPublicDataSourceFailureTracking(() => handler.fetch(probeRequest, env, ctx));
+  const tracked = await fetchWithTrackedDataFailure(probeRequest, env, ctx);
   const response = tracked.response;
   const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
   const body = contentType.includes("text/html") ? await response.clone().text() : "";
 
   return Response.json({
-    probe: "p0-281-handler-v2",
+    probe: "p0-281-handler-v3",
     handler_status: response.status,
     content_type: contentType,
     tracked_data_source_failure: tracked.failed,
@@ -237,7 +250,7 @@ export default {
     }
 
     const policy = getEdgeCachePolicy(request);
-    const tracked = await runWithPublicDataSourceFailureTracking(() => handler.fetch(request, env, ctx));
+    const tracked = await fetchWithTrackedDataFailure(request, env, ctx);
     const response = tracked.response;
 
     if (tracked.failed && isTrackedDataFailureHtmlResponse(request, response)) {
