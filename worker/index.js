@@ -74,6 +74,12 @@ function isNextInternalRequest(request) {
   ].some((header) => request.headers.has(header));
 }
 
+function isHtmlDocumentRequest(request) {
+  if (request.method !== "GET" || isNextInternalRequest(request)) return false;
+  const accept = (request.headers.get("accept") ?? "").toLowerCase();
+  return accept.includes("text/html");
+}
+
 function isPublicCacheCandidate(request) {
   if (request.method !== "GET") return false;
   if (request.headers.has("authorization") || request.headers.has("cookie")) return false;
@@ -171,7 +177,7 @@ function buildDegradedResponse(response) {
   });
 }
 
-async function canStoreResponse(response, policy) {
+async function canStoreResponse(response, policy, { htmlMarkerChecked = false } = {}) {
   if (!policy || response.status !== 200) return false;
   if (response.headers.has("set-cookie")) return false;
 
@@ -181,7 +187,7 @@ async function canStoreResponse(response, policy) {
   // Next.js error boundaries can render a branded error document while the outer
   // HTTP response remains 200. Never let that transient document become the
   // shared edge representation for an otherwise healthy public URL.
-  if (contentType.includes("text/html")) {
+  if (contentType.includes("text/html") && !htmlMarkerChecked) {
     const body = await response.clone().text();
     if (NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker))) return false;
   }
@@ -193,17 +199,18 @@ export default {
   async fetch(request, env, ctx) {
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
+    const htmlDocumentRequest = isHtmlDocumentRequest(request);
 
     // Next.js can serialize the branded data-source error boundary inside an
-    // outer HTTP 200. Convert only that known HTML signature into a temporary
-    // service-unavailable response so crawlers and intermediaries do not mistake
-    // an outage document for a healthy page. This does not retry the origin or
-    // fabricate stale product/market data.
-    if (await isDegradedHtmlResponse(response)) {
+    // outer HTTP 200. Convert only top-level HTML document requests carrying that
+    // known signature into a temporary service-unavailable response so crawlers
+    // and intermediaries do not mistake an outage document for a healthy page.
+    // This does not retry the origin or fabricate stale product/market data.
+    if (htmlDocumentRequest && await isDegradedHtmlResponse(response)) {
       return buildDegradedResponse(response);
     }
 
-    if (!(await canStoreResponse(response, policy))) {
+    if (!(await canStoreResponse(response, policy, { htmlMarkerChecked: htmlDocumentRequest }))) {
       return response;
     }
 
