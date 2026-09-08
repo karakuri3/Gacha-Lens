@@ -1,6 +1,6 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-08 JST — Supabase Fair Use restriction active; Production freeze active; repository-only affiliate prerequisites validated
+Updated: 2026-09-08 JST — Supabase Fair Use restriction active; Production freeze active; repository-only prerequisites validated
 
 The company infrastructure Final Release/Cutover remains complete. Historical checkpoints remain in `docs/history/` and Git history.
 
@@ -9,11 +9,11 @@ The company infrastructure Final Release/Cutover remains complete. Historical ch
 If a fresh thread receives only **「Gacha Lens続けて」**:
 
 1. Read this file plus `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/FINAL_CUTOVER_2026-09-05.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
-2. Re-fetch current `main`, Issues #219/#238/#262, Draft PRs #250/#273/#269, their latest comments/reviews, and only the minimum Production evidence required for the next gate.
+2. Re-fetch current `main`, Issues #219/#238/#262, Draft PRs #250/#265/#273/#269, their latest comments/reviews, and only the minimum Production evidence required for the next gate.
 3. **Do not resume the company infrastructure migration. It is complete.** Cloudflare is the Production runtime and authoritative DNS.
 4. **Do not perform a Production workaround for the current Supabase restriction.** The restriction is the delayed effect of historical current-cycle Egress; released P0 mitigations remain technically PASS-like.
 5. Non-Production branch/Preview/test/docs/review work is allowed. Production runtime merges and Production DB/schema/data/history changes remain frozen under #219/#238.
-6. Even after freeze clears, do **not** rely on standing auto-release authority until #262 resolves the stale Vercel-specific `PRODUCTION_RELEASE_POLICY.md` against the current Cloudflare Production architecture.
+6. Even after freeze clears, do **not** rely on standing auto-release authority until Draft #265 resolves #262 and is independently reviewed/revalidated on then-current main.
 7. Do not merge/apply #273 or #269, call affiliate providers, alter Secrets/Variables, dispatch/change workflows, or perform paid/destructive actions without the separate applicable approval/gate.
 8. After every major Production/recovery/security/release milestone, synchronize `HANDOFF / STATUS / DECISIONS / TODO` before starting the next major phase.
 
@@ -83,19 +83,31 @@ Frozen:
 - provider-call/load-generating experiments
 - unrelated Production releases intended to bypass restriction
 
-## Release-governance blocker — #262
+## Release-governance blocker — #262 / Draft #265
 
-Issue #262 is OPEN because standing `docs/PRODUCTION_RELEASE_POLICY.md` still requires Vercel Preview/Production behavior even though Cloudflare is now the live Production runtime and routine Vercel Git builds were intentionally disabled for cost control.
+Issue #262 is still OPEN because standing `docs/PRODUCTION_RELEASE_POLICY.md` on `main` remains Vercel-specific while Cloudflare is the live Production runtime and routine Vercel Git builds are intentionally disabled.
 
-This conflict must **not** be silently reinterpreted.
+The policy replacement itself is **already implemented in authorized Draft #265**:
+- title: `policy: make Cloudflare the standing release authority`
+- exact head: `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a`
+- explicit #262 policy-change authorization is recorded in the PR body;
+- changed files: 7 active policy/test files;
+- PR Code Quality `34045587975`: SUCCESS;
+- main drift at proof time: 0;
+- mergeable: true;
+- strengthened self-review + independent Reviewer/Verifier packet: present;
+- independent Reviewer/Verifier result: **PENDING**.
 
-After #219/#238 clear and before relying on standing auto-release authority for any normal Cloudflare Production merge:
-1. review current Cloudflare cutover/rollback evidence;
-2. explicitly approve the replacement exact-head Preview/runtime proof for Cloudflare;
-3. update `PRODUCTION_RELEASE_POLICY.md` and linked Agent/auto-merge docs consistently under the applicable policy-change approval;
-4. add checks preventing Vercel-vs-Cloudflare authority drift.
+The prior explicit authorization is narrowly for aligning the standing policy to Cloudflare. It does **not** authorize #265 to bypass #219/#238, merge itself, manually deploy/promote Cloudflare, change Production DB/data/schema, change Secrets/Variables, dispatch workflows, or perform paid/destructive actions.
 
-Do not re-enable Vercel builds merely to satisfy stale wording, and do not treat Cloudflare success as implicit permission to bypass the standing release gate.
+After #219/#238 clear:
+1. re-fetch current main and #265 head/diff;
+2. re-run exact-head CI if main/head evidence is stale;
+3. obtain genuine independent Reviewer/Verifier evidence (or a fresh #265-specific substitution if explicitly granted);
+4. only then merge #265 through the applicable safe path;
+5. close #262 only after the reviewed policy is actually on main.
+
+Do not re-enable Vercel builds merely to satisfy stale wording and do not use #265 as authority to merge #265 itself.
 
 ## Repository-only Foundation repair — #273
 
@@ -145,24 +157,28 @@ A future provider read still requires:
 1. independent review of #269;
 2. independent review + approved release/reconciliation of #273;
 3. #219/#238 post-reset Production gate clearance;
-4. #262 release-governance resolution before relying on standing release authority;
+4. #265/#262 release-governance resolution before standing release authority is usable;
 5. fresh #264/#267 rebind to then-current main/data;
 6. configuration readiness check without exposing secrets;
 7. exact new human provider-read approval.
 
 GitHub Copilot code review has previously been treated in this repository as a billable AI-credit boundary. Do not request it without explicit owner approval. Self-review must not be represented as independent review.
 
-## Next mandatory gate
+## Mandatory post-reset release train
 
-After the **2026-09-12 billing-cycle reset** and any short provider-side clearing delay:
-1. confirm organization/project restriction is actually cleared and no 402 remains;
-2. read fresh-cycle **Gacha-filtered** Egress;
-3. verify low Free-plan-compatible burn with safety margin;
-4. perform minimal public/runtime smoke without load-heavy diagnostics;
-5. verify no recurrence of the former amplification;
-6. update #219/#238 and these canonical docs from fresh evidence;
-7. resolve #262 under explicit release-policy approval before relying on standing auto-release;
-8. only then consider reopening Production merges and separately releasing/reconciling #273/#269.
+After the **2026-09-12 billing-cycle reset** and any provider-side clear delay, do not release opportunistically. Use this order unless fresh evidence requires an explicit re-prioritization:
+
+1. **P0 closure:** prove restriction cleared/no 402, fresh Gacha-filtered Egress low, minimal runtime smoke green, no amplifier recurrence; update #219/#238/#250.
+2. **Governance:** independently review/revalidate and land #265; close #262 only after the Cloudflare standing policy is on main.
+3. **CI proof authority:** revalidate and land #258 so Cloudflare runtime/cache smoke is pinned to the then-current deployed Production source; workflow-file merge still requires its applicable approval boundary.
+4. **Migration reproducibility:** independently review #273, re-read Production catalog/migration history, approve the exact reconciliation strategy, then land/reconcile without blind `db push`.
+5. **User-value runtime fix:** rebase/revalidate #253 and release the Japanese stored-category routing fix with exact Cloudflare Preview/runtime proof.
+6. **Official-ingestion reliability:** rebase/revalidate #261, obtain the applicable Production approval, release, then observe the next natural bounded F0 run rather than forcing it.
+7. **Fresh business scorecard:** recompute traffic/click/affiliate/data-freshness evidence. If the current monetization-coverage gap still dominates, proceed `#264 -> #267 -> #269`, rebinding each layer to then-current main/data. Do not reuse old approval tokens.
+8. **Data Scale R5 remains HOLD** (`#257/#260`) unless the fresh scorecard shows depth expansion again outranks monetization coverage.
+9. Synchronize canonical docs after each major release/recovery/security milestone before advancing to the next major phase.
+
+This ordering is a planning contract, not blanket approval for any merge, Production write, workflow change, provider call, Secret/Variable action, or paid operation.
 
 ## Cross-project failure-domain follow-up
 
