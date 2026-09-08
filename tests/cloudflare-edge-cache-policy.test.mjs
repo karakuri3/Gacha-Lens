@@ -60,6 +60,19 @@ test("DataSourceError marks only the active async request context", () => {
   assert.match(dataSourcePolicySource, /class DataSourceError extends Error/);
 });
 
+test("streamed HTML is drained inside the tracked async context before failure mapping", () => {
+  assert.match(source, /async function fetchWithTrackedDataFailure\(request, env, ctx\)/);
+  const trackedFetchBlock = source.slice(
+    source.indexOf("async function fetchWithTrackedDataFailure"),
+    source.indexOf("function buildDegradedResponse")
+  );
+  assert.match(trackedFetchBlock, /runWithPublicDataSourceFailureTracking\(async \(\) =>/);
+  assert.match(trackedFetchBlock, /const response = await handler\.fetch\(request, env, ctx\)/);
+  assert.match(trackedFetchBlock, /isTrackedDataFailureHtmlResponse\(request, response\)/);
+  assert.match(trackedFetchBlock, /await response\.clone\(\)\.text\(\)/);
+  assert.match(trackedFetchBlock, /return response/);
+});
+
 test("tracked data-source HTML failures become explicit temporary 503 responses before cache storage", () => {
   assert.match(source, /runWithPublicDataSourceFailureTracking/);
   assert.match(source, /DEGRADED_RESPONSE_MARKER = "data-source-error-503-v1"/);
@@ -76,7 +89,7 @@ test("tracked data-source HTML failures become explicit temporary 503 responses 
   assert.match(source, /status: 503/);
   assert.match(source, /statusText: "Service Unavailable"/);
 
-  const trackedFetch = source.indexOf("const tracked = await runWithPublicDataSourceFailureTracking");
+  const trackedFetch = source.indexOf("const tracked = await fetchWithTrackedDataFailure");
   const degradedCheck = source.indexOf("if (tracked.failed && isTrackedDataFailureHtmlResponse(request, response))");
   const cacheCheck = source.indexOf("if (!(await canStoreResponse(response, policy)))");
   assert.ok(trackedFetch > -1 && degradedCheck > trackedFetch && cacheCheck > degradedCheck);
@@ -85,7 +98,7 @@ test("tracked data-source HTML failures become explicit temporary 503 responses 
 test("tracked failure mapping does not depend on request Accept and excludes Next internal requests", () => {
   const trackedBlock = source.slice(
     source.indexOf("function isTrackedDataFailureHtmlResponse"),
-    source.indexOf("function buildDegradedResponse")
+    source.indexOf("async function fetchWithTrackedDataFailure")
   );
   assert.doesNotMatch(trackedBlock, /request\.headers\.get\("accept"\)/);
   assert.match(trackedBlock, /isNextInternalRequest\(request\)/);
