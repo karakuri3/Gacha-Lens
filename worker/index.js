@@ -2,6 +2,8 @@ import handler from "vinext/server/fetch-handler";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const NON_CACHEABLE_HTML_MARKERS = ["商品情報を取得できません"];
+const DEGRADED_RESPONSE_MARKER = "data-source-error-503-v1";
+const DEGRADED_RETRY_AFTER_SECONDS = "3600";
 
 const EDGE_CACHE_POLICIES = {
   seriesDetail: {
@@ -145,6 +147,30 @@ function getEdgeCachePolicy(request) {
   return null;
 }
 
+async function isDegradedHtmlResponse(response) {
+  if (response.status !== 200) return false;
+  const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+  if (!contentType.includes("text/html")) return false;
+  const body = await response.clone().text();
+  return NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker));
+}
+
+function buildDegradedResponse(response) {
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", "no-store");
+  headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+  headers.set("Retry-After", DEGRADED_RETRY_AFTER_SECONDS);
+  headers.set("X-Gacha-Degraded", DEGRADED_RESPONSE_MARKER);
+  headers.delete("Cache-Tag");
+  headers.delete("X-Gacha-Edge-Cache-Policy");
+
+  return new Response(response.body, {
+    status: 503,
+    statusText: "Service Unavailable",
+    headers,
+  });
+}
+
 async function canStoreResponse(response, policy) {
   if (!policy || response.status !== 200) return false;
   if (response.headers.has("set-cookie")) return false;
@@ -167,6 +193,15 @@ export default {
   async fetch(request, env, ctx) {
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
+
+    // Next.js can serialize the branded data-source error boundary inside an
+    // outer HTTP 200. Convert only that known HTML signature into a temporary
+    // service-unavailable response so crawlers and intermediaries do not mistake
+    // an outage document for a healthy page. This does not retry the origin or
+    // fabricate stale product/market data.
+    if (await isDegradedHtmlResponse(response)) {
+      return buildDegradedResponse(response);
+    }
 
     if (!(await canStoreResponse(response, policy))) {
       return response;
