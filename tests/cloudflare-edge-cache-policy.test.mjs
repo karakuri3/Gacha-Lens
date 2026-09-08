@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
 const variantDetailSource = readFileSync(new URL("../app/series/[slug]/page.js", import.meta.url), "utf8");
+const dataSourcePolicySource = readFileSync(new URL("../lib/data/data-source-policy.js", import.meta.url), "utf8");
+const failureContextSource = readFileSync(new URL("../lib/data/public-data-source-failure-context.js", import.meta.url), "utf8");
 
 const DAILY_DISCOVERY_INDEXES = ["/categories", "/brands", "/franchises"];
 
@@ -43,17 +45,27 @@ test("Cloudflare public cache excludes authenticated, cookie, internal, and quer
   assert.match(discoveryBlock, /isDiscoveryDocumentPath\(url\.pathname\)/);
 });
 
-test("known Next.js error documents cannot become shared edge cache entries", () => {
+test("known branded error documents remain ineligible for shared edge cache", () => {
   assert.match(source, /NON_CACHEABLE_HTML_MARKERS = \["商品情報を取得できません"\]/);
   assert.match(source, /response\.clone\(\)\.text\(\)/);
   assert.match(source, /NON_CACHEABLE_HTML_MARKERS\.some\(\(marker\) => body\.includes\(marker\)\)/);
-  assert.match(source, /await canStoreResponse\(response, policy, \{ htmlMarkerChecked: degradedInspection\.htmlMarkerChecked \}\)/);
+  assert.match(source, /await canStoreResponse\(response, policy\)/);
 });
 
-test("known branded data-source error HTML becomes an explicit temporary 503 before cache storage", () => {
+test("DataSourceError marks only the active async request context", () => {
+  assert.match(failureContextSource, /AsyncLocalStorage/);
+  assert.match(failureContextSource, /failureContext\.run\(state, callback\)/);
+  assert.match(failureContextSource, /failureContext\.getStore\(\)/);
+  assert.match(dataSourcePolicySource, /markPublicDataSourceFailure\(\)/);
+  assert.match(dataSourcePolicySource, /class DataSourceError extends Error/);
+});
+
+test("tracked data-source HTML failures become explicit temporary 503 responses before cache storage", () => {
+  assert.match(source, /runWithPublicDataSourceFailureTracking/);
   assert.match(source, /DEGRADED_RESPONSE_MARKER = "data-source-error-503-v1"/);
   assert.match(source, /DEGRADED_RETRY_AFTER_SECONDS = "3600"/);
-  assert.match(source, /async function inspectDegradedHtmlResponse\(request, response\)/);
+  assert.match(source, /function isTrackedDataFailureHtmlResponse\(request, response\)/);
+  assert.match(source, /request\.method !== "GET" \|\| isNextInternalRequest\(request\)/);
   assert.match(source, /response\.status !== 200/);
   assert.match(source, /contentType\.includes\("text\/html"\)/);
   assert.match(source, /function buildDegradedResponse\(response\)/);
@@ -63,21 +75,21 @@ test("known branded data-source error HTML becomes an explicit temporary 503 bef
   assert.match(source, /headers\.set\("X-Gacha-Degraded", DEGRADED_RESPONSE_MARKER\)/);
   assert.match(source, /status: 503/);
   assert.match(source, /statusText: "Service Unavailable"/);
-  const degradedCheck = source.indexOf("if (degradedInspection.degraded)");
-  const cacheCheck = source.indexOf("if (!(await canStoreResponse(response, policy, { htmlMarkerChecked: degradedInspection.htmlMarkerChecked })))");
-  assert.ok(degradedCheck > -1 && cacheCheck > degradedCheck);
+
+  const trackedFetch = source.indexOf("const tracked = await runWithPublicDataSourceFailureTracking");
+  const degradedCheck = source.indexOf("if (tracked.failed && isTrackedDataFailureHtmlResponse(request, response))");
+  const cacheCheck = source.indexOf("if (!(await canStoreResponse(response, policy)))");
+  assert.ok(trackedFetch > -1 && degradedCheck > trackedFetch && cacheCheck > degradedCheck);
 });
 
-test("degraded inspection covers crawler GET HTML by response type while excluding Next internal requests", () => {
-  assert.match(source, /async function inspectDegradedHtmlResponse\(request, response\)/);
-  assert.match(source, /request\.method !== "GET" \|\| isNextInternalRequest\(request\)/);
-  assert.doesNotMatch(source, /function isHtmlDocumentRequest\(request\)/);
-  assert.match(source, /const contentType = \(response\.headers\.get\("content-type"\) \?\? ""\)\.toLowerCase\(\)/);
-  assert.match(source, /if \(!contentType\.includes\("text\/html"\)\)/);
-  assert.match(source, /htmlMarkerChecked: true/);
-  assert.match(source, /const degradedInspection = await inspectDegradedHtmlResponse\(request, response\)/);
-  assert.match(source, /async function canStoreResponse\(response, policy, \{ htmlMarkerChecked = false \} = \{\}\)/);
-  assert.match(source, /contentType\.includes\("text\/html"\) && !htmlMarkerChecked/);
+test("tracked failure mapping does not depend on request Accept and excludes Next internal requests", () => {
+  const trackedBlock = source.slice(
+    source.indexOf("function isTrackedDataFailureHtmlResponse"),
+    source.indexOf("function buildDegradedResponse")
+  );
+  assert.doesNotMatch(trackedBlock, /request\.headers\.get\("accept"\)/);
+  assert.match(trackedBlock, /isNextInternalRequest\(request\)/);
+  assert.match(trackedBlock, /response\.headers\.get\("content-type"\)/);
 });
 
 test("variant detail stays framework-dynamic and delegates shared reuse to Workers Cache", () => {
