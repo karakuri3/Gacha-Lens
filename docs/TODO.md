@@ -1,6 +1,6 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-08 JST — active Supabase restriction; Production freeze; repository-only prerequisites validated
+Updated: 2026-09-08 19:06 JST — active Supabase restriction; public-read P0; scheduled Production writes disabled; #282 repository/Preview validation complete
 
 The company infrastructure migration is complete. Do not restart it.
 
@@ -46,7 +46,74 @@ Provider evidence:
 - [x] update #238 to Production-freeze state
 - [x] avoid speculative Production workaround / paid upgrade / transfer-as-evasion
 
-## ACTIVE P0 — mandatory 2026-09-12 reset gate (#219/#238)
+## ACTIVE P0-A — pre-reset scheduled-write guard (#280)
+
+The quota restriction must not be the only barrier that prevents Production write lanes from waking after reset.
+
+Completed with explicit owner approval at **2026-09-08 16:52 JST**:
+- [x] set `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`
+- [x] set `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
+- [x] verify both values false in authenticated GitHub UI
+- [x] keep approval-token variables unchanged
+- [x] keep Secrets/workflows/main/Production DB unchanged
+- [x] repository-wide audit all known scheduled write-capable lanes
+- [x] confirm legacy `.github/workflows/gacha-ingestion.yml` remains manually Disabled
+- [x] confirm other market automatic lane top-level gate false
+- [x] confirm Kitan automatic remains false-by-default/no-op
+
+Natural evidence:
+- [ ] observe P3's first post-disable natural no-op/write0 run (`17 */3 * * *`; first opportunity 2026-09-08 18:17 JST)
+  - as of 19:06 JST no new schedule-event run is visible; this is **not yet observed**, not PASS
+- [ ] observe Official's first post-disable natural no-op/write0 run (daily 11:27 JST; first opportunity 2026-09-09 11:27 JST)
+- [ ] synchronize final #280 evidence into #238/#250
+- [ ] close #280 only after both natural evidence gates are satisfied
+
+Do not manually dispatch merely to manufacture evidence. Keep both enable variables false through #238 clearance. Future re-enable is a separate lane-specific authorization; the disable approval is consumed and non-reusable.
+
+## ACTIVE P0-B — public-read outage (#281)
+
+- [x] confirm core public data routes render `商品情報を取得できません` during active restriction
+- [x] confirm Production root can still be seen externally as HTTP 200 with only a tiny degraded shell (~39 chars)
+- [x] classify this as a real availability/HTTP-semantics incident, not only ingestion freshness
+- [x] create repository-only containment Draft #282
+- [x] keep Production untouched under #238
+
+After reset / before any normal release:
+- [ ] recheck `https://gachalens.com/` and representative public data routes
+- [ ] determine whether normal product data is restored
+- [ ] determine whether healthy HTTP semantics are restored
+- [ ] if restored, do **not** ship #282 merely because it is green; preserve/close it after canonical incident sync
+- [ ] if outage/outer-200 misclassification persists, keep #281 P0 and evaluate #282 under independent review + explicit applicable emergency/release authority
+
+## DONE — #282 repository/Preview technical validation
+
+Draft #282 exact head: `68465cfa344fda65c6968e6bdb1af11d6abbd983`.
+
+- [x] request-scoped `AsyncLocalStorage` failure tracking
+- [x] late streamed Server Component failure capture by draining one clone inside the same request context
+- [x] explicit public-data HTML allowlist
+- [x] exclude legal/editorial/admin/client/API surfaces from stream draining
+- [x] remap only tracked GET outer-200 `text/html`
+- [x] 503 + no-store + Retry-After + `X-Gacha-Degraded` contract
+- [x] preserve branded-marker cache exclusion as defense-in-depth
+- [x] no new Supabase/provider request or retry
+- [x] PR Code Quality `34212560491` SUCCESS
+- [x] full Node suite PASS
+- [x] route-scope regression PASS
+- [x] late-stream/concurrency tests PASS
+- [x] lint/whitespace PASS
+- [x] Cloudflare vinext POC `34212560379` SUCCESS
+- [x] exact-head Cloudflare Commit Preview deployment SUCCESS
+- [x] normal external scanner could not obtain exact Preview root during outage (`pagesScanned=0`)
+- [x] close validation-only #283 without merge
+- [x] post independent Reviewer/Verifier packet on exact head
+- [ ] obtain independent Reviewer/Verifier result
+- [ ] keep Draft while #238 is active
+- [ ] after reset, decide whether containment is still needed before considering release
+
+**#282 is containment, not data recovery. No Production merge/deploy is currently authorized.**
+
+## ACTIVE P0-C — mandatory 2026-09-12 reset gate (#219/#238)
 
 Do not attempt to clear this before fresh provider evidence exists.
 
@@ -61,6 +128,7 @@ After reset and any short provider-side clear delay:
 - [ ] update #219 with fresh evidence
 - [ ] update #238 and close freeze only if all gates are green
 - [ ] synchronize #250 canonical docs from the fresh post-reset state
+- [ ] keep #280 P3/Official enable variables false during closure
 
 If restriction does not clear after reset:
 - [ ] preserve freeze
@@ -87,8 +155,6 @@ Current evidence:
 - [ ] re-fetch main/head and refresh exact-head evidence if stale
 - [ ] merge #265 only through the applicable safe path; #265 cannot authorize its own merge
 - [ ] close #262 only after the reviewed Cloudflare standing policy is on main
-
-The existing authorization does **not** authorize bypass of #219/#238, manual Cloudflare promotion/dispatch, Production DB/data/schema changes, Secrets/Variables, paid/destructive actions, auth-boundary changes, or new Production-capable lanes.
 
 Do **not** re-enable routine Vercel builds merely to satisfy old wording.
 
@@ -156,8 +222,10 @@ Remaining #269 gates:
 ## Independent review boundary
 
 - [x] strengthened Lead self-review completed
+- [x] Reviewer/Verifier packet posted on #282
 - [x] Reviewer/Verifier packet posted on #265
 - [x] Reviewer packet posted on #273/#269
+- [ ] independent Reviewer/Verifier result #282
 - [ ] independent Reviewer/Verifier result #265
 - [ ] independent Reviewer result #273
 - [ ] independent Reviewer result #269
@@ -168,22 +236,30 @@ GitHub Copilot code review has previously been treated as a billable AI-credit b
 
 ## Canonical docs — #250
 
-- [x] update `HANDOFF.md` to 2026-09-08 restriction + #265/#273/#269 state
+- [x] update `HANDOFF.md` to current 2026-09-08 restriction + #280/#281/#282/#265/#273/#269 state
 - [x] update `STATUS.md`
 - [x] update `DECISIONS.md`
 - [x] update `TODO.md`
-- [x] record authorized Draft #265 instead of treating #262 as unimplemented policy work
-- [x] unify the post-reset release train in all canonical docs
+- [x] record approved scheduled-lane disable state
+- [x] record public-read P0 and #282 disposition
+- [x] unify reset/release sequence with incident reassessment before normal release train
 - [ ] keep #250 Draft while Production freeze is active
 - [ ] after post-reset P0 PASS, refresh once more with final evidence before any main merge
 
-## Mandatory post-reset release train
+## Mandatory reset/release train
 
-Do not release opportunistically after the restriction clears. Default order:
+Do not release opportunistically after the restriction clears.
 
-### 1. P0 closure
-- [ ] complete the 2026-09-12 #219/#238 evidence gate
+### 0. Incident reassessment — #281/#282
+- [ ] check whether product data is restored
+- [ ] check HTTP status semantics on root + representative data routes
+- [ ] if healthy, do not release #282 unnecessarily
+- [ ] if still degraded/outer-200, keep #281 P0 and require #282 independent review + explicit release authority
+
+### 1. P0 closure — #219/#238
+- [ ] complete the 2026-09-12 evidence gate
 - [ ] synchronize #250 from fresh post-reset evidence
+- [ ] keep #280 P3/Official enable variables false
 
 ### 2. Release governance — #265
 - [ ] independent Reviewer/Verifier
@@ -204,19 +280,19 @@ Do not release opportunistically after the restriction clears. Default order:
 - [ ] approve exact migration-history reconciliation
 - [ ] land/reconcile without blind `db push`
 - [ ] confirm current-main Foundation baseline green
-- [ ] then close #270/#271 if their closure gates are satisfied
+- [ ] then close #270/#271 if closure gates are satisfied
 
 ### 5. User-value routing — #253
 - [ ] rebase/revalidate onto then-current main
 - [ ] exact Cloudflare Preview/browser/runtime proof for Japanese category pages
-- [ ] release through the then-authoritative policy
+- [ ] release through then-authoritative policy
 
 ### 6. Official-ingestion reliability — #261
 - [ ] rebase/revalidate onto then-current main
-- [ ] obtain applicable Production approval because the next natural F0 schedule may enter its bounded write path
+- [ ] obtain applicable Production approval
 - [ ] release
-- [ ] observe the next **natural** bounded F0 run; do not force a workflow dispatch
-- [ ] canonical sync after the natural-run result
+- [ ] observe the next **natural** bounded F0 run; do not force workflow dispatch
+- [ ] canonical sync after natural-run result
 
 ### 7. Fresh business scorecard
 - [ ] recompute traffic, clicks, affiliate coverage, data freshness and request efficiency
@@ -225,7 +301,13 @@ Do not release opportunistically after the restriction clears. Default order:
 - [ ] never reuse old provider approval tokens
 
 ### 8. Data Scale R5 HOLD
-- [ ] keep #257/#260 on HOLD unless the fresh scorecard shows depth expansion again outranks monetization coverage
+- [ ] keep #257/#260 on HOLD unless fresh evidence shows depth expansion again outranks monetization coverage
+
+### 9. Scheduled automatic lane resume is separate
+- [ ] do not re-enable P3 or Official merely because #238 closes
+- [ ] obtain lane-specific authorization
+- [ ] re-enable only the specifically approved lane
+- [ ] verify bounded natural execution after re-enable
 
 This queue is a planning/order contract only. It grants no merge, Production mutation, workflow change, provider call, Secret/Variable action, or paid operation.
 
@@ -237,7 +319,7 @@ After restriction clears:
 - [ ] transfer the **existing** Beach Supabase project to a dedicated Free organization under the Beach workstream
 - [ ] verify Beach post-transfer health
 
-Do not create a replacement Beach database and do not transfer during active restriction as a quota-evasion tactic.
+Do not create a replacement Beach database and do not transfer during active restriction as quota evasion.
 
 ## Allowed while freeze is active
 
@@ -252,6 +334,7 @@ Do not create a replacement Beach database and do not transfer during active res
 - [ ] DO NOT apply Production DB/schema/data/migration-history changes
 - [ ] DO NOT change DNS/Auth/write/admin surfaces by implication
 - [ ] DO NOT change Secrets/Variables by implication
+- [ ] DO NOT re-enable #280 lanes by implication
 - [ ] DO NOT run provider/load-generating experiments
 - [ ] DO NOT perform paid plan/billing changes without explicit approval
 - [ ] DO NOT reuse consumed prior authority

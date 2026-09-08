@@ -1,8 +1,8 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-08 JST — Fair Use restriction active; Production freeze active; repository-only prerequisite validation complete
+Updated: 2026-09-08 19:06 JST — Fair Use restriction + public-read P0 active; scheduled writes explicitly disabled; #282 validated but unreleased
 
-The complete historical decision record remains preserved in Git history and the pre-final-cutover history files. Decisions D-001 through D-150 remain authoritative unless explicitly superseded below. This file focuses the active canonical state and new decisions needed to resume safely.
+The complete historical decision record remains preserved in Git history and the pre-final-cutover history files. Decisions D-001 through D-152 remain authoritative unless explicitly superseded below. This file focuses the active canonical state and the new decisions required to resume safely.
 
 ## Existing durable state retained
 
@@ -34,11 +34,11 @@ Their released behavior remains authoritative:
 - historical cumulative Egress must be interpreted separately from post-fix burn rate;
 - internal operating-margin target remains approximately `<=0.12 GB/day` organization-wide until re-evaluated from fresh-cycle evidence.
 
-## New authoritative decisions
+## Active durable decisions carried forward
 
 ### D-142 — 2026-09-08 Fair Use restriction is historical-cycle enforcement, not automatic evidence of mitigation regression
 
-Provider evidence now shows:
+Provider evidence shows:
 - Free organization state: **All services are restricted**;
 - reason: **Egress Exceeded**;
 - cycle: 2026-08-12 -> 2026-09-12;
@@ -48,7 +48,7 @@ Provider evidence now shows:
 
 Before enforcement, post-mitigation burn was about **0.0104 GB/day**, far below the internal operating target, and the known sitemap fingerprint remained nearly flat.
 
-Therefore the best-supported interpretation is that the active restriction is delayed enforcement of historical current-cycle usage accumulated before/around the mitigation, not proof that #249/#251 failed.
+Therefore the best-supported interpretation is delayed enforcement of historical current-cycle usage, not proof #249/#251 failed.
 
 Consequences:
 - do not launch a speculative new Production runtime rewrite solely because 402/restriction appeared;
@@ -56,9 +56,7 @@ Consequences:
 - do not use project/org transfer as active-restriction quota evasion;
 - wait for clean post-reset evidence before changing the technical conclusion.
 
-### D-143 — #238 is now a Production freeze, not merely a partial-risk note
-
-Non-Production work remains allowed, but Production-changing work is frozen while the organization is restricted.
+### D-143 — #238 is a Production freeze while restriction remains active
 
 Allowed:
 - isolated branches;
@@ -71,21 +69,18 @@ Frozen:
 - Production runtime merges to main;
 - Production DB/schema/data/migration-history changes;
 - DNS/Auth/write/admin changes;
-- Secrets/Variables changes;
+- Secrets/Variables changes without explicit applicable approval;
 - paid plan/billing changes without explicit approval;
 - provider/load-generating experiments;
 - unrelated Production releases intended to bypass restriction.
 
-### D-144 — shared Supabase organization is an unacceptable long-term failure domain for Gacha + Beach
+### D-144 — shared Supabase organization is an unacceptable long-term Gacha + Beach failure domain
 
-Project-filtered evidence shows Beach is low-egress but was affected by Gacha's shared organization quota.
-
-After the restriction clears and a fresh complete backup is green, the existing Beach Supabase project should be transferred to a dedicated Free organization. This is a future Project Transfer, not creation of a replacement database and not a quota-evasion action during restriction.
+After restriction clears and a fresh complete backup is green, transfer the existing Beach Supabase project to a dedicated Free organization. This is future failure-domain isolation, not a replacement database and not active-restriction quota evasion.
 
 ### D-145 — #273 is the canonical repository repair for the fresh migration-chain `forecast_snapshots` gap
 
-Draft PR #273 exact head:
-`42c8f9934a92cda0be5fd58f2dccc7d4db17299c`
+Draft #273 exact head: `42c8f9934a92cda0be5fd58f2dccc7d4db17299c`.
 
 Accepted repository evidence:
 - Code Quality SUCCESS;
@@ -93,19 +88,16 @@ Accepted repository evidence:
 - Foundation SUCCESS;
 - downstream combined empty-DB proof via #279 SUCCESS.
 
-The repair intentionally places `20260904152325_restore_forecast_snapshots_baseline.sql` immediately before the already-existing `20260904152326_final_revoke_server_only_api_grants.sql` so fresh replay can reach the hardening migration.
-
 Durable constraints:
 - already-applied historical migration files must not be edited;
-- #273 repository proof does **not** authorize Production DDL or migration-history mutation;
-- future Production reconciliation must begin with fresh live catalog/history parity evidence;
-- blind Production `db push` is not an approved reconciliation strategy;
-- independent review is still required before release/reconciliation.
+- repository proof does not authorize Production DDL or migration-history mutation;
+- future Production reconciliation begins with fresh live catalog/history parity evidence;
+- blind Production `db push` is not approved;
+- independent review remains required.
 
 ### D-146 — #269 is the canonical durable one-time affiliate provider-read authorization boundary
 
-Draft #269 exact head:
-`574a9a4c10c3fd6cd275229c95c9b3adef8de84f`
+Draft #269 exact head: `574a9a4c10c3fd6cd275229c95c9b3adef8de84f`.
 
 Durable contract:
 - exact one-time `(head_sha, batch_digest)` claim;
@@ -113,13 +105,13 @@ Durable contract:
 - replay/reopen/reset blocked;
 - 1..10 targets, exactly two logical phases per target, max three attempts per phase;
 - serial attempt reservation;
-- discovery must succeed before affiliate enrichment;
+- discovery before affiliate enrichment;
 - whole-batch fail-close after terminal, ambiguous, or exhausted third retryable attempt;
 - private service-role-only ledger using `SECURITY INVOKER` + empty `search_path`;
-- terminal reasons are bound to durable attempt evidence, including `retry_exhausted`;
+- terminal reasons bound to durable attempt evidence, including `retry_exhausted`;
 - no successful approval can become reusable.
 
-Current accepted repository proof:
+Accepted repository proof:
 - exact-head Code Quality `34195356451`: SUCCESS;
 - exact-head vinext `34195356549`: SUCCESS;
 - #279 disposable Foundation `34195410881`: SUCCESS including cleanup;
@@ -133,23 +125,21 @@ This does not authorize a live provider executor, affiliate persistence, Product
 
 ### D-147 — self-review cannot satisfy the independent Reviewer gate
 
-Strengthened self-review may find and fix defects, but must never be represented as independent approval.
+Strengthened self-review may find/fix defects but must never be represented as independent approval.
 
-For #269 and #273:
-- independent Reviewer packets are fixed in PR comments without moving the exact heads;
-- GitHub Copilot code review has previously been treated in this repository as a billable AI-credit boundary;
+For #265/#273/#269/#282:
+- Reviewer/Verifier packets may be prepared without moving proven heads;
+- GitHub Copilot code review has historically been treated as a billable AI-credit boundary;
 - do not request a billable reviewer without explicit owner approval;
 - do not weaken/remove the independent review requirement merely to unblock merge.
 
 ### D-148 — preserve proven exact heads instead of continuing low-value edits
 
-After exact-head CI + disposable DB proof are green, do not add nonessential code/docs to the proven implementation branch because doing so invalidates the exact-head evidence and forces revalidation.
-
-Canonical documentation updates belong in docs-only Draft #250, while #273/#269 heads should remain stable pending independent review and post-freeze release gates.
+After exact-head CI/Preview/disposable proof is green, avoid nonessential changes to the proven implementation branch because every edit invalidates exact-head evidence. Canonical documentation changes belong in docs-only Draft #250.
 
 ### D-149 — post-reset P0 closure order is mandatory
 
-After the **2026-09-12 billing reset** and any short provider-side restriction-clear delay:
+After the **2026-09-12 billing reset** and any short provider clear delay:
 1. confirm restriction actually clears and no 402 remains;
 2. read fresh-cycle **Gacha-filtered** Egress;
 3. prove low Free-plan-compatible burn with safety margin;
@@ -157,58 +147,115 @@ After the **2026-09-12 billing reset** and any short provider-side restriction-c
 5. confirm no recurrence of the former amplification;
 6. synchronize #219/#238/#250 canonical state.
 
-This clears only the P0/freeze gate. Production release authority has an additional policy gate in D-150/D-151.
+This clears only the P0/freeze gate. Production release authority still has additional governance/review gates.
 
 ### D-150 — #262 must be resolved explicitly before standing Cloudflare auto-release authority can be used
 
-Issue #262 documents a real standing-policy conflict:
-- Cloudflare is now Production and routine Vercel Git builds are intentionally disabled;
-- `docs/PRODUCTION_RELEASE_POLICY.md` on current main still requires exact-head Vercel Preview and describes Vercel Production deployment as the standing release path.
-
-The two conditions cannot be silently reconciled by interpretation.
+Current main still carries Vercel-specific standing release semantics while Cloudflare is Production and routine Vercel builds are intentionally disabled.
 
 Hard consequences:
-- Cloudflare CI/Preview success is not implicit permission to bypass the stale standing policy;
+- Cloudflare CI/Preview success is not implicit permission to bypass stale standing policy;
 - do not re-enable Vercel builds merely to satisfy obsolete wording;
-- #262 is a mandatory governance gate even after the Supabase freeze clears;
-- #273/#269 Production releases/reconciliation remain separately approved changes after #262.
+- #262 remains a mandatory governance gate after the Supabase freeze clears.
 
-### D-151 — authorized Draft #265 is the canonical implementation of the #262 Cloudflare policy alignment
+### D-151 — authorized Draft #265 is the canonical implementation of #262 Cloudflare policy alignment
 
-The #262 replacement policy is not merely a proposal anymore. It is implemented in Draft PR #265:
-- exact head: `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a`;
-- explicit user authorization for the #262 policy alignment is recorded in the PR body;
-- seven active policy/test files are aligned;
+Draft #265:
+- exact head `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a`;
+- seven active policy/test files aligned;
 - PR Code Quality `34045587975`: SUCCESS;
-- strengthened self-review + independent Reviewer/Verifier packet are present;
-- independent Reviewer/Verifier result remains **PENDING**;
-- #265 is still Draft and not authoritative on main.
+- strengthened self-review + Reviewer/Verifier packet present;
+- independent result **PENDING**;
+- still Draft and not authoritative on main.
 
-The recorded authorization is narrow. It authorizes the policy alignment work, not bypass of #219/#238, not self-merge, not manual Cloudflare deploy/promotion/dispatch, and not any Production DB/data/schema, Secrets/Variables, workflow-dispatch, paid/destructive, or auth-boundary action.
-
-After the P0 freeze clears:
-1. re-fetch current main and #265 exact diff;
-2. refresh exact-head validation if main/head evidence is stale;
-3. obtain independent Reviewer/Verifier evidence, or a fresh #265-specific substitution only if explicitly granted;
-4. land #265 through the applicable safe merge path;
-5. close #262 only after the reviewed Cloudflare standing policy is actually on main.
-
-#265 must never be used as authority to merge #265 itself.
+The recorded authorization is narrow: it authorizes policy-alignment work, not bypass of #219/#238, self-merge, manual Cloudflare deploy/promotion, Production DB/data/schema, Secrets/Variables, workflow dispatch, paid/destructive actions, or auth-boundary changes.
 
 ### D-152 — post-freeze release train is ordered, not opportunistic
 
-After D-149 P0 clearance, use this default sequence unless fresh evidence justifies an explicit reprioritization:
+After D-149 clearance, default sequence remains governance (#265/#262) -> CI proof authority (#258) -> migration reproducibility (#273) -> user-value routing (#253) -> official-ingestion reliability (#261) -> fresh business scorecard / `#264 -> #267 -> #269` if monetization coverage still dominates -> R5 Data Scale HOLD unless reprioritized by fresh evidence.
 
-1. **Governance:** #265/#262 first, so later releases have a coherent Cloudflare standing policy.
-2. **CI proof authority:** #258 next, repinning runtime/cache smoke to the then-current deployed source under its workflow-change approval boundary.
-3. **Migration reproducibility:** #273 after independent review + fresh Production catalog/history parity + explicit reconciliation strategy; never blind `db push`.
-4. **User value:** #253 Japanese stored-category routing fix after fresh rebase/exact Cloudflare Preview/runtime proof.
-5. **Official-ingestion reliability:** #261 after fresh rebase/validation + applicable Production approval; observe the next natural bounded F0 run rather than forcing it.
-6. **Business scorecard:** recompute traffic/click/affiliate/data-freshness evidence. If monetization coverage still dominates, proceed `#264 -> #267 -> #269`, rebinding each layer to then-current main/data and never reusing an old approval token.
-7. **Data Scale R5:** keep #257/#260 HOLD unless the fresh scorecard shows depth expansion again outranks monetization coverage.
-8. Synchronize canonical docs after each major release/recovery/security milestone.
+New incident decisions below modify what must happen **before** that sequence begins.
 
-This ordering is not blanket approval for merge, Production mutation, workflow change, provider execution, Secret/Variable changes, or paid operations.
+## New decisions — 2026-09-08 incident delta
+
+### D-153 — quota recovery must not automatically wake scheduled Production write lanes
+
+The active 402 restriction was unintentionally acting as a stop barrier for two already-enabled scheduled Production lanes. This is not acceptable because `restriction cleared` does **not** imply `Production freeze cleared`.
+
+With explicit owner approval, at **2026-09-08 16:52 JST**:
+- `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`;
+- `OFFICIAL_BOUNDED_AUTO_ENABLED=false`.
+
+Repository-wide audit also confirms:
+- legacy `.github/workflows/gacha-ingestion.yml` remains manually Disabled;
+- the other market automatic lane has its top-level gate false;
+- Kitan automatic remains false-by-default/no-op.
+
+Durable consequence:
+- both newly-disabled variables remain false even if 402 disappears;
+- they may be re-enabled only after #238 is formally closed **and** the corresponding lane receives a new explicit authorization;
+- the #280 disable approval is consumed and cannot be reused as re-enable authority.
+
+### D-154 — absence of a GitHub scheduled run is not successful no-op evidence
+
+P3's first post-disable natural schedule opportunity was **2026-09-08 18:17 JST**. As of **19:06 JST**, no new schedule-event run was present in the latest repository Actions collection.
+
+This must be recorded as **`natural run not yet observed`**, not as no-op PASS. GitHub schedules may be delayed/dropped. No manual dispatch should be used merely to manufacture evidence while the freeze is active.
+
+Official lane's first post-disable natural opportunity is **2026-09-09 11:27 JST**.
+
+#280 remains open until actual natural no-op/write0 evidence is captured and canonical state is synchronized.
+
+### D-155 — the Supabase restriction has become a real public-read P0, and outer HTTP 200 is part of the incident
+
+Production core data pages can render the branded failure state `商品情報を取得できません` during the restriction. Fresh external read-only scanning still observed `https://gachalens.com` root as HTTP **200** while extracting only a tiny degraded shell.
+
+Therefore:
+- this is not merely ingestion freshness degradation;
+- crawlers/intermediaries can misclassify an outage document as healthy content;
+- preventing healthy-200 classification is a legitimate containment objective;
+- containment must never fabricate product/market/stock/restock data or add aggressive Supabase retries.
+
+Issue #281 is the canonical P0 incident record.
+
+### D-156 — Draft #282 is the canonical validated containment, but it is not an automatic post-reset release
+
+Draft #282 exact head: `68465cfa344fda65c6968e6bdb1af11d6abbd983`.
+
+Accepted engineering evidence:
+- PR Code Quality `34212560491`: SUCCESS;
+- Cloudflare vinext POC `34212560379`: SUCCESS;
+- exact-head Cloudflare Commit Preview deployment SUCCESS;
+- normal external scanner could not obtain the exact Preview root during the outage (`pagesScanned=0`);
+- rejected intermediate head `9d9558fd...` had exposed a UA split, proving the final stream-drain step addressed a real timing gap;
+- unresolved review threads 0 at latest check;
+- independent Reviewer/Verifier packet posted;
+- independent result **PENDING**.
+
+Durable design constraints:
+- `DataSourceError` is tracked in request-scoped `AsyncLocalStorage`;
+- only explicitly allowlisted public data GET HTML routes drain one clone of the already-produced vinext response inside the tracked context;
+- only tracked outer-200 `text/html` responses are remapped to temporary 503/no-store semantics;
+- legal/editorial/admin/client/API surfaces stay outside the stream-drain allowlist;
+- no extra Supabase/provider request or retry is introduced;
+- buffering cost is limited to the public data HTML allowlist and should be treated as incident containment, not a final streaming optimization.
+
+Release consequence:
+- #282 remains Draft under #238;
+- it is **containment, not data recovery**;
+- after the 2026-09-12 reset, first recheck #281: if normal data and healthy HTTP semantics return, do **not** ship #282 merely because it is green; preserve/close it after canonical incident sync;
+- if outage/outer-200 misclassification persists, #282 stays P0 but still requires genuine independent review plus explicit applicable Production release/emergency authority.
+
+### D-157 — incident reassessment precedes the existing post-freeze release train
+
+Before D-152's governance-first release sequence starts after reset:
+1. reassess #281/public data service and HTTP semantics;
+2. decide whether #282 is still necessary;
+3. complete D-149 P0 closure evidence;
+4. keep #280 variables false throughout closure;
+5. only after #238 formally closes may D-152 begin.
+
+Re-enabling scheduled automatic lanes is **not** part of D-152 and remains separate lane-specific authorization work.
 
 ## Current durable state
 
@@ -219,6 +266,9 @@ This ordering is not blanket approval for merge, Production mutation, workflow c
 - Supabase Fair Use restriction: **ACTIVE as of 2026-09-08**
 - #219: **OPEN**
 - #238: **OPEN / PRODUCTION FREEZE ACTIVE**
+- #280: **OPEN / P3 + Official enable variables FALSE / natural evidence pending**
+- #281: **OPEN / PUBLIC-READ P0 ACTIVE**
+- #282: **DRAFT / ENGINEERING PASS / INDEPENDENT REVIEW PENDING / PRODUCTION RELEASE FROZEN**
 - #262: **OPEN / authorized replacement implemented in Draft #265 / independent review pending**
 - #250: **DRAFT canonical docs sync**
 - #273: **DRAFT / repository proof PASS / independent review pending**
@@ -235,6 +285,8 @@ This ordering is not blanket approval for merge, Production mutation, workflow c
 - no direct main push
 - no workflow dispatch/change by implication
 - no Secrets/Variables change by implication
+- #280 disable authority is consumed; do not re-enable by implication
 - no Production DB/schema/data/history mutation by implication
 - no provider call/write by implication
 - no paid/destructive action without applicable approval
+- do not scrape Mercari or Amazon
