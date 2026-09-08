@@ -1,7 +1,10 @@
 import handler from "vinext/server/fetch-handler";
+import { runWithPublicDataSourceFailureTracking } from "../lib/data/public-data-source-failure-context.js";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const NON_CACHEABLE_HTML_MARKERS = ["商品情報を取得できません"];
+const DEGRADED_RESPONSE_MARKER = "data-source-error-503-v1";
+const DEGRADED_RETRY_AFTER_SECONDS = "3600";
 
 const EDGE_CACHE_POLICIES = {
   seriesDetail: {
@@ -62,6 +65,21 @@ const PUBLIC_SITEMAP_PATHS = new Set([
   "/variant-sitemap.xml",
 ]);
 
+// Only these HTML surfaces render public product/catalog data during SSR. Keep
+// streamed-response draining away from legal/editorial/admin pages so the P0
+// containment does not add buffering cost or failure coupling to unrelated HTML.
+const PUBLIC_DATA_HTML_EXACT_PATHS = new Set([
+  "/",
+  "/series",
+  "/ranking",
+  "/schedule",
+  "/restocks",
+  "/stock",
+  "/categories",
+  "/brands",
+  "/franchises",
+]);
+
 function isNextInternalRequest(request) {
   return [
     "rsc",
@@ -80,6 +98,12 @@ function isPublicCacheCandidate(request) {
 
 function isDiscoveryDocumentPath(pathname) {
   if (DISCOVERY_DOCUMENT_PATHS.has(pathname)) return true;
+  return /^\/(?:categories|brands|franchises)\/[^/]+$/.test(pathname);
+}
+
+function isPublicDataHtmlPath(pathname) {
+  if (PUBLIC_DATA_HTML_EXACT_PATHS.has(pathname)) return true;
+  if (/^\/series\/(?:[^/]+|group\/[^/]+)$/.test(pathname)) return true;
   return /^\/(?:categories|brands|franchises)\/[^/]+$/.test(pathname);
 }
 
@@ -145,6 +169,44 @@ function getEdgeCachePolicy(request) {
   return null;
 }
 
+function isTrackedDataFailureHtmlResponse(request, response) {
+  if (request.method !== "GET" || isNextInternalRequest(request)) return false;
+  if (!isPublicDataHtmlPath(new URL(request.url).pathname)) return false;
+  if (response.status !== 200) return false;
+  const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+  return contentType.includes("text/html");
+}
+
+async function fetchWithTrackedDataFailure(request, env, ctx) {
+  return runWithPublicDataSourceFailureTracking(async () => {
+    const response = await handler.fetch(request, env, ctx);
+    if (isTrackedDataFailureHtmlResponse(request, response)) {
+      // vinext/Next may resolve the Response before streamed Server Components
+      // finish rendering. Drain one clone while the AsyncLocalStorage context is
+      // still active so a late DataSourceError marks this exact request before we
+      // decide whether the outer HTTP 200 must become a temporary 503.
+      await response.clone().text();
+    }
+    return response;
+  });
+}
+
+function buildDegradedResponse(response) {
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", "no-store");
+  headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+  headers.set("Retry-After", DEGRADED_RETRY_AFTER_SECONDS);
+  headers.set("X-Gacha-Degraded", DEGRADED_RESPONSE_MARKER);
+  headers.delete("Cache-Tag");
+  headers.delete("X-Gacha-Edge-Cache-Policy");
+
+  return new Response(response.body, {
+    status: 503,
+    statusText: "Service Unavailable",
+    headers,
+  });
+}
+
 async function canStoreResponse(response, policy) {
   if (!policy || response.status !== 200) return false;
   if (response.headers.has("set-cookie")) return false;
@@ -152,9 +214,8 @@ async function canStoreResponse(response, policy) {
   const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
   if (!policy.contentTypes.some((expected) => contentType.includes(expected))) return false;
 
-  // Next.js error boundaries can render a branded error document while the outer
-  // HTTP response remains 200. Never let that transient document become the
-  // shared edge representation for an otherwise healthy public URL.
+  // Defense in depth for framework-rendered branded error documents. The primary
+  // degraded-state signal is request-scoped DataSourceError tracking below.
   if (contentType.includes("text/html")) {
     const body = await response.clone().text();
     if (NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker))) return false;
@@ -166,7 +227,16 @@ async function canStoreResponse(response, policy) {
 export default {
   async fetch(request, env, ctx) {
     const policy = getEdgeCachePolicy(request);
-    const response = await handler.fetch(request, env, ctx);
+    const tracked = await fetchWithTrackedDataFailure(request, env, ctx);
+    const response = tracked.response;
+
+    // Next/vinext may stream a Server Component failure after handler.fetch has
+    // produced the Response object. fetchWithTrackedDataFailure drains a clone
+    // before reading the request-scoped flag so browser and crawler requests on
+    // known public data HTML surfaces receive the same degraded HTTP semantics.
+    if (tracked.failed && isTrackedDataFailureHtmlResponse(request, response)) {
+      return buildDegradedResponse(response);
+    }
 
     if (!(await canStoreResponse(response, policy))) {
       return response;
