@@ -74,12 +74,6 @@ function isNextInternalRequest(request) {
   ].some((header) => request.headers.has(header));
 }
 
-function isHtmlDocumentRequest(request) {
-  if (request.method !== "GET" || isNextInternalRequest(request)) return false;
-  const accept = (request.headers.get("accept") ?? "").toLowerCase();
-  return accept.includes("text/html");
-}
-
 function isPublicCacheCandidate(request) {
   if (request.method !== "GET") return false;
   if (request.headers.has("authorization") || request.headers.has("cookie")) return false;
@@ -153,12 +147,22 @@ function getEdgeCachePolicy(request) {
   return null;
 }
 
-async function isDegradedHtmlResponse(response) {
-  if (response.status !== 200) return false;
+async function inspectDegradedHtmlResponse(request, response) {
+  if (request.method !== "GET" || isNextInternalRequest(request)) {
+    return { degraded: false, htmlMarkerChecked: false };
+  }
+  if (response.status !== 200) return { degraded: false, htmlMarkerChecked: false };
+
   const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
-  if (!contentType.includes("text/html")) return false;
+  if (!contentType.includes("text/html")) {
+    return { degraded: false, htmlMarkerChecked: false };
+  }
+
   const body = await response.clone().text();
-  return NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker));
+  return {
+    degraded: NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker)),
+    htmlMarkerChecked: true,
+  };
 }
 
 function buildDegradedResponse(response) {
@@ -199,18 +203,20 @@ export default {
   async fetch(request, env, ctx) {
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
-    const htmlDocumentRequest = isHtmlDocumentRequest(request);
+    const degradedInspection = await inspectDegradedHtmlResponse(request, response);
 
     // Next.js can serialize the branded data-source error boundary inside an
-    // outer HTTP 200. Convert only top-level HTML document requests carrying that
-    // known signature into a temporary service-unavailable response so crawlers
-    // and intermediaries do not mistake an outage document for a healthy page.
-    // This does not retry the origin or fabricate stale product/market data.
-    if (htmlDocumentRequest && await isDegradedHtmlResponse(response)) {
+    // outer HTTP 200. Convert GET HTML responses carrying that known signature
+    // into a temporary service-unavailable response. Classification uses the
+    // actual response Content-Type rather than the request Accept header so bots
+    // and generic HTTP clients cannot bypass the degraded-state semantics.
+    // Internal Next/RSC requests are excluded, no origin retry is added, and no
+    // stale product/market data is fabricated.
+    if (degradedInspection.degraded) {
       return buildDegradedResponse(response);
     }
 
-    if (!(await canStoreResponse(response, policy, { htmlMarkerChecked: htmlDocumentRequest }))) {
+    if (!(await canStoreResponse(response, policy, { htmlMarkerChecked: degradedInspection.htmlMarkerChecked }))) {
       return response;
     }
 
