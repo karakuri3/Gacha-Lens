@@ -229,10 +229,11 @@ test("disposable Supabase stops the whole batch after a phase exhausts all three
     );
 
     const terminal = await client.query(
-      "select public.finalize_affiliate_provider_read_authorization_v1($1, 'partial_or_ambiguous', 'provider_terminal_failure') as result",
+      "select public.finalize_affiliate_provider_read_authorization_v1($1, 'partial_or_ambiguous', 'retry_exhausted') as result",
       [exhausted.authorization_id],
     );
     assert.equal(terminal.rows[0].result.state, "partial_or_ambiguous");
+    assert.equal(terminal.rows[0].result.reason_code, "retry_exhausted");
   } finally {
     await client.query("rollback");
     await client.end();
