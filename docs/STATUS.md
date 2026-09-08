@@ -1,116 +1,153 @@
 # Gacha Lens Status
 
-Updated: 2026-09-06 JST — Egress amplification technically mitigated; historical billing-cycle risk remains
-
-The company infrastructure migration remains complete. The full pre-cutover checkpoint is preserved at `docs/history/2026-09-05-pre-final-cutover-STATUS.md` and in Git history.
+Updated: 2026-09-08 JST — Production Supabase restriction active; non-Production development allowed; #273/#269 repository proof complete
 
 ## Executive state
 
 - Company infrastructure migration: **COMPLETE**.
-- Production web runtime: Cloudflare Worker `gacha-lens` on `https://gachalens.com`.
+- Production runtime: Cloudflare Worker `gacha-lens` on `https://gachalens.com`.
+- Production `main`: `83b0b36e5d0172f3ea6964206edad6480a13b4bb`.
 - Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`).
-- Issue #219 Supabase Egress: **TECHNICAL MITIGATION PASS / BILLING-CYCLE STABILIZATION OPEN**.
-- Issue #238 change freeze: **PARTIALLY RELAXED** — non-Production development allowed; Production runtime merges remain frozen.
-- Issue #239 implementation lane: **CLOSED / COMPLETED** by #249 + #251.
-- Normal feature development: **allowed on isolated branches/Previews**; routine Production runtime releases wait for #219 final gate.
+- Issue #219: **OPEN — Fair Use restriction/post-reset gate**.
+- Issue #238: **OPEN — Production freeze ACTIVE**.
+- P0 runtime amplification mitigation #249/#251: **RELEASED / TECHNICALLY PASS**.
+- Routine Production runtime/DB changes: **FROZEN**.
+- Isolated non-Production feature/research/docs/review/test work: **ALLOWED**.
+- #273 Foundation repair: **repository validation PASS / independent review pending / Production history reconciliation not authorized**.
+- #269 affiliate authorization ledger: **repository validation PASS / independent review pending / provider execution not authorized**.
 
-## Production mitigation — PASS
+## Egress mitigation — still technically valid
 
-### PR #249 — shared edge reuse
+### #249 — shared edge reuse
+- main `397584fabe633b511cc060ae85335dc4e85fa81d`
+- Production Cloudflare build SUCCESS
+- strict Preview `MISS -> HIT -> HIT` PASS
 
-- main commit: `397584fabe633b511cc060ae85335dc4e85fa81d`
-- Cloudflare Production build: `f1d61310-7e7e-44f5-8c3e-4eb791aca5ac` — SUCCESS
-- strict Preview cache proof: byte-identical `MISS -> HIT -> HIT`
-- expensive discovery roots bounded by shared Cloudflare cache policies
-- Japanese detail and public runtime smoke PASS
+### #251 — unique-path cold-read scope
+- main `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
+- Production Cloudflare build SUCCESS
+- representative signal JSON reduction: detail **65.5%**, related **48.1%**
+- rendered semantics preserved
 
-### PR #251 — unique-path cold-read scope
+Before restriction enforcement, observed organization burn was about **0.0104 GB/day**, far below the internal `<=0.12 GB/day` target. The known sitemap fingerprint also remained almost flat: `681,256 -> 681,290` over ~36.3h (+34, under 1 call/hour average), with no stats reset.
 
-- explicitly approved and squash-merged to main: `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
-- Cloudflare Production build: `6a86ca27-a105-410b-8862-308e4a2aca8e` — SUCCESS
-- Production version: `00e608fa-153c-40ef-b8b9-d5700c270066`
-- detail/related public signal reads scoped to relevant `variant_id` / `matched_variant_id` identities
-- series-level set listings that require persisted safety metadata remain preserved
-- bounded Preview A/B preserved rendered semantics while reducing representative signal JSON by **65.5% on detail** and **48.1% on related**
-- temporary diagnostics removed before Production candidacy
+## Supabase Fair Use restriction — current truth
 
-A controlled same-URL Production detail reload repeated three times produced one observed detail-shaped backend bundle rather than three separately repeated warm bundles, consistent with edge reuse. Distinct cold product paths can still produce scoped backend work by design.
-
-## Supabase Usage — current truth
-
-Current organization Usage:
+Provider-side evidence recorded 2026-09-08:
+- cycle: **2026-08-12 -> 2026-09-12**
 - plan: Free
-- billing cycle: 2026-08-12–2026-09-12
-- uncached Egress: **25.114 GB / 5 GB**
-- Cached Egress: **0.085 GB / 5 GB**
-- Supabase banner: **Grace period is over**
-- HTTP 402: **not currently observed**
+- state: **All services are restricted**
+- reason: **Egress Exceeded**
+- organization Egress: **25.242 / 5 GB (505%)**
+- Cached Egress: **0.087 / 5 GB**
+- Gacha Lens project Egress: **23.003 GB**
+- Beach project Egress: **0.444 GB**
+- provider warns requests may return HTTP **402**
 
-Post-#249 Production baseline was 25.108 GB around 02:31 JST. By ~16:18 JST Usage was 25.114 GB: +0.006 GB over ~13.78h.
+Interpretation:
+- Gacha Lens is the dominant historical contributor to this cycle's shared-org Egress;
+- post-mitigation burn evidence remains low;
+- restriction is best classified as delayed current-cycle enforcement, not evidence of renewed runtime amplification;
+- do not make speculative Production rewrites or paid-plan changes solely to work around this historical-cycle state.
 
-Approximate org-wide observed rate:
-- **0.00044 GB/hour**
-- **0.0104 GB/day**
+## Freeze boundary
 
-This is far below the conservative operating target `<=0.12 GB/day` and is strong evidence that the original read-amplification problem is technically controlled.
+Allowed:
+- isolated branches
+- disposable/local DB validation
+- Preview deployments that do not mutate Production
+- static/repository testing
+- docs/review/planning
+- low-impact read-only observation
 
-Important distinction: the 25.114 GB cumulative value contains historical pre-fix traffic and cannot be reduced retroactively. The remaining risk is current-cycle Fair Use enforcement before the billing-cycle reset, not an identified unresolved read amplifier.
-
-## Current decision
-
-- edge/shared-cache implementation: **PASS**
-- unique-path cold-read reduction: **PASS**
-- post-release burn rate: **PASS-like with large margin**
-- paid plan required: **NOT ESTABLISHED**
-- historical current-cycle 402 risk: **OPEN until cleared**
-- #219: keep OPEN for the residual billing-cycle gate
-- #238: keep OPEN but partially relaxed
-- #239: CLOSED / completed
-
-## Allowed now
-
-- feature/design/research work on non-main branches
-- Cloudflare Preview validation
-- tests, docs, reviews, planning
-- work that does not mutate Production resources or obscure the P0 observation window
-
-## Still frozen until #219 final gate
-
+Frozen:
 - Production runtime merges to `main`
-- Production DB/schema/data changes
-- DNS/Auth/write/admin-surface changes
+- Production DB/schema/data/migration-history changes
+- DNS/Auth/write/admin changes
 - Secrets/Variables changes
-- paid plan/billing changes without explicit approval
-- unrelated Production migrations or load-generating experiments
+- paid billing/plan actions without explicit approval
+- provider experiments or load-generating diagnostics
 
-## Final gate
+## #273 Foundation repair
 
-Prefer final closure after the 2026-09-12 billing-cycle reset confirms:
-1. no HTTP 402/Fair Use restriction;
-2. Egress quota resets as expected;
-3. low post-reset burn remains compatible with the Free plan;
-4. #219 and #238 can be closed and routine Production development fully reopened.
+Draft #273 exact head: `42c8f9934a92cda0be5fd58f2dccc7d4db17299c`.
 
-Do not buy a paid plan merely to erase historical usage. Any paid-plan change requires current evidence and explicit owner approval.
+Evidence:
+- Code Quality `34193107686`: SUCCESS
+- vinext `34193107664`: SUCCESS
+- Foundation `34193107736`: SUCCESS
+- downstream combined disposable proof #279: SUCCESS
 
-## Production infrastructure state remains valid
+Purpose: restore the Production-existing `forecast_snapshots` baseline before the hardening migration so fresh repository replay succeeds without editing already-applied historical migrations.
 
-- authoritative DNS: Cloudflare (`lady.ns.cloudflare.com`, `tony.ns.cloudflare.com`)
+Remaining:
+- independent review
+- post-freeze fresh Production catalog parity check
+- separately approved migration-history reconciliation strategy
+- no blind Production `db push`
+
+## #269 durable affiliate provider-read authorization ledger
+
+Exact head: `574a9a4c10c3fd6cd275229c95c9b3adef8de84f`.
+
+Evidence:
+- exact-head Code Quality `34195356451`: SUCCESS
+- exact-head vinext `34195356549`: SUCCESS
+- disposable Foundation #279 / `34195410881`: SUCCESS including cleanup
+- empty DB: 22 migrations applied
+- Foundation: **14/14 PASS, skipped 0**
+- data-source/ledger DB: **11/11 PASS, skipped 0**
+- final catalog: 0 findings
+- Next build: PASS
+
+Key safety properties:
+- atomic one-time exact head/digest claim
+- no plaintext approval storage
+- replay/reopen/reset blocked
+- 1..10 targets × two phases × max three attempts
+- discovery-before-enrichment
+- serial attempt reservation
+- whole-batch fail-close on terminal/ambiguous/exhausted retry
+- terminal reason/evidence binding (`provider_terminal_failure`, `ambiguous_transport`, `retry_exhausted`)
+- service-role-only private ledger
+
+Remaining:
+- independent review
+- #273 release/reconciliation gate
+- #219/#238 freeze clearance
+- fresh #264/#267 rebind
+- configuration readiness preflight
+- exact new human provider-read approval
+
+Provider calls/persistence are **NOT AUTHORIZED**.
+
+## Final P0 gate
+
+After the **2026-09-12 reset** and any provider clear delay:
+1. confirm restriction cleared / no 402;
+2. read fresh-cycle Gacha-filtered Egress;
+3. prove low safe burn with margin;
+4. run minimal public/runtime smoke without heavy diagnostics;
+5. confirm no amplification recurrence;
+6. synchronize #219/#238/#250 canonical state;
+7. then decide whether routine Production development can reopen.
+
+## Production infrastructure remains otherwise valid
+
+- authoritative DNS: Cloudflare
 - apex: Worker Custom Domain -> `gacha-lens`
-- `www`: Cloudflare 301 redirect to apex with path/query preservation
-- Vercel: registrar and non-live rollback artifact only; routine Git builds disabled
+- `www`: Cloudflare redirect to apex
+- Vercel: registrar and non-live rollback artifact only
 - Stage 5 Supabase hardening recommended subset: applied and verified
-- Workers Logs: disabled; do not claim log-stream review
-- Cloudflare deployment history retains prior versions for rollback
+- Workers Logs: disabled; do not claim a Worker log-stream review
 
-## Approval boundaries
+## Hard approval boundaries
 
 - no direct main push
-- no paid/destructive action without applicable approval
-- no Production DB/schema/data mutation by implication
+- no paid/destructive action without approval
+- no Production DB/schema/data/history mutation by implication
 - no workflow dispatch/change by implication
 - no Secrets/Variables change by implication
-- consumed #228 authority remains non-reusable
 - keep `.github/workflows/gacha-ingestion.yml` disabled
 - never touch `supabase/.temp/cli-latest`
 - no automatic RPC retry
