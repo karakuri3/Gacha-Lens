@@ -42,7 +42,7 @@
     "lint": "eslint",
     "launch:check": "node scripts/launch-readiness.mjs",
     "image:audit": "node scripts/variant-image-quality-audit.mjs",
-    "test:data-source": "node --test tests/data-source-policy.test.mjs tests/affiliate-provider-read-authorization-ledger-db.test.mjs",
+    "test:data-source": "node --test tests/data-source-policy.test.mjs tests/affiliate-provider-read-authorization-ledger-db.test.mjs tests/affiliate-provider-read-terminal-reason-evidence-db.test.mjs",
     "test:foundation-baseline": "node --test tests/foundation-baseline.test.mjs",
     "test:publication": "node --test tests/provisional-publication.test.mjs",
     "test:market-evidence": "node --test tests/market-evidence.test.mjs",
