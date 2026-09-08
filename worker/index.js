@@ -155,6 +155,20 @@ function isTrackedDataFailureHtmlResponse(request, response) {
   return contentType.includes("text/html");
 }
 
+async function fetchWithTrackedDataFailure(request, env, ctx) {
+  return runWithPublicDataSourceFailureTracking(async () => {
+    const response = await handler.fetch(request, env, ctx);
+    if (isTrackedDataFailureHtmlResponse(request, response)) {
+      // vinext/Next may resolve the Response before streamed Server Components
+      // finish rendering. Drain one clone while the AsyncLocalStorage context is
+      // still active so a late DataSourceError marks this exact request before we
+      // decide whether the outer HTTP 200 must become a temporary 503.
+      await response.clone().text();
+    }
+    return response;
+  });
+}
+
 function buildDegradedResponse(response) {
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
@@ -191,14 +205,13 @@ async function canStoreResponse(response, policy) {
 export default {
   async fetch(request, env, ctx) {
     const policy = getEdgeCachePolicy(request);
-    const tracked = await runWithPublicDataSourceFailureTracking(() => handler.fetch(request, env, ctx));
+    const tracked = await fetchWithTrackedDataFailure(request, env, ctx);
     const response = tracked.response;
 
-    // Next/vinext can stream a Server Component failure inside an outer HTTP 200,
-    // while the client error boundary renders only after hydration. DataSourceError
-    // marks the current async request context before that serialization occurs, so
-    // we can fail closed on the actual service dependency without matching generic
-    // React/Next error text or hiding unrelated programmer errors.
+    // Next/vinext may stream a Server Component failure after handler.fetch has
+    // produced the Response object. fetchWithTrackedDataFailure drains a clone
+    // before reading the request-scoped flag so both browser and crawler HTML
+    // requests receive the same degraded HTTP semantics.
     if (tracked.failed && isTrackedDataFailureHtmlResponse(request, response)) {
       return buildDegradedResponse(response);
     }
