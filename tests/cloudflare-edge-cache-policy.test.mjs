@@ -60,6 +60,44 @@ test("DataSourceError marks only the active async request context", () => {
   assert.match(dataSourcePolicySource, /class DataSourceError extends Error/);
 });
 
+test("degraded stream draining is limited to known public data HTML routes", () => {
+  const pathSetBlock = source.slice(
+    source.indexOf("const PUBLIC_DATA_HTML_EXACT_PATHS"),
+    source.indexOf("function isNextInternalRequest")
+  );
+  const required = [
+    "/",
+    "/series",
+    "/ranking",
+    "/schedule",
+    "/restocks",
+    "/stock",
+    "/categories",
+    "/brands",
+    "/franchises",
+  ];
+  for (const pathname of required) {
+    assert.ok(pathSetBlock.includes(`"${pathname}"`), `missing public data route ${pathname}`);
+  }
+  for (const pathname of [
+    "/guides",
+    "/privacy",
+    "/contact",
+    "/affiliate-disclosure",
+    "/favorites",
+    "/api",
+  ]) {
+    assert.ok(!pathSetBlock.includes(`"${pathname}"`), `unrelated route should not be drained: ${pathname}`);
+  }
+  const helperBlock = source.slice(
+    source.indexOf("function isPublicDataHtmlPath"),
+    source.indexOf("function getEdgeCachePolicy")
+  );
+  assert.match(helperBlock, /PUBLIC_DATA_HTML_EXACT_PATHS\.has\(pathname\)/);
+  assert.ok(helperBlock.includes('if (/^\\/series\\/[^/]+$/.test(pathname)) return true;'));
+  assert.ok(helperBlock.includes('return /^\\/(?:categories|brands|franchises)\\/[^/]+$/.test(pathname);'));
+});
+
 test("streamed HTML is drained inside the tracked async context before failure mapping", () => {
   assert.match(source, /async function fetchWithTrackedDataFailure\(request, env, ctx\)/);
   const trackedFetchBlock = source.slice(
@@ -79,6 +117,7 @@ test("tracked data-source HTML failures become explicit temporary 503 responses 
   assert.match(source, /DEGRADED_RETRY_AFTER_SECONDS = "3600"/);
   assert.match(source, /function isTrackedDataFailureHtmlResponse\(request, response\)/);
   assert.match(source, /request\.method !== "GET" \|\| isNextInternalRequest\(request\)/);
+  assert.match(source, /isPublicDataHtmlPath\(new URL\(request\.url\)\.pathname\)/);
   assert.match(source, /response\.status !== 200/);
   assert.match(source, /contentType\.includes\("text\/html"\)/);
   assert.match(source, /function buildDegradedResponse\(response\)/);
