@@ -1,209 +1,149 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-08 19:06 JST — Supabase Fair Use restriction active; public-read P0 active; scheduled Production writes explicitly disabled; repository-only emergency containment validated
+Updated: 2026-09-08 19:47 JST
 
-The company infrastructure Final Release/Cutover remains complete. Historical checkpoints remain in `docs/history/` and Git history.
+This file is the active-state handoff. Historical detail remains in Git history and `docs/history/`.
 
-## Resume protocol
+## Resume rule
 
-If a fresh thread receives only **「Gacha Lens続けて」**:
+If a new thread receives only **「Gacha Lens続けて」**:
 
-1. Read this file plus `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/FINAL_CUTOVER_2026-09-05.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
-2. Re-fetch current `main`; Issues #219/#238/#280/#281/#262; Draft PRs #250/#282/#265/#273/#269; latest comments/reviews; and only the minimum live evidence needed for the next gate.
-3. **Do not resume the company infrastructure migration. It is complete.** Cloudflare is the Production runtime and authoritative DNS.
-4. **Do not perform a Production workaround for the current Supabase restriction by implication.** Released Egress mitigations remain technically supported; the current restriction is best explained by historical current-cycle overage.
-5. `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false` and `OFFICIAL_BOUNDED_AUTO_ENABLED=false` are deliberate pre-reset safety controls. Do not re-enable either because HTTP 402 disappears. Re-enable only after #238 is formally cleared and the specific lane receives separate authorization.
-6. Production currently has a public-read outage (#281): core data pages can render the branded data-source failure while returning outer HTTP 200. Draft #282 is validated repository/Preview containment, **not data recovery** and not authorized for Production release.
-7. Non-Production branch/Preview/test/docs/review work is allowed. Production runtime merges and Production DB/schema/data/history changes remain frozen under #219/#238.
-8. Even after freeze clears, do **not** rely on standing auto-release authority until Draft #265 resolves #262 and is independently reviewed/revalidated on then-current main.
-9. Do not merge/apply #273 or #269, call affiliate providers, alter Secrets/Variables, dispatch/change workflows, or perform paid/destructive actions without the separate applicable approval/gate.
-10. After every major Production/recovery/security/release milestone, synchronize `HANDOFF / STATUS / DECISIONS / TODO` before starting the next major phase.
+1. Read `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/PRODUCTION_RELEASE_POLICY.md`, and `docs/AUTO_MERGE_POLICY.md`.
+2. Re-fetch current `main`, Issues #219/#238/#280/#281/#284/#285/#262, and Draft PRs #250/#282/#265/#273/#269.
+3. Do not restart the company-infrastructure migration; it is complete.
+4. Do not merge Production runtime changes, mutate Production DB/history, re-enable scheduled writes, change Secrets/Variables, call providers, dispatch workflows, or buy paid services by implication.
 
-## Production infrastructure
+## Production
 
-- Repository: `karakuri3/Gacha-Lens`
-- current Production `main`: `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
-- Production URL: `https://gachalens.com`
-- Production runtime: Cloudflare Worker `gacha-lens`
+- repo: `karakuri3/Gacha-Lens`
+- Production main: `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
+- URL: `https://gachalens.com`
+- runtime: Cloudflare Worker `gacha-lens`
 - authoritative DNS: Cloudflare
-- registrar: Vercel; hosting is non-live rollback artifact only
+- Vercel: registrar + non-live rollback only
 - Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
-- old inactive Supabase project `ihcudkfspzuixsqsvoku`: never confuse with Production
+- never confuse old inactive project `ihcudkfspzuixsqsvoku`
 
-## Released Egress mitigation remains valid
+## Egress mitigation / active restriction
 
-PR #249 — shared edge reuse:
-- main `397584fabe633b511cc060ae85335dc4e85fa81d`
-- Cloudflare Production build SUCCESS
-- strict `MISS -> HIT -> HIT` cache proof PASS
+Released mitigations remain technically supported:
+- #249 shared Cloudflare edge reuse — Production PASS
+- #251 scoped cold public reads — Production PASS
+- pre-enforcement post-fix burn ~`0.0104 GB/day` org-wide
+- former amplifier fingerprint `681,256 -> 681,290` over ~36.3h (+34)
 
-PR #251 — scoped unique-path cold reads:
-- main `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
-- Cloudflare Production build SUCCESS
-- representative signal JSON reduction: detail **-65.5%**, related **-48.1%**, rendered semantics preserved
-
-Post-mitigation observation before enforcement showed roughly `25.108 -> 25.114 GB` over ~13.78h, about **0.0104 GB/day org-wide**, far below the internal `<=0.12 GB/day` operating target. The known sitemap/runtime amplifier fingerprint also stayed nearly flat (`681,256 -> 681,290` over ~36.3h, +34, under 1 call/hour average).
-
-## Supabase Fair Use incident — current truth
-
-Provider-side evidence recorded 2026-09-08 in #219:
-- billing cycle: **2026-08-12 -> 2026-09-12**
-- plan: Free
-- organization state: **All services are restricted**
+Supabase current cycle: **2026-08-12 -> 2026-09-12**.
+Provider evidence on 2026-09-08:
+- Free organization: **All services are restricted**
 - reason: **Egress Exceeded**
-- organization uncached Egress: **25.242 / 5 GB (505%)**
-- organization Cached Egress: **0.087 / 5 GB**
-- `gacha-lens-tokyo`: **23.003 GB Egress**
-- `beach-match-manager`: **0.444 GB Egress**
-- requests may return HTTP **402** while restricted
+- org Egress: **25.242 / 5 GB (505%)**
+- Gacha: **23.003 GB**
+- Beach: **0.444 GB**
+- requests may return HTTP 402
 
-Interpretation:
-- Gacha Lens accounts for about 91% of current-cycle organization Egress;
-- pre-enforcement post-mitigation burn evidence remains low;
-- the restriction is best supported as delayed enforcement of historical current-cycle usage, not proof that #249/#251 reverted;
-- do not buy Pro or use project/org transfer as active-restriction quota evasion without a separately approved decision.
+Best-supported interpretation: historical current-cycle enforcement, not evidence that #249/#251 reverted.
 
-## P0 scheduled-write guard — #280
+## #238 Production freeze
 
-The 402 restriction must never be the only barrier preventing scheduled Production writes from waking after quota reset.
+Allowed: isolated branches, tests, disposable DB, Preview, docs/review/planning, low-impact read-only evidence.
 
-Owner-approved temporary repository-variable changes were completed at **2026-09-08 16:52 JST**:
+Frozen: Production runtime merge, Production DB/schema/data/history, DNS/Auth/write/admin, Secrets/Variables without explicit approval, provider/load experiments, paid plan/billing, unrelated Production releases.
+
+Keep #238 OPEN until after the 2026-09-12 reset proves no402, low fresh Gacha-filtered burn, minimal runtime smoke, no amplifier recurrence, and canonical sync.
+
+## #280 scheduled-write guard
+
+Explicit owner-approved safety mutation completed 2026-09-08 16:52 JST:
 - `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`
 - `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
 
-Repository-wide scheduled write-capable lane audit:
-- legacy `.github/workflows/gacha-ingestion.yml`: manually Disabled and must remain disabled;
-- `Gacha Market Bounded Automatic Production`: existing top-level enable gate false;
-- `Gacha Market P3 Bounded Seed V2 Automatic`: explicitly disabled by #280;
-- `Gacha Official Bounded Automatic Production`: explicitly disabled by #280;
-- `Gacha Official Kitan Bounded Automatic Production`: false-by-default/no-op unless separately enabled later.
+Also:
+- legacy `gacha-ingestion.yml` remains manually Disabled
+- other market automatic gate false
+- Kitan automatic false-by-default/no-op
 
-Natural-run evidence:
-- P3 schedule is `17 */3 * * *`; first post-disable opportunity was **2026-09-08 18:17 JST**;
-- as of **19:06 JST**, no new schedule-event run had appeared in the repository Actions collection; this is **not** recorded as a successful no-op because scheduled runs can be delayed/dropped;
-- Official schedule is daily **11:27 JST**; first post-disable natural opportunity is **2026-09-09 11:27 JST**.
+P3 cron first post-disable opportunity was 18:17 JST; as of 19:19 JST no new schedule-event run was observed. This is **not** no-op PASS. Next P3 opportunity: 21:17 JST. Official first post-disable opportunity: 2026-09-09 11:27 JST.
 
-#280 remains OPEN until natural no-op/write0 evidence is obtained and canonical state is final. No manual dispatch is needed. Both enable variables stay false until #238 closes and the corresponding lane is separately authorized to resume.
+Do not manually dispatch to manufacture evidence. Both enable variables remain false through #238 closure and require separate lane-specific approval to re-enable.
 
-## P0 public-read outage — #281
+## #281 public-read P0
 
-Production observation on 2026-09-08:
-- core public data pages such as `/` and `/series` render the branded message `商品情報を取得できません` during the Supabase restriction;
-- an external read-only scan of `https://gachalens.com` still observed root HTTP **200** while extracting only a tiny degraded shell (~39 chars);
-- therefore the current outage can be misclassified by crawlers/intermediaries as a healthy 200 page.
+Production core public data pages currently render `商品情報を取得できません` during restriction. External root scan saw HTTP 200 with a tiny degraded shell, so crawlers/intermediaries can misclassify the outage as healthy.
 
-This is a real availability/HTTP-semantics incident, not merely ingestion freshness degradation.
+Affected route audit also confirmed Production `/series/group/series-1` reaches the same branded outage.
 
-## Repository-only containment — Draft #282
+## #282 canonical containment candidate
 
-Draft PR #282: `fix: return temporary 503 for public data outage`
-- exact head: `68465cfa344fda65c6968e6bdb1af11d6abbd983`
-- changed files: 5
-- PR Code Quality `34212560491`: SUCCESS
-- Cloudflare vinext POC `34212560379`: SUCCESS
-- exact Cloudflare Commit Preview `e700d503-gacha-lens.senpingxingzuo.workers.dev`: deployment SUCCESS
-- exact Preview normal external scanner could not obtain the root during the active outage (`pagesScanned=0`)
-- unresolved review threads: 0 at latest check
-- independent Reviewer/Verifier result: **PENDING**
-- Reviewer/Verifier packet posted on #282 without moving the head
+Draft #282 current exact head:
+**`4d95413a9dcdd9a35555f5f40e47568f53a5245d`**
 
-Design:
-- `DataSourceError` marks only the active request through `AsyncLocalStorage`;
-- for explicitly allowlisted public data-dependent GET HTML routes, the Worker drains one clone of the same vinext response stream **inside that request context** so late streamed Server Component failures are observed before response classification;
-- only tracked outer-200 `text/html` responses are remapped to temporary **503 Service Unavailable** with `no-store`, `Retry-After: 3600`, and `X-Gacha-Degraded: data-source-error-503-v1`;
-- unrelated legal/editorial/admin/client/API HTML surfaces are outside the stream-drain allowlist;
-- no Supabase/provider retry or additional origin data request is introduced.
+The previous candidate `68465cfa...` is **superseded**. Strengthened audit found `/series/group/:slug` missing from its degraded-route allowlist even though parent-series pages perform server-side `getParentSeriesBySlug()` reads and are canonical/sitemap-linked.
 
-Important disposition:
-- #282 is **containment, not data recovery**;
-- it stays Draft under #238;
-- if the 2026-09-12 reset restores normal data service and the outer-200 outage disappears, **do not ship #282 merely because it is green**; reassess and likely close/preserve it as incident evidence;
-- if the outage or healthy-200 misclassification persists, #282 still needs genuine independent review plus an explicit applicable Production release/emergency exception before merge/deploy.
+Current tracked public-data HTML scope includes:
+- `/`
+- `/series`
+- `/series/:slug`
+- `/series/group/:slug`
+- ranking/schedule/restocks/stock
+- category/brand/franchise index+landing
 
-## Freeze state
+Unrelated legal/editorial/admin/client/API surfaces remain outside stream draining.
 
-Issue #219: **OPEN — active restriction / post-reset evidence gate**.
+Behavior: request-scoped `AsyncLocalStorage` tracks `DataSourceError`; one clone of an allowlisted GET HTML stream is drained inside the same context so late streamed failures are observed. Only tracked outer-200 `text/html` is remapped to 503 + no-store + Retry-After 3600 + `X-Gacha-Degraded: data-source-error-503-v1`.
 
-Issue #238: **OPEN — Production freeze active**.
-
-Allowed:
-- isolated non-main feature/research/design work
-- local/disposable DB testing
-- Cloudflare/Vercel Preview work that does not mutate Production
-- docs/review/planning/static analysis
-- low-impact read-only evidence collection
-
-Frozen:
-- Production runtime merges to `main`
-- Production DB/schema/data/migration-history changes
-- DNS/Auth/admin/write-surface changes
-- Secrets/Variables changes, except the already-consumed explicit #280 disable approval
-- paid plan/billing changes without explicit owner approval
-- provider-call/load-generating experiments
-- unrelated Production releases intended to bypass restriction
-
-## Release-governance blocker — #262 / Draft #265
-
-Cloudflare is Production, but current main still carries standing Vercel-specific release wording. Routine Vercel Git builds remain intentionally disabled for cost control.
-
-Authorized Draft #265 is the canonical implementation of the replacement policy:
-- exact head `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a`
-- seven active policy/test files aligned to Cloudflare
-- PR Code Quality `34045587975`: SUCCESS
-- mergeable true at last proof
-- strengthened self-review + Reviewer/Verifier packet present
-- independent Reviewer/Verifier result: **PENDING**
-
-After #219/#238 clear, re-fetch main/head, refresh exact-head evidence if needed, obtain genuine independent review (or a fresh #265-specific substitution only if explicitly granted), then land #265 through the applicable safe path. #265 cannot authorize its own merge.
-
-## Repository-only Foundation repair — #273
-
-Draft #273 exact head: `42c8f9934a92cda0be5fd58f2dccc7d4db17299c`
-- Code Quality `34193107686`: SUCCESS
-- vinext `34193107664`: SUCCESS
-- Foundation `34193107736`: SUCCESS
-- downstream combined empty-DB proof via #279: SUCCESS
+Current evidence:
+- exact PR-head Code Quality `34216342875`, job `102028876310`: **SUCCESS**
+- full Node suite including parent-series regression: PASS
+- lint/whitespace: PASS
+- Cloudflare vinext merge-tree compatibility/build `34216342824`, job `102028964843`: **SUCCESS**
+- exact Cloudflare build `60c3707c-a7dd-4ec3-9213-ce15a46df382`: **SUCCESS**
+- exact Commit Preview: `https://c79cbb42-gacha-lens.senpingxingzuo.workers.dev`
+- external exact Preview root scan during outage: failed / `pagesScanned=0`
+- Production `/series/group/series-1`: branded outage confirmed
+- superseding Reviewer/Verifier packet posted for `4d95413a...`
 - independent review: **PENDING**
-- Production migration/history reconciliation: **NOT AUTHORIZED / POST-FREEZE ONLY**
 
-Do not edit already-applied historical migrations and do not use blind Production `db push`. Future reconciliation begins with fresh live catalog/history parity evidence and separate approval.
+Production Worker read-only settings:
+- compatibility date `2026-09-08`
+- `nodejs_compat` enabled
+- `AsyncLocalStorage` subset used by #282 is supported by current Workers docs
 
-## Repository-only affiliate authorization ledger — #269
+Performance risk:
+- Production CPU baseline roughly 27–28ms
+- clone drain may add CPU/memory/TTFB even though it does not duplicate Supabase/provider requests
+- if #282 remains necessary after reset, bounded Preview performance comparison is required before Production release
 
-Draft #269 exact head: `574a9a4c10c3fd6cd275229c95c9b3adef8de84f`
-- exact-head Code Quality `34195356451`: SUCCESS
-- exact-head vinext `34195356549`: SUCCESS
-- disposable DB proof #279 / Foundation `34195410881`: SUCCESS including cleanup
-- 22 migrations from empty DB
-- Foundation **14/14 PASS, skipped 0**
-- data-source/ledger DB **11/11 PASS, skipped 0**
-- terminal reason/evidence binding DB-proven
-- independent review: **PENDING**
-- provider execution: **NOT AUTHORIZED**
+#282 is containment, not data recovery. If reset restores normal data + healthy HTTP semantics, do not ship it merely because it is green. If outage/outer-200 persists, it still needs independent review, performance preflight, and explicit applicable Production release/emergency authority.
 
-GitHub Copilot code review has historically been treated as a billable AI-credit boundary in this repository. Do not request it without explicit owner approval. Self-review must not be represented as independent review.
+## Reliability / cost follow-ups
 
-## Mandatory reset/release sequence
+### #284 — docs-only Cloudflare Preview builds
+Current Git integration includes `*` and excludes nothing, so docs-only #250 changes create Preview builds. #284 proposes `docs/*` exclusion after freeze/separate settings approval. No setting changed yet.
 
-After the **2026-09-12 billing-cycle reset** and any provider-side clear delay:
+### #285 — parent-series shared-cache gap
+Canonical `/series/group/:slug` pages are sitemap-linked server-data pages but current `seriesDetail` edge-cache matcher covers only `/series/:slug`. #285 tracks a bounded follow-up; do not mix it into #282 or claim savings until measured.
 
-0. **Reassess the incident before shipping containment.** Check #281/public data first. If data service and healthy HTTP semantics are restored, do not merge #282 opportunistically; preserve/close it only after canonical sync. If outage/outer-200 misclassification persists, keep P0 priority and require independent review + explicit release authority for #282.
-1. **P0 closure:** prove restriction cleared/no 402, fresh Gacha-filtered Egress low, minimal runtime smoke green, no amplifier recurrence; update #219/#238/#250. Do not re-enable #280 variables during this step.
-2. **Governance:** independently review/revalidate and land #265; close #262 only after the Cloudflare standing policy is on main.
-3. **CI proof authority:** revalidate and land #258 so runtime/cache smoke is pinned to the then-current deployed Production source, under its workflow-file approval boundary.
-4. **Migration reproducibility:** independently review #273, re-read Production catalog/migration history, approve the exact reconciliation strategy, then land/reconcile without blind `db push`.
-5. **User value:** rebase/revalidate/release #253 Japanese stored-category routing fix.
-6. **Reliability:** rebase/revalidate/release #261 with applicable Production approval; observe the next natural bounded F0 run rather than forcing it.
-7. **Fresh business scorecard:** recompute traffic/click/affiliate/data-freshness evidence. If monetization coverage still dominates, proceed `#264 -> #267 -> #269`, rebinding every layer to then-current main/data and never reusing old approval tokens.
-8. **Data Scale R5 remains HOLD** (`#257/#260`) unless fresh evidence makes depth expansion higher priority.
-9. **Scheduled write re-enable is separate.** Even after #238 closes, restore P3/Official automatic enable variables only under a new lane-specific authorization and then verify bounded natural execution.
-10. Synchronize canonical docs after each major release/recovery/security milestone before advancing to the next major phase.
+## Other validated Drafts
 
-This ordering is a planning contract, not blanket approval for any merge, Production mutation, workflow change, provider call, Secret/Variable action, or paid operation.
+- #265 governance: `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a`, validation PASS, independent review pending
+- #273 Foundation repair: `42c8f9934a92cda0be5fd58f2dccc7d4db17299c`, CQ/vinext/Foundation PASS, independent review pending, Production history reconciliation not authorized
+- #269 affiliate provider-read ledger: `574a9a4c10c3fd6cd275229c95c9b3adef8de84f`, CQ/vinext/disposable DB PASS, independent review pending, provider execution not authorized
 
-## Cross-project failure-domain follow-up
+Do not request billable Copilot review without explicit owner approval; self-review is not independent review.
 
-After restriction clears and a fresh complete backup is green, the existing Beach Supabase project is intended to move to a dedicated Free organization so Beach and Gacha Lens no longer share the same quota/failure domain. This is a future Project Transfer, not a replacement database and not an active-restriction workaround.
+## Mandatory post-reset order
+
+0. Reassess #281/#282 before shipping containment.
+1. Close #219/#238 only from fresh reset evidence; keep #280 variables false.
+2. Independently review/revalidate and land #265 / close #262.
+3. Revalidate/land #258 under its workflow-file boundary.
+4. Independently review #273; fresh Production catalog/history parity; approved reconciliation; no blind `db push`.
+5. Rebase/revalidate/release #253.
+6. Rebase/revalidate/release #261 under applicable approval, then observe natural F0 run.
+7. Recompute business scorecard; if monetization coverage still dominates, proceed `#264 -> #267 -> #269` with fresh bindings/tokens.
+8. Keep #257/#260 R5 Data Scale HOLD unless fresh evidence reprioritizes it.
+9. Re-enable automatic lanes only via separate post-#238 lane approval.
+10. Synchronize canonical docs after each major release/recovery/security milestone.
 
 ## Hard boundaries
 
@@ -211,10 +151,10 @@ After restriction clears and a fresh complete backup is green, the existing Beac
 - never touch `supabase/.temp/cli-latest`
 - keep `.github/workflows/gacha-ingestion.yml` disabled
 - no automatic RPC retry
-- no paid/destructive action without applicable approval
-- no Production DB/schema/data/history mutation by implication
-- no provider refresh/write by implication
+- no Production DB/history mutation by implication
+- no provider action by implication
 - no workflow dispatch/change by implication
-- no Secrets/Variables change by implication; #280 disable authority is consumed and non-reusable
-- consumed prior Production/provider authority remains non-reusable
+- no Secrets/Variables mutation by implication
+- #280 disable authority is consumed and non-reusable
+- no paid/destructive action without approval
 - do not scrape Mercari or Amazon
