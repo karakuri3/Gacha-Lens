@@ -155,10 +155,30 @@ After the **2026-09-12 billing reset** and any short provider-side restriction-c
 3. prove low Free-plan-compatible burn with safety margin;
 4. perform minimal public/runtime smoke without load-heavy diagnostics;
 5. confirm no recurrence of the former amplification;
-6. synchronize #219/#238/#250 canonical state;
-7. only then close the P0/freeze and reopen normal Production development.
+6. synchronize #219/#238/#250 canonical state.
 
-#273/#269 Production release/reconciliation remains a separate change even after freeze clearance.
+This clears only the P0/freeze gate. Production release authority has an additional policy gate in D-150.
+
+### D-150 — #262 must be resolved explicitly before standing Cloudflare auto-release authority can be used
+
+Issue #262 documents a real standing-policy conflict:
+- Cloudflare is now Production and routine Vercel Git builds are intentionally disabled;
+- `docs/PRODUCTION_RELEASE_POLICY.md` still requires exact-head Vercel Preview and describes Vercel Production deployment as the standing release path.
+
+The two conditions cannot be silently reconciled by interpretation.
+
+Therefore, after #219/#238 clear and before relying on standing auto-release authority for a normal Cloudflare Production merge:
+1. review the current Cloudflare cutover and rollback evidence;
+2. obtain the applicable explicit policy-change approval for the replacement release gate;
+3. define the exact Cloudflare Preview/version + repository CI + required runtime/cache/security evidence that replaces obsolete Vercel-hosting assumptions;
+4. update `PRODUCTION_RELEASE_POLICY.md` and linked Agent/auto-merge docs consistently;
+5. add automated/docs checks preventing hosting-authority drift.
+
+Hard consequences:
+- Cloudflare CI/Preview success is not implicit permission to bypass the stale standing policy;
+- do not re-enable Vercel builds merely to satisfy obsolete wording;
+- #262 is a mandatory governance gate even after the Supabase freeze clears;
+- #273/#269 Production releases/reconciliation remain separately approved changes after #262.
 
 ## Current durable state
 
@@ -169,6 +189,7 @@ After the **2026-09-12 billing reset** and any short provider-side restriction-c
 - Supabase Fair Use restriction: **ACTIVE as of 2026-09-08**
 - #219: **OPEN**
 - #238: **OPEN / PRODUCTION FREEZE ACTIVE**
+- #262: **OPEN / RELEASE-GOVERNANCE BLOCKER**
 - #250: **DRAFT canonical docs sync**
 - #273: **DRAFT / repository proof PASS / independent review pending**
 - #269: **DRAFT / repository proof PASS / independent review pending**
