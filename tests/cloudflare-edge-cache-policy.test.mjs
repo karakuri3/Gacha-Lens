@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
 const variantDetailSource = readFileSync(new URL("../app/series/[slug]/page.js", import.meta.url), "utf8");
+const parentSeriesDetailSource = readFileSync(new URL("../app/series/group/[slug]/page.js", import.meta.url), "utf8");
 const dataSourcePolicySource = readFileSync(new URL("../lib/data/data-source-policy.js", import.meta.url), "utf8");
 const failureContextSource = readFileSync(new URL("../lib/data/public-data-source-failure-context.js", import.meta.url), "utf8");
 
@@ -94,8 +95,19 @@ test("degraded stream draining is limited to known public data HTML routes", () 
     source.indexOf("function getEdgeCachePolicy")
   );
   assert.match(helperBlock, /PUBLIC_DATA_HTML_EXACT_PATHS\.has\(pathname\)/);
-  assert.ok(helperBlock.includes('if (/^\\/series\\/[^/]+$/.test(pathname)) return true;'));
+  assert.ok(helperBlock.includes('if (/^\\/series\\/(?:[^/]+|group\\/[^/]+)$/.test(pathname)) return true;'));
   assert.ok(helperBlock.includes('return /^\\/(?:categories|brands|franchises)\\/[^/]+$/.test(pathname);'));
+});
+
+test("parent-series group detail is a server-data public route covered by degraded draining", () => {
+  assert.match(parentSeriesDetailSource, /getParentSeriesBySlug/);
+  assert.match(parentSeriesDetailSource, /export const dynamic = "force-dynamic"/);
+  assert.match(parentSeriesDetailSource, /export const revalidate = 0/);
+  const helperBlock = source.slice(
+    source.indexOf("function isPublicDataHtmlPath"),
+    source.indexOf("function getEdgeCachePolicy")
+  );
+  assert.ok(helperBlock.includes('group\\/[^/]+'));
 });
 
 test("streamed HTML is drained inside the tracked async context before failure mapping", () => {
