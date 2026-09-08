@@ -68,27 +68,29 @@ If restriction does not clear after reset:
 - [ ] do not buy Pro without separate current-price/terms review + explicit approval
 - [ ] do not use organization/project transfer as quota evasion
 
-## ACTIVE GOVERNANCE — #262 release policy alignment
+## ACTIVE GOVERNANCE — #262 / authorized Draft #265
 
-This gate remains required even after #219/#238 become green.
+The replacement Cloudflare standing policy is already implemented. Do not recreate it.
 
-Current conflict:
-- [x] Cloudflare is confirmed Production runtime
-- [x] routine Vercel Git builds are intentionally disabled for cost control
-- [x] standing `PRODUCTION_RELEASE_POLICY.md` still requires Vercel Preview/Production semantics
-- [x] record #262 as an explicit release-governance blocker in canonical docs
+Current evidence:
+- [x] Cloudflare confirmed as Production runtime
+- [x] routine Vercel Git builds intentionally disabled for cost control
+- [x] main still has stale Vercel-specific standing release wording
+- [x] user explicitly authorized the #262 policy alignment; authorization is recorded in Draft #265
+- [x] Draft #265 exact head `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a`
+- [x] seven active policy/test files aligned to Cloudflare
+- [x] PR Code Quality `34045587975` SUCCESS
+- [x] strengthened self-review complete
+- [x] independent Reviewer/Verifier packet posted
+- [ ] independent Reviewer/Verifier result
+- [ ] wait for #219/#238 Production freeze clearance
+- [ ] re-fetch main/head and refresh exact-head evidence if stale
+- [ ] merge #265 only through the applicable safe path; #265 cannot authorize its own merge
+- [ ] close #262 only after the reviewed Cloudflare standing policy is on main
 
-After the P0 Production freeze clears, before relying on standing auto-release authority:
-- [ ] review the current Cloudflare cutover and rollback evidence
-- [ ] obtain the applicable explicit policy-change approval
-- [ ] define the exact Cloudflare Preview/version + repository CI + runtime/cache/security evidence replacing obsolete Vercel requirements
-- [ ] update `docs/PRODUCTION_RELEASE_POLICY.md`
-- [ ] update linked Agent/auto-merge docs consistently
-- [ ] add tests/docs checks preventing Vercel-vs-Cloudflare hosting-authority drift
-- [ ] close #262 only after the new standing release gate is coherent and validated
-- [ ] only then rely on routine standing auto-release authority for normal Cloudflare Production merges
+The existing authorization does **not** authorize bypass of #219/#238, manual Cloudflare promotion/dispatch, Production DB/data/schema changes, Secrets/Variables, paid/destructive actions, auth-boundary changes, or new Production-capable lanes.
 
-Do **not** silently reinterpret the current Vercel wording and do **not** re-enable routine Vercel builds merely to satisfy it.
+Do **not** re-enable routine Vercel builds merely to satisfy old wording.
 
 ## DONE — #273 repository technical validation
 
@@ -107,7 +109,7 @@ Draft #273 exact head: `42c8f9934a92cda0be5fd58f2dccc7d4db17299c`.
 Remaining #273 gates:
 - [ ] obtain independent review
 - [ ] wait for #219/#238 freeze clearance
-- [ ] resolve #262 before relying on standing Production release authority
+- [ ] ensure #265/#262 governance gate is resolved before relying on standing release authority
 - [ ] re-read fresh Production catalog + migration history before any release
 - [ ] design/approve exact Production migration-history reconciliation
 - [ ] explicitly reject blind `db push` if remote/local history still differs
@@ -142,7 +144,7 @@ Remaining #269 gates:
 - [ ] obtain independent review
 - [ ] obtain #273 independent review + approved release/reconciliation
 - [ ] wait for #219/#238 freeze clearance
-- [ ] resolve #262 before relying on standing Production release authority
+- [ ] ensure #265/#262 release governance is authoritative on main before relying on standing release authority
 - [ ] fresh #264 cohort recompute after the relevant main/data state is final
 - [ ] fresh #267 provider-read plan bound to then-current main
 - [ ] configuration readiness check without exposing secrets
@@ -154,9 +156,11 @@ Remaining #269 gates:
 ## Independent review boundary
 
 - [x] strengthened Lead self-review completed
-- [x] reviewer packets posted on #273/#269
-- [ ] independent Reviewer approval #273
-- [ ] independent Reviewer approval #269
+- [x] Reviewer/Verifier packet posted on #265
+- [x] Reviewer packet posted on #273/#269
+- [ ] independent Reviewer/Verifier result #265
+- [ ] independent Reviewer result #273
+- [ ] independent Reviewer result #269
 
 Do not mark these complete using another Lead/self-review pass.
 
@@ -164,13 +168,66 @@ GitHub Copilot code review has previously been treated as a billable AI-credit b
 
 ## Canonical docs — #250
 
-- [x] update `HANDOFF.md` to 2026-09-08 restriction + #273/#269 state
+- [x] update `HANDOFF.md` to 2026-09-08 restriction + #265/#273/#269 state
 - [x] update `STATUS.md`
 - [x] update `DECISIONS.md`
 - [x] update `TODO.md`
-- [x] add #262 release-governance blocker to all four canonical docs
+- [x] record authorized Draft #265 instead of treating #262 as unimplemented policy work
+- [x] unify the post-reset release train in all canonical docs
 - [ ] keep #250 Draft while Production freeze is active
 - [ ] after post-reset P0 PASS, refresh once more with final evidence before any main merge
+
+## Mandatory post-reset release train
+
+Do not release opportunistically after the restriction clears. Default order:
+
+### 1. P0 closure
+- [ ] complete the 2026-09-12 #219/#238 evidence gate
+- [ ] synchronize #250 from fresh post-reset evidence
+
+### 2. Release governance — #265
+- [ ] independent Reviewer/Verifier
+- [ ] refresh exact-head evidence if needed
+- [ ] land #265 safely
+- [ ] close #262 only after policy is authoritative on main
+
+### 3. CI proof authority — #258
+- [ ] re-confirm current deployed Production source
+- [ ] repin if Production moved
+- [ ] fresh exact-head Code Quality/runtime/cache proof
+- [ ] obtain applicable workflow-file approval/review boundary
+- [ ] land #258
+
+### 4. Migration reproducibility — #273
+- [ ] independent review
+- [ ] fresh Production catalog/history parity check
+- [ ] approve exact migration-history reconciliation
+- [ ] land/reconcile without blind `db push`
+- [ ] confirm current-main Foundation baseline green
+- [ ] then close #270/#271 if their closure gates are satisfied
+
+### 5. User-value routing — #253
+- [ ] rebase/revalidate onto then-current main
+- [ ] exact Cloudflare Preview/browser/runtime proof for Japanese category pages
+- [ ] release through the then-authoritative policy
+
+### 6. Official-ingestion reliability — #261
+- [ ] rebase/revalidate onto then-current main
+- [ ] obtain applicable Production approval because the next natural F0 schedule may enter its bounded write path
+- [ ] release
+- [ ] observe the next **natural** bounded F0 run; do not force a workflow dispatch
+- [ ] canonical sync after the natural-run result
+
+### 7. Fresh business scorecard
+- [ ] recompute traffic, clicks, affiliate coverage, data freshness and request efficiency
+- [ ] if monetization coverage still dominates, proceed `#264 -> #267 -> #269`
+- [ ] rebind every layer to then-current main/data
+- [ ] never reuse old provider approval tokens
+
+### 8. Data Scale R5 HOLD
+- [ ] keep #257/#260 on HOLD unless the fresh scorecard shows depth expansion again outranks monetization coverage
+
+This queue is a planning/order contract only. It grants no merge, Production mutation, workflow change, provider call, Secret/Variable action, or paid operation.
 
 ## Cross-project failure-domain follow-up
 
@@ -204,11 +261,3 @@ Do not create a replacement Beach database and do not transfer during active res
 - [ ] keep `.github/workflows/gacha-ingestion.yml` disabled
 - [ ] no automatic RPC retry
 - [ ] no direct main push
-
-## After freeze + #262 clear
-
-Resume company prioritization in this order:
-
-**Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
-
-Reassess Search Console, traffic, outbound shop clicks, affiliate conversion/revenue, data freshness and request efficiency before choosing the next bounded Production experiment.
