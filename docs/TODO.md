@@ -1,6 +1,6 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-08 19:47 JST
+Updated: 2026-09-09 01:31 JST
 
 Infrastructure migration and released Egress mitigations are complete. Current work is incident stabilization + post-reset release preparation.
 
@@ -10,9 +10,8 @@ Infrastructure migration and released Egress mitigations are complete. Current w
 - [x] `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
 - [x] legacy ingestion remains disabled
 - [x] other automatic lanes audited false/no-op
-- [ ] observe a real P3 natural no-op/write0 run; 18:17 JST opportunity was not observed as of 19:19 JST
-- [ ] next P3 natural opportunity: 21:17 JST
-- [ ] observe Official first post-disable natural no-op/write0 run: 2026-09-09 11:27 JST
+- [x] observe a real P3 natural no-op/write0 run — run `34220342461` / #75, `event=schedule`, provider skipped, DB writes 0
+- [ ] observe Official first post-disable natural no-op/write0 run after 2026-09-09 11:27 JST
 - [ ] keep both vars false through #238 closure
 - [ ] re-enable only under new lane-specific approval
 
@@ -40,14 +39,14 @@ Completed:
 - [x] exclude legal/editorial/admin/client/API surfaces
 - [x] 503 + no-store + Retry-After + `X-Gacha-Degraded` mapping
 - [x] no new Supabase/provider request/retry
-- [x] exact PR-head Code Quality `34216342875` SUCCESS
-- [x] full Node suite including parent-series regression PASS
-- [x] lint/whitespace PASS
-- [x] merge-tree vinext compatibility/build `34216342824` SUCCESS
-- [x] exact Cloudflare build `60c3707c-a7dd-4ec3-9213-ce15a46df382` SUCCESS
-- [x] exact Preview `c79cbb42...workers.dev`
-- [x] external exact Preview root scan failed/pagesScanned0 during outage
-- [x] superseding Reviewer/Verifier packet posted for current head
+- [x] complete exact-head inventory of all 26 `app/**/page.js` files
+- [x] classify public server-data SSR into 14 route shapes
+- [x] verify current Worker allowlist/matchers cover 14/14 route shapes
+- [x] exact PR-head Code Quality `34217094679` SUCCESS
+- [x] vinext `34217094908` SUCCESS
+- [x] full Node suite including parent-series and route-scope regression PASS
+- [x] exact Cloudflare commit Preview deployment for `4d95413a...` SUCCESS
+- [x] unresolved review threads 0
 - [x] Production runtime compatibility for AsyncLocalStorage verified read-only (`2026-09-08`, `nodejs_compat`)
 - [x] Production CPU baseline captured (~27–28ms)
 
@@ -80,13 +79,16 @@ After 2026-09-12 reset + provider clear delay:
 - [ ] prove docs-only change skips build
 - [ ] prove runtime change still produces Preview
 
-### #285 parent-series edge-cache coverage
+### #285 / Draft #286 parent-series edge-cache coverage
 - [x] confirm canonical `/series/group/:slug` links/sitemaps/server-data route
-- [x] confirm current 30m `seriesDetail` matcher covers only `/series/:slug`
-- [ ] quantify/confirm desired freshness semantics
-- [ ] prepare bounded branch-only matcher + regression if still justified
-- [ ] validate cold->warm Preview safely after restriction clears or with isolated fixture
+- [x] confirm current Production 30m `seriesDetail` matcher covers only `/series/:slug`
+- [x] prepare bounded branch-only matcher for exactly `/series/:slug` + `/series/group/:slug`
+- [x] retain existing 30-minute TTL and auth/cookie/Next-internal/query/error-document exclusions
+- [x] exact #286 Code Quality `34217874920` PASS
+- [x] exact #286 Cloudflare commit Preview `cc6891c4...workers.dev` deployment PASS
+- [ ] after restriction clears, validate one bounded healthy parent-series cold->warm exact-Preview proof
 - [ ] measure before/after origin behavior before claiming savings
+- [ ] obtain applicable review/release authority if still justified
 - [ ] no Production merge during #238
 
 ## Governance — #265/#262
@@ -99,9 +101,12 @@ After 2026-09-12 reset + provider clear delay:
 
 ## CI proof authority — #258
 
-- [ ] after freeze, re-confirm deployed Production source
-- [ ] repin if needed
-- [ ] fresh exact-head runtime/cache proof
+Current exact candidate: `76dac8708abaffd2ffcada7d7aa64bdc49b06e90`.
+- [x] prior exact-head runtime smoke PASS
+- [x] prior exact-head cache proof PASS
+- [x] prior exact-head Code Quality PASS
+- [ ] after freeze, re-confirm deployed Production source identity
+- [ ] repin/revalidate if Production moved
 - [ ] obtain applicable workflow-file approval boundary
 - [ ] land #258
 
@@ -149,9 +154,13 @@ Current #269 exact `574a9a4c10c3fd6cd275229c95c9b3adef8de84f`; repository/dispos
 
 - [x] sync active restriction/#280/#281 state
 - [x] supersede #282 `68465cfa...` with current `4d95413a...`
-- [x] record parent-series correctness fix
-- [x] record #284/#285 cost follow-ups
+- [x] record complete #282 26-page / 14-route / 14-of-14 audit
+- [x] record P3 natural schedule no-op/write0 PASS
+- [x] record #284 docs-build cost follow-up
+- [x] record #285/#286 parent-series edge-cache implementation + pending runtime proof
+- [x] record #258 current exact release-train candidate
 - [x] record independent review + performance gates
+- [ ] record Official natural no-op/write0 result after first post-disable 11:27 JST opportunity
 - [ ] keep Draft during freeze
 - [ ] refresh again from fresh post-reset evidence before any main merge
 
