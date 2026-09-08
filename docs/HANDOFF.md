@@ -1,24 +1,25 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-06 JST — technical Egress P0 mitigation PASS; current-cycle Fair Use risk remains
+Updated: 2026-09-08 JST — Supabase Fair Use restriction active; Production freeze active; repository-only affiliate prerequisites validated
 
-The company infrastructure Final Release/Cutover remains complete. The pre-final-cutover checkpoint is preserved at `docs/history/2026-09-05-pre-final-cutover-HANDOFF.md` and in Git history.
+The company infrastructure Final Release/Cutover remains complete. Historical checkpoints remain in `docs/history/` and Git history.
 
 ## Resume protocol
 
 If a fresh thread receives only **「Gacha Lens続けて」**:
 
 1. Read this file plus `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/FINAL_CUTOVER_2026-09-05.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/AUTO_MERGE_POLICY.md`, and `docs/PRODUCTION_RELEASE_POLICY.md`.
-2. Re-fetch current `main`, Issues #219/#238, recent PRs, Cloudflare Production state, and the minimum Supabase evidence needed for the next gate.
+2. Re-fetch current `main`, Issues #219/#238, Draft PRs #250/#273/#269, their latest comments/reviews, and only the minimum Production evidence required for the next gate.
 3. **Do not resume the company infrastructure migration. It is complete.** Cloudflare is the Production runtime and authoritative DNS.
-4. Do not recreate P0 implementation work: #249 and #251 are already merged and live; implementation Issue #239 is closed/completed.
-5. Issue #219 remains open only for historical current-billing-cycle/Fair Use stabilization. Issue #238 is partially relaxed: non-Production feature work may proceed; Production runtime merges remain frozen until #219 final gate.
-6. Production data writes, migrations/schema/backfills, provider execution, workflow dispatch/change, Secrets/Variables, paid/destructive actions, and ineligible merges/releases still require their applicable approval. Consumed #228 authority remains non-reusable.
-7. After every future major Production/recovery/security/release milestone, synchronize `HANDOFF / STATUS / DECISIONS / TODO` before the next major phase.
+4. **Do not perform a Production workaround for the current Supabase restriction.** The restriction is the delayed effect of historical current-cycle Egress; released P0 mitigations remain technically PASS-like.
+5. Non-Production branch/Preview/test/docs/review work is allowed. Production runtime merges and Production DB/schema/data/history changes remain frozen under #219/#238.
+6. Do not merge/apply #273 or #269, call affiliate providers, alter Secrets/Variables, dispatch/change workflows, or perform paid/destructive actions without the separate applicable approval/gate.
+7. After every major Production/recovery/security/release milestone, synchronize `HANDOFF / STATUS / DECISIONS / TODO` before starting the next major phase.
 
-## Current Production state
+## Production infrastructure
 
 - Repository: `karakuri3/Gacha-Lens`
+- current `main`: `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
 - Production URL: `https://gachalens.com`
 - Production runtime: Cloudflare Worker `gacha-lens`
 - authoritative DNS: Cloudflare
@@ -26,119 +27,139 @@ If a fresh thread receives only **「Gacha Lens続けて」**:
 - Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
 - old inactive Supabase project `ihcudkfspzuixsqsvoku`: never confuse with Production
 
-### Released P0 commits
+## Released Egress mitigation remains valid
 
 PR #249 — shared edge reuse:
 - main `397584fabe633b511cc060ae85335dc4e85fa81d`
-- Cloudflare Production build `f1d61310-7e7e-44f5-8c3e-4eb791aca5ac` — SUCCESS
-- strict Preview proof `MISS -> HIT -> HIT`
+- Cloudflare Production build SUCCESS
+- strict `MISS -> HIT -> HIT` cache proof PASS
 
 PR #251 — scoped unique-path cold reads:
-- explicitly approved and squash-merged to main `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
-- Cloudflare Production build `6a86ca27-a105-410b-8862-308e4a2aca8e` — SUCCESS
-- Production version `00e608fa-153c-40ef-b8b9-d5700c270066`
+- main `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
+- Cloudflare Production build SUCCESS
+- representative signal JSON reduction: detail **-65.5%**, related **-48.1%**, rendered semantics preserved
 
-## What is now live
+Post-mitigation observation before enforcement showed roughly `25.108 -> 25.114 GB` over ~13.78h, about **0.0104 GB/day org-wide**, far below the internal `<=0.12 GB/day` operating target. The known sitemap/runtime amplifier has not returned to its former regime.
 
-- expensive `/categories`, `/brands`, `/franchises` no-query roots: 24h shared Cloudflare cache
-- `/series` no-query and first-page facet landings: 30m shared cache
-- series detail: 30m shared cache
-- sitemap documents: 24h shared cache
-- query/search/pagination/auth/cookie/Next-internal requests remain outside the bounded shared-document policy
-- known branded error HTML is not promoted into shared cache
-- detail/related signal reads use relevant `variant_id` / `matched_variant_id` scope instead of broad sibling-series signal hydration
-- series-level complete/partial/popular set listings retain required persisted safety metadata
-- public Supabase coordinates resolve environment-first with safe public fallback; service-role credentials remain environment-only
+## Supabase Fair Use incident — current truth
 
-## Verification evidence
+Provider-side evidence recorded 2026-09-08 in #219:
+- billing cycle: **2026-08-12 -> 2026-09-12**
+- plan: Free
+- organization state: **All services are restricted**
+- reason: **Egress Exceeded**
+- organization uncached Egress: **25.242 / 5 GB (505%)**
+- organization Cached Egress: **0.087 / 5 GB**
+- `gacha-lens-tokyo`: **23.003 GB Egress**
+- `beach-match-manager`: **0.444 GB Egress**
+- dashboard states project requests can respond with HTTP **402** while restricted
 
-Pre-Production / Preview:
-- repository test/lint and vinext compatibility PASS
-- exact Cloudflare Preview build PASS
-- Japanese detail/related semantics PASS
-- strict byte-identical `MISS -> HIT -> HIT` proof PASS
-- bounded A/B for #251 preserved semantic snapshots while reducing representative signal JSON by **65.5% on detail** and **48.1% on related**
-- temporary diagnostic route removed before Production candidacy
+Interpretation:
+- Gacha Lens accounts for about 91% of current-cycle organization Egress;
+- the restriction is best supported as delayed enforcement of historical pre/post-fix accumulated usage, not proof that the released mitigation failed;
+- do not add speculative runtime rewrites solely because restriction is now active;
+- do not buy Pro or attempt project/org transfer as quota evasion without a separately approved decision.
 
-Post-Production:
-- #249 and #251 Cloudflare main builds both succeeded
-- representative Japanese detail renders full live data
-- controlled same-URL Production detail reload repeated three times produced one observed backend detail bundle rather than three separately repeated warm bundles, consistent with edge reuse
-- distinct cold product paths can still cause scoped backend work by design
-- no HTTP 402 currently observed
+## Freeze state
 
-Workers Logs remain disabled; this handoff does **not** claim a Workers log-stream review.
+Issue #219: **OPEN — active restriction / post-reset evidence gate**.
 
-## Supabase Egress final operational gate
-
-Current organization Usage:
-- Free plan
-- cycle: 2026-08-12–2026-09-12
-- uncached Egress: **25.114 GB / 5 GB**
-- Cached Egress: **0.085 GB / 5 GB**
-- banner: **Grace period is over**
-
-Post-#249 Production baseline was 25.108 GB around 02:31 JST. By ~16:18 JST Usage was 25.114 GB: +0.006 GB over ~13.78h.
-
-Observed approximate org-wide rate:
-- **0.00044 GB/hour**
-- **0.0104 GB/day**
-
-This is far below the conservative `<=0.12 GB/day` target and is strong evidence the technical amplification is controlled.
-
-The remaining risk is historical current-cycle state: the 25.114 GB cumulative usage cannot be rolled back, and Supabase says grace is over. Until that legacy overage risk clears, do not declare the operational P0 fully closed.
-
-Current classification:
-- #249 shared edge mitigation: **DONE / Production PASS**
-- #251 scoped cold-read mitigation: **DONE / Production PASS**
-- post-release burn rate: **PASS-like with large margin**
-- paid plan required: **NOT ESTABLISHED**
-- #219: **OPEN — billing-cycle/Fair Use stabilization only**
-- #238: **OPEN / PARTIALLY RELAXED**
-- #239: **CLOSED / COMPLETED**
-
-## Development boundary now
+Issue #238: **OPEN — Production freeze active**.
 
 Allowed:
-- normal feature/design/research work on isolated branches
-- Cloudflare Preview deployments and tests
-- docs/review/planning
-- non-Production work that does not obscure the P0 observation signal
+- isolated non-main feature/research/design work
+- local/disposable DB testing
+- Cloudflare/Vercel Preview work that does not mutate Production
+- docs/review/planning/static analysis
+- low-impact read-only evidence collection
 
-Still frozen:
+Frozen:
 - Production runtime merges to `main`
-- Production DB/schema/data changes
-- DNS/Auth/write/admin surface changes
+- Production DB/schema/data/migration-history changes
+- DNS/Auth/admin/write-surface changes
 - Secrets/Variables changes
-- unrelated Production load/migration experiments
-- paid plan/billing changes without explicit approval
+- paid plan/billing changes without explicit owner approval
+- provider-call/load-generating experiments
+- unrelated Production releases intended to bypass restriction
 
-## Next action when resuming
+## Repository-only Foundation repair — #273
 
-Continue read-only monitoring of Supabase Usage/project health. Prefer final closure after the **2026-09-12 billing-cycle reset** confirms:
-1. no 402 restriction;
-2. quota resets as expected;
-3. post-reset burn remains Free-plan compatible.
+Draft PR #273: `fix: restore forecast snapshots migration baseline`
+- exact head: `42c8f9934a92cda0be5fd58f2dccc7d4db17299c`
+- Code Quality `34193107686`: SUCCESS
+- vinext `34193107664`: SUCCESS
+- Foundation `34193107736`: SUCCESS
+- downstream combined proof via #279: SUCCESS
+- independent review: **PENDING**
+- Production migration/history reconciliation: **NOT AUTHORIZED / POST-FREEZE ONLY**
 
-On final PASS:
-1. record final evidence and close #219;
-2. close #238 and fully reopen routine Production development;
-3. finalize canonical docs / Draft docs PR #250 under its merge approval boundary;
-4. explicitly state that this P0 thread is complete and normal Gacha Lens Production development may resume.
+Purpose: restore `forecast_snapshots` in fresh migration replay immediately before hardening migration `20260904152326`, without editing already-applied historical migrations.
 
-If 402 appears before reset:
-- keep #219/#238 open;
-- verify whether reset clears it;
-- do not upgrade to Pro without separate explicit owner approval.
+## Repository-only affiliate authorization ledger — #269
+
+Draft PR #269 exact head:
+`574a9a4c10c3fd6cd275229c95c9b3adef8de84f`
+
+Current contract:
+- durable one-time `(head_sha, batch_digest)` claim
+- no plaintext approval storage
+- 1..10 targets, two phases each, max three attempts per phase
+- serial attempt reservation
+- replay/reopen/reset blocked
+- discovery-before-affiliate-enrichment
+- whole-batch fail-close after terminal/ambiguous/exhausted retry
+- service-role-only private ledger
+- terminal reasons bound to durable attempt evidence, including `retry_exhausted`
+
+Current proof:
+- exact-head Code Quality #278 / run `34195356451`: SUCCESS
+- exact-head vinext `34195356549`: SUCCESS
+- disposable DB proof #279 / Foundation `34195410881`: SUCCESS including cleanup
+- 22 migrations from empty DB
+- Foundation **14/14 PASS, skipped 0**
+- data-source/ledger DB **11/11 PASS, skipped 0**
+- final catalog 0 findings
+- FK transaction/rollback/zero residue PASS
+- Next production build PASS
+- #278 and #279 are closed evidence-only PRs; do not merge them
+- independent review: **PENDING**
+
+No provider executor/live affiliate read is authorized. Even eventual #269 merge would not itself authorize provider execution.
+
+A future provider read still requires:
+1. independent review of #269;
+2. independent review + approved release/reconciliation of #273;
+3. #219/#238 post-reset Production gate clearance;
+4. fresh #264/#267 rebind to then-current main/data;
+5. configuration readiness check without exposing secrets;
+6. exact new human provider-read approval.
+
+GitHub Copilot code review has previously been treated in this repository as a billable AI-credit boundary. Do not request it without explicit owner approval. Self-review must not be represented as independent review.
+
+## Next mandatory gate
+
+After the **2026-09-12 billing-cycle reset** and any short provider-side clearing delay:
+1. confirm organization/project restriction is actually cleared and no 402 remains;
+2. read fresh-cycle **Gacha-filtered** Egress;
+3. verify low Free-plan-compatible burn with safety margin;
+4. perform minimal public/runtime smoke without load-heavy diagnostics;
+5. verify no recurrence of the former amplification;
+6. update #219/#238 and these canonical docs from fresh evidence;
+7. only then consider reopening Production merges and separately releasing/reconciling #273/#269.
+
+## Cross-project failure-domain follow-up
+
+After restriction clears and a fresh complete backup is green, the existing Beach Supabase project is intended to move to a dedicated Free organization so Beach and Gacha Lens no longer share the same quota/failure domain. This is a future Project Transfer, not a replacement database and not an active-restriction workaround.
 
 ## Hard boundaries
 
 - no direct main push
+- never touch `supabase/.temp/cli-latest`
+- keep `.github/workflows/gacha-ingestion.yml` disabled
+- no automatic RPC retry
 - no paid/destructive action without applicable approval
-- no Production DB/schema/data mutation by implication
+- no Production DB/schema/data/history mutation by implication
 - no provider refresh/write by implication
 - no workflow dispatch/change by implication
 - no Secrets/Variables change by implication
-- keep `.github/workflows/gacha-ingestion.yml` disabled
-- never touch `supabase/.temp/cli-latest`
-- no automatic RPC retry
+- consumed prior Production authority remains non-reusable
