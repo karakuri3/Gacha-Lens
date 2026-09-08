@@ -103,7 +103,7 @@ function isDiscoveryDocumentPath(pathname) {
 
 function isPublicDataHtmlPath(pathname) {
   if (PUBLIC_DATA_HTML_EXACT_PATHS.has(pathname)) return true;
-  if (/^\/series\/[^/]+$/.test(pathname)) return true;
+  if (/^\/series\/(?:[^/]+|group\/[^/]+)$/.test(pathname)) return true;
   return /^\/(?:categories|brands|franchises)\/[^/]+$/.test(pathname);
 }
 
