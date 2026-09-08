@@ -50,6 +50,24 @@ test("known Next.js error documents cannot become shared edge cache entries", ()
   assert.match(source, /await canStoreResponse\(response, policy\)/);
 });
 
+test("known branded data-source error HTML becomes an explicit temporary 503 before cache storage", () => {
+  assert.match(source, /DEGRADED_RESPONSE_MARKER = "data-source-error-503-v1"/);
+  assert.match(source, /DEGRADED_RETRY_AFTER_SECONDS = "3600"/);
+  assert.match(source, /async function isDegradedHtmlResponse\(response\)/);
+  assert.match(source, /response\.status !== 200/);
+  assert.match(source, /contentType\.includes\("text\/html"\)/);
+  assert.match(source, /function buildDegradedResponse\(response\)/);
+  assert.match(source, /headers\.set\("Cache-Control", "no-store"\)/);
+  assert.match(source, /headers\.set\("Cloudflare-CDN-Cache-Control", "no-store"\)/);
+  assert.match(source, /headers\.set\("Retry-After", DEGRADED_RETRY_AFTER_SECONDS\)/);
+  assert.match(source, /headers\.set\("X-Gacha-Degraded", DEGRADED_RESPONSE_MARKER\)/);
+  assert.match(source, /status: 503/);
+  assert.match(source, /statusText: "Service Unavailable"/);
+  const degradedCheck = source.indexOf("if (await isDegradedHtmlResponse(response))");
+  const cacheCheck = source.indexOf("if (!(await canStoreResponse(response, policy)))");
+  assert.ok(degradedCheck > -1 && cacheCheck > degradedCheck);
+});
+
 test("variant detail stays framework-dynamic and delegates shared reuse to Workers Cache", () => {
   assert.match(variantDetailSource, /export const dynamic = "force-dynamic"/);
   assert.match(variantDetailSource, /export const revalidate = 0/);
