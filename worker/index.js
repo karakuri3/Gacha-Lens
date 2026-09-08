@@ -4,6 +4,7 @@ const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const NON_CACHEABLE_HTML_MARKERS = ["商品情報を取得できません"];
 const DEGRADED_RESPONSE_MARKER = "data-source-error-503-v1";
 const DEGRADED_RETRY_AFTER_SECONDS = "3600";
+const P0_281_PROBE_PATH = "/__gacha_p0_281_handler_probe";
 
 const EDGE_CACHE_POLICIES = {
   seriesDetail: {
@@ -94,9 +95,6 @@ function getEdgeCachePolicy(request) {
   if (/^\/series\/[^/]+$/.test(url.pathname) && accept.includes("text/html")) {
     if (url.searchParams.size === 0) return EDGE_CACHE_POLICIES.seriesDetail;
 
-    // Allow one cache-busting proof key only on isolated workers.dev previews.
-    // Production custom domains remain query-string cache ineligible to avoid
-    // cache-key fragmentation and user-controlled cache variants.
     if (
       url.hostname.endsWith(PREVIEW_HOST_SUFFIX) &&
       url.searchParams.size === 1 &&
@@ -107,9 +105,6 @@ function getEdgeCachePolicy(request) {
     return null;
   }
 
-  // Discovery index roots are expensive to rebuild and their taxonomy/counts do
-  // not require sub-hour freshness. A daily edge boundary keeps their full-table
-  // origin work bounded to roughly the same cadence as the public sitemaps.
   if (
     url.searchParams.size === 0 &&
     accept.includes("text/html") &&
@@ -118,9 +113,6 @@ function getEdgeCachePolicy(request) {
     return EDGE_CACHE_POLICIES.discoveryIndex;
   }
 
-  // The main series listing and first-page facet landings are non-personalized
-  // but change more often. Cache only their no-query HTML forms so pagination and
-  // search variants cannot create unbounded cache-key cardinality.
   if (
     url.searchParams.size === 0 &&
     accept.includes("text/html") &&
@@ -129,9 +121,6 @@ function getEdgeCachePolicy(request) {
     return EDGE_CACHE_POLICIES.discoveryDocument;
   }
 
-  // Other shared public document pages are cacheable only without query
-  // parameters. Search, filter and pagination variants intentionally bypass edge
-  // storage so user-controlled cache-key cardinality stays bounded.
   if (
     url.searchParams.size === 0 &&
     accept.includes("text/html") &&
@@ -188,9 +177,6 @@ async function canStoreResponse(response, policy, { htmlMarkerChecked = false } 
   const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
   if (!policy.contentTypes.some((expected) => contentType.includes(expected))) return false;
 
-  // Next.js error boundaries can render a branded error document while the outer
-  // HTTP response remains 200. Never let that transient document become the
-  // shared edge representation for an otherwise healthy public URL.
   if (contentType.includes("text/html") && !htmlMarkerChecked) {
     const body = await response.clone().text();
     if (NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker))) return false;
@@ -199,19 +185,51 @@ async function canStoreResponse(response, policy, { htmlMarkerChecked = false } 
   return true;
 }
 
+function isP0281ProbeRequest(request) {
+  const url = new URL(request.url);
+  return request.method === "GET"
+    && url.hostname.endsWith(PREVIEW_HOST_SUFFIX)
+    && url.pathname === P0_281_PROBE_PATH;
+}
+
+async function runP0281HandlerProbe(request, env, ctx) {
+  const rootUrl = new URL("/", request.url);
+  const probeRequest = new Request(rootUrl, {
+    method: "GET",
+    headers: {
+      accept: "text/html",
+      "user-agent": "gacha-lens-p0-281-preview-probe",
+    },
+  });
+  const response = await handler.fetch(probeRequest, env, ctx);
+  const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+  const body = contentType.includes("text/html") ? await response.clone().text() : "";
+
+  return Response.json({
+    probe: "p0-281-handler-v1",
+    handler_status: response.status,
+    content_type: contentType,
+    marker_found: NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker)),
+    body_length: body.length,
+    vinext_cache: response.headers.get("x-vinext-cache"),
+  }, {
+    headers: {
+      "Cache-Control": "no-store",
+      "X-Robots-Tag": "noindex, nofollow",
+    },
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
+    if (isP0281ProbeRequest(request)) {
+      return runP0281HandlerProbe(request, env, ctx);
+    }
+
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
     const degradedInspection = await inspectDegradedHtmlResponse(request, response);
 
-    // Next.js can serialize the branded data-source error boundary inside an
-    // outer HTTP 200. Convert GET HTML responses carrying that known signature
-    // into a temporary service-unavailable response. Classification uses the
-    // actual response Content-Type rather than the request Accept header so bots
-    // and generic HTTP clients cannot bypass the degraded-state semantics.
-    // Internal Next/RSC requests are excluded, no origin retry is added, and no
-    // stale product/market data is fabricated.
     if (degradedInspection.degraded) {
       return buildDegradedResponse(response);
     }
