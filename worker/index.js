@@ -1,4 +1,5 @@
 import handler from "vinext/server/fetch-handler";
+import { runWithPublicDataSourceFailureTracking } from "../lib/data/public-data-source-failure-context.js";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const NON_CACHEABLE_HTML_MARKERS = ["商品情報を取得できません"];
@@ -136,6 +137,13 @@ function getEdgeCachePolicy(request) {
   return null;
 }
 
+function isTrackedDataFailureHtmlResponse(request, response) {
+  if (request.method !== "GET" || isNextInternalRequest(request)) return false;
+  if (response.status !== 200) return false;
+  const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+  return contentType.includes("text/html");
+}
+
 async function inspectDegradedHtmlResponse(request, response) {
   if (request.method !== "GET" || isNextInternalRequest(request)) {
     return { degraded: false, htmlMarkerChecked: false };
@@ -201,14 +209,16 @@ async function runP0281HandlerProbe(request, env, ctx) {
       "user-agent": "gacha-lens-p0-281-preview-probe",
     },
   });
-  const response = await handler.fetch(probeRequest, env, ctx);
+  const tracked = await runWithPublicDataSourceFailureTracking(() => handler.fetch(probeRequest, env, ctx));
+  const response = tracked.response;
   const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
   const body = contentType.includes("text/html") ? await response.clone().text() : "";
 
   return Response.json({
-    probe: "p0-281-handler-v1",
+    probe: "p0-281-handler-v2",
     handler_status: response.status,
     content_type: contentType,
+    tracked_data_source_failure: tracked.failed,
     marker_found: NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker)),
     body_length: body.length,
     vinext_cache: response.headers.get("x-vinext-cache"),
@@ -227,9 +237,14 @@ export default {
     }
 
     const policy = getEdgeCachePolicy(request);
-    const response = await handler.fetch(request, env, ctx);
-    const degradedInspection = await inspectDegradedHtmlResponse(request, response);
+    const tracked = await runWithPublicDataSourceFailureTracking(() => handler.fetch(request, env, ctx));
+    const response = tracked.response;
 
+    if (tracked.failed && isTrackedDataFailureHtmlResponse(request, response)) {
+      return buildDegradedResponse(response);
+    }
+
+    const degradedInspection = await inspectDegradedHtmlResponse(request, response);
     if (degradedInspection.degraded) {
       return buildDegradedResponse(response);
     }
