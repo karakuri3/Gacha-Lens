@@ -2,7 +2,7 @@
 
 Updated: 2026-09-08 JST — Fair Use restriction active; Production freeze active; repository-only prerequisite validation complete
 
-The complete historical decision record remains preserved in Git history and the pre-final-cutover history files. Decisions D-001 through D-141 remain authoritative unless explicitly superseded below. This file focuses the active canonical state and new decisions needed to resume safely.
+The complete historical decision record remains preserved in Git history and the pre-final-cutover history files. Decisions D-001 through D-150 remain authoritative unless explicitly superseded below. This file focuses the active canonical state and new decisions needed to resume safely.
 
 ## Existing durable state retained
 
@@ -157,28 +157,58 @@ After the **2026-09-12 billing reset** and any short provider-side restriction-c
 5. confirm no recurrence of the former amplification;
 6. synchronize #219/#238/#250 canonical state.
 
-This clears only the P0/freeze gate. Production release authority has an additional policy gate in D-150.
+This clears only the P0/freeze gate. Production release authority has an additional policy gate in D-150/D-151.
 
 ### D-150 — #262 must be resolved explicitly before standing Cloudflare auto-release authority can be used
 
 Issue #262 documents a real standing-policy conflict:
 - Cloudflare is now Production and routine Vercel Git builds are intentionally disabled;
-- `docs/PRODUCTION_RELEASE_POLICY.md` still requires exact-head Vercel Preview and describes Vercel Production deployment as the standing release path.
+- `docs/PRODUCTION_RELEASE_POLICY.md` on current main still requires exact-head Vercel Preview and describes Vercel Production deployment as the standing release path.
 
 The two conditions cannot be silently reconciled by interpretation.
-
-Therefore, after #219/#238 clear and before relying on standing auto-release authority for a normal Cloudflare Production merge:
-1. review the current Cloudflare cutover and rollback evidence;
-2. obtain the applicable explicit policy-change approval for the replacement release gate;
-3. define the exact Cloudflare Preview/version + repository CI + required runtime/cache/security evidence that replaces obsolete Vercel-hosting assumptions;
-4. update `PRODUCTION_RELEASE_POLICY.md` and linked Agent/auto-merge docs consistently;
-5. add automated/docs checks preventing hosting-authority drift.
 
 Hard consequences:
 - Cloudflare CI/Preview success is not implicit permission to bypass the stale standing policy;
 - do not re-enable Vercel builds merely to satisfy obsolete wording;
 - #262 is a mandatory governance gate even after the Supabase freeze clears;
 - #273/#269 Production releases/reconciliation remain separately approved changes after #262.
+
+### D-151 — authorized Draft #265 is the canonical implementation of the #262 Cloudflare policy alignment
+
+The #262 replacement policy is not merely a proposal anymore. It is implemented in Draft PR #265:
+- exact head: `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a`;
+- explicit user authorization for the #262 policy alignment is recorded in the PR body;
+- seven active policy/test files are aligned;
+- PR Code Quality `34045587975`: SUCCESS;
+- strengthened self-review + independent Reviewer/Verifier packet are present;
+- independent Reviewer/Verifier result remains **PENDING**;
+- #265 is still Draft and not authoritative on main.
+
+The recorded authorization is narrow. It authorizes the policy alignment work, not bypass of #219/#238, not self-merge, not manual Cloudflare deploy/promotion/dispatch, and not any Production DB/data/schema, Secrets/Variables, workflow-dispatch, paid/destructive, or auth-boundary action.
+
+After the P0 freeze clears:
+1. re-fetch current main and #265 exact diff;
+2. refresh exact-head validation if main/head evidence is stale;
+3. obtain independent Reviewer/Verifier evidence, or a fresh #265-specific substitution only if explicitly granted;
+4. land #265 through the applicable safe merge path;
+5. close #262 only after the reviewed Cloudflare standing policy is actually on main.
+
+#265 must never be used as authority to merge #265 itself.
+
+### D-152 — post-freeze release train is ordered, not opportunistic
+
+After D-149 P0 clearance, use this default sequence unless fresh evidence justifies an explicit reprioritization:
+
+1. **Governance:** #265/#262 first, so later releases have a coherent Cloudflare standing policy.
+2. **CI proof authority:** #258 next, repinning runtime/cache smoke to the then-current deployed source under its workflow-change approval boundary.
+3. **Migration reproducibility:** #273 after independent review + fresh Production catalog/history parity + explicit reconciliation strategy; never blind `db push`.
+4. **User value:** #253 Japanese stored-category routing fix after fresh rebase/exact Cloudflare Preview/runtime proof.
+5. **Official-ingestion reliability:** #261 after fresh rebase/validation + applicable Production approval; observe the next natural bounded F0 run rather than forcing it.
+6. **Business scorecard:** recompute traffic/click/affiliate/data-freshness evidence. If monetization coverage still dominates, proceed `#264 -> #267 -> #269`, rebinding each layer to then-current main/data and never reusing an old approval token.
+7. **Data Scale R5:** keep #257/#260 HOLD unless the fresh scorecard shows depth expansion again outranks monetization coverage.
+8. Synchronize canonical docs after each major release/recovery/security milestone.
+
+This ordering is not blanket approval for merge, Production mutation, workflow change, provider execution, Secret/Variable changes, or paid operations.
 
 ## Current durable state
 
@@ -189,7 +219,7 @@ Hard consequences:
 - Supabase Fair Use restriction: **ACTIVE as of 2026-09-08**
 - #219: **OPEN**
 - #238: **OPEN / PRODUCTION FREEZE ACTIVE**
-- #262: **OPEN / RELEASE-GOVERNANCE BLOCKER**
+- #262: **OPEN / authorized replacement implemented in Draft #265 / independent review pending**
 - #250: **DRAFT canonical docs sync**
 - #273: **DRAFT / repository proof PASS / independent review pending**
 - #269: **DRAFT / repository proof PASS / independent review pending**
