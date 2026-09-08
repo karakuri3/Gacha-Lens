@@ -1,180 +1,189 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-06 JST — technical Egress mitigation complete; billing-cycle operational gate remains
+Updated: 2026-09-08 JST — Fair Use restriction active; Production freeze active; repository-only prerequisite validation complete
 
-The complete pre-final-cutover decisions checkpoint is preserved at `docs/history/2026-09-05-pre-final-cutover-DECISIONS.md` and in Git history. Decisions D-001 through D-130 remain authoritative unless explicitly superseded below.
+The complete historical decision record remains preserved in Git history and the pre-final-cutover history files. Decisions D-001 through D-141 remain authoritative unless explicitly superseded below. This file focuses the active canonical state and new decisions needed to resume safely.
 
 ## Existing durable state retained
 
-- Cloudflare is the Production web runtime and authoritative DNS for Gacha Lens.
-- Vercel remains registrar and a non-live rollback artifact only; automatic Git builds are disabled.
+- Cloudflare is the Production runtime and authoritative DNS.
+- Vercel remains registrar and a non-live rollback artifact only; routine Git builds are disabled.
 - `www` canonicalization is a Cloudflare edge redirect.
-- scoped Stage 5 Production hardening is independently durable and not coupled to application rollback.
-- company infrastructure migration is complete.
-- Workers Logs remain disabled; metrics/API Gateway evidence must not be mislabeled as Worker log-stream review.
-- exact #228 authority is consumed/non-reusable.
+- Stage 5 scoped Supabase hardening remains applied and durable.
+- Company infrastructure migration is complete and must not be restarted.
+- Workers Logs remain disabled; other metrics must not be mislabeled as Worker log-stream review.
+- direct main pushes remain prohibited.
+- consumed prior Production/provider authority is non-reusable.
+- `.github/workflows/gacha-ingestion.yml` remains disabled.
+- `supabase/.temp/cli-latest` must never be touched.
+- automatic RPC retry remains prohibited.
+- strict market matching/identity/safety semantics must not be weakened for coverage.
+- completed sold evidence remains separate from asking-price evidence.
+- Mercari/Amazon scraping remains prohibited.
 
-## Authoritative additions
+## Previously accepted P0 runtime decisions retained
 
-### D-131 — P0-B uses bounded Cloudflare Workers Cache rather than a new persistence layer
+PR #249 is the accepted shared-edge reuse implementation. PR #251 is the accepted unique-path cold-read implementation.
 
-PR #249 is the accepted shared-reuse implementation for the remaining public Supabase read amplification under Issue #219.
+Their released behavior remains authoritative:
+- bounded Cloudflare shared cache for selected public discovery/sitemap surfaces;
+- query/search/pagination/auth/cookie/Next-internal exclusions remain outside shared-document caching;
+- known error HTML is not promoted to shared cache;
+- detail/related signal reads are scoped to relevant variant identities while preserving required series-level set safety semantics;
+- service-role credentials remain environment-only;
+- historical cumulative Egress must be interpreted separately from post-fix burn rate;
+- internal operating-margin target remains approximately `<=0.12 GB/day` organization-wide until re-evaluated from fresh-cycle evidence.
 
-Production policy:
-- no-query `/categories`, `/brands`, `/franchises` roots: 24h shared edge cache;
-- no-query `/series` and first-page facet landings: 30m shared edge cache;
-- series detail: 30m shared edge cache;
-- public sitemap documents: 24h shared edge cache;
-- query/search/pagination, auth/cookie requests, and Next internals remain outside the bounded shared-document policy;
-- known branded error HTML is never promoted to shared cache.
+## New authoritative decisions
 
-This uses the existing Cloudflare/Vinext `workers-cache` boundary. It does not introduce KV, a new persistence layer, a Production DB mutation, or a new global cache store.
+### D-142 — 2026-09-08 Fair Use restriction is historical-cycle enforcement, not automatic evidence of mitigation regression
 
-### D-132 — Public Supabase deployment coordinates may have code defaults; service-role credentials may not
+Provider evidence now shows:
+- Free organization state: **All services are restricted**;
+- reason: **Egress Exceeded**;
+- cycle: 2026-08-12 -> 2026-09-12;
+- organization uncached Egress: **25.242 / 5 GB**;
+- Gacha project Egress: **23.003 GB**;
+- Beach project Egress: **0.444 GB**.
 
-Supabase URL and publishable key are public client configuration and may resolve environment-first with current public defaults for Preview portability. Service-role credentials remain environment-only and must never be embedded or displayed.
+Before enforcement, post-mitigation burn was about **0.0104 GB/day**, far below the internal operating target, and the known sitemap fingerprint remained nearly flat.
 
-### D-133 — PR #249 Production release is technically PASS
+Therefore the best-supported interpretation is that the active restriction is delayed enforcement of historical current-cycle usage accumulated before/around the mitigation, not proof that #249/#251 failed.
 
-PR #249 was explicitly approved and merged as:
+Consequences:
+- do not launch a speculative new Production runtime rewrite solely because 402/restriction appeared;
+- do not buy Pro merely to erase historical cycle usage;
+- do not use project/org transfer as active-restriction quota evasion;
+- wait for clean post-reset evidence before changing the technical conclusion.
 
-`397584fabe633b511cc060ae85335dc4e85fa81d`
+### D-143 — #238 is now a Production freeze, not merely a partial-risk note
 
-Cloudflare Production build:
+Non-Production work remains allowed, but Production-changing work is frozen while the organization is restricted.
 
-`f1d61310-7e7e-44f5-8c3e-4eb791aca5ac`
+Allowed:
+- isolated branches;
+- local/disposable DB tests;
+- Preview validation that does not mutate Production;
+- docs/review/planning/static analysis;
+- low-impact read-only evidence collection.
 
-Evidence includes repository/compatibility PASS, exact Preview runtime smoke, strict byte-identical `MISS -> HIT -> HIT`, Japanese detail runtime PASS, and Production warm-request backend suppression consistent with the shared cache boundary.
-
-### D-134 — Cumulative Usage must be interpreted as a rate, not as an immediately reversible counter
-
-The current billing-cycle cumulative Egress contains historical pre-fix traffic. A successful mitigation does not reduce that accumulated number retroactively.
-
-Therefore:
-- current cumulative overage alone is not evidence that the new runtime remains expensive;
-- the post-release delta over elapsed time is the relevant technical sustainability signal;
-- historical Fair Use/402 exposure can remain until the billing cycle resets even after the technical amplifier is fixed.
-
-### D-135 — Free-plan sustainability uses a conservative operating-margin target
-
-For this P0, a conservative organization-wide target of approximately `<=0.12 GB/day` (`<=0.005 GB/hour`) is used as the operational margin for uncached Egress.
-
-This is not a Supabase contractual limit. It is an internal safety target chosen to remain materially below a 5 GB/month allowance and leave room for shared-org traffic and growth.
-
-### D-136 — PR #251 is the accepted unique-path cold-read mitigation
-
-Post-#249 evidence showed that distinct product paths could still pay one cold detail bundle per path. The accepted follow-up is PR #251.
-
-PR #251:
-- scopes public detail/related market/X/restock/stock reads to relevant `variant_id` / `matched_variant_id` identities;
-- retains required series-level COMPLETE_SET/PARTIAL_SET/POPULAR_SET market listings and their persisted safety metadata;
-- omits unused persisted `raw` payload only from safe variant-specific public reads;
-- leaves the broader repository implementation available for other consumers;
-- does not change Production DB/schema/data, Secrets/Variables, DNS/Auth, billing or workflow configuration.
-
-Bounded Preview A/B preserved rendered semantics while reducing representative signal JSON by **65.5% on detail** and **48.1% on related**.
-
-The temporary diagnostic route used to establish that proof was removed before Production candidacy.
-
-### D-137 — PR #251 Production release is technically PASS
-
-PR #251 was explicitly approved and squash-merged as:
-
-`83b0b36e5d0172f3ea6964206edad6480a13b4bb`
-
-Cloudflare Production build:
-
-`6a86ca27-a105-410b-8862-308e4a2aca8e`
-
-Production version:
-
-`00e608fa-153c-40ef-b8b9-d5700c270066`
-
-Post-release Japanese detail remains functional and no HTTP 402 is currently observed. A controlled same-URL Production detail reload repeated three times yielded one observed detail-shaped backend bundle rather than three separately repeated warm bundles, consistent with shared edge reuse.
-
-Implementation Issue #239 is therefore complete/superseded by #249 + #251 and is closed.
-
-### D-138 — Observed post-release burn rate passes the technical sustainability gate with large margin
-
-Observed organization Usage:
-- post-#249 baseline: 25.108 GB uncached Egress around 02:31 JST;
-- refreshed value: 25.114 GB around 16:18 JST;
-- elapsed: approximately 13.78 hours;
-- delta: +0.006 GB.
-
-Approximate observed rate:
-- **0.00044 GB/hour**;
-- **0.0104 GB/day**.
-
-This is far below the internal `<=0.12 GB/day` target even though the interval includes Preview/A-B verification, Production smoke and other shared-org traffic.
-
-Accordingly, the original technical read-amplification problem is classified as **CONTROLLED / PASS-like with large margin**. A paid Supabase plan is not established as necessary by the current technical burn rate.
-
-### D-139 — Technical PASS and historical billing-cycle risk are separate gates
-
-The organization is still at approximately `25.114 / 5 GB` in the current cycle and Supabase reports `Grace period is over`. Because historical usage cannot be removed, a Fair Use restriction remains a residual operational risk until the cycle resets even though current burn is low.
-
-Therefore:
-- Issue #219 remains open only for billing-cycle/Fair Use stabilization;
-- do not upgrade to a paid plan merely to erase historical usage without separate explicit owner approval;
-- prefer final operational closure after the 2026-09-12 billing-cycle reset confirms no 402 and continued low burn.
-
-### D-140 — The P0 freeze is partially relaxed instead of wasting engineering time
-
-Issue #238 no longer blocks all engineering work.
-
-Allowed now:
-- feature/design/research work on isolated non-main branches;
-- Cloudflare Preview deployments;
-- tests, docs, review and planning;
-- non-Production work that does not obscure P0 monitoring.
-
-Still frozen until #219 final PASS:
-- Production runtime merges to `main`;
-- Production DB/schema/data changes;
-- DNS/Auth/write/admin-surface changes;
+Frozen:
+- Production runtime merges to main;
+- Production DB/schema/data/migration-history changes;
+- DNS/Auth/write/admin changes;
 - Secrets/Variables changes;
-- unrelated Production load/migration experiments;
-- billing/paid plan changes without explicit owner approval.
+- paid plan/billing changes without explicit approval;
+- provider/load-generating experiments;
+- unrelated Production releases intended to bypass restriction.
 
-This balances operational isolation with the cost of holding all product engineering until the historical billing counter resets.
+### D-144 — shared Supabase organization is an unacceptable long-term failure domain for Gacha + Beach
 
-### D-141 — Final P0 closure order
+Project-filtered evidence shows Beach is low-egress but was affected by Gacha's shared organization quota.
 
-On final operational PASS:
-1. record the billing-cycle/post-reset evidence and close #219;
-2. close #238 and fully reopen routine Production development;
-3. ensure #239 remains closed as completed;
-4. finalize and merge canonical docs PR #250 under its applicable main/Production approval boundary;
-5. explicitly state that the Egress P0 thread is complete and normal Gacha Lens Production development may resume.
+After the restriction clears and a fresh complete backup is green, the existing Beach Supabase project should be transferred to a dedicated Free organization. This is a future Project Transfer, not creation of a replacement database and not a quota-evasion action during restriction.
 
-If 402 appears before reset, keep #219/#238 open and determine whether the reset clears it. A paid-plan decision remains a paid action requiring explicit approval.
+### D-145 — #273 is the canonical repository repair for the fresh migration-chain `forecast_snapshots` gap
+
+Draft PR #273 exact head:
+`42c8f9934a92cda0be5fd58f2dccc7d4db17299c`
+
+Accepted repository evidence:
+- Code Quality SUCCESS;
+- vinext SUCCESS;
+- Foundation SUCCESS;
+- downstream combined empty-DB proof via #279 SUCCESS.
+
+The repair intentionally places `20260904152325_restore_forecast_snapshots_baseline.sql` immediately before the already-existing `20260904152326_final_revoke_server_only_api_grants.sql` so fresh replay can reach the hardening migration.
+
+Durable constraints:
+- already-applied historical migration files must not be edited;
+- #273 repository proof does **not** authorize Production DDL or migration-history mutation;
+- future Production reconciliation must begin with fresh live catalog/history parity evidence;
+- blind Production `db push` is not an approved reconciliation strategy;
+- independent review is still required before release/reconciliation.
+
+### D-146 — #269 is the canonical durable one-time affiliate provider-read authorization boundary
+
+Draft #269 exact head:
+`574a9a4c10c3fd6cd275229c95c9b3adef8de84f`
+
+Durable contract:
+- exact one-time `(head_sha, batch_digest)` claim;
+- no plaintext approval persistence;
+- replay/reopen/reset blocked;
+- 1..10 targets, exactly two logical phases per target, max three attempts per phase;
+- serial attempt reservation;
+- discovery must succeed before affiliate enrichment;
+- whole-batch fail-close after terminal, ambiguous, or exhausted third retryable attempt;
+- private service-role-only ledger using `SECURITY INVOKER` + empty `search_path`;
+- terminal reasons are bound to durable attempt evidence, including `retry_exhausted`;
+- no successful approval can become reusable.
+
+Current accepted repository proof:
+- exact-head Code Quality `34195356451`: SUCCESS;
+- exact-head vinext `34195356549`: SUCCESS;
+- #279 disposable Foundation `34195410881`: SUCCESS including cleanup;
+- 22 migrations from empty DB;
+- Foundation 14/14 PASS, skip0;
+- data-source/ledger DB 11/11 PASS, skip0;
+- final catalog 0 findings;
+- Next build PASS.
+
+This does not authorize a live provider executor, affiliate persistence, Production migration, or provider call.
+
+### D-147 — self-review cannot satisfy the independent Reviewer gate
+
+Strengthened self-review may find and fix defects, but must never be represented as independent approval.
+
+For #269 and #273:
+- independent Reviewer packets are fixed in PR comments without moving the exact heads;
+- GitHub Copilot code review has previously been treated in this repository as a billable AI-credit boundary;
+- do not request a billable reviewer without explicit owner approval;
+- do not weaken/remove the independent review requirement merely to unblock merge.
+
+### D-148 — preserve proven exact heads instead of continuing low-value edits
+
+After exact-head CI + disposable DB proof are green, do not add nonessential code/docs to the proven implementation branch because doing so invalidates the exact-head evidence and forces revalidation.
+
+Canonical documentation updates belong in docs-only Draft #250, while #273/#269 heads should remain stable pending independent review and post-freeze release gates.
+
+### D-149 — post-reset P0 closure order is mandatory
+
+After the **2026-09-12 billing reset** and any short provider-side restriction-clear delay:
+1. confirm restriction actually clears and no 402 remains;
+2. read fresh-cycle **Gacha-filtered** Egress;
+3. prove low Free-plan-compatible burn with safety margin;
+4. perform minimal public/runtime smoke without load-heavy diagnostics;
+5. confirm no recurrence of the former amplification;
+6. synchronize #219/#238/#250 canonical state;
+7. only then close the P0/freeze and reopen normal Production development.
+
+#273/#269 Production release/reconciliation remains a separate change even after freeze clearance.
 
 ## Current durable state
 
 - infrastructure migration: **COMPLETE**
-- Production web runtime: Cloudflare Worker `gacha-lens`
-- #249 shared cache mitigation: **MERGED / PRODUCTION PASS**
-- #251 cold-read mitigation: **MERGED / PRODUCTION PASS**
-- observed technical burn: **PASS-like / large margin**
-- Issue #219: **OPEN — billing-cycle/Fair Use stabilization only**
-- Issue #238: **OPEN / PARTIALLY RELAXED**
-- Issue #239: **CLOSED / COMPLETED**
-- non-Production feature development: **ALLOWED**
-- Production runtime merges: **FROZEN until #219 final PASS**
-- paid Supabase plan requirement: **NOT ESTABLISHED**
+- Production runtime: Cloudflare
+- current Production main: `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
+- #249/#251: **MERGED / PRODUCTION PASS**
+- Supabase Fair Use restriction: **ACTIVE as of 2026-09-08**
+- #219: **OPEN**
+- #238: **OPEN / PRODUCTION FREEZE ACTIVE**
+- #250: **DRAFT canonical docs sync**
+- #273: **DRAFT / repository proof PASS / independent review pending**
+- #269: **DRAFT / repository proof PASS / independent review pending**
+- provider execution: **NOT AUTHORIZED**
+- Production DB/history reconciliation: **NOT AUTHORIZED**
+- paid Supabase requirement: **NOT ESTABLISHED**
 
 ## Hard durable constraints
 
 - never touch `supabase/.temp/cli-latest`
 - keep `.github/workflows/gacha-ingestion.yml` disabled
 - no automatic RPC retry
-- do not manually alter Supabase migration ledger identity/timestamps
-- do not weaken strict market matching or identity guards for coverage
-- completed sold evidence remains separate from asking-price evidence
-- do not scrape Mercari or Amazon
-- direct main pushes remain prohibited
+- no direct main push
 - no workflow dispatch/change by implication
 - no Secrets/Variables change by implication
-- no Production DB/schema/data mutation by implication
+- no Production DB/schema/data/history mutation by implication
+- no provider call/write by implication
 - no paid/destructive action without applicable approval
