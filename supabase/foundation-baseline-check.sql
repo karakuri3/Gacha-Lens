@@ -423,10 +423,10 @@ findings as (
   union all
 
   select
-    'deferred_table_present',
+    'missing_restored_table',
     'forecast_snapshots',
-    'forecast_snapshots is intentionally deferred'
-  where to_regclass('public.forecast_snapshots') is not null
+    'forecast_snapshots must be present after migration baseline repair'
+  where to_regclass('public.forecast_snapshots') is null
 
   union all
 
