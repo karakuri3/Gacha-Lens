@@ -65,6 +65,21 @@ const PUBLIC_SITEMAP_PATHS = new Set([
   "/variant-sitemap.xml",
 ]);
 
+// Only these HTML surfaces render public product/catalog data during SSR. Keep
+// streamed-response draining away from legal/editorial/admin pages so the P0
+// containment does not add buffering cost or failure coupling to unrelated HTML.
+const PUBLIC_DATA_HTML_EXACT_PATHS = new Set([
+  "/",
+  "/series",
+  "/ranking",
+  "/schedule",
+  "/restocks",
+  "/stock",
+  "/categories",
+  "/brands",
+  "/franchises",
+]);
+
 function isNextInternalRequest(request) {
   return [
     "rsc",
@@ -83,6 +98,12 @@ function isPublicCacheCandidate(request) {
 
 function isDiscoveryDocumentPath(pathname) {
   if (DISCOVERY_DOCUMENT_PATHS.has(pathname)) return true;
+  return /^\/(?:categories|brands|franchises)\/[^/]+$/.test(pathname);
+}
+
+function isPublicDataHtmlPath(pathname) {
+  if (PUBLIC_DATA_HTML_EXACT_PATHS.has(pathname)) return true;
+  if (/^\/series\/[^/]+$/.test(pathname)) return true;
   return /^\/(?:categories|brands|franchises)\/[^/]+$/.test(pathname);
 }
 
@@ -150,6 +171,7 @@ function getEdgeCachePolicy(request) {
 
 function isTrackedDataFailureHtmlResponse(request, response) {
   if (request.method !== "GET" || isNextInternalRequest(request)) return false;
+  if (!isPublicDataHtmlPath(new URL(request.url).pathname)) return false;
   if (response.status !== 200) return false;
   const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
   return contentType.includes("text/html");
@@ -210,8 +232,8 @@ export default {
 
     // Next/vinext may stream a Server Component failure after handler.fetch has
     // produced the Response object. fetchWithTrackedDataFailure drains a clone
-    // before reading the request-scoped flag so both browser and crawler HTML
-    // requests receive the same degraded HTTP semantics.
+    // before reading the request-scoped flag so browser and crawler requests on
+    // known public data HTML surfaces receive the same degraded HTTP semantics.
     if (tracked.failed && isTrackedDataFailureHtmlResponse(request, response)) {
       return buildDegradedResponse(response);
     }
