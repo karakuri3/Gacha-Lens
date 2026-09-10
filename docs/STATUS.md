@@ -1,6 +1,6 @@
 # Gacha Lens Status
 
-Updated: 2026-09-09 01:31 JST
+Updated: 2026-09-11 JST
 
 ## Executive state
 
@@ -8,102 +8,75 @@ Updated: 2026-09-09 01:31 JST
 - Production runtime: Cloudflare Worker `gacha-lens`
 - Production main: `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
 - Supabase Production: `vxbrnvfhmzcxehuuzzum`
-- #219: **OPEN — active Fair Use restriction/post-reset gate**
+- #219: **OPEN — Fair Use restriction / post-reset gate**
 - #238: **OPEN — Production freeze ACTIVE**
-- #280: **OPEN — P3 natural no-op/write0 PASS; Official natural no-op/write0 still pending after 2026-09-09 11:27 JST**
+- #280: **technical natural-run proof COMPLETE — P3 and Official both repeated no-op/write0; canonical sync in this docs refresh; lane re-enable remains separately prohibited**
 - #281: **OPEN — public-read P0 / healthy-200 outage classification**
-- #282: **Draft / current head `4d95413a...` / engineering PASS / full route inventory 14/14 / independent review PENDING / Production release FROZEN**
-- #284: **OPEN — docs-only Cloudflare build waste follow-up**
-- #285/#286: **bounded parent-series edge-cache branch implemented; static/Preview PASS; healthy cold->warm proof pending after restriction clears**
+- #282: **Draft `4d95413a...` / engineering PASS / 14-of-14 route coverage / independent review PENDING / Production FROZEN**
+- #284: **OPEN — docs-only Cloudflare build waste**
+- #285/#286: **parent-series edge-cache candidate repository/Preview PASS; healthy runtime proof pending**
+- #287: **OPEN — dependency-security triage from npm audit warning**
 - #262/#265: governance replacement implemented, independent review pending
-- #258: CI source-pin repair exact `76dac870...`, prior runtime/cache/CQ PASS, Draft; Production identity must be re-confirmed before merge
-- #273: Foundation repair repository PASS, independent review pending, Production history reconciliation not authorized
-- #269: affiliate authorization ledger repository/DB PASS, independent review pending, provider execution not authorized
+- #258: CI source-pin repair `76dac870...`, prior runtime/cache/CQ PASS
+- #273: Foundation repair repository PASS; migration-history action not authorized
+- #269: affiliate authorization ledger repository/DB PASS; provider execution not authorized
 
 ## Supabase / Egress
 
-Current cycle: 2026-08-12 -> 2026-09-12.
-Provider state: **All services are restricted / Egress Exceeded**.
-- org Egress: 25.242 / 5 GB
-- Gacha: 23.003 GB
-- Beach: 0.444 GB
+Current restricted cycle: **2026-08-12 -> 2026-09-12**. Last authoritative provider state: `All services are restricted / Egress Exceeded`, org 25.242/5 GB, Gacha 23.003 GB, Beach 0.444 GB.
 
-Released #249/#251 remain technically supported. Before enforcement, post-fix burn was ~0.0104 GB/day and the former amplifier fingerprint was nearly flat. Treat current restriction as historical-cycle enforcement unless fresh post-reset evidence proves otherwise.
+Released #249/#251 remain technically supported. Before enforcement, post-fix burn was ~0.0104 GB/day and the former amplifier was nearly flat. Treat restriction as historical-cycle enforcement unless fresh post-reset evidence disproves that interpretation.
 
-## #280 write safety
+## Recovery gate
 
-Completed 2026-09-08 16:52 JST with explicit owner approval:
+The plan no longer jumps directly from calendar reset to normal development. After the provider actually exposes the next cycle:
+1. verify no restriction / no HTTP 402;
+2. record fresh Gacha-filtered Egress baseline;
+3. run minimal public/runtime smoke and former-amplifier check;
+4. take a second refreshed provider-usage snapshot and calculate fresh-cycle slope, with <=0.12 GB/day as the conservative operating target;
+5. only then close #219/#238 and start controlled releases.
+
+Scheduled Production lanes remain disabled throughout recovery.
+
+## #280 write safety — COMPLETE evidence
+
+Owner-approved gates remain false:
 - `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`
 - `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
 
-Legacy ingestion stays disabled; other automatic lanes are false/no-op.
+P3 has repeated natural no-op/write0 proof. Official also now has repeated post-disable natural proof:
+- #15 `34324135554` and #16 `34449938117` are natural `schedule` runs on exact main `83b0b36e...`;
+- gate environment: `OFFICIAL_BOUNDED_AUTO_ENABLED=false`;
+- live audit / plan / Production transaction skipped;
+- terminal `OFFICIAL_BOUNDED_AUTO_DISABLED`;
+- database writes 0, deletes 0, secret findings 0.
 
-P3 natural no-op evidence is **PASS**:
-- run `34220342461` / #75, `event=schedule`, exact main `83b0b36e...`, created 2026-09-08 20:22 JST;
-- gate saw `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`;
-- provider execution, artifact scan and upload were skipped;
-- summary states `Provider fetch: skipped` and `Database writes: 0`.
-
-Official's first post-disable natural opportunity is **2026-09-09 11:27 JST** and has not happened yet as of this update. Do not manually dispatch to create evidence. Do not re-enable by implication after reset.
+No manual dispatch was used. #280 may close after this canonical sync, but its closure must not change either repository variable.
 
 ## #281 / #282
 
-Production public data outage remains active. Root has been externally observed as HTTP 200 while serving only degraded content. Production `/series/group/series-1` also currently reaches the branded data-source error.
+Production public data outage remains the current incident state until fresh provider recovery evidence says otherwise. #282 is a containment candidate, not data recovery. It stays Draft and should be discarded/preserved rather than shipped if reset restores normal service and healthy HTTP semantics.
 
-Current #282 exact candidate:
-`4d95413a9dcdd9a35555f5f40e47568f53a5245d`
+Current #282 exact candidate `4d95413a9dcdd9a35555f5f40e47568f53a5245d`: Code Quality/vinext/exact Cloudflare Preview/full route audit green; independent review pending; bounded Preview performance preflight required if still needed after reset.
 
-Why previous `68465cfa...` was superseded:
-- it did not include `/series/group/:slug` in degraded stream-drain classification;
-- that page is `force-dynamic`, `revalidate=0`, uses `getParentSeriesBySlug()`, is canonical/sitemap-linked, and is currently affected in Production.
+## Dependency security — #287
 
-Complete exact-head route audit:
-- all 26 `app/**/page.js` files inventoried;
-- public server-data SSR resolves to 14 route shapes;
-- current Worker allowlist + bounded dynamic matchers cover 14/14;
-- client-only, local editorial/legal, diagnostic `notFound()`, redirect and authenticated review surfaces remain intentionally excluded.
+Latest natural Official runs report `npm ci`: 12 vulnerabilities = 1 critical, 8 high, 2 moderate, 1 low. This is not yet classified as Production exploitability. Required next step is exact advisory/dependency-path and runtime-reachability triage. Do not use `npm audit fix --force` blindly. A confirmed runtime-reachable critical/high advisory outranks ordinary post-freeze feature/monetization releases.
 
-Current validation:
-- Code Quality `34217094679`: **SUCCESS**
-- vinext `34217094908`: **SUCCESS**
-- exact Cloudflare commit Preview for `4d95413a...`: deployment SUCCESS
-- full Node suite including parent-series and route-scope regression: PASS
-- unresolved review threads: 0
-- submitted independent reviews: 0 / PENDING
-- runtime/cache proof jobs still stop at the pre-existing #258 source-pin step and do not classify #282 behavior
+## Revised controlled-release sequence
 
-Design remains bounded: request-scoped `AsyncLocalStorage`, explicit public-data HTML allowlist including `/series/group/:slug`, 503/no-store mapping only for tracked GET outer-200 HTML, no extra origin/provider request.
-
-Runtime compatibility: Production Worker compatibility date `2026-09-08`, `nodejs_compat` enabled. Production CPU baseline ~27–28ms; if #282 remains needed after reset, bounded Preview CPU/TTFB preflight is required before release.
-
-Classification: **ENGINEERING PASS / ROUTE COVERAGE 14/14 / INDEPENDENT REVIEW PENDING / PERFORMANCE PREFLIGHT IF STILL NEEDED / PRODUCTION FROZEN**.
-
-## Cost/reliability follow-ups
-
-#284: Cloudflare Git integration currently builds docs-only commits. Official Build Watch supports excluding `docs/*`. No setting change during freeze.
-
-#285/#286: canonical `/series/group/:slug` is outside the current Production 30-minute `seriesDetail` shared-cache matcher. Draft #286 exact `710c21751f41bfedb9eb20cc5f0573b8fa842df6` extends the existing matcher to exactly `/series/:slug` and `/series/group/:slug`. Code Quality `34217874920` PASS and exact commit Preview deployment PASS. Do not call runtime cache PASS or claim Egress savings until healthy cold->warm exact-Preview proof is obtained after restriction clears.
-
-## Other release prerequisites
-
-- #265 exact `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a`, validated, independent review pending
-- #258 exact `76dac8708abaffd2ffcada7d7aa64bdc49b06e90`, prior exact runtime/cache/CQ PASS; re-confirm deployed Production source immediately before merge
-- #273 exact `42c8f9934a92cda0be5fd58f2dccc7d4db17299c`, CQ/vinext/Foundation PASS
-- #269 exact `574a9a4c10c3fd6cd275229c95c9b3adef8de84f`, CQ/vinext/disposable DB PASS, 22 migrations, Foundation14/14, data-source11/11
-
-## Post-reset sequence
-
-0. Reassess #281/#282; do not release containment unnecessarily.
-1. Prove #219/#238 closure from fresh no402/Egress/smoke/amplifier evidence; keep #280 variables false.
-2. Independently review/revalidate and land #265.
-3. Reconfirm Production source, revalidate/land #258.
-4. Independently review #273 and reconcile migration history only under approved exact plan.
-5. Rebase/revalidate/release #253.
-6. Rebase/revalidate/release #261 and observe natural F0.
-7. Fresh business scorecard; if monetization still dominates, `#264 -> #267 -> #269` with fresh bindings.
-8. R5 #257/#260 HOLD unless reprioritized.
-9. Scheduled lanes re-enable only under separate lane-specific authorization.
-10. If #286 is still justified after healthy service returns, run one bounded exact-Preview cold->warm proof before release consideration.
+0. Recovery observation: actual next-cycle/no402 + fresh baseline + minimal smoke/amplifier check + second refreshed Egress sample/slope.
+1. Reassess #281/#282.
+2. Close #219/#238 only when recovery evidence is green; keep P3/Official false.
+3. Independent review/revalidation -> #265.
+4. Reconfirm Production source/revalidation -> #258.
+5. Classify #287 and insert a security patch here if runtime-critical/high.
+6. Rebase/revalidate/release #253.
+7. Rebase/revalidate/release #261; keep Official auto disabled until separate lane-specific authority, then observe natural F0 only after re-enable.
+8. Reassess/prove #286 only if still useful.
+9. Fresh business scorecard; if monetization still dominates, continue #264/#267, then move #273 into this lane as the prerequisite for #269 rather than blocking #253/#261 upfront.
+10. #257/#260 remain HOLD unless reprioritized.
+11. Scheduled lane re-enable is always separate authorization.
 
 ## Hard constraints
 
