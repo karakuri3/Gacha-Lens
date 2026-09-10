@@ -1,110 +1,83 @@
 # Gacha Lens Status
 
-Updated: 2026-09-05 JST — Final Release/Cutover complete; normal development ready
+Updated: 2026-09-11 JST
 
-The complete status checkpoint immediately before this closeout is preserved byte-for-byte at `docs/history/2026-09-05-pre-final-cutover-STATUS.md`.
+## Executive state
 
-## Company infrastructure migration — COMPLETE
-
-Final state:
-- Stage 1 Vercel waste control: complete; after this closeout automatic Vercel Git builds are unconditionally skipped.
-- Stage 2 Cloudflare parallel environment: complete.
-- Stage 3 Beach Cloudflare parity: previously passed/separated from this repository.
-- Stage 4 Gacha Lens Cloudflare runtime + portable P0 cache: PASS and released.
-- Stage 5 Supabase hardening isolated: PASS; scoped Production-recommended hardening applied and verified.
-- Final Release/Cutover: **PASS**.
-- Normal development gate: **OPEN / READY**.
-
-## Current Production runtime
-
-- Production URL: `https://gachalens.com`
-- Runtime: Cloudflare Worker `gacha-lens`
-- Verified cutover Worker version: `811ab60a` at 100% traffic
-- Cloudflare authoritative DNS: Active
-- Nameservers: `lady.ns.cloudflare.com`, `tony.ns.cloudflare.com`
-- apex: Worker Custom Domain -> `gacha-lens`
-- `www`: Cloudflare proxied `192.0.2.1` + Active 301 redirect to apex, preserving path/query
-- Vercel web A/wildcard routes: removed
-- Vercel remains domain registrar and non-live rollback artifact only
+- Infrastructure migration: **COMPLETE**
+- Production runtime: Cloudflare Worker `gacha-lens`
+- Production main: `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
 - Supabase Production: `vxbrnvfhmzcxehuuzzum`
+- #219: **OPEN — Fair Use restriction / post-reset gate**
+- #238: **OPEN — Production freeze ACTIVE**
+- #280: **technical natural-run proof COMPLETE — P3 and Official both repeated no-op/write0; canonical sync in this docs refresh; lane re-enable remains separately prohibited**
+- #281: **OPEN — public-read P0 / healthy-200 outage classification**
+- #282: **Draft `4d95413a...` / engineering PASS / 14-of-14 route coverage / independent review PENDING / Production FROZEN**
+- #284: **OPEN — docs-only Cloudflare build waste**
+- #285/#286: **parent-series edge-cache candidate repository/Preview PASS; healthy runtime proof pending**
+- #287: **OPEN — dependency-security triage from npm audit warning**
+- #262/#265: governance replacement implemented, independent review pending
+- #258: CI source-pin repair `76dac870...`, prior runtime/cache/CQ PASS
+- #273: Foundation repair repository PASS; migration-history action not authorized
+- #269: affiliate authorization ledger repository/DB PASS; provider execution not authorized
 
-## Final web verification
+## Supabase / Egress
 
-PASS after cutover:
-- `/`
-- `/ranking`
-- `/schedule`
-- `/series`
-- `/stock`
-- `/restocks`
-- `/robots.txt`
-- `/sitemap.xml`
-- representative Japanese `/series/[slug]` that previously failed on Vercel with an invalid `x-next-cache-tags` 500
-- `www` HTTP/HTTPS 301 redirect with path/query preservation
+Current restricted cycle: **2026-08-12 -> 2026-09-12**. Last authoritative provider state: `All services are restricted / Egress Exceeded`, org 25.242/5 GB, Gacha 23.003 GB, Beach 0.444 GB.
 
-Negative routing proof:
-- removed Vercel wildcard DNS no longer catches arbitrary subdomains; an undeclared cutover-test hostname fails DNS resolution.
+Released #249/#251 remain technically supported. Before enforcement, post-fix burn was ~0.0104 GB/day and the former amplifier was nearly flat. Treat restriction as historical-cycle enforcement unless fresh post-reset evidence disproves that interpretation.
 
-Production observability at closeout:
-- Cloudflare error metrics: zero in the inspected cutover window.
-- Workers Logs: disabled; therefore log-stream review is not claimed.
-- Cloudflare deployment history exposes prior versions for rollback.
+## Recovery gate
 
-## Supabase hardening — Production verified
+The plan no longer jumps directly from calendar reset to normal development. After the provider actually exposes the next cycle:
+1. verify no restriction / no HTTP 402;
+2. record fresh Gacha-filtered Egress baseline;
+3. run minimal public/runtime smoke and former-amplifier check;
+4. take a second refreshed provider-usage snapshot and calculate fresh-cycle slope, with <=0.12 GB/day as the conservative operating target;
+5. only then close #219/#238 and start controlled releases.
 
-Applied/verified:
-- direct `anon`/`authenticated` grants on 13 server-only target tables: 0
-- `service_role` CRUD target coverage: 13/13
-- intentional public tables preserved: 4/4
-- future default privileges: scoped Candidate A
-- unused `pg_graphql`: removed non-CASCADE after fresh dependency preflight
-- Production migration history synchronized to Git
+Scheduled Production lanes remain disabled throughout recovery.
 
-HOLD / intentionally not applied:
-- `pg_net` relocation
-- global Candidate B PUBLIC function-default revoke
-- FK/index optimizations not independently prioritized for current scale
-- unused-index cleanup
+## #280 write safety — COMPLETE evidence
 
-## Vercel state
+Owner-approved gates remain false:
+- `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`
+- `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
 
-Vercel is no longer Production hosting for Gacha Lens.
+P3 has repeated natural no-op/write0 proof. Official also now has repeated post-disable natural proof:
+- #15 `34324135554` and #16 `34449938117` are natural `schedule` runs on exact main `83b0b36e...`;
+- gate environment: `OFFICIAL_BOUNDED_AUTO_ENABLED=false`;
+- live audit / plan / Production transaction skipped;
+- terminal `OFFICIAL_BOUNDED_AUTO_DISABLED`;
+- database writes 0, deletes 0, secret findings 0.
 
-- Project `gachalens` is `live: false` in the connected project snapshot.
-- No `gachalens.com` custom Production domain remains on the project; only Vercel-owned `.vercel.app` domains remain.
-- Latest observed target-production deployment was canceled/non-live.
-- Repository `vercel.json` is changed in this closeout to `ignoreCommand: "exit 0"`, so automatic Git-triggered Vercel builds are skipped. Manual rollback action is separate and explicit.
-- Registrar/renewal remains at Vercel; this is intentional and independent of web runtime.
+No manual dispatch was used. #280 may close after this canonical sync, but its closure must not change either repository variable.
 
-## Current operational priority after cutover
+## #281 / #282
 
-Infrastructure migration itself no longer blocks work. The existing priority model remains:
+Production public data outage remains the current incident state until fresh provider recovery evidence says otherwise. #282 is a containment candidate, not data recovery. It stays Draft and should be discarded/preserved rather than shipped if reset restores normal service and healthy HTTP semantics.
 
-**Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
+Current #282 exact candidate `4d95413a9dcdd9a35555f5f40e47568f53a5245d`: Code Quality/vinext/exact Cloudflare Preview/full route audit green; independent review pending; bounded Preview performance preflight required if still needed after reset.
 
-Issue #219 Supabase uncached-Egress / Fair Use risk remains **open until read-only post-release measurement proves the trajectory is controlled**. The Cloudflare cutover and portable cache materially change the runtime architecture, but they do not by themselves prove billed-byte recovery.
+## Dependency security — #287
 
-If Egress remains materially high, continue bounded attribution/mitigation as P0. If it normalizes, reassess the next product/business experiment instead of automatically returning to Data Scale depth work.
+Latest natural Official runs report `npm ci`: 12 vulnerabilities = 1 critical, 8 high, 2 moderate, 1 low. This is not yet classified as Production exploitability. Required next step is exact advisory/dependency-path and runtime-reachability triage. Do not use `npm audit fix --force` blindly. A confirmed runtime-reachable critical/high advisory outranks ordinary post-freeze feature/monetization releases.
 
-## Existing approval boundaries remain
+## Revised controlled-release sequence
 
-- exact #228 R4 authority remains consumed/non-reusable
-- no provider refresh/write by implication
-- no workflow dispatch/change by implication
-- no Secrets/Variables change by implication
-- no paid/destructive action without applicable approval
-- no automatic RPC retry
-- keep `.github/workflows/gacha-ingestion.yml` disabled
-- never touch `supabase/.temp/cli-latest`
-- no direct main push
+0. Recovery observation: actual next-cycle/no402 + fresh baseline + minimal smoke/amplifier check + second refreshed Egress sample/slope.
+1. Reassess #281/#282.
+2. Close #219/#238 only when recovery evidence is green; keep P3/Official false.
+3. Independent review/revalidation -> #265.
+4. Reconfirm Production source/revalidation -> #258.
+5. Classify #287 and insert a security patch here if runtime-critical/high.
+6. Rebase/revalidate/release #253.
+7. Rebase/revalidate/release #261; keep Official auto disabled until separate lane-specific authority, then observe natural F0 only after re-enable.
+8. Reassess/prove #286 only if still useful.
+9. Fresh business scorecard; if monetization still dominates, continue #264/#267, then move #273 into this lane as the prerequisite for #269 rather than blocking #253/#261 upfront.
+10. #257/#260 remain HOLD unless reprioritized.
+11. Scheduled lane re-enable is always separate authorization.
 
-## Separate non-blocking debt
+## Hard constraints
 
-- Workers Logs/observability policy
-- Stage 5 HOLD items
-- cleanup/closure of historical isolated Draft PRs
-- Vercel rollback artifact retirement after an appropriate stabilization period, if/when separately approved
-
-## Canonical history
-
-`docs/history/2026-09-05-pre-final-cutover-STATUS.md`
+No direct main push; no Production DB/history, workflow dispatch/change, Secrets/Variables, provider, paid/destructive action by implication; keep ingestion disabled; no automatic RPC retry; never touch `supabase/.temp/cli-latest`; no Mercari/Amazon scraping.
