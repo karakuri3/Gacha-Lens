@@ -1,0 +1,141 @@
+name: Vinext locked toolchain current-main compatibility
+
+on:
+  pull_request:
+    branches:
+      - validate/vinext-main-compat-base-292
+    paths:
+      - ".github/vinext-main-compat-trigger"
+      - ".github/workflows/vinext-main-compat-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  main-compat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MAIN_SHA: 5754baf59a21caba4f24c0246f33ff63f67cd389
+    steps:
+      - name: Checkout validation merge
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Prove application and dependencies equal current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${MAIN_SHA}^{commit}"
+          changed="$(git diff --name-only "$MAIN_SHA" HEAD -- app components lib worker next.config.mjs package.json package-lock.json)"
+          if [[ -n "$changed" ]]; then
+            echo 'Validation overlay changed current-main application/dependency tree:' >&2
+            echo "$changed" >&2
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install current-main application dependencies
+        run: npm ci
+
+      - name: Create and install security-clean isolated toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gacha-vinext-toolchain
+          cat > /tmp/gacha-vinext-toolchain/package.json <<'JSON'
+          {
+            "name": "gacha-lens-vinext-ci-toolchain-main-compat",
+            "private": true,
+            "version": "1.0.0",
+            "type": "module",
+            "dependencies": {
+              "@cloudflare/vite-plugin": "1.54.8",
+              "@vinext/cloudflare": "1.0.0-beta.6",
+              "@vitejs/plugin-react": "6.1.1",
+              "@vitejs/plugin-rsc": "0.5.34",
+              "react-server-dom-webpack": "19.2.8",
+              "vinext": "1.0.0-beta.8",
+              "vite": "8.2.2",
+              "wrangler": "4.131.1"
+            }
+          }
+          JSON
+          npm install --package-lock-only --ignore-scripts --prefix /tmp/gacha-vinext-toolchain
+          npm ci --ignore-scripts --prefix /tmp/gacha-vinext-toolchain
+          npm audit --audit-level=low --prefix /tmp/gacha-vinext-toolchain
+
+      - name: Expose exact toolchain without changing root lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum package-lock.json > /tmp/root-package-lock.before
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const toolchain = JSON.parse(fs.readFileSync('/tmp/gacha-vinext-toolchain/package.json', 'utf8')).dependencies;
+          pkg.devDependencies = { ...pkg.devDependencies, ...toolchain };
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
+          link_pkg() {
+            local name="$1"
+            local src="/tmp/gacha-vinext-toolchain/node_modules/$name"
+            local dst="$PWD/node_modules/$name"
+            mkdir -p "$(dirname "$dst")"
+            rm -rf "$dst"
+            ln -s "$src" "$dst"
+          }
+          link_pkg vinext
+          link_pkg @vinext/cloudflare
+          link_pkg react-server-dom-webpack
+          link_pkg vite
+          link_pkg @vitejs/plugin-react
+          link_pkg @vitejs/plugin-rsc
+          link_pkg @cloudflare/vite-plugin
+          link_pkg wrangler
+
+      - name: Run locked vinext check and init without dependency resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/gacha-vinext-toolchain/node_modules/.bin/vinext check
+          /tmp/gacha-vinext-toolchain/node_modules/.bin/vinext init --skip-check --platform=cloudflare --data-cache=kv --image-optimization=cloudflare-images | tee /tmp/vinext-init.log
+          if grep -Eq 'Installing dependencies:|Installing devDependencies:|Upgrading dependencies:' /tmp/vinext-init.log; then
+            echo 'vinext init attempted dependency resolution' >&2
+            exit 1
+          fi
+          sha256sum -c /tmp/root-package-lock.before
+
+      - name: Pin non-production placeholder bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'wrangler.jsonc';
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+          config.name = 'gachalens-cloudflare-poc';
+          config.preview_urls = true;
+          for (const namespace of config.kv_namespaces ?? []) {
+            if (namespace.binding === 'VINEXT_KV_CACHE' && !namespace.id) namespace.id = '00000000000000000000000000000000';
+          }
+          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          NODE
+
+      - name: Build Worker with locked toolchain
+        run: /tmp/gacha-vinext-toolchain/node_modules/.bin/vinext build
+
+      - name: Verify artifact and root lock invariant
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/server/wrangler.json
+          sha256sum -c /tmp/root-package-lock.before
+          git diff --exit-code -- package-lock.json
