@@ -1,0 +1,51 @@
+name: Security zero-audit lockfile writeback
+
+on:
+  pull_request:
+    branches:
+      - validate/security-zero-audit-write-base-291
+    paths:
+      - validation/security-zero-audit.trigger
+      - .github/workflows/security-zero-audit-writeback.yml
+
+permissions:
+  contents: write
+
+jobs:
+  writeback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout pull-request head branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact candidate
+        run: npm ci
+
+      - name: Apply non-force lockfile-only audit fix
+        run: npm audit fix --package-lock-only --ignore-scripts
+
+      - name: Prove zero audit findings
+        run: npm audit --audit-level=low
+
+      - name: Prove package manifest unchanged
+        run: git diff --exit-code -- package.json
+
+      - name: Commit only generated lockfile
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git diff --cached --check
+          git commit -m 'security: refresh transitive patched resolutions'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
