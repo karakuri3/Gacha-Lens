@@ -24,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DEPLOYED_SHA: c5886989ab8483f2782b22cb927c1cff074ee5e0
-      PREVIEW_URL: https://5a70e56c-gacha-lens.senpingxingzuo.workers.dev
+      DEPLOYED_SHA: 710c21751f41bfedb9eb20cc5f0573b8fa842df6
+      PREVIEW_URL: https://cc6891c4-gacha-lens.senpingxingzuo.workers.dev
     steps:
       - name: Checkout current pull-request head
         uses: actions/checkout@v7
@@ -65,7 +65,7 @@ jobs:
           set -euo pipefail
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
-          product_path="/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC?cacheproof=stage4-worker-cache-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          product_path="/series/group/tarts-y901096?cacheproof=parent-series-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           start="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           echo "Proof window start: ${start}" | tee -a "$GITHUB_STEP_SUMMARY"
           declare -a statuses
@@ -77,7 +77,7 @@ jobs:
             metrics="$(curl --silent --show-error --max-time 90 -H 'Accept: text/html' --dump-header "$headers" --output "$body" --write-out '%{http_code} %{time_total} %{size_download}' "${PREVIEW_URL}${product_path}")"
             code="${metrics%% *}"
             [[ "$code" == "200" ]] || { echo "request ${n} returned ${code}" >&2; exit 1; }
-            grep -Fq 'ディズニー マリー' "$body" || { echo "request ${n} missing Japanese product marker" >&2; exit 1; }
+            grep -Fq 'ディズニーキャラクター Pretty Faceポーチ' "$body" || { echo "request ${n} missing parent-series marker" >&2; exit 1; }
 
             hash="$(sha256sum "$body" | awk '{print $1}')"
             if [[ -z "$first_hash" ]]; then
@@ -108,4 +108,4 @@ jobs:
 
           end="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           echo "Proof window end: ${end}" | tee -a "$GITHUB_STEP_SUMMARY"
-          echo 'Cold MISS followed by two byte-identical HITs: warm identical HTML requests are served by Workers Cache before the Worker/Supabase render path.' | tee -a "$GITHUB_STEP_SUMMARY"
+          echo 'Parent-series cold MISS followed by two byte-identical HITs: warm identical parent-series HTML requests are served by Workers Cache before the Worker/Supabase render path.' | tee -a "$GITHUB_STEP_SUMMARY"
