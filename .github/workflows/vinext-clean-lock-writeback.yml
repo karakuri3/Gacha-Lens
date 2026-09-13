@@ -1,0 +1,83 @@
+name: Vinext clean toolchain lock writeback
+
+on:
+  pull_request:
+    branches:
+      - validate/vinext-clean-lock-write-base-291
+    paths:
+      - ".github/vinext-clean-lock-trigger"
+      - ".github/workflows/vinext-clean-lock-writeback.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  writeback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout pull-request head branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Create exact CI-only toolchain manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .github/vinext-toolchain
+          cat > .github/vinext-toolchain/package.json <<'JSON'
+          {
+            "name": "gacha-lens-vinext-ci-toolchain",
+            "private": true,
+            "version": "1.0.0",
+            "type": "module",
+            "dependencies": {
+              "@cloudflare/vite-plugin": "1.54.8",
+              "@vinext/cloudflare": "1.0.0-beta.6",
+              "@vitejs/plugin-react": "6.1.1",
+              "@vitejs/plugin-rsc": "0.5.34",
+              "react-server-dom-webpack": "19.2.8",
+              "vinext": "1.0.0-beta.8",
+              "vite": "8.2.2",
+              "wrangler": "4.131.1"
+            }
+          }
+          JSON
+
+      - name: Generate lock normally
+        run: npm install --package-lock-only --ignore-scripts --prefix .github/vinext-toolchain
+
+      - name: Prove exact install and zero audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --prefix .github/vinext-toolchain
+          npm audit --audit-level=low --prefix .github/vinext-toolchain
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const root = '.github/vinext-toolchain/node_modules';
+          const expected = JSON.parse(fs.readFileSync('.github/vinext-toolchain/package.json','utf8')).dependencies;
+          for (const [name, version] of Object.entries(expected)) {
+            const actual = JSON.parse(fs.readFileSync(`${root}/${name}/package.json`, 'utf8')).version;
+            if (actual !== version) throw new Error(`${name}: expected ${version}, got ${actual}`);
+            console.log(`${name}@${actual}`);
+          }
+          NODE
+
+      - name: Commit generated toolchain files only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/vinext-toolchain/package.json .github/vinext-toolchain/package-lock.json
+          git diff --cached --check
+          git commit -m 'test: record security-clean vinext CI toolchain'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
