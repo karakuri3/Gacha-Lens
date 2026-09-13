@@ -34,7 +34,7 @@ Describe the completed outcome, not only the files changed.
 - workflow dispatches: 0
 - direct main pushes: 0
 - Existing Production-capable workflows changed: no
-- Normal Vercel Production release expected after merge: yes / no
+- Normal Cloudflare Production application release expected after merge: yes / no
 - Rollback:
 
 ## Validation
@@ -49,8 +49,9 @@ Describe the completed outcome, not only the files changed.
 | Diff whitespace |  | `git diff --check origin/main...HEAD` |
 | Unexpected changes |  | status + name/status + full diff reviewed |
 | Secret scan |  | added lines reviewed; values not printed |
-| Canonical docs |  | AGENTS / AGENT_OS / AGENT_QUEUE / AUTO_MERGE_POLICY / PRODUCTION_RELEASE_POLICY / HANDOFF / STATUS / DECISIONS / TODO checked |
-| Vercel Preview |  | exact head-SHA Preview successful when Production release is expected |
+| Canonical docs |  | AGENTS / AGENT_OS / AGENT_QUEUE / AUTO_MERGE_POLICY / PRODUCTION_RELEASE_POLICY / VERCEL_COST_CONTROL / HANDOFF / STATUS / DECISIONS / TODO checked |
+| Cloudflare exact-head validation |  | exact-head non-Production Preview/version plus runtime/cache/security proof as applicable; `N/A — reason` only when there is no application/runtime consequence |
+| Vercel status |  | informational/non-authoritative while `docs/VERCEL_COST_CONTROL.md` routine-build skip is active |
 | Required GitHub checks |  | all required head-SHA checks successful |
 
 ## Failure classification / known issues
@@ -90,6 +91,6 @@ For each non-pass result, classify it as task regression, baseline issue, enviro
 ## Merge / release disposition
 
 - [ ] Auto-Merge Gate in `docs/AUTO_MERGE_POLICY.md` passes in full
-- [ ] If merge triggers Vercel Production, Standing Production Release Gate in `docs/PRODUCTION_RELEASE_POLICY.md` also passes in full
-- [ ] Agent may mark ready, squash merge, and allow the normal Vercel Production release without routine human acknowledgement
+- [ ] If merge triggers Cloudflare Production, Standing Production Release Gate in `docs/PRODUCTION_RELEASE_POLICY.md` also passes in full
+- [ ] Agent may mark ready, squash merge, and allow the existing reviewed Cloudflare Production application release without routine human acknowledgement
 - [ ] OR human approval is required because a merge/release exclusion or Stop Condition applies
