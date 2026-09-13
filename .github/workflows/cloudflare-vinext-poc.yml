@@ -9,6 +9,7 @@ on:
       - "next.config.mjs"
       - "package.json"
       - "package-lock.json"
+      - ".github/vinext-toolchain/**"
       - ".github/workflows/cloudflare-vinext-poc.yml"
 
 permissions:
@@ -22,6 +23,8 @@ jobs:
   compatibility:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      TOOLCHAIN_DIR: .github/vinext-toolchain
 
     steps:
       - name: Checkout
@@ -36,14 +39,96 @@ jobs:
       - name: Install project dependencies
         run: npm ci
 
-      - name: Run vinext compatibility check
-        run: npx --yes vinext@1.0.0-beta.8 check
+      - name: Require React and locked RSC versions to match
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const app = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const toolchain = JSON.parse(fs.readFileSync(".github/vinext-toolchain/package.json", "utf8"));
+          const react = app.dependencies?.react;
+          const reactDom = app.dependencies?.["react-dom"];
+          const rsc = toolchain.dependencies?.["react-server-dom-webpack"];
+          if (!react || !reactDom || !rsc || react !== reactDom || react !== rsc) {
+            throw new Error(`React/RSC version mismatch: react=${react}, react-dom=${reactDom}, react-server-dom-webpack=${rsc}. Regenerate the locked vinext toolchain for the application React patch; do not allow vinext to live-upgrade React.`);
+          }
+          console.log(`React/RSC lockstep verified at ${react}.`);
+          NODE
 
-      - name: Generate ephemeral Cloudflare configuration
-        run: npx --yes vinext@1.0.0-beta.8 init --skip-check --platform=cloudflare --data-cache=kv --image-optimization=cloudflare-images
+      - name: Install and audit locked CI toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --prefix "$TOOLCHAIN_DIR"
+          npm audit --audit-level=low --prefix "$TOOLCHAIN_DIR"
+
+      - name: Verify locked direct toolchain versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const root = ".github/vinext-toolchain/node_modules";
+          const expected = JSON.parse(fs.readFileSync(".github/vinext-toolchain/package.json", "utf8")).dependencies;
+          for (const [name, version] of Object.entries(expected)) {
+            const actual = JSON.parse(fs.readFileSync(`${root}/${name}/package.json`, "utf8")).version;
+            if (actual !== version) throw new Error(`${name}: expected ${version}, got ${actual}`);
+            console.log(`${name}@${actual}`);
+          }
+          NODE
+
+      - name: Expose locked toolchain without mutating root lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum package-lock.json > /tmp/root-package-lock.before
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const path = "package.json";
+          const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+          const toolchain = JSON.parse(fs.readFileSync(".github/vinext-toolchain/package.json", "utf8")).dependencies;
+          pkg.devDependencies = { ...pkg.devDependencies, ...toolchain };
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
+
+          link_pkg() {
+            local name="$1"
+            local src="$PWD/$TOOLCHAIN_DIR/node_modules/$name"
+            local dst="$PWD/node_modules/$name"
+            mkdir -p "$(dirname "$dst")"
+            rm -rf "$dst"
+            ln -s "$src" "$dst"
+          }
+
+          link_pkg vinext
+          link_pkg @vinext/cloudflare
+          link_pkg react-server-dom-webpack
+          link_pkg vite
+          link_pkg @vitejs/plugin-react
+          link_pkg @vitejs/plugin-rsc
+          link_pkg @cloudflare/vite-plugin
+          link_pkg wrangler
+
+      - name: Run locked vinext compatibility check
+        run: "$TOOLCHAIN_DIR/node_modules/.bin/vinext check"
+
+      - name: Generate ephemeral Cloudflare configuration without dependency resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$TOOLCHAIN_DIR/node_modules/.bin/vinext" init --skip-check --platform=cloudflare --data-cache=kv --image-optimization=cloudflare-images | tee /tmp/vinext-init.log
+          if grep -Eq 'Installing dependencies:|Installing devDependencies:|Upgrading dependencies:' /tmp/vinext-init.log; then
+            echo 'vinext init attempted live dependency resolution; deterministic CI refuses to continue.' >&2
+            exit 1
+          fi
+          sha256sum -c /tmp/root-package-lock.before
+          git diff --exit-code -- package-lock.json
 
       - name: Pin non-production placeholder bindings
+        shell: bash
         run: |
+          set -euo pipefail
           node --input-type=module <<'NODE'
           import fs from "node:fs";
 
@@ -61,8 +146,20 @@ jobs:
           fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
           NODE
 
-      - name: Build vinext worker artifact
-        run: npm run build:vinext
+      - name: Build vinext worker artifact without live React upgrade
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$TOOLCHAIN_DIR/node_modules/.bin/vinext" build | tee /tmp/vinext-build.log
+          if grep -Fq 'Upgrading React for RSC compatibility' /tmp/vinext-build.log; then
+            echo 'vinext attempted to live-upgrade React; deterministic CI refuses this build.' >&2
+            exit 1
+          fi
 
-      - name: Verify worker artifact
-        run: test -f dist/server/wrangler.json
+      - name: Verify worker artifact and lockfile invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/server/wrangler.json
+          sha256sum -c /tmp/root-package-lock.before
+          git diff --exit-code -- package-lock.json
