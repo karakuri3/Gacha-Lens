@@ -1,137 +1,113 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-11 JST
+Updated: 2026-09-13 JST
 
-Infrastructure migration and released Egress mitigations are complete. Current work is incident recovery preparation, security triage and controlled post-reset release planning.
+Infrastructure migration and the Supabase Fair Use recovery are complete. Current priority is clean incident closeout, governance/CI normalization, dependency security, then user value.
 
-## P0 — #280 scheduled-write safety
+## P0 recovery gate — #219/#238
+
+- [x] next billing cycle visibly active: `2026-09-12 -> 2026-10-12`
+- [x] active Fair Use restriction / HTTP 402 cleared
+- [x] fresh usage baseline: org Egress `0 / 5 GB`, overage `0 GB`
+- [x] separated provider usage samples remained `0.00 GB`; org-wide upper bound is comfortably <=0.12 GB/day and therefore bounds Gacha below the target
+- [x] minimal public smoke: `/`, `/series`, `/series/group/tarts-y901096` healthy
+- [x] former amplifier non-recurrence: about `681,290 -> 681,324` (`+34` over roughly five days)
+- [x] #281/#282 reassessed: outage resolved; containment no longer needed
+- [x] canonical recovery evidence synchronized in #250
+- [ ] close #281 as resolved
+- [ ] close #282 unmerged
+- [ ] close #219/#238 as completed incident/freeze work
+- [ ] keep P3/Official variables false after closure until separate lane approvals
+
+## P0 scheduled-write safety — #280 COMPLETE
 
 - [x] `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`
 - [x] `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
 - [x] legacy ingestion remains disabled
-- [x] other automatic lanes audited false/no-op
 - [x] repeated P3 natural no-op/write0 evidence
-- [x] Official natural no-op/write0 — run #15 `34324135554`, exact main, disabled gate, audit/plan/transaction skipped, DB writes 0
-- [x] second Official persistence proof — run #16 `34449938117`, same disabled/no-op/write0 result
-- [x] canonical state synchronized in #250
-- [ ] close #280 as completed control-gap work; closure must not re-enable variables
-- [ ] keep both vars false through #238 closure
+- [x] repeated Official natural no-op/write0 evidence
+- [x] reset-day Official #18 `34680299101` no-op/write0
+- [x] reset-day P3 #95 `34689497050` no-op/write0
+- [x] #280 closed
 - [ ] re-enable only under new lane-specific approval
-
-Do not manual-dispatch merely to manufacture evidence.
-
-## P0 recovery gate — #219/#238
-
-After the provider actually enters the post-2026-09-12 cycle:
-- [ ] confirm next billing cycle is visibly active
-- [ ] confirm Fair Use restriction cleared / no HTTP 402
-- [ ] record fresh Gacha-filtered Egress baseline
-- [ ] run minimal public/runtime smoke
-- [ ] confirm no former amplifier recurrence
-- [ ] take a second provider-usage sample after dashboard refresh and calculate fresh burn slope
-- [ ] require comfortable Free compatibility; conservative target <=0.12 GB/day
-- [ ] reassess #281/#282
-- [ ] synchronize canonical evidence
-- [ ] close #219/#238 only when all gates are green
-- [ ] keep P3/Official variables false during and after freeze closure until separate lane approvals
-
-Do not infer recovery from calendar date or one healthy request alone.
-
-## P0 — #281 / Draft #282
-
-- [x] confirm public degraded body + outer-200 misclassification during restriction
-- [x] #282 exact `4d95413a9dcdd9a35555f5f40e47568f53a5245d` covers 14/14 audited public server-data route shapes
-- [x] repository/vinext/exact Preview evidence green
-- [ ] after reset, recheck root/series/parent-series and representative public data routes
-- [ ] if healthy service/HTTP semantics return: preserve/close #282 without shipping
-- [ ] if incident persists: genuine independent review + bounded Preview CPU/TTFB comparison + explicit Production authority
 
 ## P1 security — #287
 
-Current `npm ci` warning: 12 vulnerabilities = 1 critical / 8 high / 2 moderate / 1 low.
-- [ ] identify exact advisories and dependency paths from current lockfile
-- [ ] classify runtime-reachable vs build/dev-only
-- [ ] identify smallest non-breaking patched versions
-- [ ] test any patch in isolated non-Production scope
-- [ ] never use `npm audit fix --force` blindly
-- [ ] if runtime-reachable critical/high is confirmed, place repair ahead of #253/#261 ordinary release work
+- [x] static triage completed; installed baseline behind security releases
+- [x] smallest preferred targets identified: Next/`eslint-config-next` 16.3.3, React/ReactDOM 19.2.8
+- [ ] regenerate lockfile normally in isolated branch
+- [ ] run fresh `npm audit` and classify remaining dependency paths
+- [ ] full Node tests + lint + vinext/Cloudflare build
+- [ ] exact Cloudflare Preview smoke
+- [ ] never use `npm audit fix --force`
+- [ ] never hand-edit `package-lock.json`
 
 ## Governance / CI prerequisites
 
 ### #265 / #262
 - [x] exact `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a` implemented/validated
 - [ ] genuine independent review
-- [ ] wait for #238 clearance
-- [ ] refresh exact evidence and land; close #262 only when policy is on main
+- [ ] refresh exact evidence on current main
+- [ ] land and close #262 only when policy is authoritative on main
 
 ### #258
 - [x] exact `76dac8708abaffd2ffcada7d7aa64bdc49b06e90` prior runtime/cache/CQ PASS
-- [ ] after freeze, re-confirm deployed Production source identity
+- [ ] re-confirm deployed Cloudflare Production source identity
 - [ ] repin/revalidate if Production moved
-- [ ] satisfy applicable workflow-file approval boundary
+- [ ] satisfy workflow-file approval boundary
 - [ ] land after #265
 
 ## User value
 
 ### #253 Japanese category routing
-- [ ] after #265/#258 and security triage, rebase to current main
+- [ ] after #265/#258 and #287, rebase to current main
 - [ ] exact CI/Preview/browser/runtime proof
 - [ ] release under applicable Production authority
 
 ### #261 rerelease canonical fix
 - [ ] rebase/revalidate after #253
-- [ ] obtain applicable Production release approval
-- [ ] release code while keeping `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
-- [ ] request separate lane-specific re-enable only if/when natural F0 execution should resume
-- [ ] after authorized re-enable, observe next natural bounded F0; do not force dispatch
+- [ ] release code under applicable authority while keeping `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
+- [ ] request separate lane-specific re-enable only if natural F0 should resume
 
 ## Reliability / cost
 
 ### #284 docs-only Cloudflare builds
 - [x] Build Watch supports `docs/*` exclusion
-- [ ] after freeze/separate settings approval, set only `docs/*` exclude
+- [ ] apply only under separate settings approval
 - [ ] prove docs-only skip and runtime-change Preview still works
 
 ### #285 / #286 parent-series edge cache
-- [x] bounded exact matcher implementation + CQ + exact Preview PASS
-- [ ] only after healthy service returns, run one bounded parent-series cold->warm exact-Preview proof
+- [x] bounded matcher implementation + CQ + exact Preview PASS
+- [ ] run one bounded healthy parent-series cold->warm exact-Preview proof
 - [ ] measure origin behavior before claiming savings
 - [ ] release only if measured value justifies it
 
 ## Monetization / DB lane
 
 ### #264 -> #267 -> #273 -> #269
-- [ ] after user-value/recovery prerequisites, run a fresh business scorecard
-- [ ] if affiliate monetization still dominates, refresh/rebase #264 cohort and #267 provider-read binding
-- [ ] then independently review #273 exact `42c8f9934a92cda0be5fd58f2dccc7d4db17299c`
-- [ ] fresh Production catalog/history parity for #273
-- [ ] approve exact reconciliation; no blind `db push`
-- [ ] independently review/revalidate #269 exact `574a9a4c10c3fd6cd275229c95c9b3adef8de84f`
-- [ ] configuration readiness preflight
-- [ ] obtain a new exact human provider-read approval; never reuse old tokens
+- [ ] after user-value/security prerequisites, run fresh business scorecard
+- [ ] if affiliate monetization dominates, refresh/rebase #264 cohort and #267 provider-read binding
+- [ ] independently review #273 and reconcile Production history only with exact evidence; no blind `db push`
+- [ ] independently review/revalidate #269
+- [ ] obtain fresh exact provider-read approval; never reuse old tokens
 - [ ] provider calls and persistence remain separately unauthorized until their exact gates
-
-#273 is deliberately moved out of the pre-#253 release path because it is not required by #253/#261; it returns immediately before the #269 DB-dependent lane that actually needs it.
 
 ## HOLD
 
-- [ ] #257/#260 R5 Data Scale remains HOLD unless fresh evidence says depth now outranks user value/monetization
+- [ ] #257/#260 R5 Data Scale remains HOLD unless fresh evidence says depth outranks user value/monetization
 
 ## Canonical docs — #250
 
-- [x] record P3 repeated no-op/write0
-- [x] record Official runs #15/#16 repeated natural no-op/write0
-- [x] add recovery-observation phase
-- [x] move #273 behind current user-visible fixes and into monetization/DB lane
-- [x] record #287 dependency-security triage
-- [x] clarify #261 merge does not imply Official lane re-enable
-- [ ] keep Draft during #238
-- [ ] refresh from fresh post-reset evidence before any main merge
+- [x] recovery state synchronized
+- [x] scheduled lanes remain disabled after recovery
+- [x] #281/#282 disposition recorded
+- [x] post-freeze release order recorded
+- [ ] require exact-head Code Quality green
+- [ ] merge docs-only PR through GitHub; never direct-push main
 
-## Hard HOLD — Production/actions
+## Hard boundaries
 
 - [ ] no direct main push
-- [ ] no Production runtime merge during #238
 - [ ] no Production DB/schema/data/history by implication
 - [ ] no DNS/Auth/write/admin change by implication
 - [ ] no workflow dispatch/change by implication
