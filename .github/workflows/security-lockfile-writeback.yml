@@ -1,0 +1,57 @@
+name: Security lockfile writeback
+
+on:
+  pull_request:
+    branches:
+      - validate/security-lockfile-write-base-287
+    paths:
+      - package.json
+      - .github/workflows/security-lockfile-writeback.yml
+
+permissions:
+  contents: write
+
+jobs:
+  generate-and-commit-lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout pull-request head branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Generate lockfile normally
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Verify lockfile package targets
+        run: |
+          node -e "const p=require('./package-lock.json'); const r=p.packages['']; for (const [k,v] of Object.entries({next:'16.3.4',react:'19.2.8','react-dom':'19.2.8','eslint-config-next':'16.3.4'})) { const actual=(r.dependencies?.[k] ?? r.devDependencies?.[k]); if (actual!==v) throw new Error(k+' expected '+v+' got '+actual); }"
+
+      - name: Capture audit
+        run: npm audit --json > security-audit.json || true
+
+      - name: Commit generated lockfile to validation branch
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git diff --cached --check
+          git commit -m 'test: record generated security lockfile'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
+      - name: Upload audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-evidence
+          path: security-audit.json
+          if-no-files-found: error
+          retention-days: 3
