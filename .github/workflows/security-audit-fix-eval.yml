@@ -1,0 +1,49 @@
+name: Security audit fix evaluator
+
+on:
+  pull_request:
+    branches:
+      - validate/security-audit-fix-base-291
+    paths:
+      - validation/security-audit-fix.trigger
+      - .github/workflows/security-audit-fix-eval.yml
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact candidate
+        run: npm ci
+
+      - name: Evaluate non-force lockfile-only audit fix
+        run: npm audit fix --package-lock-only --ignore-scripts || true
+
+      - name: Capture post-fix audit
+        run: npm audit --json > security-audit-post-fix.json || true
+
+      - name: Record bounded diff
+        run: git diff -- package.json package-lock.json > security-audit-fix.patch
+
+      - name: Upload evaluation
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-fix-evaluation
+          path: |
+            package-lock.json
+            security-audit-post-fix.json
+            security-audit-fix.patch
+          if-no-files-found: error
+          retention-days: 3
