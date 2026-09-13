@@ -43,7 +43,7 @@
     "launch:check": "node scripts/launch-readiness.mjs",
     "image:audit": "node scripts/variant-image-quality-audit.mjs",
     "test:data-source": "node --test tests/data-source-policy.test.mjs",
-    "test:foundation-baseline": "node --test tests/foundation-baseline.test.mjs tests/forecast-snapshots-baseline.test.mjs",
+    "test:foundation-baseline": "node --test tests/foundation-baseline.test.mjs && node --test tests/forecast-snapshots-baseline.test.mjs",
     "test:publication": "node --test tests/provisional-publication.test.mjs",
     "test:market-evidence": "node --test tests/market-evidence.test.mjs",
     "test:market-observation-history": "node --test tests/market-observation-history.test.mjs",
@@ -85,15 +85,15 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
     "lucide-react": "^1.25.0",
-    "next": "16.2.1",
+    "next": "16.3.4",
     "pg": "8.23.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
-    "eslint-config-next": "16.2.1",
+    "eslint-config-next": "16.3.4",
     "tailwindcss": "^4"
   }
 }
