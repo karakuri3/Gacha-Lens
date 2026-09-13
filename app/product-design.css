@@ -1,0 +1,103 @@
+/* Gacha Lens product-specific design layer.
+   Keep this file after globals.css so the selected Collector Editorial direction wins. */
+
+.dashboard-panel {
+  box-shadow: none;
+}
+
+.dashboard-spotlight-panel {
+  border-color: #d7dbe1;
+}
+
+.dashboard-spotlight__image {
+  background: #fff;
+}
+
+.dashboard-spotlight__copy h2 {
+  letter-spacing: -0.025em;
+}
+
+.dashboard-spotlight__metrics strong,
+.dashboard-rank-tile > span:not(.dashboard-rank-tile__rank),
+.dashboard-table__row > b,
+.dashboard-mini-row__value b,
+.dashboard-counts strong {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.dashboard-spotlight__metrics {
+  border-color: #d7dbe1;
+}
+
+.dashboard-spotlight__metrics div,
+.dashboard-panel__head,
+.dashboard-table__row,
+.dashboard-compact-row,
+.dashboard-mini-row {
+  border-color: #d7dbe1;
+}
+
+/* Status is compact market metadata, not a generic pill decoration. */
+.dashboard-table__row > em,
+.dashboard-compact-row > b {
+  border-radius: 4px;
+}
+
+/* Ranking tiles are one continuous collector strip rather than five floating cards. */
+.dashboard-ranking__grid {
+  background: #fff;
+}
+
+.dashboard-rank-tile {
+  background: transparent;
+}
+
+.dashboard-rank-tile__image,
+.dashboard-table__image,
+.dashboard-compact-row__image {
+  border-radius: 3px;
+}
+
+.dashboard-rank-tile__rank {
+  border-radius: 3px;
+}
+
+/* The item name and market value should visually outrank decorative labels. */
+.dashboard-spotlight__copy .eyebrow,
+.dashboard-panel__head span,
+.dashboard-rank-tile > small {
+  letter-spacing: 0.01em;
+}
+
+@media (min-width: 721px) {
+  .dashboard-spotlight {
+    grid-template-columns: 196px minmax(240px, 0.95fr) minmax(280px, 1.05fr);
+  }
+
+  .dashboard-spotlight__copy h2 {
+    font-size: 26px;
+  }
+}
+
+@media (max-width: 720px) {
+  /* On mobile, preserve object identity before exposing secondary market detail. */
+  .dashboard-spotlight {
+    grid-template-columns: 112px minmax(0, 1fr);
+  }
+
+  .dashboard-spotlight__copy h2 {
+    font-size: 19px;
+  }
+
+  .dashboard-panel {
+    border-radius: 5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-line,
+  .loading-panel,
+  .loading-tile {
+    animation: none;
+  }
+}
