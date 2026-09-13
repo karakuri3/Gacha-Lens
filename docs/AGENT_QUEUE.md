@@ -17,7 +17,7 @@ The Lead must interpret it as an instruction to:
 3. resume durable in-progress work before creating duplicate work;
 4. normalize candidate Issues into the eligibility fields below;
 5. select deterministically, execute, verify, review, and update durable GitHub state;
-6. merge and allow the normal Git-triggered Vercel Production release only when both standing gates pass;
+6. merge and allow the normal Git-triggered Cloudflare Production application release only when both standing gates pass;
 7. continue to the next independently safe bounded item while the session and repository remain healthy; and
 8. return only for a true Stop Condition, a terminal queue outcome, or an unavoidable session/tool limit.
 
@@ -149,7 +149,7 @@ For each selected Issue:
 9. create/update a Draft PR with the ledger, validation, findings, rollback, and safety counts;
 10. repair ordinary failures autonomously and revalidate;
 11. apply the Auto-Merge Gate and Standing Production Release Gate;
-12. if both pass, mark ready, squash merge, allow only the normal Git-triggered Vercel release, verify the exact deployment, and complete the Issue; and
+12. if both pass, mark ready, squash merge, allow only the normal Git-triggered Cloudflare Production application release, verify the exact Cloudflare release/version, and complete the Issue; and
 13. refresh live queue state before selecting another item.
 
 A queue run must never dispatch a workflow as validation. Required checks run through their normal PR triggers only.
@@ -178,7 +178,7 @@ The PR and Issue must contain:
 - base/head SHAs, branch/worktree, and owned paths;
 - acceptance-criterion mapping;
 - focused tests, full regression, lint, applicable typecheck, build, and diff checks;
-- exact-head Preview and required-check status when release is expected;
+- exact-head Cloudflare Preview/version plus runtime/cache/security proof applicable to the diff when release is expected;
 - independent Verifier and Reviewer results;
 - complete Auto-Merge and Production Release gate disposition;
 - rollback path;
@@ -190,7 +190,7 @@ The PR and Issue must contain:
 - `destructive actions: 0`; and
 - `direct main pushes: 0`.
 
-Normal Vercel Production deployment after an eligible merge is recorded separately from `Production actions before merge`; it is allowed only through `docs/PRODUCTION_RELEASE_POLICY.md`.
+Normal Cloudflare Production application release after an eligible merge is recorded separately from `Production actions before merge`; it is allowed only through `docs/PRODUCTION_RELEASE_POLICY.md`.
 
 ## Offline planning and smoke check
 
