@@ -1,0 +1,147 @@
+name: Vinext deterministic toolchain proof
+
+on:
+  pull_request:
+    branches:
+      - validate/vinext-deterministic-base-292
+    paths:
+      - ".github/vinext-deterministic-trigger"
+      - ".github/workflows/vinext-deterministic-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-cloudflare-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CANDIDATE_SHA: edac95979f297be273f3761166489eca907a3a18
+    steps:
+      - name: Checkout validation merge
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Prove application and dependency candidate are exact #291
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${CANDIDATE_SHA}^{commit}"
+          changed="$(git diff --name-only "$CANDIDATE_SHA" HEAD -- app components lib worker next.config.mjs package.json package-lock.json)"
+          if [[ -n "$changed" ]]; then
+            echo 'Validation overlay changed application/dependency candidate:' >&2
+            echo "$changed" >&2
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact application dependencies
+        run: npm ci
+
+      - name: Install pinned ephemeral vinext toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum package-lock.json > /tmp/package-lock.before
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund \
+            vinext@1.0.0-beta.8 \
+            @vinext/cloudflare@1.0.0-beta.6 \
+            react-server-dom-webpack@19.2.8 \
+            vite@8.2.2 \
+            @vitejs/plugin-react@6.1.1 \
+            @vitejs/plugin-rsc@0.5.34 \
+            @cloudflare/vite-plugin@1.54.8 \
+            wrangler@4.125.0
+
+      - name: Declare only the pinned ephemeral toolchain to init
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          pkg.dependencies = {
+            ...pkg.dependencies,
+            vinext: '1.0.0-beta.8',
+            '@vinext/cloudflare': '1.0.0-beta.6',
+            'react-server-dom-webpack': '19.2.8',
+          };
+          pkg.devDependencies = {
+            ...pkg.devDependencies,
+            vite: '8.2.2',
+            '@vitejs/plugin-react': '6.1.1',
+            '@vitejs/plugin-rsc': '0.5.34',
+            '@cloudflare/vite-plugin': '1.54.8',
+            wrangler: '4.125.0',
+          };
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
+
+      - name: Prove pinned direct versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const expected = {
+            vinext: '1.0.0-beta.8',
+            '@vinext/cloudflare': '1.0.0-beta.6',
+            'react-server-dom-webpack': '19.2.8',
+            vite: '8.2.2',
+            '@vitejs/plugin-react': '6.1.1',
+            '@vitejs/plugin-rsc': '0.5.34',
+            '@cloudflare/vite-plugin': '1.54.8',
+            wrangler: '4.125.0',
+          };
+          for (const [name, version] of Object.entries(expected)) {
+            const actual = JSON.parse(fs.readFileSync(`node_modules/${name}/package.json`, 'utf8')).version;
+            if (actual !== version) throw new Error(`${name}: expected ${version}, got ${actual}`);
+            console.log(`${name}@${actual}`);
+          }
+          NODE
+
+      - name: Run pinned vinext compatibility check
+        run: ./node_modules/.bin/vinext check
+
+      - name: Generate Cloudflare config without dependency resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/vinext init --skip-check --platform=cloudflare --data-cache=kv --image-optimization=cloudflare-images | tee /tmp/vinext-init.log
+          if grep -Eq 'Installing dependencies:|Installing devDependencies:|Upgrading dependencies:' /tmp/vinext-init.log; then
+            echo 'vinext init attempted dependency resolution despite predeclared pinned toolchain' >&2
+            exit 1
+          fi
+          sha256sum -c /tmp/package-lock.before
+          git diff --exit-code -- package-lock.json
+
+      - name: Pin non-production placeholder bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'wrangler.jsonc';
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+          config.name = 'gachalens-cloudflare-poc';
+          config.preview_urls = true;
+          for (const namespace of config.kv_namespaces ?? []) {
+            if (namespace.binding === 'VINEXT_KV_CACHE' && !namespace.id) {
+              namespace.id = '00000000000000000000000000000000';
+            }
+          }
+          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          NODE
+
+      - name: Build Cloudflare worker with pinned toolchain
+        run: npm run build:vinext
+
+      - name: Verify worker artifact
+        run: test -f dist/server/wrangler.json
