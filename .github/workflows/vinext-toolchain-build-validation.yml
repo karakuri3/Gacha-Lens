@@ -1,0 +1,149 @@
+name: Vinext locked toolchain build proof
+
+on:
+  pull_request:
+    branches:
+      - validate/vinext-toolchain-build-base-292
+    paths:
+      - ".github/vinext-toolchain-build-trigger"
+      - ".github/workflows/vinext-toolchain-build-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  locked-toolchain-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CANDIDATE_SHA: edac95979f297be273f3761166489eca907a3a18
+      TOOLCHAIN_DIR: .github/vinext-toolchain
+    steps:
+      - name: Checkout validation merge
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Prove application and dependency candidate are exact #291
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${CANDIDATE_SHA}^{commit}"
+          changed="$(git diff --name-only "$CANDIDATE_SHA" HEAD -- app components lib worker next.config.mjs package.json package-lock.json)"
+          if [[ -n "$changed" ]]; then
+            echo 'Validation overlay changed application/dependency candidate:' >&2
+            echo "$changed" >&2
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact application dependencies
+        run: npm ci
+
+      - name: Install locked CI-only toolchain
+        run: npm ci --ignore-scripts --prefix "$TOOLCHAIN_DIR"
+
+      - name: Capture CI-only toolchain audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm audit --json --prefix "$TOOLCHAIN_DIR" > /tmp/vinext-toolchain-audit.json || true
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const audit = JSON.parse(fs.readFileSync('/tmp/vinext-toolchain-audit.json', 'utf8'));
+          console.log(JSON.stringify(audit.metadata?.vulnerabilities ?? {}, null, 2));
+          for (const [name, finding] of Object.entries(audit.vulnerabilities ?? {})) {
+            console.log(`${name}\tseverity=${finding.severity}\tdirect=${finding.isDirect}\trange=${finding.range}`);
+          }
+          NODE
+
+      - name: Expose locked toolchain without touching root lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum package-lock.json > /tmp/root-package-lock.before
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const toolchain = JSON.parse(fs.readFileSync('.github/vinext-toolchain/package.json', 'utf8')).dependencies;
+          pkg.devDependencies = { ...pkg.devDependencies, ...toolchain };
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
+          link_pkg() {
+            local name="$1"
+            local src="$PWD/$TOOLCHAIN_DIR/node_modules/$name"
+            local dst="$PWD/node_modules/$name"
+            mkdir -p "$(dirname "$dst")"
+            rm -rf "$dst"
+            ln -s "$src" "$dst"
+          }
+          link_pkg vinext
+          link_pkg @vinext/cloudflare
+          link_pkg react-server-dom-webpack
+          link_pkg vite
+          link_pkg @vitejs/plugin-react
+          link_pkg @vitejs/plugin-rsc
+          link_pkg @cloudflare/vite-plugin
+          link_pkg wrangler
+
+      - name: Verify locked direct versions from project resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const expected = JSON.parse(fs.readFileSync('.github/vinext-toolchain/package.json', 'utf8')).dependencies;
+          for (const [name, version] of Object.entries(expected)) {
+            const actual = JSON.parse(fs.readFileSync(`node_modules/${name}/package.json`, 'utf8')).version;
+            if (actual !== version) throw new Error(`${name}: expected ${version}, got ${actual}`);
+            console.log(`${name}@${actual}`);
+          }
+          NODE
+
+      - name: Run locked vinext compatibility check
+        run: "$TOOLCHAIN_DIR/node_modules/.bin/vinext check"
+
+      - name: Generate Cloudflare config without registry resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$TOOLCHAIN_DIR/node_modules/.bin/vinext" init --skip-check --platform=cloudflare --data-cache=kv --image-optimization=cloudflare-images | tee /tmp/vinext-init.log
+          if grep -Eq 'Installing dependencies:|Installing devDependencies:|Upgrading dependencies:' /tmp/vinext-init.log; then
+            echo 'vinext init attempted dependency resolution despite locked predeclared toolchain' >&2
+            exit 1
+          fi
+          sha256sum -c /tmp/root-package-lock.before
+          git diff --exit-code -- package-lock.json
+
+      - name: Pin non-production placeholder bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'wrangler.jsonc';
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+          config.name = 'gachalens-cloudflare-poc';
+          config.preview_urls = true;
+          for (const namespace of config.kv_namespaces ?? []) {
+            if (namespace.binding === 'VINEXT_KV_CACHE' && !namespace.id) namespace.id = '00000000000000000000000000000000';
+          }
+          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          NODE
+
+      - name: Build Worker with locked toolchain
+        run: "$TOOLCHAIN_DIR/node_modules/.bin/vinext build"
+
+      - name: Verify worker artifact and root lock invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/server/wrangler.json
+          sha256sum -c /tmp/root-package-lock.before
+          git diff --exit-code -- package-lock.json
