@@ -31,17 +31,37 @@ jobs:
           request() {
             local scope="$1" name="$2" base="$3" path="$4" needle="${5:-}"
             local body="$tmp/${scope}_${name}.body" headers="$tmp/${scope}_${name}.headers"
-            local code
-            code="$(curl --silent --show-error --location --max-time 90 \
-              -H "Accept: ${BROWSER_ACCEPT}" \
-              --dump-header "$headers" --output "$body" --write-out '%{http_code}' \
-              "${base}${path}")"
-            [[ "$code" == "200" ]] || { echo "$scope/$name HTTP $code" >&2; head -c 1200 "$body" >&2 || true; exit 1; }
-            if [[ -n "$needle" ]]; then grep -Fq "$needle" "$body" || { echo "$scope/$name missing marker $needle" >&2; exit 1; }; fi
-            if [[ "$scope" == preview ]] && grep -Eq '商品情報を取得できません|一時的な通信エラー' "$body"; then
-              echo "$scope/$name contains public data-error signature" >&2
+            local attempt code rc delay
+            for attempt in 1 2 3; do
+              rc=0
+              code="$(curl --silent --show-error --location --max-time 90 \
+                -H "Accept: ${BROWSER_ACCEPT}" \
+                --dump-header "$headers" --output "$body" --write-out '%{http_code}' \
+                "${base}${path}")" || rc=$?
+              code="${code:-000}"
+              if [[ "$rc" == "0" && "$code" == "200" ]]; then
+                if [[ -n "$needle" ]]; then grep -Fq "$needle" "$body" || { echo "$scope/$name missing marker $needle" >&2; exit 1; }; fi
+                if [[ "$scope" == preview ]] && grep -Eq '商品情報を取得できません|一時的な通信エラー' "$body"; then
+                  echo "$scope/$name contains public data-error signature" >&2
+                  exit 1
+                fi
+                echo "$scope/$name HTTP 200 attempt=$attempt"
+                return 0
+              fi
+              if [[ "$attempt" -lt 3 ]]; then
+                case "$code" in
+                  000|429|500|502|503|504)
+                    delay=$((attempt * 2))
+                    echo "$scope/$name transient rc=$rc HTTP $code attempt=$attempt; retrying after ${delay}s"
+                    sleep "$delay"
+                    continue
+                    ;;
+                esac
+              fi
+              echo "$scope/$name failed rc=$rc HTTP $code attempt=$attempt" >&2
+              head -c 1200 "$body" >&2 || true
               exit 1
-            fi
+            done
           }
 
           edge_policy() { awk 'BEGIN{IGNORECASE=1} /^x-gacha-edge-cache-policy:/ {gsub("\r", ""); print $2; exit}' "$tmp/$1_$2.headers"; }
@@ -89,10 +109,8 @@ jobs:
           [[ "$ingest_code" == "401" ]]
           [[ "$login_code" == "303" ]]
 
-          preview_headers="$tmp/security_preview.headers"
-          prod_headers="$tmp/security_prod.headers"
-          curl --silent --show-error --max-time 60 --output /dev/null --dump-header "$preview_headers" "${PREVIEW_URL}/"
-          curl --silent --show-error --max-time 60 --output /dev/null --dump-header "$prod_headers" "${PRODUCTION_URL}/"
+          preview_headers="$tmp/preview_home.headers"
+          prod_headers="$tmp/production_home.headers"
           missing=0
           for header in strict-transport-security x-content-type-options x-frame-options referrer-policy content-security-policy permissions-policy; do
             if grep -qi "^${header}:" "$prod_headers"; then
