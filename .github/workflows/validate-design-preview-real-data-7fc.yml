@@ -1,0 +1,137 @@
+name: Validate #303 exact Preview real-data visuals 7fc
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate-design-preview-real-data-7fc.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-design-preview-real-data-7fc-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview-visuals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXACT_PREVIEW_ORIGIN: https://a5326460-gacha-lens.senpingxingzuo.workers.dev
+    steps:
+      - name: Checkout validation head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install pinned screenshot browser
+        run: |
+          set -euo pipefail
+          DEPS="$RUNNER_TEMP/gachalens-preview-visual-qa"
+          mkdir -p "$DEPS"
+          cd "$DEPS"
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-audit --no-fund playwright@1.55.0
+          "$DEPS/node_modules/.bin/playwright" install --with-deps chromium
+          echo "VISUAL_QA_DEPS=$DEPS" >> "$GITHUB_ENV"
+
+      - name: Capture bounded exact-Preview real-data evidence
+        run: |
+          set -euo pipefail
+          mkdir -p visual-qa-real
+          cat > "$RUNNER_TEMP/capture-real-preview.cjs" <<'NODE'
+          const { chromium } = require(process.env.VISUAL_QA_DEPS + '/node_modules/playwright');
+          const path = require('node:path');
+          const origin = process.env.EXACT_PREVIEW_ORIGIN;
+          const viewports = [
+            ['360x800', 360, 800],
+            ['390x844', 390, 844],
+            ['desktop-1440x1000', 1440, 1000],
+          ];
+          const brandedErrors = [
+            '商品情報を取得できません',
+            'Data source configuration is unavailable.',
+            'Product data could not be retrieved.',
+          ];
+
+          async function open(page, label, route, viewportName) {
+            const response = await page.goto(`${origin}${route}`, { waitUntil: 'networkidle' });
+            if (!response || !response.ok()) throw new Error(`${label} ${viewportName}: HTTP ${response?.status()}`);
+            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+            if (overflow > 1) throw new Error(`${label} ${viewportName}: horizontal overflow ${overflow}px`);
+            const body = await page.locator('body').innerText();
+            for (const marker of brandedErrors) {
+              if (body.includes(marker)) throw new Error(`${label} ${viewportName}: branded data-source error detected`);
+            }
+            return body;
+          }
+
+          async function capture(page, label, route, viewportName) {
+            await open(page, label, route, viewportName);
+            await page.screenshot({
+              path: path.join('visual-qa-real', `${label}--${viewportName}.png`),
+              fullPage: true,
+            });
+          }
+
+          async function catalogEvidence(page, viewportName) {
+            await open(page, 'catalog', '/series', viewportName);
+            await page.screenshot({ path: path.join('visual-qa-real', `catalog--${viewportName}.png`), fullPage: true });
+
+            const cards = page.locator('a.product-card');
+            const count = Math.min(await cards.count(), 60);
+            if (count < 1) throw new Error(`catalog ${viewportName}: no product cards`);
+
+            let firstHref = '';
+            let longestHref = '';
+            let longestLength = -1;
+            for (let index = 0; index < count; index += 1) {
+              const card = cards.nth(index);
+              const href = await card.getAttribute('href');
+              if (!href || !href.startsWith('/series/')) continue;
+              if (!firstHref) firstHref = href;
+              const text = (await card.innerText()).replace(/\s+/g, ' ').trim();
+              if (text.length > longestLength) {
+                longestLength = text.length;
+                longestHref = href;
+              }
+            }
+            if (!firstHref) throw new Error(`catalog ${viewportName}: no usable detail href`);
+            return { firstHref, longestHref: longestHref || firstHref };
+          }
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            try {
+              for (const [viewportName, width, height] of viewports) {
+                const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+                await capture(page, 'home-real', '/', viewportName);
+                const { firstHref, longestHref } = await catalogEvidence(page, viewportName);
+                await capture(page, 'detail-real', firstHref, viewportName);
+                await capture(page, 'long-name-detail-real', longestHref, viewportName);
+                await capture(page, 'parent-detail-real', '/series/group/tarts-y901096', viewportName);
+                await capture(page, 'ranking-real', '/ranking', viewportName);
+                await page.close();
+              }
+            } finally {
+              await browser.close();
+            }
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          node "$RUNNER_TEMP/capture-real-preview.cjs"
+
+      - name: Upload exact-Preview real-data visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gachalens-7fc-real-preview-visual-qa
+          path: visual-qa-real/*.png
+          if-no-files-found: error
+          retention-days: 14
