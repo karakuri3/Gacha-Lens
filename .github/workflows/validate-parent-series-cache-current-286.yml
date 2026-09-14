@@ -84,7 +84,11 @@ jobs:
           trap 'rm -rf "$tmp"' EXIT
 
           get200() {
-            local name="$1" path="$2" marker="${3:-}" body="$tmp/${name}.body" code rc attempt
+            local name path marker body code rc attempt
+            name="$1"
+            path="$2"
+            marker="${3:-}"
+            body="$tmp/${name}.body"
             for attempt in 1 2 3; do
               rc=0
               code="$(curl --silent --show-error --location --max-time 90 -H 'Accept: text/html' --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}${path}")" || rc=$?
