@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { normalizeRecordShape, normalizeStoredRecordShape } from "../lib/data/gacha-repository.js";
 import {
   buildEffectiveReleaseQueryPlan,
   effectiveReleaseState,
@@ -43,6 +44,31 @@ test("date-only values remain calendar dates and map to JST start-of-day", () =>
   assert.equal(releaseCalendarDate("2026-09-15"), "2026-09-15");
   assert.equal(releaseCalendarDate("2026-02-30"), "");
   assert.equal(releaseDateAtJstStart("2026-09-15")?.toISOString(), "2026-09-14T15:00:00.000Z");
+});
+
+test("public record normalization derives effective series and variant booleans without mutating stored input", () => {
+  const records = {
+    series: [{ id: "s1", is_released: false, release_date: "2026-09-15" }],
+    variants: [{ id: "v1", series_id: "s1", released: false, release_date: "2026-09-15" }],
+  };
+  const before = normalizeRecordShape(records, { now: BEFORE_JST_RELEASE_DAY });
+  const at = normalizeRecordShape(records, { now: AT_JST_RELEASE_DAY });
+
+  assert.equal(before.series[0].is_released, false);
+  assert.equal(before.variants[0].released, false);
+  assert.equal(at.series[0].is_released, true);
+  assert.equal(at.variants[0].released, true);
+  assert.equal(records.series[0].is_released, false);
+  assert.equal(records.variants[0].released, false);
+});
+
+test("stored record normalization preserves persisted booleans for ingestion and write planning", () => {
+  const stored = normalizeStoredRecordShape({
+    series: [{ id: "s1", is_released: false, release_date: "2026-09-15" }],
+    variants: [{ id: "v1", series_id: "s1", released: false, release_date: "2026-09-15" }],
+  });
+  assert.equal(stored.series[0].is_released, false);
+  assert.equal(stored.variants[0].released, false);
 });
 
 test("released PostgREST plan includes persisted true plus aged false rows", () => {
