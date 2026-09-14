@@ -4,7 +4,7 @@ import process from "node:process";
 import {
   buildReleaseCoverageReadinessReport,
   formatReleaseCoverageReadinessMarkdown,
-} from "../lib/domain/release-coverage-readiness.js";
+} from "./lib/release-coverage-readiness.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const input = readInput(args.input);

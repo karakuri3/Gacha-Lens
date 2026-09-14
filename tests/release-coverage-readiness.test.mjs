@@ -4,7 +4,7 @@ import {
   buildOfficialReleaseCoverageCapabilityMatrix,
   buildReleaseCoverageReadinessReport,
   formatReleaseCoverageReadinessMarkdown,
-} from "../lib/domain/release-coverage-readiness.js";
+} from "../scripts/lib/release-coverage-readiness.mjs";
 
 test("capability matrix records current main source envelopes", () => {
   const matrix = buildOfficialReleaseCoverageCapabilityMatrix();
