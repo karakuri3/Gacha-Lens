@@ -38,6 +38,12 @@ test("Gacha Lens design contract is wired into the app", async () => {
   assert.match(page, /summary\.has_stock_signal \|\| summary\.has_restock_signal/);
   assert.equal(page.includes("summary.latest_status"), false);
 
+  // Primary market anchors should not promote missing values as if they were evidence.
+  assert.match(page, /function rankingPrimaryEvidence/);
+  assert.match(page, /schedule !== "未定"/);
+  assert.match(page, /stock !== "未取得"/);
+  assert.match(page, /sellThrough !== "データ不足"/);
+
   for (const forbidden of ["linear-gradient(", "radial-gradient(", "backdrop-filter:", "text-shadow:"]) {
     assert.equal(css.includes(forbidden), false, `product design layer must not introduce ${forbidden}`);
   }
