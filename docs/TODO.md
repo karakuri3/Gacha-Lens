@@ -1,109 +1,106 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-13 JST
+Updated: 2026-09-14 JST
 
-Infrastructure migration and the Supabase Fair Use recovery are complete. Current priority is clean incident closeout, governance/CI normalization, dependency security, then user value.
+Infrastructure migration, Fair Use recovery, release-governance repair, Foundation migration repair, framework security, Japanese category routing and rerelease canonicalization are complete. Current priority is to finish the already-proven parent-series cache candidate without bypassing independent review, then reconcile the product-specific design candidate to current `main`, then choose the next revenue experiment from a fresh scorecard.
 
-## P0 recovery gate — #219/#238
+## Completed recovery / governance / security train
 
-- [x] next billing cycle visibly active: `2026-09-12 -> 2026-10-12`
-- [x] active Fair Use restriction / HTTP 402 cleared
-- [x] fresh usage baseline: org Egress `0 / 5 GB`, overage `0 GB`
-- [x] separated provider usage samples remained `0.00 GB`; org-wide upper bound is comfortably <=0.12 GB/day and therefore bounds Gacha below the target
-- [x] minimal public smoke: `/`, `/series`, `/series/group/tarts-y901096` healthy
-- [x] former amplifier non-recurrence: about `681,290 -> 681,324` (`+34` over roughly five days)
-- [x] #281/#282 reassessed: outage resolved; containment no longer needed
-- [x] canonical recovery evidence synchronized in #250
-- [ ] close #281 as resolved
-- [ ] close #282 unmerged
-- [ ] close #219/#238 as completed incident/freeze work
-- [ ] keep P3/Official variables false after closure until separate lane approvals
-
-## P0 scheduled-write safety — #280 COMPLETE
-
-- [x] `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`
-- [x] `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
+- [x] #219/#238 recovery gate passed and incident/freeze closed
+- [x] #281 resolved after provider recovery
+- [x] #282 closed without merge
+- [x] #280 scheduled-write safety complete
+- [x] keep `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`
+- [x] keep `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
 - [x] legacy ingestion remains disabled
-- [x] repeated P3 natural no-op/write0 evidence
-- [x] repeated Official natural no-op/write0 evidence
-- [x] reset-day Official #18 `34680299101` no-op/write0
-- [x] reset-day P3 #95 `34689497050` no-op/write0
-- [x] #280 closed
-- [ ] re-enable only under new lane-specific approval
+- [x] #265 merged and #262 closed; Cloudflare is authoritative Production/Preview release path
+- [x] #258 merged; runtime/cache proof source binding normalized
+- [x] #273 merged; fresh-database `forecast_snapshots` baseline restored
+- [x] #291/#287 merged; framework security baseline and deterministic vinext toolchain repaired
+- [x] #253 merged; Japanese stored category routing repaired
+- [x] #261 merged; rerelease canonical year/month repair released while Official auto remains disabled
+- [x] #307 merged; stale CI runs cancelled to reduce redundant Actions usage
+- [ ] re-enable either scheduled write lane only under a new lane-specific approval
 
-## P1 security — #287
+## P1 current release candidate — #285 / #286 parent-series edge cache
 
-- [x] static triage completed; installed baseline behind security releases
-- [x] smallest preferred targets identified: Next/`eslint-config-next` 16.3.3, React/ReactDOM 19.2.8
-- [ ] regenerate lockfile normally in isolated branch
-- [ ] run fresh `npm audit` and classify remaining dependency paths
-- [ ] full Node tests + lint + vinext/Cloudflare build
-- [ ] exact Cloudflare Preview smoke
-- [ ] never use `npm audit fix --force`
-- [ ] never hand-edit `package-lock.json`
+- [x] bounded matcher implementation exists
+- [x] current branch rebased/reconciled to current `main` with behind 0 at checkpoint
+- [x] PR Code Quality `34816583524` PASS
+- [x] Cloudflare cache proof `34816583550` PASS
+- [x] Cloudflare runtime smoke `34816583572` PASS
+- [x] dedicated parent-series exact-Preview proof PASS through validation-only #308
+- [x] parent-series cold `MISS` -> `HIT` -> `HIT`
+- [x] byte-identical 64,736-byte HTML within proof run
+- [x] `series-detail-1800-v1`, no `Set-Cookie`
+- [x] public runtime/auth/security checks PASS
+- [x] #308 closed without merge
+- [ ] obtain a genuine independent Verifier result on the frozen current candidate
+- [ ] obtain a genuine independent Reviewer result on the frozen current candidate
+- [ ] after independent PASS, re-fetch `main` and confirm no intervening overlap/drift
+- [ ] apply Auto-Merge and Production Release gates in full
+- [ ] squash merge only if every gate remains green
+- [ ] observe the normal Git-triggered Cloudflare release and run bounded Production smoke
+- [ ] close #285 only after released behavior is verified
+- [ ] do not claim measured Production egress savings without actual measurement
 
-## Governance / CI prerequisites
+## P1 product experience — #303 Collector Editorial design
 
-### #265 / #262
-- [x] exact `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a` implemented/validated
-- [ ] genuine independent review
-- [ ] refresh exact evidence on current main
-- [ ] land and close #262 only when policy is authoritative on main
+- [x] product-specific design direction and `DESIGN.md` exist
+- [x] initial object-first home/design implementation exists
+- [x] design-contract/visual-QA scaffolding exists
+- [ ] reconcile #303 non-destructively onto then-current `main`
+- [ ] inspect all overlap with landed framework/category/rerelease/CI changes
+- [ ] rerun exact-head Code Quality and applicable Cloudflare build/runtime validation
+- [ ] validate real Japanese data at 360 px
+- [ ] validate real Japanese data at 390 px
+- [ ] validate desktop
+- [ ] review home, catalog/search, series detail and ranking
+- [ ] review no-evidence state
+- [ ] review missing-image state
+- [ ] review long Japanese names
+- [ ] review loading and error states
+- [ ] establish/approve screenshot visual-regression evidence
+- [ ] confirm market/data semantics are unchanged
+- [ ] independent review as required by the final release risk
+- [ ] release only after complete visual/product gate passes
 
-### #258
-- [x] exact `76dac8708abaffd2ffcada7d7aa64bdc49b06e90` prior runtime/cache/CQ PASS
-- [ ] re-confirm deployed Cloudflare Production source identity
-- [ ] repin/revalidate if Production moved
-- [ ] satisfy workflow-file approval boundary
-- [ ] land after #265
+## P1 business / monetization decision
 
-## User value
+Before reviving old data-dependent monetization Drafts:
+- [ ] run a fresh current-state business scorecard
+- [ ] measure current first-party outbound demand and monetization coverage
+- [ ] compare monetization opportunity against further market-depth/data-scale work
+- [ ] make the next experiment decision from current evidence rather than the 2026-09-06 snapshot
 
-### #253 Japanese category routing
-- [ ] after #265/#258 and #287, rebase to current main
-- [ ] exact CI/Preview/browser/runtime proof
-- [ ] release under applicable Production authority
+If monetization still wins:
+- [ ] refresh/recompute #264 cohort on then-current data
+- [ ] reconcile #264 onto current `main`
+- [ ] reconcile/revalidate #267 provider-read binding
+- [ ] reconcile/revalidate #269 durable authorization ledger
+- [ ] independently review the ledger before release
+- [ ] reconcile any Production migration-history state only through a separate exact-evidence plan; never blind `db push`
+- [ ] check configuration readiness without exposing secret values
+- [ ] obtain a fresh exact provider-read approval before any provider call
+- [ ] keep provider execution and affiliate-provenance persistence separately gated
 
-### #261 rerelease canonical fix
-- [ ] rebase/revalidate after #253
-- [ ] release code under applicable authority while keeping `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
-- [ ] request separate lane-specific re-enable only if natural F0 should resume
+## Reliability / cost hygiene — #284
 
-## Reliability / cost
+- [x] exact two Cloudflare proof-workflow paths have the previously approved bounded Build Watch exclusion
+- [ ] establish current before/after evidence for the remaining docs-only-build problem
+- [ ] do not broaden exclusions speculatively
+- [ ] prove any future docs-only skip without breaking runtime-relevant Preview builds
+- [ ] close #284 only when its actual current acceptance criteria are met
 
-### #284 docs-only Cloudflare builds
-- [x] Build Watch supports `docs/*` exclusion
-- [ ] apply only under separate settings approval
-- [ ] prove docs-only skip and runtime-change Preview still works
+## HOLD — #257 / #260 R5 Data Scale
 
-### #285 / #286 parent-series edge cache
-- [x] bounded matcher implementation + CQ + exact Preview PASS
-- [ ] run one bounded healthy parent-series cold->warm exact-Preview proof
-- [ ] measure origin behavior before claiming savings
-- [ ] release only if measured value justifies it
+- [ ] keep HOLD unless a fresh business scorecard shows cross-provider depth work outranks current product quality / monetization
+- [ ] if reprioritized, recompute all data-dependent inputs and rebase/revalidate from then-current `main`
 
-## Monetization / DB lane
+## Backlog hygiene
 
-### #264 -> #267 -> #273 -> #269
-- [ ] after user-value/security prerequisites, run fresh business scorecard
-- [ ] if affiliate monetization dominates, refresh/rebase #264 cohort and #267 provider-read binding
-- [ ] independently review #273 and reconcile Production history only with exact evidence; no blind `db push`
-- [ ] independently review/revalidate #269
-- [ ] obtain fresh exact provider-read approval; never reuse old tokens
-- [ ] provider calls and persistence remain separately unauthorized until their exact gates
-
-## HOLD
-
-- [ ] #257/#260 R5 Data Scale remains HOLD unless fresh evidence says depth outranks user value/monetization
-
-## Canonical docs — #250
-
-- [x] recovery state synchronized
-- [x] scheduled lanes remain disabled after recovery
-- [x] #281/#282 disposition recorded
-- [x] post-freeze release order recorded
-- [ ] require exact-head Code Quality green
-- [ ] merge docs-only PR through GitHub; never direct-push main
+- [ ] review stale Draft #232 in a separate bounded cleanup task; do not delete history or silently discard still-useful decisions
+- [ ] consolidate future canonical-doc updates so `HANDOFF`, `STATUS`, `DECISIONS` and `TODO` do not drift from live GitHub state again
 
 ## Hard boundaries
 

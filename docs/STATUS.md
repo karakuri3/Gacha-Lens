@@ -1,74 +1,107 @@
 # Gacha Lens Status
 
-Updated: 2026-09-13 JST — Recovery Gate PASS
+Updated: 2026-09-14 JST — post-recovery release train advanced
 
 ## Executive state
 
 - Infrastructure migration: **COMPLETE**
 - Production runtime: Cloudflare Worker `gacha-lens`
-- Production main before docs-only closeout: `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
+- Current `main`: `1adc56a7729fddac794de7e3566e316cfe918530` (`#261` merged)
 - Supabase Production: `vxbrnvfhmzcxehuuzzum`
 - Supabase Fair Use restriction: **CLEARED**
-- #219/#238: recovery exit criteria **PASS**; incident/freeze ready for closure after canonical synchronization
+- #219/#238: **CLOSED / recovery complete**
+- #281: public-read outage **RESOLVED**
+- #282: **CLOSED UNMERGED**; emergency containment not shipped after provider recovery
 - #280: **CLOSED / scheduled-write safety proven**
-- #281: public-read outage **RESOLVED by provider recovery**
-- #282: Draft emergency containment **no longer needed; close unmerged**
-- #284: OPEN — docs-only Cloudflare build waste
-- #285/#286: parent-series edge-cache candidate; healthy measurement still required
-- #287: OPEN — isolated dependency-security upgrade remains pre-feature priority
-- #262/#265: governance replacement implemented, genuine independent review pending
-- #258: CI source-pin repair prepared; reconfirm Production source before landing
-- #273/#269: later monetization/DB lane; Production/provider execution remains separately gated
+- #262/#265: **CLOSED / MERGED**; Cloudflare is authoritative release path
+- #258: **MERGED**; live runtime/cache proof pinning normalized
+- #273: **MERGED**; fresh-database `forecast_snapshots` baseline restored
+- #287/#291: **MERGED**; framework/security baseline updated and deterministic vinext validation established
+- #253: **MERGED**; Japanese stored category routes repaired
+- #261: **MERGED**; rerelease canonical year/month behavior repaired while Official auto remains disabled
+- #307: **MERGED**; stale GitHub Actions work is cancelled for bounded cost control
+- #285/#286: **ACTIVE DRAFT**; implementation and exact Preview/runtime/cache/security evidence are green; genuine independent Reviewer + Verifier remain the release blocker
+- #303: **ACTIVE DRAFT**; Collector Editorial product-specific design candidate exists, but it is behind current `main` and still requires current-main reconciliation plus exact visual QA
+- #264/#267/#269: **DRAFT / NOT RELEASE-READY**; monetization/provider-read stack must be recomputed and rebased from fresh current state before any release or external execution
+- #257/#260: **HOLD** unless fresh evidence makes market-depth expansion more valuable than current user-value/monetization work
+- #284: **OPEN** cost hygiene; two exact proof-workflow paths are already excluded from the relevant Cloudflare Build Watch configuration, but the broader docs-only-build objective is not treated as closed without direct proof
 
-## Recovery evidence
+## Recovery and infrastructure health
 
-Current provider cycle: **2026-09-12 -> 2026-10-12**.
+The 2026-09 Fair Use incident is closed. The fresh provider cycle started `2026-09-12`, restrictions cleared, representative public routes recovered, and no recurrence of the former amplification signature was visible at the recovery gate.
 
-At the 2026-09-13 recovery checkpoint:
-- `All services are restricted` is no longer present;
-- org Egress `0 / 5 GB (<1%)`, Cached Egress `0 / 5 GB`, overage `0 GB`;
-- Usage remained `0.00 GB` at both midday and 21:26 JST, so even the org-wide upper bound is comfortably below the internal `<=0.12 GB/day` target; Gacha is necessarily below that total;
-- `/`, `/series`, and `/series/group/tarts-y901096` render normal product data;
-- former amplifier fingerprint is `681,324` calls versus about `681,290` during the incident, only `+34` over roughly five days.
+The release train has since advanced through governance, CI source pinning, Foundation repair, framework security, category routing and rerelease canonicalization. Do not restart the migration/recovery work merely because older docs or old PR bodies still mention it.
 
-The incident is therefore classified as delayed enforcement of historical-cycle overage, not recurrence of the fixed amplification path.
-
-## Scheduled-write safety
+## Scheduled-write safety remains locked
 
 Keep both owner-approved gates false:
 - `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`
 - `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
 
-Natural reset-day evidence remains safe:
-- Official #18 `34680299101`: exact main, disabled/no-op, writes 0;
-- P3 #95 `34689497050`: exact main, disabled/no-op, writes 0.
+Recovery and subsequent code releases do not authorize either lane to wake up. Re-enable is always a separate lane-specific decision.
 
-Freeze closure does not authorize re-enable.
+## Current highest-priority release candidate — #286
 
-## #281 / #282
+Current Draft #286 extends the existing bounded 30-minute `seriesDetail` edge-cache class from `/series/:slug` to the canonical parent-series form `/series/group/:slug` without introducing a generic `/series/**` wildcard.
 
-#281 is resolved by restored provider service. #282 remains a technically validated emergency containment design, but the triggering outage no longer exists. Close #282 without merge; do not add permanent stream-drain overhead for a resolved provider incident without new evidence.
+Current frozen candidate:
+- head: `0afcfbf98833260debea41e6227dcf6e8190473a`
+- base: current `main` `1adc56a7729fddac794de7e3566e316cfe918530`
+- ahead 4 / behind 0 at the 2026-09-14 checkpoint
 
-## Dependency security — #287
+Current-head automatic evidence is green:
+- PR Code Quality `34816583524`: SUCCESS
+- Cloudflare cache proof `34816583550`: SUCCESS
+- Cloudflare runtime smoke `34816583572`: SUCCESS
 
-Current installed baseline still requires isolated update work. Preferred smallest target remains:
-- Next + `eslint-config-next`: `16.3.3`
-- React + ReactDOM: `19.2.8`
+Dedicated exact parent-series proof also succeeded through validation-only #308:
+- cold `MISS` -> warm `HIT` -> `HIT`
+- byte-identical 64,736-byte HTML within the proof run
+- `series-detail-1800-v1`
+- no `Set-Cookie`
+- public route smoke, unauthenticated boundaries and audited security-header coverage passed
 
-Regenerate lock normally; run fresh audit and full Node/lint/vinext/Cloudflare Preview validation. Never `npm audit fix --force` and never hand-edit `package-lock.json`.
+#308 was closed unmerged after evidence capture.
 
-## Controlled release sequence after freeze closure
+**Remaining release gate:** genuine independent Reviewer + Verifier. Same-assistant self-review must not be presented as independent approval. Until that gate passes, #286 stays Draft and must not merge.
 
-1. #265 / #262 governance review and landing.
-2. #258 current Production-source reconfirmation and landing.
-3. #287 isolated security update.
-4. #253 Japanese category routing.
-5. #261 rerelease canonical fix; Official auto remains disabled.
-6. #286 only if healthy cold->warm measurement proves useful savings.
-7. Fresh business scorecard; if monetization wins, #264/#267 -> #273 -> #269 under their separate gates.
-8. #257/#260 remain HOLD unless reprioritized.
-9. Scheduled lane re-enable is always separate authorization.
+## Product/design lane — #303
+
+Draft #303 establishes a product-specific **Collector Editorial** direction intended to replace generic dashboard/SaaS presentation with object-first collector context, real product imagery, compact evidence and denser comparison.
+
+It is not release-ready yet. Relative to current `main`, the branch is stale/diverged and must be reconciled non-destructively before final validation. After reconciliation require:
+- exact-head Code Quality and Cloudflare build/runtime checks applicable to the diff;
+- exact branch renders with real Japanese data;
+- mobile 360 px / 390 px and desktop review;
+- home, search/catalog, series detail and ranking review;
+- no-evidence, missing-image, long-name, loading and error states;
+- screenshot/visual-regression approval;
+- no market/data semantic drift.
+
+Do not merge a visually attractive stale branch merely because its older checks were green.
+
+## Monetization / data lane
+
+The older affiliate-demand work (#264 -> #267 -> #269) remains valuable R&D, but its data snapshots and bases predate the current release train. Before reviving it:
+1. run a fresh business scorecard against current state;
+2. recompute demand/affiliate opportunity rather than reusing the 2026-09-06 cohort;
+3. rebase/reconcile each surviving layer onto then-current `main`;
+4. obtain independent review where required;
+5. keep Production migration/provider execution/persistence behind their own explicit gates.
+
+No provider-read token, Production migration, persistence permission or scheduled-lane permission is implied by the existence of these Drafts.
+
+## Near-term operating order
+
+1. Keep #286 frozen and obtain genuine independent Reviewer + Verifier evidence.
+2. If #286 passes, re-fetch `main`, run the complete Auto-Merge + Production Release gates, squash merge, observe the normal Git-triggered Cloudflare release and perform bounded public smoke; then close #285.
+3. Reconcile #303 onto then-current `main` and complete the full visual/product QA gate before any design release.
+4. After the user-facing design baseline is credible, run a fresh business scorecard and choose the next revenue experiment from current evidence.
+5. If monetization still wins, refresh #264 -> #267 -> #269 under their separate DB/provider boundaries.
+6. Finish #284 only from measured Cloudflare build behavior; avoid speculative settings expansion.
+7. Keep #257/#260 HOLD unless new evidence changes the ranking.
+8. Keep scheduled write lanes disabled until separately authorized.
 
 ## Hard constraints
 
-No direct main push; no Production DB/history, provider execution, workflow dispatch/change, Secrets/Variables, scheduled-lane re-enable, billing or destructive action by implication. Keep ingestion disabled; no automatic RPC retry; never touch `supabase/.temp/cli-latest`; no Mercari/Amazon scraping.
+No direct main push; no Production DB/history, provider execution, workflow dispatch/change, Secrets/Variables, scheduled-lane re-enable, billing, auth/DNS or destructive action by implication. Keep ingestion disabled; no automatic RPC retry; never touch `supabase/.temp/cli-latest`; no Mercari/Amazon scraping.

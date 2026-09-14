@@ -1,6 +1,6 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-13 JST — post-Fair-Use recovery verified
+Updated: 2026-09-14 JST — release train synchronized after recovery
 
 This file is the active-state handoff. Historical detail remains in Git history and `docs/history/`.
 
@@ -10,32 +10,102 @@ If a new thread receives only **「Gacha Lens続けて」**:
 
 1. Read `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/PRODUCTION_RELEASE_POLICY.md`, and `docs/AUTO_MERGE_POLICY.md`.
 2. Re-fetch current `main`, active Issues/PRs, current Supabase usage, and current Cloudflare Production source before mutating anything.
-3. Do not restart the company-infrastructure migration; it is complete.
-4. Keep scheduled write lanes disabled unless separately and explicitly authorized.
+3. Resume existing active Drafts before creating duplicate implementation work.
+4. Do not restart the company-infrastructure migration, Fair Use incident response, Cloudflare-governance cutover, security upgrade, Japanese category repair, or rerelease canonical repair; those lanes have already landed.
+5. Keep scheduled write lanes disabled unless separately and explicitly authorized.
 
-## Production
+## Production / current main
 
 - repo: `karakuri3/Gacha-Lens`
-- Production main before this docs-only closeout: `83b0b36e5d0172f3ea6964206edad6480a13b4bb`
+- current `main`: `1adc56a7729fddac794de7e3566e316cfe918530`
+- latest merged feature/fix at this checkpoint: #261 rerelease canonical year/month repair
 - URL: `https://gachalens.com`
 - runtime/DNS: Cloudflare
-- Vercel: registrar + non-live rollback only
+- Vercel: registrar + non-live rollback only; routine Git builds are non-authoritative
 - Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
 - old `ihcudkfspzuixsqsvoku` is inactive
 
-## Supabase Egress incident — recovery verified
+## Completed release-train work
 
-The restricted cycle `2026-08-12 -> 2026-09-12` ended after historical Egress overage. The new provider cycle is visibly `2026-09-12 -> 2026-10-12`.
+Do not re-open these as prerequisites merely because older canonical docs or PR bodies still list them as future work:
 
-Fresh recovery evidence on 2026-09-13 JST:
-- prior `All services are restricted` state is gone;
-- remaining `Your grace period is over` banner is a Fair Use warning, not an active restriction;
-- organization Egress reads `0 / 5 GB (<1%)`, Cached Egress `0 / 5 GB`, overage `0 GB`;
-- provider Usage still read `0.00 GB` at both the midday checkpoint and 21:26 JST, giving an org-wide upper bound comfortably below the conservative `<=0.12 GB/day` operating target; Gacha project burn is necessarily no greater than the organization total;
-- Production `/`, `/series`, and `/series/group/tarts-y901096` all render normal live product data again;
-- the former high-cost amplifier fingerprint moved only from about `681,290` calls during the incident to `681,324` at recovery verification (`+34` over roughly five days), so no recurrence is visible.
+- #219/#238: recovery/freeze closed after measured provider recovery
+- #281: public-read outage resolved by provider recovery
+- #282: emergency containment closed without merge
+- #280: scheduled-write safety complete; lanes remain disabled
+- #265/#262: Cloudflare standing release governance merged/closed
+- #258: Cloudflare runtime/cache proof pinning merged
+- #273: fresh-database `forecast_snapshots` migration baseline repair merged
+- #291/#287: framework security + deterministic vinext validation merged with genuine independent Reviewer/Verifier evidence
+- #253: Japanese stored category routing merged
+- #261: rerelease canonical year/month repair merged; Official auto still disabled
+- #307: GitHub Actions stale-run cancellation merged for bounded CI cost control
 
-Recovery Gate is **PASS**. #219/#238 can be closed as completed incident/freeze work once this synchronized canonical state is recorded. This does not authorize scheduled-write re-enable or unrelated Production mutations.
+## Active release candidate — #285 / #286
+
+PR #286 is the highest-priority existing verification/release item.
+
+Purpose: include canonical `/series/group/:slug` pages in the existing bounded 30-minute `seriesDetail` Cloudflare edge-cache class while preserving all current public-cache exclusions.
+
+Current candidate:
+- PR: #286
+- branch: `fix/parent-series-edge-cache-285`
+- base: `1adc56a7729fddac794de7e3566e316cfe918530`
+- head: `0afcfbf98833260debea41e6227dcf6e8190473a`
+- Draft: yes
+- mergeable: yes at the 2026-09-14 checkpoint
+
+Current-head automatic checks:
+- PR Code Quality `34816583524`: SUCCESS
+- Cloudflare cache proof `34816583550`: SUCCESS
+- Cloudflare runtime smoke `34816583572`: SUCCESS
+
+Dedicated exact parent-series validation-only #308 is complete and closed unmerged. Final proof showed cold `MISS` -> `HIT` -> `HIT`, byte-identical 64,736-byte HTML, `series-detail-1800-v1`, no `Set-Cookie`, healthy public route smoke, expected unauthenticated boundaries and Production-equivalent-or-broader audited security-header presence.
+
+**Stop Condition:** genuine independent Reviewer and Verifier are still pending. Do not substitute Builder/self-review. Do not mark ready or merge until that gate is genuinely satisfied and the current head/base are rechecked.
+
+After independent PASS:
+1. fetch current `main` and inspect intervening overlap;
+2. rerun/reconfirm required exact-head checks if the head/base moved;
+3. apply Auto-Merge and Standing Production Release gates in full;
+4. normally squash merge;
+5. allow only the existing Git-triggered Cloudflare application release;
+6. observe the resulting release and run bounded public smoke;
+7. close #285 when the released behavior is verified.
+
+## Active product/design candidate — #303
+
+PR #303 is a Draft product-specific redesign using the **Collector Editorial** direction. It is intended to remove generic dashboard/SaaS visual patterns and make Gacha Lens object-first and collector-oriented.
+
+At the 2026-09-14 checkpoint it is not current-main-clean: it is ahead of its old merge base but behind current `main`. Do not merge it directly.
+
+Required next work after the current release candidate is settled:
+- non-destructively reconcile current `main` into #303;
+- inspect overlap with the recently landed security/category/rerelease/CI changes;
+- rerun applicable exact-head CI and Cloudflare Preview validation;
+- perform visual QA at 360 px, 390 px and desktop using real Japanese data;
+- cover home, catalog/search, series detail, ranking, missing-image, no-evidence, long-name, loading and error states;
+- preserve market/data semantics;
+- record screenshot/visual-regression approval before release consideration.
+
+## Monetization / provider-read Draft stack
+
+Open Drafts #264 -> #267 -> #269 remain research/implementation assets, not current release candidates.
+
+Their older Production-demand snapshot must not be reused as if current. Before revival:
+- run a fresh business scorecard;
+- recompute exact-provider demand from current data;
+- reconcile surviving layers onto then-current `main`;
+- independently review the durable ledger where required;
+- treat any Production migration/history reconciliation, provider call, approval token, affiliate provenance persistence or external write as a separate gate.
+
+The existence of the Draft stack authorizes none of those operations.
+
+## Reliability / cost backlog
+
+- #284 remains open. Two exact Cloudflare proof-workflow paths already have a bounded Build Watch exclusion from earlier approved work, but the broader docs-only-build objective must not be called complete without direct evidence.
+- #257/#260 R5 Data Scale remain HOLD until a fresh scorecard shows depth work outranks product quality or monetization.
+- stale Drafts such as #232 should not be deleted or rewritten merely for cleanliness; reconcile/close them only through a deliberate bounded cleanup task.
 
 ## Scheduled-write safety remains locked
 
@@ -43,35 +113,7 @@ Owner-approved gates remain:
 - `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`
 - `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
 
-#280 is complete/closed. Natural post-disable proof includes later reset-day runs as well:
-- Official run #18 / `34680299101`: natural schedule, exact main, disabled gate, live audit/plan/transaction skipped, DB writes 0;
-- P3 run #95 / `34689497050`: natural schedule, exact main, disabled gate, provider work skipped, DB writes 0.
-
-Clearing #238 does **not** re-enable either lane. Re-enable is a separate lane-specific authorization.
-
-## #281 / #282 disposition
-
-The public-read outage was caused by active Supabase Fair Use restriction and has now cleared with provider recovery. Normal data is again visible on representative core routes.
-
-Draft #282 (`4d95413a9dcdd9a35555f5f40e47568f53a5245d`) was a bounded emergency 503/no-store containment candidate. It is no longer needed for the resolved incident and should be closed **without merge**. Do not ship it opportunistically merely because its engineering checks were green.
-
-## Reliability / security follow-ups
-
-- #284: docs-only Cloudflare Preview build waste; settings change remains separately approval-bound.
-- #285/#286: parent-series shared-cache candidate; prove healthy cold->warm behavior before release and claim savings only from measurement.
-- #287: current framework baseline remains behind security releases. Preferred isolated target is Next/`eslint-config-next` `16.3.3` and React/ReactDOM `19.2.8`, with normal lock regeneration, fresh audit, full tests/lint/vinext and exact Cloudflare Preview. Never use `npm audit fix --force` or hand-edit the lockfile.
-
-## Current post-freeze release order
-
-1. Independently review/revalidate and land #265 / close #262.
-2. Reconfirm Cloudflare Production source and revalidate/land #258.
-3. Complete #287 isolated framework-security update before normal user-value/monetization releases if the patched versions remain applicable.
-4. Rebase/revalidate/release #253 as the clearest current user-visible defect.
-5. Rebase/revalidate/release #261 while keeping Official auto disabled.
-6. Reassess #286 only from healthy-service evidence; release only if measured origin savings justify it.
-7. Run a fresh business scorecard. If affiliate monetization still dominates, proceed with #264/#267, then #273 only when needed as the DB prerequisite for #269, then #269 under its separate provider/Production boundaries.
-8. Keep #257/#260 R5 HOLD unless fresh evidence reprioritizes Data Scale.
-9. Re-enable each scheduled lane only under separate lane-specific authorization.
+No recovery, code merge or UI release implicitly re-enables them. Re-enable is a separate lane-specific authorization.
 
 ## Hard boundaries
 
