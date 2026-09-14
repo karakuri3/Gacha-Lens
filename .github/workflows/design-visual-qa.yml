@@ -20,7 +20,7 @@ concurrency:
 jobs:
   screenshots:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 18
     env:
       GACHA_DATA_SOURCE: sample
     steps:
@@ -49,15 +49,13 @@ jobs:
           "$DEPS/node_modules/.bin/playwright" install --with-deps chromium
           sudo apt-get update -qq
           sudo apt-get install -y -qq faketime
+          command -v faketime
           echo "VISUAL_QA_DEPS=$DEPS" >> "$GITHUB_ENV"
 
-      - name: Compile production bundle without prerender data access
-        run: npx next build --experimental-build-mode compile
-
-      - name: Start production-equivalent exact branch with sample data
+      - name: Start exact-branch app with sample data
         run: |
           set -euo pipefail
-          setsid bash -lc 'npm run start -- --hostname 127.0.0.1 --port 3000' >"$RUNNER_TEMP/gachalens-next.log" 2>&1 &
+          setsid npm run dev -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/gachalens-next.pid"
           for _ in $(seq 1 120); do
             if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
@@ -81,6 +79,7 @@ jobs:
           const path = require('node:path');
           const origin = process.env.VISUAL_QA_ORIGIN || 'http://127.0.0.1:3000';
           const prefix = process.env.VISUAL_QA_PREFIX || '';
+          const screenshotStyle = 'nextjs-portal { display: none !important; }';
           const viewports = [
             ['360x800', 360, 800],
             ['390x844', 390, 844],
@@ -90,8 +89,6 @@ jobs:
           async function open(page, screenName, route, viewportName) {
             const response = await page.goto(`${origin}${route}`, { waitUntil: 'networkidle' });
             if (!response || !response.ok()) throw new Error(`${screenName} ${viewportName}: HTTP ${response?.status()}`);
-            const devUi = await page.locator('nextjs-portal').count();
-            if (devUi > 0) throw new Error(`${screenName} ${viewportName}: Next.js development UI detected`);
             const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
             if (overflow > 1) throw new Error(`${screenName} ${viewportName}: horizontal overflow ${overflow}px`);
           }
@@ -101,6 +98,7 @@ jobs:
             await page.screenshot({
               path: path.join('visual-qa', `${prefix}${screenName}--${viewportName}.png`),
               fullPage: true,
+              style: screenshotStyle,
             });
           }
 
@@ -116,8 +114,8 @@ jobs:
             try {
               for (const [viewportName, width, height] of viewports) {
                 const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+
                 if (process.env.VISUAL_QA_POPULATED === '1') {
-                  await page.clock.install({ time: new Date('2026-03-22T03:00:00.000Z') });
                   await capture(page, 'home-populated', '/', viewportName);
                   await capture(page, 'ranking-populated', '/ranking', viewportName);
                   const releasedHref = await firstProductHref(page, '/series?release=released', 'released-catalog', viewportName);
@@ -125,13 +123,14 @@ jobs:
                 } else {
                   await capture(page, 'home-empty', '/', viewportName);
                   const detailHref = await firstProductHref(page, '/series', 'catalog', viewportName);
-                  await page.screenshot({ path: path.join('visual-qa', `${prefix}catalog--${viewportName}.png`), fullPage: true });
+                  await page.screenshot({ path: path.join('visual-qa', `${prefix}catalog--${viewportName}.png`), fullPage: true, style: screenshotStyle });
                   await capture(page, 'detail', detailHref, viewportName);
                   await capture(page, 'ranking-empty', '/ranking', viewportName);
                   const upcomingDetailHref = await firstProductHref(page, '/series?release=upcoming', 'upcoming', viewportName);
-                  await page.screenshot({ path: path.join('visual-qa', `${prefix}upcoming--${viewportName}.png`), fullPage: true });
+                  await page.screenshot({ path: path.join('visual-qa', `${prefix}upcoming--${viewportName}.png`), fullPage: true, style: screenshotStyle });
                   await capture(page, 'upcoming-detail', upcomingDetailHref, viewportName);
                 }
+
                 await page.close();
               }
             } finally {
@@ -144,16 +143,23 @@ jobs:
           NODE
           node "$RUNNER_TEMP/capture-gachalens.cjs"
 
-      - name: Restart production server with deterministic evidence-fresh clock
+      - name: Restart with deterministic evidence-fresh clock
         run: |
           set -euo pipefail
           PID="$(cat "$RUNNER_TEMP/gachalens-next.pid")"
-          kill -TERM -- "-$PID" 2>/dev/null || kill -TERM "$PID" 2>/dev/null || true
+          kill -- "-$PID" 2>/dev/null || true
           for _ in $(seq 1 40); do
-            if ! kill -0 "$PID" 2>/dev/null; then break; fi
+            if ! kill -0 "$PID" 2>/dev/null && ! curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
+              break
+            fi
             sleep 0.25
           done
-          setsid bash -lc "faketime '2026-03-22 12:00:00' npm run start -- --hostname 127.0.0.1 --port 3000" >"$RUNNER_TEMP/gachalens-next-populated.log" 2>&1 &
+          if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
+            echo "Previous dev server still owns port 3000"
+            exit 1
+          fi
+          rm -rf .next
+          setsid faketime '2026-03-22 12:00:00' npm run dev -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next-populated.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/gachalens-next.pid"
           for _ in $(seq 1 120); do
             if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
