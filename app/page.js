@@ -287,7 +287,7 @@ function spotlightMetrics(item) {
 
 function hasAvailabilitySignal(item) {
   const summary = item.stock_summary ?? item.availability_summary ?? {};
-  return Boolean(summary.has_stock_signal || summary.has_restock_signal || summary.latest_status);
+  return Boolean(summary.has_stock_signal || summary.has_restock_signal);
 }
 
 function upcomingPriority(item) {
