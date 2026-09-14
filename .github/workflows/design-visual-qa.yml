@@ -20,7 +20,7 @@ concurrency:
 jobs:
   screenshots:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     env:
       GACHA_DATA_SOURCE: sample
     steps:
@@ -38,7 +38,7 @@ jobs:
       - name: Install app dependencies
         run: npm ci
 
-      - name: Install pinned screenshot browser
+      - name: Install pinned screenshot browser and deterministic clock
         run: |
           set -euo pipefail
           DEPS="$RUNNER_TEMP/gachalens-visual-qa"
@@ -47,6 +47,8 @@ jobs:
           npm init -y >/dev/null
           npm install --ignore-scripts --no-audit --no-fund playwright@1.55.0
           "$DEPS/node_modules/.bin/playwright" install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libfaketime
           echo "VISUAL_QA_DEPS=$DEPS" >> "$GITHUB_ENV"
 
       - name: Start exact-branch app with sample data
@@ -67,14 +69,15 @@ jobs:
           cat "$RUNNER_TEMP/gachalens-next.log"
           exit 1
 
-      - name: Capture product-state screenshots
+      - name: Capture current-date and content states
         run: |
           set -euo pipefail
           mkdir -p visual-qa
           cat > "$RUNNER_TEMP/capture-gachalens.cjs" <<'NODE'
           const { chromium } = require(process.env.VISUAL_QA_DEPS + '/node_modules/playwright');
           const path = require('node:path');
-          const origin = 'http://127.0.0.1:3000';
+          const origin = process.env.VISUAL_QA_ORIGIN || 'http://127.0.0.1:3000';
+          const prefix = process.env.VISUAL_QA_PREFIX || '';
           const viewports = [
             ['360x800', 360, 800],
             ['390x844', 390, 844],
@@ -91,7 +94,7 @@ jobs:
           async function capture(page, screenName, route, viewportName) {
             await open(page, screenName, route, viewportName);
             await page.screenshot({
-              path: path.join('visual-qa', `${screenName}--${viewportName}.png`),
+              path: path.join('visual-qa', `${prefix}${screenName}--${viewportName}.png`),
               fullPage: true,
             });
           }
@@ -109,14 +112,21 @@ jobs:
               for (const [viewportName, width, height] of viewports) {
                 const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
 
-                await capture(page, 'home-empty', '/', viewportName);
-                const detailHref = await firstProductHref(page, '/series', 'catalog', viewportName);
-                await page.screenshot({ path: path.join('visual-qa', `catalog--${viewportName}.png`), fullPage: true });
-                await capture(page, 'detail', detailHref, viewportName);
-                await capture(page, 'ranking-empty', '/ranking', viewportName);
-                const upcomingDetailHref = await firstProductHref(page, '/series?release=upcoming', 'upcoming', viewportName);
-                await page.screenshot({ path: path.join('visual-qa', `upcoming--${viewportName}.png`), fullPage: true });
-                await capture(page, 'upcoming-detail', upcomingDetailHref, viewportName);
+                if (process.env.VISUAL_QA_POPULATED === '1') {
+                  await capture(page, 'home-populated', '/', viewportName);
+                  await capture(page, 'ranking-populated', '/ranking', viewportName);
+                  const releasedHref = await firstProductHref(page, '/series?release=released', 'released-catalog', viewportName);
+                  await capture(page, 'detail-populated', releasedHref, viewportName);
+                } else {
+                  await capture(page, 'home-empty', '/', viewportName);
+                  const detailHref = await firstProductHref(page, '/series', 'catalog', viewportName);
+                  await page.screenshot({ path: path.join('visual-qa', `${prefix}catalog--${viewportName}.png`), fullPage: true });
+                  await capture(page, 'detail', detailHref, viewportName);
+                  await capture(page, 'ranking-empty', '/ranking', viewportName);
+                  const upcomingDetailHref = await firstProductHref(page, '/series?release=upcoming', 'upcoming', viewportName);
+                  await page.screenshot({ path: path.join('visual-qa', `${prefix}upcoming--${viewportName}.png`), fullPage: true });
+                  await capture(page, 'upcoming-detail', upcomingDetailHref, viewportName);
+                }
 
                 await page.close();
               }
@@ -130,6 +140,35 @@ jobs:
           NODE
           node "$RUNNER_TEMP/capture-gachalens.cjs"
 
+      - name: Restart with deterministic evidence-fresh clock
+        run: |
+          set -euo pipefail
+          kill "$(cat "$RUNNER_TEMP/gachalens-next.pid")" || true
+          for _ in $(seq 1 40); do
+            if ! kill -0 "$(cat "$RUNNER_TEMP/gachalens-next.pid")" 2>/dev/null; then break; fi
+            sleep 0.25
+          done
+          rm -rf .next
+          faketime '2026-03-22 12:00:00' npm run dev -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next-populated.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/gachalens-next.pid"
+          for _ in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/gachalens-next.pid")" 2>/dev/null; then
+              cat "$RUNNER_TEMP/gachalens-next-populated.log"
+              exit 1
+            fi
+            sleep 0.5
+          done
+          cat "$RUNNER_TEMP/gachalens-next-populated.log"
+          exit 1
+
+      - name: Capture deterministic populated market states
+        env:
+          VISUAL_QA_POPULATED: "1"
+        run: node "$RUNNER_TEMP/capture-gachalens.cjs"
+
       - name: Upload exact-head visual evidence
         uses: actions/upload-artifact@v4
         with:
@@ -140,4 +179,6 @@ jobs:
 
       - name: Print app log on failure
         if: failure()
-        run: cat "$RUNNER_TEMP/gachalens-next.log" || true
+        run: |
+          cat "$RUNNER_TEMP/gachalens-next.log" || true
+          cat "$RUNNER_TEMP/gachalens-next-populated.log" || true
