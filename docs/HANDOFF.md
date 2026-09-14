@@ -9,17 +9,19 @@ This file is the active-state handoff. Historical detail remains in Git history 
 If a new thread receives only **「Gacha Lens続けて」**:
 
 1. Read `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/PRODUCTION_RELEASE_POLICY.md`, and `docs/AUTO_MERGE_POLICY.md`.
-2. Re-fetch current `main`, active Issues/PRs, current Supabase usage and current Cloudflare Production source before mutating anything.
-3. Resume existing active Drafts before creating duplicate implementation work.
-4. Do not restart completed migration/recovery/governance/security/category/rerelease lanes.
-5. Keep scheduled write lanes disabled unless separately and explicitly authorized.
-6. Treat #319 as the current business decision gate; do not revive dated affiliate/Data Scale priorities from old snapshots.
+2. **Always re-fetch current `main`** before using an exact SHA; canonical docs intentionally do not claim that a historical SHA remains the live branch head after later merges.
+3. Re-fetch active Issues/PRs, current Supabase usage and current Cloudflare Production source before mutating anything.
+4. Resume existing active Drafts before creating duplicate implementation work.
+5. Do not restart completed migration/recovery/governance/security/category/rerelease lanes.
+6. Keep scheduled write lanes disabled unless separately and explicitly authorized.
+7. Treat #319 as the current business decision gate; do not revive dated affiliate/Data Scale priorities from old snapshots.
 
-## Production / current main
+## Production / main baseline
 
 - repo: `karakuri3/Gacha-Lens`
-- current `main`: `3b215a9c777431cbf049ec4966b83f474f146953`
-- latest current-main checkpoint: #309 canonical state sync
+- **live `main`: fetch at resume time; do not infer it from this file**
+- #320 canonical synchronization merged at `d89c33ac715490f6923a442c3593e4164f8dd396`
+- last runtime/application baseline immediately before #320: `3b215a9c777431cbf049ec4966b83f474f146953`; #320 itself is documentation-only
 - URL: `https://gachalens.com`
 - runtime/DNS: Cloudflare
 - Vercel: registrar + non-live rollback only; routine Git builds are non-authoritative
@@ -42,6 +44,7 @@ Do not re-open these as prerequisites merely because older PR bodies mention the
 - #261: rerelease canonical year/month repair merged; Official auto still disabled
 - #307: GitHub Actions stale-run cancellation merged for bounded CI cost control
 - #309: canonical state synchronization merged
+- #320: #319/product/reliability canonical state synchronization merged; docs only
 
 ## P1 reliability candidate — #285 / #286
 
@@ -49,13 +52,13 @@ PR #286 is technically green but independently gated.
 
 Purpose: include canonical `/series/group/:slug` pages in the existing bounded 30-minute `seriesDetail` Cloudflare edge-cache class while preserving all current public-cache exclusions.
 
-Frozen candidate:
+Frozen candidate checkpoint:
 - PR: #286
 - branch: `fix/parent-series-edge-cache-285`
-- base: `3b215a9c777431cbf049ec4966b83f474f146953`
-- head: `38aae46fa759b1cd470d6220640a905440f720ab`
+- validated base checkpoint: `3b215a9c777431cbf049ec4966b83f474f146953`
+- frozen head: `38aae46fa759b1cd470d6220640a905440f720ab`
 - Draft: yes
-- mergeable: yes at the checkpoint
+- mergeable: yes at that checkpoint
 - effective diff: exactly 4 files
 
 Fresh exact-head checks:
@@ -66,6 +69,8 @@ Fresh exact-head checks:
 Dedicated validation-only #308 proved the exact parent-series route: cold `MISS` -> `HIT` -> `HIT`, byte-identical 64,736-byte HTML, `series-detail-1800-v1`, no `Set-Cookie`, healthy public route smoke, unauthenticated boundaries and audited security headers. #308 closed unmerged.
 
 **Stop Condition:** genuine independent Reviewer and Verifier are still pending. Do not substitute Builder/self-review. Do not mark ready or merge until that gate is genuinely satisfied and current head/base are rechecked.
+
+Since #320 advanced `main` with docs-only canonical synchronization after the frozen validation checkpoint, do not silently call the old ahead/behind count current. Keep the candidate frozen for independent review; before merge, fetch then-current `main`, inspect the docs-only/intervening drift and reconcile/revalidate as required by policy.
 
 After independent PASS:
 1. fetch current `main` and inspect intervening overlap;
@@ -80,18 +85,18 @@ After independent PASS:
 
 PR #303 is the substantial product-specific redesign. It replaces generic dashboard/SaaS presentation with object-first collector context, real imagery, compact evidence and denser series/product comparison while intentionally preserving market/data semantics.
 
-Frozen candidate:
+Frozen candidate checkpoint:
 - PR: #303
 - branch: `design/product-specific-ui-contract`
-- current checkpoint main: `3b215a9c777431cbf049ec4966b83f474f146953`
-- head: `37c8523acd44dd319dd06e79d3cc5f8e82edf1c8`
-- ahead 38 / behind 0 at checkpoint
+- validated main checkpoint: `3b215a9c777431cbf049ec4966b83f474f146953`
+- frozen head: `37c8523acd44dd319dd06e79d3cc5f8e82edf1c8`
+- ahead 38 / behind 0 at that checkpoint
 - Draft: yes
-- mergeable: yes at checkpoint
+- mergeable: yes at that checkpoint
 
-The branch was reconciled non-destructively with current main; no force/history rewrite was used.
+The branch was reconciled non-destructively with the validated main checkpoint; no force/history rewrite was used.
 
-Current exact-head gates are green:
+Current frozen-head gates are green:
 - PR Code Quality: SUCCESS
 - Cloudflare vinext: SUCCESS
 - Cloudflare runtime smoke: SUCCESS
@@ -110,7 +115,7 @@ Visual/data proof:
 
 #303 briefly became Ready despite no submitted independent review. Review/thread lists were empty, so it was returned to **Draft**.
 
-**Stop Condition:** genuine independent review/verification required for this substantial release. Same-assistant self-review is not independent evidence. After PASS, re-fetch main/head, inspect drift and apply full Auto-Merge + Production Release policies before any merge.
+**Stop Condition:** genuine independent review/verification required for this substantial release. Same-assistant self-review is not independent evidence. #320 subsequently advanced `main` with docs-only changes; keep #303 frozen rather than invalidating its review candidate, then re-fetch/reconcile current main after independent PASS and rerun affected exact-head gates if required.
 
 ## P1 business decision — #319 fresh scorecard
 

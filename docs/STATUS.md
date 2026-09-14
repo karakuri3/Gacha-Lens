@@ -6,7 +6,9 @@ Updated: 2026-09-14 JST — product gate and fresh business scorecard synchroniz
 
 - Infrastructure migration: **COMPLETE**
 - Production runtime: Cloudflare Worker `gacha-lens`
-- Current `main`: `3b215a9c777431cbf049ec4966b83f474f146953` (#309 canonical state sync)
+- **Live `main`: always re-fetch before acting; do not infer it from a hard-coded SHA in this status file**
+- #320 canonical synchronization merge: `d89c33ac715490f6923a442c3593e4164f8dd396`
+- Last runtime/application baseline immediately before #320: `3b215a9c777431cbf049ec4966b83f474f146953`; #320 is docs-only
 - Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
 - Supabase Fair Use restriction: **CLEARED**
 - #219/#238: **CLOSED / recovery complete**
@@ -20,8 +22,9 @@ Updated: 2026-09-14 JST — product gate and fresh business scorecard synchroniz
 - #253: **MERGED**; Japanese stored category routes repaired
 - #261: **MERGED**; rerelease canonical year/month behavior repaired while Official auto remains disabled
 - #307: **MERGED**; stale GitHub Actions work cancelled for bounded cost control
+- #320: **MERGED / DOCS ONLY**; canonical product/reliability/business state synchronized
 - #285/#286: **ACTIVE DRAFT / TECHNICALLY GREEN**; genuine independent Reviewer + Verifier remain the release blocker
-- #303: **ACTIVE DRAFT / TECHNICALLY GREEN**; current-main reconciliation, Cloudflare gates and visual QA are complete at the frozen checkpoint; genuine independent review remains the release blocker
+- #303: **ACTIVE DRAFT / TECHNICALLY GREEN**; current-main reconciliation, Cloudflare gates and visual QA are complete at its frozen checkpoint; genuine independent review remains the release blocker
 - #319: **ACTIVE P1 BUSINESS DECISION GATE**; fresh Production scorecard completed
 - #263/#266/#268 and #264/#267/#269: **HOLD**; preserve implementation assets but do not advance provider spend until #319 reactivation conditions are met
 - #119/#257/#260: **HOLD**; broad Data Scale is not the default next move
@@ -41,10 +44,10 @@ Recovery and subsequent code releases do not authorize either lane to wake up. R
 
 Draft #286 extends the existing bounded 30-minute `seriesDetail` Cloudflare cache from `/series/:slug` to exactly `/series/group/:slug` without introducing a generic `/series/**` wildcard.
 
-Frozen candidate:
+Frozen candidate checkpoint:
 - head: `38aae46fa759b1cd470d6220640a905440f720ab`
-- base: `3b215a9c777431cbf049ec4966b83f474f146953`
-- ahead 5 / behind 0 at the checkpoint
+- validated base: `3b215a9c777431cbf049ec4966b83f474f146953`
+- ahead 5 / behind 0 at that checkpoint
 - effective diff: exactly 4 files
 
 Fresh exact-head evidence:
@@ -63,17 +66,19 @@ Dedicated validation-only #308 proved the canonical parent-series route on exact
 
 **Remaining release gate:** genuine independent Reviewer + Verifier. Same-assistant self-review is not independent approval. Until that gate passes, #286 stays Draft and must not merge.
 
+#320 advanced `main` after this frozen checkpoint with docs-only changes. Do not rewrite the frozen candidate merely to make an old ahead/behind count look current. Before eventual merge, fetch current main, inspect/reconcile drift and rerun any gates affected by the new exact head/base.
+
 ## P1 product release candidate — #303 Collector Editorial
 
 Draft #303 implements the product-specific **Collector Editorial** direction: object-first collector context, real product imagery, compact market evidence and less generic dashboard/SaaS presentation while preserving market/data semantics.
 
-Frozen candidate:
+Frozen candidate checkpoint:
 - head: `37c8523acd44dd319dd06e79d3cc5f8e82edf1c8`
-- current-main checkpoint: `3b215a9c777431cbf049ec4966b83f474f146953`
-- ahead 38 / behind 0 at the checkpoint
+- validated main checkpoint: `3b215a9c777431cbf049ec4966b83f474f146953`
+- ahead 38 / behind 0 at that checkpoint
 - branch reconciled non-destructively; no force/history rewrite
 
-Current exact-head release evidence is green:
+Frozen-head release evidence is green:
 - PR Code Quality: SUCCESS
 - Cloudflare vinext: SUCCESS
 - Cloudflare runtime smoke: SUCCESS
@@ -92,7 +97,9 @@ Visual/data evidence:
 
 Validation-only #317/#318 are closed unmerged after evidence capture.
 
-#303 briefly became Ready without an independent review submission. Live review and thread lists were empty, so it was returned to **Draft**. **Remaining release gate:** genuine independent review/verification required for this substantial product/UI release, followed by a fresh head/base check and the complete Auto-Merge + Production Release policies.
+#303 briefly became Ready without an independent review submission. Live review and thread lists were empty, so it was returned to **Draft**. **Remaining release gate:** genuine independent review/verification required for this substantial product/UI release.
+
+#320 subsequently advanced `main` with docs-only changes. Keep the frozen candidate stable for independent review. After independent PASS, fetch/reconcile then-current main and rerun any exact-head gates required by the resulting head/base before the complete Auto-Merge + Production Release policies.
 
 ## P1 business decision — #319
 
