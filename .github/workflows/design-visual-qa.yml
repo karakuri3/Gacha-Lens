@@ -74,34 +74,50 @@ jobs:
           cat > "$RUNNER_TEMP/capture-gachalens.cjs" <<'NODE'
           const { chromium } = require(process.env.VISUAL_QA_DEPS + '/node_modules/playwright');
           const path = require('node:path');
-
-          const screens = [
-            ['home', '/'],
-            ['catalog', '/series'],
-            ['ranking', '/ranking'],
-            ['detail', '/series/chiikawa-osuwari-usagi'],
-            ['upcoming', '/series?release=upcoming'],
-            ['upcoming-detail', '/series/onepiece-wanted-luffy'],
-          ];
+          const origin = 'http://127.0.0.1:3000';
           const viewports = [
             ['360x800', 360, 800],
             ['390x844', 390, 844],
             ['desktop-1440x1000', 1440, 1000],
           ];
 
+          async function open(page, screenName, route, viewportName) {
+            const response = await page.goto(`${origin}${route}`, { waitUntil: 'networkidle' });
+            if (!response || !response.ok()) throw new Error(`${screenName} ${viewportName}: HTTP ${response?.status()}`);
+            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+            if (overflow > 1) throw new Error(`${screenName} ${viewportName}: horizontal overflow ${overflow}px`);
+          }
+
+          async function capture(page, screenName, route, viewportName) {
+            await open(page, screenName, route, viewportName);
+            await page.screenshot({
+              path: path.join('visual-qa', `${screenName}--${viewportName}.png`),
+              fullPage: true,
+            });
+          }
+
+          async function firstProductHref(page, route, screenName, viewportName) {
+            await open(page, screenName, route, viewportName);
+            const href = await page.locator('a.product-card').first().getAttribute('href');
+            if (!href || !href.startsWith('/series/')) throw new Error(`${screenName} ${viewportName}: no product detail href`);
+            return href;
+          }
+
           (async () => {
             const browser = await chromium.launch({ headless: true });
             try {
               for (const [viewportName, width, height] of viewports) {
                 const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
-                for (const [screenName, route] of screens) {
-                  const response = await page.goto(`http://127.0.0.1:3000${route}`, { waitUntil: 'networkidle' });
-                  if (!response || !response.ok()) throw new Error(`${screenName} ${viewportName}: HTTP ${response?.status()}`);
-                  await page.screenshot({
-                    path: path.join('visual-qa', `${screenName}--${viewportName}.png`),
-                    fullPage: true,
-                  });
-                }
+
+                await capture(page, 'home-empty', '/', viewportName);
+                const detailHref = await firstProductHref(page, '/series', 'catalog', viewportName);
+                await page.screenshot({ path: path.join('visual-qa', `catalog--${viewportName}.png`), fullPage: true });
+                await capture(page, 'detail', detailHref, viewportName);
+                await capture(page, 'ranking-empty', '/ranking', viewportName);
+                const upcomingDetailHref = await firstProductHref(page, '/series?release=upcoming', 'upcoming', viewportName);
+                await page.screenshot({ path: path.join('visual-qa', `upcoming--${viewportName}.png`), fullPage: true });
+                await capture(page, 'upcoming-detail', upcomingDetailHref, viewportName);
+
                 await page.close();
               }
             } finally {
