@@ -1,0 +1,228 @@
+name: Design Visual QA
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "DESIGN.md"
+      - ".github/workflows/design-visual-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: design-visual-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      GACHA_DATA_SOURCE: sample
+    steps:
+      - name: Checkout exact pull-request head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install pinned screenshot browser and deterministic clock
+        run: |
+          set -euo pipefail
+          DEPS="$RUNNER_TEMP/gachalens-visual-qa"
+          mkdir -p "$DEPS"
+          cd "$DEPS"
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-audit --no-fund playwright@1.55.0
+          "$DEPS/node_modules/.bin/playwright" install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq faketime
+          command -v faketime
+          echo "VISUAL_QA_DEPS=$DEPS" >> "$GITHUB_ENV"
+
+      - name: Start exact-branch app with sample data
+        run: |
+          set -euo pipefail
+          setsid npm run dev -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/gachalens-next.pid"
+          for _ in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/gachalens-next.pid")" 2>/dev/null; then
+              cat "$RUNNER_TEMP/gachalens-next.log"
+              exit 1
+            fi
+            sleep 0.5
+          done
+          cat "$RUNNER_TEMP/gachalens-next.log"
+          exit 1
+
+      - name: Capture current-date and content states
+        run: |
+          set -euo pipefail
+          mkdir -p visual-qa
+          cat > "$RUNNER_TEMP/capture-gachalens.cjs" <<'NODE'
+          const { chromium } = require(process.env.VISUAL_QA_DEPS + '/node_modules/playwright');
+          const path = require('node:path');
+          const origin = process.env.VISUAL_QA_ORIGIN || 'http://127.0.0.1:3000';
+          const prefix = process.env.VISUAL_QA_PREFIX || '';
+          const screenshotStyle = 'nextjs-portal { display: none !important; }';
+          const viewports = [
+            ['360x800', 360, 800],
+            ['390x844', 390, 844],
+            ['desktop-1440x1000', 1440, 1000],
+          ];
+
+          async function open(page, screenName, route, viewportName) {
+            const response = await page.goto(`${origin}${route}`, { waitUntil: 'networkidle' });
+            if (!response || !response.ok()) throw new Error(`${screenName} ${viewportName}: HTTP ${response?.status()}`);
+            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+            if (overflow > 1) throw new Error(`${screenName} ${viewportName}: horizontal overflow ${overflow}px`);
+          }
+
+          async function capture(page, screenName, route, viewportName) {
+            await open(page, screenName, route, viewportName);
+            await page.screenshot({
+              path: path.join('visual-qa', `${prefix}${screenName}--${viewportName}.png`),
+              fullPage: true,
+              style: screenshotStyle,
+            });
+          }
+
+          async function firstProductHref(page, route, screenName, viewportName, kind = 'any') {
+            await open(page, screenName, route, viewportName);
+            const href = await page.locator('a.product-card').first().getAttribute('href');
+            if (!href || !href.startsWith('/series/')) throw new Error(`${screenName} ${viewportName}: no product detail href`);
+            if (kind === 'series' && !href.startsWith('/series/group/')) {
+              throw new Error(`${screenName} ${viewportName}: expected series detail href, got ${href}`);
+            }
+            if (kind === 'variant' && href.startsWith('/series/group/')) {
+              throw new Error(`${screenName} ${viewportName}: expected variant detail href, got ${href}`);
+            }
+            return href;
+          }
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            try {
+              for (const [viewportName, width, height] of viewports) {
+                const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+
+                if (process.env.VISUAL_QA_POPULATED === '1') {
+                  await capture(page, 'home-populated', '/', viewportName);
+                  await capture(page, 'ranking-fixed-clock', '/ranking', viewportName);
+                  const releasedSeriesHref = await firstProductHref(
+                    page,
+                    '/series?release=released',
+                    'released-series-catalog',
+                    viewportName,
+                    'series',
+                  );
+                  await capture(page, 'series-detail-populated', releasedSeriesHref, viewportName);
+                  const releasedVariantHref = await firstProductHref(
+                    page,
+                    '/series?scope=variant&release=released',
+                    'released-variant-catalog',
+                    viewportName,
+                    'variant',
+                  );
+                  await capture(page, 'variant-detail-populated', releasedVariantHref, viewportName);
+                } else {
+                  await capture(page, 'home-empty', '/', viewportName);
+                  const seriesDetailHref = await firstProductHref(page, '/series', 'series-catalog', viewportName, 'series');
+                  await page.screenshot({ path: path.join('visual-qa', `${prefix}catalog--${viewportName}.png`), fullPage: true, style: screenshotStyle });
+                  await capture(page, 'series-detail', seriesDetailHref, viewportName);
+                  const variantDetailHref = await firstProductHref(
+                    page,
+                    '/series?scope=variant',
+                    'variant-catalog',
+                    viewportName,
+                    'variant',
+                  );
+                  await capture(page, 'variant-detail', variantDetailHref, viewportName);
+                  await capture(page, 'ranking-empty', '/ranking', viewportName);
+                  const upcomingDetailHref = await firstProductHref(
+                    page,
+                    '/series?release=upcoming',
+                    'upcoming',
+                    viewportName,
+                    'series',
+                  );
+                  await page.screenshot({ path: path.join('visual-qa', `${prefix}upcoming--${viewportName}.png`), fullPage: true, style: screenshotStyle });
+                  await capture(page, 'upcoming-series-detail', upcomingDetailHref, viewportName);
+                }
+
+                await page.close();
+              }
+            } finally {
+              await browser.close();
+            }
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          node "$RUNNER_TEMP/capture-gachalens.cjs"
+
+      - name: Restart with deterministic evidence-fresh clock
+        run: |
+          set -euo pipefail
+          PID="$(cat "$RUNNER_TEMP/gachalens-next.pid")"
+          kill -- "-$PID" 2>/dev/null || true
+          for _ in $(seq 1 40); do
+            if ! kill -0 "$PID" 2>/dev/null && ! curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
+              break
+            fi
+            sleep 0.25
+          done
+          if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
+            echo "Previous dev server still owns port 3000"
+            exit 1
+          fi
+          rm -rf .next
+          setsid faketime '2026-03-22 12:00:00' npm run dev -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next-populated.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/gachalens-next.pid"
+          for _ in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/gachalens-next.pid")" 2>/dev/null; then
+              cat "$RUNNER_TEMP/gachalens-next-populated.log"
+              exit 1
+            fi
+            sleep 0.5
+          done
+          cat "$RUNNER_TEMP/gachalens-next-populated.log"
+          exit 1
+
+      - name: Capture deterministic populated market states
+        env:
+          VISUAL_QA_POPULATED: "1"
+        run: node "$RUNNER_TEMP/capture-gachalens.cjs"
+
+      - name: Upload exact-head visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gachalens-design-visual-qa-${{ github.event.pull_request.head.sha || github.sha }}
+          path: visual-qa/*.png
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Print app log on failure
+        if: failure()
+        run: |
+          cat "$RUNNER_TEMP/gachalens-next.log" || true
+          cat "$RUNNER_TEMP/gachalens-next-populated.log" || true

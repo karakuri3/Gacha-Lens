@@ -1,4 +1,6 @@
 import "./globals.css";
+import "./product-design.css";
+import "./product-detail-design.css";
 import Header from "@/components/Header";
 import AppSidebar from "@/components/AppSidebar";
 import Footer from "@/components/Footer";
