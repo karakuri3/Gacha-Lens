@@ -1,0 +1,60 @@
+name: Validate root vinext lock 291
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/validate-root-vinext-lock-291.yml"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout validation branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Match Cloudflare npm
+        run: npm install --global npm@10.9.2
+
+      - name: Pin Cloudflare live-install dependencies in root manifest
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          pkg.devDependencies = {
+            ...pkg.devDependencies,
+            '@vinext/cloudflare': '1.0.0-beta.6',
+            'react-server-dom-webpack': '19.2.8',
+            'vinext': '1.0.0-beta.8'
+          };
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
+          npm install --package-lock-only --ignore-scripts
+          npm audit --audit-level=low
+
+      - name: Commit generated manifest and lock if needed
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo 'Root manifest/lock already synchronized.'
+            exit 0
+          fi
+          git config user.name karakuri3
+          git config user.email senpingxingzuo@gmail.com
+          git add package.json package-lock.json
+          git commit -m 'test: pin root vinext dependencies for Cloudflare proof'
+          git push origin HEAD:${{ github.head_ref }}
