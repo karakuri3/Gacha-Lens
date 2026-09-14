@@ -1,13 +1,13 @@
 # Gacha Lens Durable Decisions
 
-Updated: 2026-09-14 JST
+Updated: 2026-09-15 JST
 
 Historical decisions remain in Git history. This file records the active durable decisions needed to resume safely.
 
 ## Infrastructure / safety decisions
 
 - Cloudflare is Production runtime + authoritative DNS.
-- Vercel is registrar/non-live rollback only; routine Git builds remain disabled/non-authoritative.
+- Vercel is registrar/non-live rollback only; routine Git build status is non-authoritative.
 - Supabase Production is `vxbrnvfhmzcxehuuzzum`; old `ihcudkfspzuixsqsvoku` is inactive.
 - direct main push prohibited.
 - `.github/workflows/gacha-ingestion.yml` remains disabled.
@@ -16,108 +16,133 @@ Historical decisions remain in Git history. This file records the active durable
 - consumed approvals/tokens are non-reusable.
 - Mercari/Amazon scraping prohibited.
 - unavailable analytics/revenue evidence must never be converted to measured zero.
+- scheduled writes remain disabled unless separately re-authorized:
+  - `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`
+  - `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
 
 ## D-142 — 2026-09 Fair Use restriction was historical-cycle enforcement
 
-The restricted `2026-08-12 -> 2026-09-12` cycle ended after historical Egress overage. Released #249/#251 remain supported by both pre-enforcement low burn and post-reset recovery evidence. Do not reinterpret that incident as mitigation regression without fresh evidence.
+The restricted `2026-08-12 -> 2026-09-12` cycle ended after historical Egress overage. Released mitigations remain supported by recovery evidence. Do not reinterpret the incident as current mitigation failure without fresh evidence.
 
-## D-143 — #238 freeze clears only from measured recovery evidence
+## D-143 — #238 freeze cleared from measured recovery evidence
 
-The freeze was correct while active. It may close only after actual provider restriction removal, fresh-cycle usage safety, minimal public smoke, former-amplifier non-recurrence, and canonical synchronization. The 2026-09-13 evidence satisfied those gates.
-
-## D-153 — quota recovery never wakes scheduled write lanes automatically
-
-`P3_BOUNDED_SEED_V2_AUTO_ENABLED=false` and `OFFICIAL_BOUNDED_AUTO_ENABLED=false` remain false after recovery. Re-enable requires new lane-specific authorization.
-
-## D-154 — guarded scheduled lanes have natural no-op/write0 proof
-
-Manual dispatch is not accepted as substitute evidence. Reset-day natural runs reconfirmed safety: Official #18 `34680299101` and P3 #95 `34689497050` both ran on exact main with disabled gates and Production writes 0.
-
-## D-155 — public-read restriction incident is resolved
-
-During restriction, core public data could render `商品情報を取得できません` with unhealthy outer-200 semantics. After provider restriction cleared, representative core routes again rendered normal live data. Treat #281 as resolved by provider recovery.
-
-## D-156 — do not ship #282 after the incident has disappeared
-
-Draft #282 remains useful incident research, but its response-clone drain adds CPU/memory/TTFB. Because normal service returned, it closed unmerged. Revisit only if a future outage reproduces the same bad HTTP semantics.
-
-## D-160 — #286 remains measured follow-up, not assumed savings
-
-Draft #286 expands only the bounded series-detail cache matcher to parent-series detail. Its exact Preview/cache/runtime proof is green, but release remains gated by genuine independent Reviewer + Verifier. Do not claim measured Production egress savings without actual measurement.
-
-## D-161 — docs-only Cloudflare build waste is separate cost hygiene
-
-#284 tracks the remaining cost-hygiene problem. Exact proof-workflow exclusions already exist, but broader docs-only settings mutation remains separately approval-bound and must not be called solved without direct evidence.
-
-## D-162 — org-wide usage can serve as a stricter recovery upper bound
-
-When project-filtered billing data is unavailable but the organization total itself is safely below the operating target, the Gacha project subset is mathematically no greater than that total. This logic is valid only when the org-wide measurement is fresh and actually available.
-
-## D-163 — user-visible repairs precede unrelated migration-history work
-
-Foundation/migration prerequisites should block only the lanes that need them. Do not let dormant provider-ledger work delay unrelated user-value releases.
-
-## D-164 — merging product/runtime code never implies Official lane re-enable
-
-Code release and scheduled-write authorization are separate decisions. Official remains disabled until a new explicit lane approval.
-
-## D-165 — dependency-security baseline is a pre-feature release priority
-
-The security/framework repair train was completed through #291/#287. Do not restart it from older stale instructions unless fresh dependency evidence creates a new issue.
+The freeze was correct while active and closed only after provider restriction removal, fresh-cycle usage safety, representative public smoke and canonical synchronization.
 
 ## D-147 — self-review is not independent review
 
-Where genuine independent review is required, same-assistant Builder/self-review cannot satisfy it. Paid review must not be invoked without explicit approval. This applies to current #286 and substantial product release #303.
+Where governance requires independent review, same-assistant Builder/self-review cannot satisfy it. #286 and #303 ultimately advanced only after independent Reviewer + Verifier PASS was recorded and current-main reconciliation/exact-head gates were rerun.
 
-## D-166 — #303 is technically proven but remains independently gated
+## D-153 — quota recovery never wakes scheduled write lanes automatically
 
-Collector Editorial #303 has been reconciled non-destructively to the current-main checkpoint and has green exact-head Code Quality, vinext, runtime smoke, cache proof and visual QA. Real Japanese-data validation through #317/#318 also passed, including 21/21 bounded HTTP 200 reads on the final integrated pass and multi-viewport visual inspection.
+Recovery, code release and product redesign never imply scheduled-write authorization. Re-enable remains a separate lane-specific decision.
 
-This technical evidence does **not** substitute for the genuine independent release review required for a substantial product/UI change. #303 must remain Draft until that gate passes and main/head drift is rechecked.
+## D-155 — public-read restriction incident is resolved
+
+Representative public routes recovered after provider restriction cleared. Treat #281 as resolved unless fresh evidence reproduces the failure.
+
+## D-156 — do not ship #282 after the incident disappeared
+
+#282 closed unmerged. Revisit only if a future outage reproduces the same degraded-response semantics and the extra response handling is justified again.
+
+## D-160 — #286 is released reliability coverage, not measured savings
+
+#286 expanded only the existing bounded series-detail cache matcher to canonical parent-series detail and released as merge `b9b8165c73e6ee9290ebadf9f6bd7802c545f7f6` after independent Reviewer + Verifier PASS and exact-head Code Quality/runtime/cache proof PASS.
+
+Dedicated Preview evidence proved parent-series cold `MISS` -> warm `HIT` -> `HIT`, byte-identical HTML, marker `series-detail-1800-v1` and no `Set-Cookie`.
+
+#285 is closed. Do **not** claim measured Production egress savings until actual before/after traffic evidence exists.
+
+## D-161 — docs/workflow-only Cloudflare build waste remains separate cost hygiene
+
+#284 remains a distinct provider-settings lane. Current evidence shows docs/workflow-only changes can still trigger Cloudflare Preview builds. A bounded exclusion/rollback plan exists, but Cloudflare Build Watch must not be changed without separate explicit approval and post-change proof.
+
+## D-163 — user-visible repairs precede unrelated migration-history work
+
+Foundation/provider-ledger prerequisites block only the lanes that depend on them. Do not let dormant migration-history work delay user-value releases.
+
+## D-164 — merging product/runtime code never implies Official lane re-enable
+
+Code releases and scheduled-write authorization are separate decisions. Official remains disabled until a new explicit lane approval.
+
+## D-165 — dependency-security baseline is complete unless fresh evidence reopens it
+
+The framework/security repair train was completed through #291/#287. Do not restart it from stale instructions.
+
+## D-166 — #303 Collector Editorial is the released product baseline
+
+#303 is no longer a pending Draft. It released after:
+- current-main non-destructive reconciliation;
+- independent Reviewer + Verifier PASS;
+- natural test/lint `34856915575` PASS;
+- compatibility `34856915830` PASS;
+- screenshots `34856915548` PASS;
+- exact-head runtime `34856915847` PASS;
+- isolated cache proof `34856915789` PASS;
+- Cloudflare Workers build `5e69aab5-9673-45dc-b535-cf021fffcffd` PASS.
+
+Merge commit: `8a090d116fda6234c53d327760c9ce1c933fdd6e`.
+
+Cloudflare Production was directly verified at 100% traffic on version `c2ede0e8` linked to that commit. Treat Collector Editorial as the current user-facing baseline; do not default back to redesign churn without measured evidence.
 
 ## D-167 — fresh #319 scorecard supersedes dated affiliate priority
 
-The 2026-09-14 SELECT-only Production scorecard is the current business decision source. Key evidence:
-- 10,241 series / 23,808 variants
-- 176 market listings
-- 163 variants fresh <30d / 0.6846% catalog coverage
-- 161 of 163 fresh covered variants have one listing
-- 198 observations / 22 re-observed listings / 12.5% re-observation rate
-- 0 new listings and 0 new observations in the last 7d
-- outbound clicks 34 / 30d but 0 / 7d
-- verified affiliate provenance 10 listings, all Rakuten
-- affiliate-eligible exact `(variant_id, provider)` clicks 0 / 34
-- review-safe stock/restock 0 / 0
+The 2026-09-14 SELECT-only scorecard remains the pre-release/current-state reference. Its low affiliate overlap and shallow market coverage mean the old 2026-09-06 affiliate cohort is historical prioritization evidence, not a current execution target.
 
-Therefore the 2026-09-06 affiliate-demand cohort is historical prioritization evidence, not a current execution target. #263/#266/#268 and Drafts #264/#267/#269 remain useful implementation assets but are HOLD behind #319 until fresh post-product demand reactivates the lane.
+#263/#266/#268 and #264/#267/#269 remain HOLD until fresh post-release demand reactivates the lane.
 
 ## D-168 — low data coverage does not automatically reactivate broad Data Scale
 
-Market coverage is clearly shallow, but recent user demand and collection freshness are also weak. Broad #119/#257/#260 Data Scale remains HOLD.
+#119/#257/#260 remain HOLD. Low market coverage alone is not a user-value signal. Prefer demand-weighted data quality unless fresh usage proves broader collection has higher user/revenue ROI.
 
-After the current product baseline is released, observe fresh behavior. If monetization demand appears, target affiliate coverage on current demand. If demand remains sparse, prefer a demand-weighted market-quality/re-observation experiment on actually used pages/variants before broad provider expansion. Do not optimize for provider count, row count, or infrastructure activity as a proxy for user value.
+## D-169 — analytics/revenue availability is a truthfulness state
 
-## D-169 — external analytics/revenue availability is a truthfulness state
+At the current checkpoint:
+- Cloudflare Web Analytics is **available and active** for `gachalens.com`;
+- Search Console remains unavailable through current GSC Wizard access;
+- PostHog remains unavailable in the current tool session;
+- provider revenue/orders remain unavailable;
+- X/social remains not instrumented for #319.
 
-At the #319 checkpoint:
-- Search Console is unavailable through the connected GSC Wizard because the subscription/trial does not permit the read;
-- PostHog/product analytics is unavailable in the current tool session;
-- verified provider revenue/orders are unavailable;
-- X/social is not instrumented for this decision.
+Unavailable sources must not be reported as zero or used to justify purchasing/enabling a provider by implication.
 
-None of those states may be reported as zero. Their absence also does not authorize purchasing a plan, enabling a provider, changing credentials, or creating new tracking by implication.
+## D-170 — use privacy-minimized Cloudflare Web Analytics before adding a new first-party analytics DB
+
+#322 completed without creating a new Supabase pageview/event table. Live dashboard audit proved:
+- Web Analytics site configured for `gachalens.com`;
+- automatic RUM injection;
+- mode `Enable, excluding visitor data in the EU`;
+- Path visibility for `/`, `/series`, `/series/group/...`.
+
+Cloudflare's current documented RUM behavior does not use browser storage such as cookies/localStorage/sessionStorage/IndexedDB for analytics and discards source IP at the nearest data center rather than storing it in core logs/databases.
+
+Do not broaden collection by removing the EU exclusion without a separate privacy decision.
+
+## D-171 — Production outbound-click demand must exclude Preview/noncanonical hosts
+
+#323 released a server-side canonical-host guard: only HTTPS `gachalens.com` can record `outbound_clicks`. Preview/localhost/noncanonical hosts return 204 before body parsing/DB insertion. Historical rows are preserved, not rewritten.
+
+This makes future click evidence cleaner but does not retroactively validate old rows.
+
+## D-172 — post-release business measurement starts at a clean epoch
+
+Use:
+
+**T0 = 2026-09-15 00:00 JST**
+
+for the fresh #319 measurement phase.
+
+Do not treat pre-T0 Web Analytics values or the old 34-click rolling window as clean post-product demand. The old click audit found 23/34 events in same-day same-page 3+ provider bursts, so those rows are not reliable as organic purchase intent.
+
+Align the same post-T0 window across Cloudflare Visits/Page views/Path and Production-only outbound clicks. Compute an intent/conversion-like rate only where the denominator is meaningful.
 
 ## Current ordered decision
 
-1. Keep #286 frozen Draft and obtain genuine independent Reviewer + Verifier.
-2. Keep #303 frozen Draft and obtain genuine independent release review/verification.
-3. When an independent gate passes, re-fetch `main`, check overlap/drift, rerun affected exact-head gates if needed, then apply complete Auto-Merge + Production Release policy.
-4. Release only through ordinary Git-triggered Cloudflare and run bounded public smoke.
-5. After the current product baseline is live, collect fresh first-party usage and continue #319.
-6. If fresh monetization demand wins, recompute/reconcile #264 -> #267 -> #269 under their separate independent-review, DB, provider and persistence gates.
-7. If demand remains weak, prefer demand-weighted market-quality/re-observation before broad Data Scale.
-8. Keep #119/#257/#260 HOLD unless fresh evidence changes the ranking.
-9. Finish #284 only from measured build behavior.
-10. Re-enable any scheduled lane only under separate authorization.
+1. Observe fresh post-T0 behavior on the live #303 baseline.
+2. Continue #319 from aligned current windows, not historical rolling residue.
+3. If meaningful demand overlaps affiliate-eligible inventory, recompute/reconcile the affiliate stack before execution.
+4. If demand exists but market evidence is shallow/stale on used pages, prefer demand-weighted market-quality/re-observation.
+5. Keep #119/#257/#260 broad Data Scale HOLD unless fresh evidence proves higher user/revenue ROI.
+6. Keep #284 separate and approval-bound; do not bundle analytics/build settings changes.
+7. Keep both scheduled write lanes disabled until separately authorized.
 
 This order is not blanket merge/Production/provider/workflow/Secret/billing approval.
