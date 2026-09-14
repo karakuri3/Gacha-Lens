@@ -2,7 +2,7 @@
 
 Updated: 2026-09-15 JST
 
-Infrastructure migration, Fair Use recovery, governance repair, parent-series edge-cache coverage and the Collector Editorial product release are complete. The current operating order is now: measure fresh post-release demand, then choose the next user-value/revenue experiment from #319.
+Infrastructure migration, Fair Use recovery, governance repair, parent-series edge-cache coverage and the Collector Editorial product release are complete. The current operating order is: preserve a clean post-release measurement window, measure real demand, then choose the next user-value/revenue experiment from #319.
 
 ## Completed release / safety train
 
@@ -30,11 +30,12 @@ Infrastructure migration, Fair Use recovery, governance repair, parent-series ed
 - [x] #303 merged as `8a090d116fda6234c53d327760c9ce1c933fdd6e`
 - [x] Cloudflare Production verified at 100% traffic on version `c2ede0e8` linked to #303 merge
 - [x] #322 measurement readiness completed and closed
+- [x] #324 synchronized the post-release canonical docs
 - [ ] re-enable either scheduled write lane only under a new lane-specific approval
 
 ## P1 business decision — #319
 
-Pre-release checkpoint already completed:
+Pre-release / measurement-readiness work completed:
 - [x] fresh 2026-09-14 SELECT-only Production scorecard
 - [x] current first-party outbound demand + affiliate overlap audit
 - [x] market breadth/depth/history/signals audit
@@ -43,19 +44,25 @@ Pre-release checkpoint already completed:
 - [x] #263/#266/#268 and #264/#267/#269 moved to HOLD
 - [x] #323 blocks future noncanonical/Preview click pollution
 - [x] Cloudflare Web Analytics verified active for `gachalens.com`
-- [x] Path data verified for `/`, `/series`, `/series/group/...`
-- [x] clean measurement epoch fixed at **2026-09-15 00:00 JST**
+- [x] Path data verified
+- [x] T0 `2026-09-15 00:00 JST` recorded as instrumentation-only seed
+- [x] T1 corrected to **2026-09-15 00:30 JST** after operator release verification contaminated Web Analytics between 00:00 and 00:30
+- [x] rolling 24h 17 Page views / 17 Visits identified as operator-dominated, not business demand
+- [x] initial post-T1 Production-only outbound-click seed: 0 events / 0 variants / 0 providers; not a demand verdict
+- [x] Production verification tabs closed after T1; routine #319 observation must not open Production content
 
 Fresh post-release work:
-- [ ] observe Cloudflare Visits / Page views from T0 onward
-- [ ] measure catalog/detail path mix over the same window
+- [ ] observe Cloudflare Visits / Page views from T1 onward without opening Production pages from the operator/assistant workflow
+- [ ] measure catalog/detail path mix over the same clean window
 - [ ] identify most-viewed detail paths only after sample size is useful
-- [ ] query Production-only outbound clicks over the same post-T0 window
+- [ ] query Production-only outbound clicks over the same post-T1 window
 - [ ] map clicked variants/providers against viewed detail paths where mapping is meaningful
 - [ ] recompute affiliate-eligible demand overlap from fresh data
+- [ ] do not estimate/subtract contaminated analytics if the exact T1 interval cannot be isolated safely
 - [ ] do not compute a conversion/intent rate from an invalid or tiny denominator
 - [ ] choose affiliate coverage only if current demand makes it a useful experiment
 - [ ] otherwise choose demand-weighted market-quality/re-observation on actually used pages/variants
+- [ ] if real demand is too sparse to choose either lane, prioritize qualified discovery/traffic rather than broad Data Scale by default
 - [ ] do not reactivate broad Data Scale from low catalog coverage alone
 
 Pre-release scorecard reference:
@@ -70,7 +77,7 @@ Pre-release scorecard reference:
 - exact affiliate-eligible prior clicks 0/34
 
 If affiliate execution later wins:
-- [ ] recompute #264 cohort from then-current data
+- [ ] recompute #264 cohort from then-current post-T1 data
 - [ ] reconcile #264 onto then-current `main`
 - [ ] reconcile/revalidate #267 provider-read binding
 - [ ] reconcile/revalidate #269 durable authorization ledger
@@ -92,13 +99,16 @@ If affiliate execution later wins:
 
 - [x] #119 metadata corrected from stale P0 to HOLD
 - [x] #119 linked to #319
-- [ ] keep broad Data Scale HOLD unless fresh post-release evidence shows cross-provider depth has higher user/revenue ROI
+- [x] #257 and #260 titles explicitly marked `[HOLD]`
+- [ ] keep broad Data Scale HOLD unless fresh post-T1 evidence shows cross-provider depth has higher user/revenue ROI
 - [ ] prefer demand-weighted data quality before broad provider expansion when demand is sparse
 - [ ] if reprioritized, recompute all data-dependent inputs and reconcile/revalidate from then-current `main`
 
 ## Backlog hygiene
 
-- [ ] review stale Draft #232 in a separate bounded cleanup task; do not delete history or silently discard useful decisions
+- [x] #232 reviewed: stale Draft closed unmerged
+- [x] useful #232 technology-intelligence concept preserved in backlog #326
+- [ ] revisit #326 only after #319 or when a concrete development bottleneck makes it relevant; never merge/rebase #232 as-is
 - [x] synchronize canonical docs after #286/#303/#322/#323 state change
 - [ ] keep future canonical-doc updates consolidated so live GitHub state and docs do not drift again
 
