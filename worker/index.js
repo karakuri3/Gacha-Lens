@@ -83,13 +83,17 @@ function isDiscoveryDocumentPath(pathname) {
   return /^\/(?:categories|brands|franchises)\/[^/]+$/.test(pathname);
 }
 
+function isSeriesDetailCachePath(pathname) {
+  return /^\/series\/(?:[^/]+|group\/[^/]+)$/.test(pathname);
+}
+
 function getEdgeCachePolicy(request) {
   if (!isPublicCacheCandidate(request)) return null;
 
   const url = new URL(request.url);
   const accept = (request.headers.get("accept") ?? "").toLowerCase();
 
-  if (/^\/series\/[^/]+$/.test(url.pathname) && accept.includes("text/html")) {
+  if (isSeriesDetailCachePath(url.pathname) && accept.includes("text/html")) {
     if (url.searchParams.size === 0) return EDGE_CACHE_POLICIES.seriesDetail;
 
     // Allow one cache-busting proof key only on isolated workers.dev previews.
