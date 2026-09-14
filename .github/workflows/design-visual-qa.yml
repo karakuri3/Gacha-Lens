@@ -102,10 +102,16 @@ jobs:
             });
           }
 
-          async function firstProductHref(page, route, screenName, viewportName) {
+          async function firstProductHref(page, route, screenName, viewportName, kind = 'any') {
             await open(page, screenName, route, viewportName);
             const href = await page.locator('a.product-card').first().getAttribute('href');
             if (!href || !href.startsWith('/series/')) throw new Error(`${screenName} ${viewportName}: no product detail href`);
+            if (kind === 'series' && !href.startsWith('/series/group/')) {
+              throw new Error(`${screenName} ${viewportName}: expected series detail href, got ${href}`);
+            }
+            if (kind === 'variant' && href.startsWith('/series/group/')) {
+              throw new Error(`${screenName} ${viewportName}: expected variant detail href, got ${href}`);
+            }
             return href;
           }
 
@@ -117,18 +123,46 @@ jobs:
 
                 if (process.env.VISUAL_QA_POPULATED === '1') {
                   await capture(page, 'home-populated', '/', viewportName);
-                  await capture(page, 'ranking-populated', '/ranking', viewportName);
-                  const releasedHref = await firstProductHref(page, '/series?release=released', 'released-catalog', viewportName);
-                  await capture(page, 'detail-populated', releasedHref, viewportName);
+                  await capture(page, 'ranking-fixed-clock', '/ranking', viewportName);
+                  const releasedSeriesHref = await firstProductHref(
+                    page,
+                    '/series?release=released',
+                    'released-series-catalog',
+                    viewportName,
+                    'series',
+                  );
+                  await capture(page, 'series-detail-populated', releasedSeriesHref, viewportName);
+                  const releasedVariantHref = await firstProductHref(
+                    page,
+                    '/series?scope=variant&release=released',
+                    'released-variant-catalog',
+                    viewportName,
+                    'variant',
+                  );
+                  await capture(page, 'variant-detail-populated', releasedVariantHref, viewportName);
                 } else {
                   await capture(page, 'home-empty', '/', viewportName);
-                  const detailHref = await firstProductHref(page, '/series', 'catalog', viewportName);
+                  const seriesDetailHref = await firstProductHref(page, '/series', 'series-catalog', viewportName, 'series');
                   await page.screenshot({ path: path.join('visual-qa', `${prefix}catalog--${viewportName}.png`), fullPage: true, style: screenshotStyle });
-                  await capture(page, 'detail', detailHref, viewportName);
+                  await capture(page, 'series-detail', seriesDetailHref, viewportName);
+                  const variantDetailHref = await firstProductHref(
+                    page,
+                    '/series?scope=variant',
+                    'variant-catalog',
+                    viewportName,
+                    'variant',
+                  );
+                  await capture(page, 'variant-detail', variantDetailHref, viewportName);
                   await capture(page, 'ranking-empty', '/ranking', viewportName);
-                  const upcomingDetailHref = await firstProductHref(page, '/series?release=upcoming', 'upcoming', viewportName);
+                  const upcomingDetailHref = await firstProductHref(
+                    page,
+                    '/series?release=upcoming',
+                    'upcoming',
+                    viewportName,
+                    'series',
+                  );
                   await page.screenshot({ path: path.join('visual-qa', `${prefix}upcoming--${viewportName}.png`), fullPage: true, style: screenshotStyle });
-                  await capture(page, 'upcoming-detail', upcomingDetailHref, viewportName);
+                  await capture(page, 'upcoming-series-detail', upcomingDetailHref, viewportName);
                 }
 
                 await page.close();
