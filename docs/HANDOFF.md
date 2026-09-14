@@ -1,6 +1,6 @@
 # Gacha Lens Canonical Handoff
 
-Updated: 2026-09-14 JST — product/reliability gates and fresh business scorecard synchronized
+Updated: 2026-09-15 JST — reliability/product releases live; fresh demand measurement started
 
 This file is the active-state handoff. Historical detail remains in Git history and `docs/history/`.
 
@@ -9,172 +9,148 @@ This file is the active-state handoff. Historical detail remains in Git history 
 If a new thread receives only **「Gacha Lens続けて」**:
 
 1. Read `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `AGENTS.md`, `docs/AGENT_OS.md`, `docs/PRODUCTION_RELEASE_POLICY.md`, and `docs/AUTO_MERGE_POLICY.md`.
-2. **Always re-fetch current `main`** before using an exact SHA; canonical docs intentionally do not claim that a historical SHA remains the live branch head after later merges.
-3. Re-fetch active Issues/PRs, current Supabase usage and current Cloudflare Production source before mutating anything.
-4. Resume existing active Drafts before creating duplicate implementation work.
-5. Do not restart completed migration/recovery/governance/security/category/rerelease lanes.
+2. **Always re-fetch current `main`** before using an exact SHA.
+3. Re-fetch active Issues/PRs, current Supabase usage, Cloudflare Production source, and current Web Analytics state before mutating anything.
+4. Do not recreate completed #286/#303/#322/#323 work.
+5. Treat #319 as the current business decision gate.
 6. Keep scheduled write lanes disabled unless separately and explicitly authorized.
-7. Treat #319 as the current business decision gate; do not revive dated affiliate/Data Scale priorities from old snapshots.
+7. Keep affiliate/provider Draft stack and broad Data Scale HOLD until fresh post-release evidence reactivates a lane.
 
-## Production / main baseline
+## Production baseline
 
 - repo: `karakuri3/Gacha-Lens`
-- **live `main`: fetch at resume time; do not infer it from this file**
-- #320 canonical synchronization merged at `d89c33ac715490f6923a442c3593e4164f8dd396`
-- last runtime/application baseline immediately before #320: `3b215a9c777431cbf049ec4966b83f474f146953`; #320 itself is documentation-only
 - URL: `https://gachalens.com`
 - runtime/DNS: Cloudflare
-- Vercel: registrar + non-live rollback only; routine Git builds are non-authoritative
+- Vercel: registrar/non-live rollback only; routine Vercel build status is non-authoritative
 - Supabase Production: `vxbrnvfhmzcxehuuzzum` (`gacha-lens-tokyo`, ap-northeast-1)
 - old `ihcudkfspzuixsqsvoku` is inactive
+- live `main`: fetch at resume time
+- verified release checkpoint at this handoff: `8a090d116fda6234c53d327760c9ce1c933fdd6e`
+- Cloudflare Production at this handoff: version `c2ede0e8`, 100% traffic, linked to `8a090d...`
 
 ## Completed release-train work
 
-Do not re-open these as prerequisites merely because older PR bodies mention them as future work:
+Do not reopen these merely because older PR bodies describe them as pending:
 
-- #219/#238: recovery/freeze closed after measured provider recovery
-- #281: public-read outage resolved
-- #282: emergency containment closed without merge
-- #280: scheduled-write safety complete; lanes remain disabled
-- #265/#262: Cloudflare standing release governance merged/closed
-- #258: Cloudflare runtime/cache proof pinning merged
-- #273: fresh-database `forecast_snapshots` migration baseline repair merged
-- #291/#287: framework security + deterministic vinext validation merged with genuine independent Reviewer/Verifier evidence
-- #253: Japanese stored category routing merged
-- #261: rerelease canonical year/month repair merged; Official auto still disabled
-- #307: GitHub Actions stale-run cancellation merged for bounded CI cost control
-- #309: canonical state synchronization merged
-- #320: #319/product/reliability canonical state synchronization merged; docs only
+- #219/#238 recovery/freeze closed
+- #281 public-read outage resolved
+- #282 emergency containment closed without merge
+- #280 scheduled-write safety complete; lanes remain disabled
+- #265/#262 Cloudflare standing release governance complete
+- #258 runtime/cache proof source binding normalized
+- #273 fresh-database forecast migration baseline repaired
+- #291/#287 framework security + deterministic vinext validation merged
+- #253 Japanese stored category routing repaired
+- #261 rerelease canonical year/month repair merged; Official auto still disabled
+- #307 stale GitHub Actions cancellation merged
+- #309/#320/#321 canonical docs sync train merged
+- #323 Production-only outbound-click hardening merged/released
+- #285/#286 parent-series edge cache merged/released and #285 closed
+- #303 Collector Editorial merged/released
+- #322 privacy-minimized demand measurement closed completed
 
-## P1 reliability candidate — #285 / #286
+## Released reliability — #286
 
-PR #286 is technically green but independently gated.
+Purpose: include canonical `/series/group/:slug` in the existing bounded 30-minute `seriesDetail` Cloudflare edge cache without broad `/series/**` matching.
 
-Purpose: include canonical `/series/group/:slug` pages in the existing bounded 30-minute `seriesDetail` Cloudflare edge-cache class while preserving all current public-cache exclusions.
+Final evidence:
+- final PR head `e379d70f55b1f2ce03501934e69b4deede984a54`
+- merge `b9b8165c73e6ee9290ebadf9f6bd7802c545f7f6`
+- independent Reviewer + Verifier PASS
+- exact-head Code Quality/runtime/cache proofs PASS
+- dedicated parent-series Preview proof: cold `MISS` -> warm `HIT` -> `HIT`, byte-identical HTML, `series-detail-1800-v1`, no `Set-Cookie`
+- #303 changed no Worker source, so #286 Worker behavior remains part of current Production release
 
-Frozen candidate checkpoint:
-- PR: #286
-- branch: `fix/parent-series-edge-cache-285`
-- validated base checkpoint: `3b215a9c777431cbf049ec4966b83f474f146953`
-- frozen head: `38aae46fa759b1cd470d6220640a905440f720ab`
-- Draft: yes
-- mergeable: yes at that checkpoint
-- effective diff: exactly 4 files
+Do not claim measured Production egress savings without direct measurement.
 
-Fresh exact-head checks:
-- PR Code Quality `34817627624`: SUCCESS
-- Cloudflare runtime smoke `34817627620`: SUCCESS
-- Cloudflare cache proof `34817627621`: SUCCESS
+## Released product baseline — #303 Collector Editorial
 
-Dedicated validation-only #308 proved the exact parent-series route: cold `MISS` -> `HIT` -> `HIT`, byte-identical 64,736-byte HTML, `series-detail-1800-v1`, no `Set-Cookie`, healthy public route smoke, unauthenticated boundaries and audited security headers. #308 closed unmerged.
+#303 is no longer Draft/pending. It is the live product baseline.
 
-**Stop Condition:** genuine independent Reviewer and Verifier are still pending. Do not substitute Builder/self-review. Do not mark ready or merge until that gate is genuinely satisfied and current head/base are rechecked.
+Final evidence:
+- final PR head `773040deb53020b9da317a7bbe2fd4a492bc2b79`
+- merge `8a090d116fda6234c53d327760c9ce1c933fdd6e`
+- independent Reviewer + Verifier PASS
+- required natural test/lint, compatibility, screenshot, exact-runtime, isolated-cache-proof and Workers build gates PASS
+- real Japanese-data visual validation completed at 360/390/desktop through the validation train
+- Cloudflare Production directly verified at 100% traffic on version `c2ede0e8`, linked to the merge commit
 
-Since #320 advanced `main` with docs-only canonical synchronization after the frozen validation checkpoint, do not silently call the old ahead/behind count current. Keep the candidate frozen for independent review; before merge, fetch then-current `main`, inspect the docs-only/intervening drift and reconcile/revalidate as required by policy.
+The next step is not more redesign churn by default. Measure how users behave on this baseline.
 
-After independent PASS:
-1. fetch current `main` and inspect intervening overlap;
-2. rerun/reconfirm required exact-head checks if head/base moved materially;
-3. apply Auto-Merge and Standing Production Release gates in full;
-4. squash merge only if every gate remains green;
-5. allow only the normal Git-triggered Cloudflare application release;
-6. observe release and run bounded public smoke;
-7. close #285 when released behavior is verified.
+## Measurement — #322 / #323
 
-## P1 product candidate — #303 Collector Editorial
+#323 ensures `outbound_clicks` accepts demand events only from canonical HTTPS `gachalens.com`; Preview/noncanonical hosts return 204 before DB insert. Historical click rows were preserved.
 
-PR #303 is the substantial product-specific redesign. It replaces generic dashboard/SaaS presentation with object-first collector context, real imagery, compact evidence and denser series/product comparison while intentionally preserving market/data semantics.
+Cloudflare Web Analytics was already active and was audited live rather than re-enabled redundantly:
+- configured hostname `gachalens.com`
+- automatic RUM injection
+- mode **Enable, excluding visitor data in the EU**
+- Path breakdown visible for `/`, `/series`, `/series/group/...`
+- no app-side analytics DB/table was added
 
-Frozen candidate checkpoint:
-- PR: #303
-- branch: `design/product-specific-ui-contract`
-- validated main checkpoint: `3b215a9c777431cbf049ec4966b83f474f146953`
-- frozen head: `37c8523acd44dd319dd06e79d3cc5f8e82edf1c8`
-- ahead 38 / behind 0 at that checkpoint
-- Draft: yes
-- mergeable: yes at that checkpoint
+Cloudflare documentation states its RUM beacon does not use browser storage such as cookies/localStorage/sessionStorage/IndexedDB for analytics and does not store source IP in core logs/databases.
 
-The branch was reconciled non-destructively with the validated main checkpoint; no force/history rewrite was used.
+Fresh accounting boundary:
 
-Current frozen-head gates are green:
-- PR Code Quality: SUCCESS
-- Cloudflare vinext: SUCCESS
-- Cloudflare runtime smoke: SUCCESS
-- Cloudflare cache proof: SUCCESS
-- Design Visual QA: SUCCESS
+**T0 = 2026-09-15 00:00 JST**
 
-Visual/data proof:
-- #316 integrated a production-faithful deterministic visual harness
-- #317/#318 provided real Japanese-data exact-Preview validation
-- final #318 run `34823381570`: SUCCESS
-- 21 / 21 bounded public reads returned HTTP 200 on attempt 1; 5xx retries 0
-- 360x800 / 390x844 / 1440x1000 reviewed
-- home, catalog/search, parent-series detail, variant detail and ranking reviewed
-- latest strengthened visual artifact includes 33 screenshots with no blocking layout issue or Next development chrome
-- validation-only #317/#318 closed without merge
+Anything before T0 is historical/verification evidence, not clean post-release business demand.
 
-#303 briefly became Ready despite no submitted independent review. Review/thread lists were empty, so it was returned to **Draft**.
+## Current business gate — #319
 
-**Stop Condition:** genuine independent review/verification required for this substantial release. Same-assistant self-review is not independent evidence. #320 subsequently advanced `main` with docs-only changes; keep #303 frozen rather than invalidating its review candidate, then re-fetch/reconcile current main after independent PASS and rerun affected exact-head gates if required.
-
-## P1 business decision — #319 fresh scorecard
-
-Issue #319 is the current business decision gate. It supersedes using the 2026-09-06 affiliate cohort or 2026-09-01 Data Scale baseline as current truth.
-
-Fresh SELECT-only Production evidence on 2026-09-14:
+The 2026-09-14 SELECT-only scorecard remains the reference for the pre-release state:
 - 10,241 series / 23,808 variants
-- 176 market listings; 175 safe active single listings
-- 163 variants fresh <30d; fresh coverage **0.6846%**
-- fresh depth: 161 variants ×1 listing, 2 variants ×2, none ×3+
-- 198 observations; 22 listings re-observed; 12.5% re-observation rate
-- last 7d: 0 new listings / 0 new observations
-- review-safe stock/restock: 0 / 0
-- outbound clicks: 34 / 30d, **0 / 7d**, 14 distinct variants / 30d
-- verified affiliate provenance: 10 listings, all Rakuten
-- affiliate-eligible exact `(variant_id, provider)` clicks: **0 / 34 = 0%**
+- 176 listings
+- 163 variants fresh <30d; 0.6846% fresh coverage
+- 161/163 fresh covered variants have only one listing
+- 198 observations; 22 re-observed listings; 12.5% re-observation rate
+- no new listings/observations in the previous 7d
+- stock/restock review-safe signals 0/0
+- 34 outbound clicks / 30d, but 23/34 were same-day same-page 3+ provider bursts and therefore not verified organic demand
+- 10 verified affiliate-provenance listings, all Rakuten
+- exact affiliate-eligible `(variant_id, provider)` clicks 0/34
 
-Truthfulness:
-- Search Console is `unavailable` because the connected GSC Wizard subscription/trial does not permit the read; do not convert unavailable to zero or buy a plan by implication
-- PostHog/product analytics is `unavailable` in the current tool session
-- affiliate-provider revenue/orders are `unavailable`
-- X/social is `not_instrumented` for this decision and no provider action is authorized
+Truthfulness states:
+- Search Console: unavailable through current GSC Wizard access
+- PostHog: unavailable in current tool session
+- provider revenue/orders: unavailable
+- X/social: not instrumented for this decision
 
-### Current business rule
+### What to do next
 
-Do **not** advance affiliate provider spend or broad Data Scale solely from old evidence.
+Measure the released #303 baseline using aligned post-T0 windows:
+1. Cloudflare Visits + Page views
+2. route/path mix, especially `/series` and `/series/...`
+3. most-viewed detail paths
+4. Production-only outbound clicks over the same interval
+5. clicked variants/providers
+6. affiliate-eligible demand overlap
+7. only compute an intent rate where the denominator is meaningful
 
-First release/establish the current product-quality baseline through normal governance, then observe fresh post-release first-party usage. If current demand shows useful Rakuten/Yahoo monetization overlap, recompute/reconcile the affiliate stack. If demand remains sparse, prefer a **demand-weighted market-quality/re-observation experiment** on actually used pages/variants before broad provider expansion.
+Then choose:
+- **affiliate coverage** if fresh demand overlaps monetizable providers/items, or
+- **demand-weighted market-quality/re-observation** if users are looking at pages whose market evidence is shallow/stale.
 
-No arbitrary demand threshold is precommitted; decide from the actual post-release distribution/sample size.
+Do not reactivate broad provider/Data Scale work from low coverage alone.
 
-## Affiliate/provider Draft stack — HOLD
+## HOLD lanes
 
-Issues #263/#266/#268 and Drafts #264 -> #267 -> #269 are explicitly HOLD behind #319.
+### Affiliate/provider stack
+#263/#266/#268 and Drafts #264/#267/#269 remain HOLD behind #319. If revived, recompute cohorts from fresh post-T0 data, reconcile onto current main, revalidate migration/config/history assumptions, and keep provider execution/persistence separately approval-bound.
 
-Their implementation and safety contracts remain useful assets, but their old cohorts/exact-main bindings are not executable current truth. Before revival:
-- recompute demand from fresh Production evidence;
-- reconcile each surviving layer onto then-current `main`;
-- rerun exact-head tests/proofs;
-- independently review the durable ledger where required;
-- recheck Production migration/history state before any migration application;
-- keep provider execution and affiliate-provenance persistence behind separate explicit approvals.
+### Broad Data Scale
+#119/#257/#260 remain HOLD. Prefer demand-weighted data quality unless fresh evidence proves broader expansion has higher user/revenue value.
 
-## Broad Data Scale — HOLD
+## Cost hygiene
 
-#119/#257/#260 remain HOLD behind #319. Market coverage is low, but recent demand and collection freshness are also weak. Low row counts alone are not permission for broad provider expansion. Prefer work tied to measured user value/revenue opportunity.
-
-## Reliability / cost backlog
-
-- #284 remains open. Two exact Cloudflare proof-workflow paths already have bounded Build Watch exclusion, but broader docs-only-build completion requires direct proof.
-- stale Drafts such as #232 should not be deleted or rewritten merely for cleanliness; reconcile/close only through a bounded cleanup task.
+#284 remains open. Docs/workflow-only Cloudflare builds have been observed, and a bounded Build Watch exclusion plan exists, but changing Cloudflare build settings remains a separate approval-bound provider-settings action.
 
 ## Scheduled-write safety remains locked
 
-Owner-approved gates remain:
 - `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`
 - `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
 
-No recovery, code merge or UI release implicitly re-enables them. Re-enable is a separate lane-specific authorization.
+No release or provider recovery implicitly re-enables either lane.
 
 ## Hard boundaries
 
