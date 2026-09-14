@@ -1,0 +1,131 @@
+name: Validate current parent-series cache #286
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate-parent-series-cache-current-286.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  exact-preview-parent-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DEPLOYED_SHA: d70d59a61b6848112d6fc729ee25da793727d3ea
+      PREVIEW_URL: https://df527c4d-gacha-lens.senpingxingzuo.workers.dev
+      PROD_URL: https://gachalens.com
+    steps:
+      - name: Checkout validation head
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Prove runtime sources equal #286 implementation head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${DEPLOYED_SHA}^{commit}"
+          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib worker jsconfig.json next.config.mjs package.json package-lock.json)"
+          if [[ -n "$changed" ]]; then
+            echo 'Runtime source drift exists after the exact #286 Preview:' >&2
+            echo "$changed" >&2
+            exit 1
+          fi
+          echo "Runtime source tree is byte-equivalent to ${DEPLOYED_SHA}." >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact Preview: ${PREVIEW_URL}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prove parent-series cold to warm cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          path="/series/group/tarts-y901096?cacheproof=parent-series-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          first_hash=''
+          declare -a statuses
+
+          for n in 1 2 3; do
+            body="$tmp/body-${n}"
+            headers="$tmp/headers-${n}"
+            metrics="$(curl --silent --show-error --max-time 90 -H 'Accept: text/html' --dump-header "$headers" --output "$body" --write-out '%{http_code} %{time_total} %{size_download}' "${PREVIEW_URL}${path}")"
+            code="${metrics%% *}"
+            [[ "$code" == '200' ]] || { echo "parent request ${n} returned ${code}" >&2; exit 1; }
+            grep -Fq 'ディズニーキャラクター Pretty Faceポーチ' "$body" || { echo "parent request ${n} missing expected real-data marker" >&2; exit 1; }
+            ! grep -Fq '商品情報を取得できません' "$body" || { echo "parent request ${n} rendered branded data-source error" >&2; exit 1; }
+
+            hash="$(sha256sum "$body" | awk '{print $1}')"
+            if [[ -z "$first_hash" ]]; then first_hash="$hash"; else [[ "$hash" == "$first_hash" ]] || { echo "parent body drift on request ${n}" >&2; exit 1; }; fi
+
+            status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$headers")"
+            age="$(awk 'BEGIN{IGNORECASE=1} /^age:/ {gsub("\r", ""); print $2; exit}' "$headers")"
+            policy="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-edge-cache-policy:/ {gsub("\r", ""); print $2; exit}' "$headers")"
+            cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cache-control:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+            set_cookie='none'; if grep -qi '^set-cookie:' "$headers"; then set_cookie='present'; fi
+            statuses[$n]="${status:-none}"
+
+            echo "Parent request ${n}: ${metrics} | sha256=${hash} | cf-cache-status=${status:-none} | age=${age:-none} | edge-policy=${policy:-none} | cache-control=${cache_control:-none} | set-cookie=${set_cookie}" | tee -a "$GITHUB_STEP_SUMMARY"
+            [[ "$policy" == 'series-detail-1800-v1' ]] || { echo "request ${n} missing series-detail-1800-v1" >&2; exit 1; }
+            [[ "$set_cookie" == 'none' ]] || { echo "request ${n} unexpectedly set cookie" >&2; exit 1; }
+            sleep 2
+          done
+
+          [[ "${statuses[1]}" == 'MISS' ]] || { echo "cold parent request was ${statuses[1]}, expected MISS" >&2; exit 1; }
+          [[ "${statuses[2]}" == 'HIT' ]] || { echo "warm parent request 2 was ${statuses[2]}, expected HIT" >&2; exit 1; }
+          [[ "${statuses[3]}" == 'HIT' ]] || { echo "warm parent request 3 was ${statuses[3]}, expected HIT" >&2; exit 1; }
+          echo 'PASS: parent-series cold MISS -> byte-identical HIT -> HIT.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke exact Preview runtime and auth boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          get200() {
+            local name="$1" path="$2" marker="${3:-}" body="$tmp/${name}.body" code rc attempt
+            for attempt in 1 2 3; do
+              rc=0
+              code="$(curl --silent --show-error --location --max-time 90 -H 'Accept: text/html' --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}${path}")" || rc=$?
+              code="${code:-000}"
+              if [[ "$rc" == 0 && "$code" == 200 ]]; then
+                if [[ -n "$marker" ]]; then grep -Fq "$marker" "$body" || { echo "$name missing marker $marker" >&2; exit 1; }; fi
+                ! grep -Fq '商品情報を取得できません' "$body" || { echo "$name rendered branded data-source error" >&2; exit 1; }
+                echo "$name HTTP 200" >> "$GITHUB_STEP_SUMMARY"
+                return 0
+              fi
+              if [[ "$attempt" -lt 3 && "$code" =~ ^(000|429|500|502|503|504)$ ]]; then sleep $((attempt * 2)); continue; fi
+              echo "$name failed rc=$rc HTTP $code" >&2; exit 1
+            done
+          }
+
+          get200 home '/' 'Gacha Lens'
+          get200 series '/series' 'ガチャ一覧'
+          get200 parent '/series/group/tarts-y901096' 'ディズニーキャラクター Pretty Faceポーチ'
+          get200 product '/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC' 'ディズニー マリー'
+          get200 categories '/categories' 'カテゴリから探す'
+
+          review_code="$(curl --silent --show-error --max-time 60 --output /dev/null --write-out '%{http_code}' -X POST -H "Origin: ${PREVIEW_URL}" -H 'Content-Type: application/x-www-form-urlencoded' --data 'decision=approved' "${PREVIEW_URL}/api/review/community-reports/validation-nonexistent")"
+          ingest_code="$(curl --silent --show-error --max-time 60 --output /dev/null --write-out '%{http_code}' -X POST "${PREVIEW_URL}/api/ingest/all")"
+          login_code="$(curl --silent --show-error --max-time 60 --output /dev/null --write-out '%{http_code}' -X POST -H 'Content-Type: application/x-www-form-urlencoded' --data 'token=validation-invalid-token' "${PREVIEW_URL}/review/login")"
+          [[ "$review_code" == '401' ]] || { echo "review mutation returned ${review_code}, expected 401" >&2; exit 1; }
+          [[ "$ingest_code" == '401' ]] || { echo "ingest returned ${ingest_code}, expected 401" >&2; exit 1; }
+          [[ "$login_code" == '303' ]] || { echo "invalid login returned ${login_code}, expected 303" >&2; exit 1; }
+          echo 'Auth boundaries PASS: review=401 ingest=401 invalid-login=303.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compare security headers with Production
+        shell: bash
+        run: |
+          set -euo pipefail
+          preview="$(mktemp)"; production="$(mktemp)"; trap 'rm -f "$preview" "$production"' EXIT
+          curl --silent --show-error --max-time 60 --output /dev/null --dump-header "$preview" "${PREVIEW_URL}/"
+          curl --silent --show-error --max-time 60 --output /dev/null --dump-header "$production" "${PROD_URL}/"
+          missing=0
+          for header in strict-transport-security x-content-type-options x-frame-options referrer-policy content-security-policy permissions-policy; do
+            if grep -qi "^${header}:" "$production"; then
+              grep -qi "^${header}:" "$preview" || { echo "Preview missing Production header ${header}" >&2; missing=1; }
+            fi
+          done
+          [[ "$missing" == 0 ]]
+          echo 'Security-header presence matches or exceeds current Production for audited headers.' >> "$GITHUB_STEP_SUMMARY"
