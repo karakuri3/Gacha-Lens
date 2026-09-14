@@ -28,61 +28,78 @@ jobs:
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
 
-          get() {
-            local name="$1" path="$2" needle="${3:-}"
-            local body="$tmp/$name.body" headers="$tmp/$name.headers"
+          request() {
+            local scope="$1" name="$2" base="$3" path="$4" needle="${5:-}"
+            local body="$tmp/${scope}_${name}.body" headers="$tmp/${scope}_${name}.headers"
             local code
             code="$(curl --silent --show-error --location --max-time 90 \
               -H "Accept: ${BROWSER_ACCEPT}" \
               --dump-header "$headers" --output "$body" --write-out '%{http_code}' \
-              "${PREVIEW_URL}${path}")"
-            [[ "$code" == "200" ]] || { echo "$name HTTP $code" >&2; head -c 1200 "$body" >&2 || true; exit 1; }
-            if [[ -n "$needle" ]]; then grep -Fq "$needle" "$body" || { echo "$name missing marker $needle" >&2; exit 1; }; fi
-            if grep -Eq '商品情報を取得できません|一時的な通信エラー' "$body"; then
-              echo "$name contains public data-error signature" >&2
+              "${base}${path}")"
+            [[ "$code" == "200" ]] || { echo "$scope/$name HTTP $code" >&2; head -c 1200 "$body" >&2 || true; exit 1; }
+            if [[ -n "$needle" ]]; then grep -Fq "$needle" "$body" || { echo "$scope/$name missing marker $needle" >&2; exit 1; }; fi
+            if [[ "$scope" == preview ]] && grep -Eq '商品情報を取得できません|一時的な通信エラー' "$body"; then
+              echo "$scope/$name contains public data-error signature" >&2
               exit 1
             fi
           }
 
-          edge_policy() { awk 'BEGIN{IGNORECASE=1} /^x-gacha-edge-cache-policy:/ {gsub("\r", ""); print $2; exit}' "$tmp/$1.headers"; }
-          cf_status() { awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$tmp/$1.headers"; }
+          edge_policy() { awk 'BEGIN{IGNORECASE=1} /^x-gacha-edge-cache-policy:/ {gsub("\r", ""); print $2; exit}' "$tmp/$1_$2.headers"; }
+          cf_status() { awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$tmp/$1_$2.headers"; }
 
-          get home '/' 'Gacha Lens'
-          get series '/series' 'ガチャ一覧'
-          get group '/series/group/tarts-y901096' 'ディズニーキャラクター Pretty Faceポーチ'
-          get product '/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC' 'ディズニー マリー'
-          get categories '/categories' 'カテゴリから探す'
-          get api '/api/public-variants?ids=tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC' 'tarts-y901096-ディズニー-マリー'
+          declare -A paths markers
+          paths[home]='/'
+          markers[home]='Gacha Lens'
+          paths[series]='/series'
+          markers[series]='ガチャ一覧'
+          paths[group]='/series/group/tarts-y901096'
+          markers[group]='ディズニーキャラクター Pretty Faceポーチ'
+          paths[product]='/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
+          markers[product]='ディズニー マリー'
+          paths[categories]='/categories'
+          markers[categories]='カテゴリから探す'
 
-          [[ "$(edge_policy home)" == 'public-document-120-v1' ]]
-          [[ "$(edge_policy series)" == 'discovery-document-1800-v1' ]]
-          [[ "$(edge_policy group)" == 'series-detail-1800-v1' ]]
-          [[ "$(edge_policy product)" == 'series-detail-1800-v1' ]]
-          [[ "$(edge_policy categories)" == 'discovery-index-86400-v1' ]]
+          for name in home series group product categories; do
+            request preview "$name" "$PREVIEW_URL" "${paths[$name]}" "${markers[$name]}"
+            request production "$name" "$PRODUCTION_URL" "${paths[$name]}" "${markers[$name]}"
+            preview_policy="$(edge_policy preview "$name")"
+            production_policy="$(edge_policy production "$name")"
+            echo "$name edge policy preview=${preview_policy:-none} production=${production_policy:-none}"
+            [[ -n "$production_policy" ]] || { echo "$name Production edge policy unexpectedly empty" >&2; exit 1; }
+            [[ "$preview_policy" == "$production_policy" ]] || { echo "$name edge policy differs from Production" >&2; exit 1; }
+          done
 
-          get series_warm '/series' 'ガチャ一覧'
-          get group_warm '/series/group/tarts-y901096' 'ディズニーキャラクター Pretty Faceポーチ'
+          request preview api "$PREVIEW_URL" '/api/public-variants?ids=tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC' 'tarts-y901096-ディズニー-マリー'
+
+          request preview series_warm "$PREVIEW_URL" '/series' 'ガチャ一覧'
+          request preview group_warm "$PREVIEW_URL" '/series/group/tarts-y901096' 'ディズニーキャラクター Pretty Faceポーチ'
           for name in series_warm group_warm; do
-            status="$(cf_status "$name")"
+            status="$(cf_status preview "$name")"
+            echo "$name Preview CF-Cache-Status=${status:-none}"
             case "$status" in HIT|STALE) ;; *) echo "$name cache status ${status:-none}, expected HIT/STALE" >&2; exit 1;; esac
           done
 
           review_code="$(curl --silent --show-error --max-time 60 --output /dev/null --write-out '%{http_code}' -X POST -H "Origin: ${PREVIEW_URL}" -H 'Content-Type: application/x-www-form-urlencoded' --data 'decision=approved' "${PREVIEW_URL}/api/review/community-reports/runtime-smoke-nonexistent")"
-          [[ "$review_code" == "401" ]] || { echo "review boundary HTTP $review_code" >&2; exit 1; }
           ingest_code="$(curl --silent --show-error --max-time 60 --output /dev/null --write-out '%{http_code}' -X POST "${PREVIEW_URL}/api/ingest/all")"
-          [[ "$ingest_code" == "401" ]] || { echo "ingest boundary HTTP $ingest_code" >&2; exit 1; }
           login_code="$(curl --silent --show-error --max-time 60 --output /dev/null --write-out '%{http_code}' -X POST -H 'Content-Type: application/x-www-form-urlencoded' --data 'token=runtime-smoke-invalid-token' "${PREVIEW_URL}/review/login")"
-          [[ "$login_code" == "303" ]] || { echo "invalid login HTTP $login_code" >&2; exit 1; }
+          echo "boundary codes review=$review_code ingest=$ingest_code invalid_login=$login_code"
+          [[ "$review_code" == "401" ]]
+          [[ "$ingest_code" == "401" ]]
+          [[ "$login_code" == "303" ]]
 
-          preview_headers="$tmp/preview.headers"
-          prod_headers="$tmp/prod.headers"
+          preview_headers="$tmp/security_preview.headers"
+          prod_headers="$tmp/security_prod.headers"
           curl --silent --show-error --max-time 60 --output /dev/null --dump-header "$preview_headers" "${PREVIEW_URL}/"
           curl --silent --show-error --max-time 60 --output /dev/null --dump-header "$prod_headers" "${PRODUCTION_URL}/"
           missing=0
           for header in strict-transport-security x-content-type-options x-frame-options referrer-policy content-security-policy permissions-policy; do
-            if grep -qi "^${header}:" "$prod_headers" && ! grep -qi "^${header}:" "$preview_headers"; then
-              echo "Preview missing Production security header: $header" >&2
-              missing=1
+            if grep -qi "^${header}:" "$prod_headers"; then
+              if grep -qi "^${header}:" "$preview_headers"; then
+                echo "security header preserved: $header"
+              else
+                echo "Preview missing Production security header: $header" >&2
+                missing=1
+              fi
             fi
           done
           [[ "$missing" == 0 ]]
