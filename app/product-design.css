@@ -60,7 +60,8 @@
 .dashboard-table__row > b,
 .dashboard-mini-row__value b,
 .dashboard-counts strong,
-.product-evidence dd {
+.product-evidence dd,
+.detail-evidence-grid .metric__value {
   font-variant-numeric: tabular-nums lining-nums;
 }
 
@@ -238,6 +239,77 @@
   margin-top: 1px;
 }
 
+/* Variant detail is a collector record, not a dashboard inside a card. */
+.detail-hero {
+  border: 0 !important;
+  border-top: 1px solid #d7dbe1 !important;
+  border-bottom: 1px solid #d7dbe1 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.detail-media {
+  background: #fff;
+}
+
+.detail-panel {
+  min-width: 0;
+  background: transparent;
+}
+
+.detail-panel > .detail-evidence-grid,
+#overview .detail-evidence-grid,
+.detail-sections .detail-evidence-grid {
+  display: block;
+  border-top: 1px solid #d7dbe1;
+}
+
+.detail-evidence-grid .metric {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 18px;
+  align-items: baseline;
+  min-height: 0;
+  padding: 9px 0;
+  border: 0;
+  border-bottom: 1px solid #e5e8ec;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.detail-evidence-grid .metric:last-child {
+  border-bottom: 0;
+}
+
+.detail-evidence-grid .metric__label {
+  color: #68707d;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.detail-evidence-grid .metric__value {
+  color: #151922;
+  font-size: 15px;
+  font-weight: 900;
+  text-align: right;
+}
+
+.detail-evidence-grid .metric small {
+  grid-column: 1 / -1;
+  color: #7b8492;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.detail-section-nav,
+.price-history-panel,
+.detail-sections > .card,
+.community-disclosure {
+  box-shadow: none !important;
+}
+
 @media (min-width: 721px) {
   .dashboard-spotlight {
     grid-template-columns: 196px minmax(240px, 0.95fr) minmax(280px, 1.05fr);
@@ -285,6 +357,15 @@
 
   .product-evidence__row {
     padding: 6px 0;
+  }
+
+  .detail-hero {
+    border-top: 0 !important;
+  }
+
+  .detail-evidence-grid .metric {
+    gap: 2px 12px;
+    padding: 8px 0;
   }
 }
 
