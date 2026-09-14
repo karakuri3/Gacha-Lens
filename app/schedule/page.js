@@ -17,8 +17,8 @@ const weeks = ["第1週", "第2週", "第3週", "第4週", "第5週"];
 export async function generateMetadata({ searchParams }) {
   const month = normalizeCatalogMonth((await searchParams)?.month);
   return buildPageMetadata({
-    title: month ? `${formatCatalogMonth(month)}の発売予定 | Gacha Lens` : "発売スケジュール | Gacha Lens",
-    description: "発売予定の正式公開されたガチャシリーズを月と週から確認できます。",
+    title: month ? `${formatCatalogMonth(month)}のガチャ新作・発売情報 | Gacha Lens` : "発売スケジュール | Gacha Lens",
+    description: "正式公開されたガチャシリーズの発売情報を月と週から確認できます。",
     path: month ? `/schedule?month=${month}` : "/schedule",
   });
 }
@@ -30,13 +30,12 @@ export default async function SchedulePage({ searchParams }) {
   const requestedMonth = normalizeCatalogMonth(params?.month);
   const selectedMonth = requestedMonth || availableMonths.find((month) => month >= currentMonth) || availableMonths[0] || currentMonth;
   const catalogPage = await getParentSeriesCatalogPage({
-    release: "upcoming",
     month: selectedMonth,
     sort: "newest",
     page: 1,
     pageSize: 120,
   });
-  const items = catalogPage.items.filter((item) => !item.is_released).sort(compareScheduleItems);
+  const items = [...catalogPage.items].sort(compareScheduleItems);
   const scheduledItems = items.filter((item) => normalizeWeek(seriesScheduleWeek(item)));
   const undatedItems = items.filter((item) => !normalizeWeek(seriesScheduleWeek(item)));
   const groups = weeks
@@ -55,7 +54,7 @@ export default async function SchedulePage({ searchParams }) {
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">SCHEDULE</p>
-          <h1 className="page-title">新作・発売予定</h1>
+          <h1 className="page-title">新作・発売スケジュール</h1>
           <p className="page-lead">月と週を切り替えて、正式公開されたガチャシリーズの発売情報を確認できます。</p>
           <Link className="context-guide-link" href="/guides/forecast-ranking">発売予定データの見方</Link>
         </section>
@@ -80,9 +79,9 @@ export default async function SchedulePage({ searchParams }) {
         <div className="section-head schedule-results-head">
           <div>
             <h2 className="section-title">{formatCatalogMonth(selectedMonth)}</h2>
-            <p className="section-sub">発売予定シリーズ {catalogPage.total.toLocaleString("ja-JP")}件</p>
+            <p className="section-sub">発売シリーズ {catalogPage.total.toLocaleString("ja-JP")}件</p>
           </div>
-          <Link href={`/series?release=upcoming&month=${selectedMonth}&sort=newest`} className="button-link">シリーズ一覧で見る</Link>
+          <Link href={`/series?month=${selectedMonth}&sort=newest`} className="button-link">シリーズ一覧で見る</Link>
         </div>
 
         {groups.length > 0 ? (
@@ -103,9 +102,9 @@ export default async function SchedulePage({ searchParams }) {
           </section>
         ) : (
           <div className="card empty catalog-empty">
-            <strong>{formatCatalogMonth(selectedMonth)}の発売予定はまだありません</strong>
+            <strong>{formatCatalogMonth(selectedMonth)}の発売情報はまだありません</strong>
             <span>前月・次月、またはデータがある月へ切り替えて確認できます。</span>
-            <Link href="/series?release=upcoming" className="button-link button-link--accent">発売予定をすべて見る</Link>
+            <Link href="/series" className="button-link button-link--accent">ガチャ一覧を見る</Link>
           </div>
         )}
       </div>
