@@ -19,6 +19,8 @@ const homePage = read("app/page.js");
 const header = read("components/Header.js");
 const repository = read("lib/data/supabase-gacha-repository.js");
 const css = read("app/globals.css");
+const beforeVariantRelease = new Date("2026-08-11T14:59:59.999Z");
+const atVariantRelease = new Date("2026-08-11T15:00:00.000Z");
 
 const variant = {
   id: "v1",
@@ -86,9 +88,13 @@ test("22 released filter is applied", () => assert.match(repository, /eq\("relea
 test("23 upcoming filter is applied", () => assert.match(repository, /eq\("released", false\)/));
 test("24 category contract matches filtering", () => assert.equal(recordMatchesCatalogQuery(variant, { category: "フィギュア" }), true));
 test("25 month filter matches release month", () => assert.equal(recordMatchesCatalogQuery(variant, { month: "2026-08" }), true));
-test("26 combined filters use AND semantics", () => {
-  assert.equal(recordMatchesCatalogQuery(variant, { q: "アトム", release: "upcoming", category: "フィギュア", month: "2026-08" }), true);
-  assert.equal(recordMatchesCatalogQuery(variant, { q: "アトム", release: "released", category: "フィギュア", month: "2026-08" }), false);
+test("26 combined filters use AND semantics before the JST release boundary", () => {
+  assert.equal(recordMatchesCatalogQuery(variant, { q: "アトム", release: "upcoming", category: "フィギュア", month: "2026-08" }, "variant", beforeVariantRelease), true);
+  assert.equal(recordMatchesCatalogQuery(variant, { q: "アトム", release: "released", category: "フィギュア", month: "2026-08" }, "variant", beforeVariantRelease), false);
+});
+test("26a aged persisted false flips catalog release filters exactly at the JST release boundary", () => {
+  assert.equal(recordMatchesCatalogQuery(variant, { release: "upcoming" }, "variant", atVariantRelease), false);
+  assert.equal(recordMatchesCatalogQuery(variant, { release: "released" }, "variant", atVariantRelease), true);
 });
 test("27 page outside range is clamped by repository", () => assert.match(repository, /page > lastPage/));
 test("28 blank and meaningless categories are removed", () => assert.match(repository, /isMeaningfulCategory/));
