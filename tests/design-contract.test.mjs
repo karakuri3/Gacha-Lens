@@ -32,6 +32,12 @@ test("Gacha Lens design contract is wired into the app", async () => {
   assert.match(page, /stockMoves\.length \?/);
   assert.match(page, /MarketEmptyState/);
 
+  // Stock/circulation UI must use the canonical fresh-signal flags produced by
+  // buildAvailabilitySummary. A stray latest_status field would admit rows that
+  // stockStatusLabel can only render as 未取得.
+  assert.match(page, /summary\.has_stock_signal \|\| summary\.has_restock_signal/);
+  assert.equal(page.includes("summary.latest_status"), false);
+
   for (const forbidden of ["linear-gradient(", "radial-gradient(", "backdrop-filter:", "text-shadow:"]) {
     assert.equal(css.includes(forbidden), false, `product design layer must not introduce ${forbidden}`);
   }
