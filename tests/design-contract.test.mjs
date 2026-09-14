@@ -78,7 +78,6 @@ test("Gacha Lens design contract is wired into the app", async () => {
   // release metadata stay in facts; missing market/stock values do not become
   // prominent KPI cards, and zero-value attention scores are omitted.
   assert.match(variantDetail, /visibleDetailMetrics\(buildReleasedCustomerMetrics\(item\), \["定価", "注目度"\]\)/);
-  assert.match(variantDetail, /still|/);
   assert.match(variantDetail, /まだ在庫の実観測はありません。未取得を在庫状態として扱いません。/);
   assert.equal(variantDetail.includes("PRICE PULSE"), false);
   assert.match(css, /\.detail-hero\s*\{[\s\S]*border-radius:\s*0\s*!important/);
