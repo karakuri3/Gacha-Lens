@@ -1,8 +1,46 @@
 /* Gacha Lens product-specific design layer.
    Keep this file after globals.css so the selected Collector Editorial direction wins. */
 
+.home-context-nav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 0 0 14px;
+  padding: 0 2px 10px;
+  border-bottom: 1px solid #d7dbe1;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.home-context-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.home-context-nav a {
+  color: #4f5968;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.home-context-nav a:hover,
+.home-context-nav a:focus-visible {
+  color: #151922;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
 .dashboard-panel {
   box-shadow: none;
+}
+
+.dashboard-layout--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dashboard-lower-grid--single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .dashboard-spotlight-panel {
@@ -62,11 +100,36 @@
   border-radius: 3px;
 }
 
-/* The item name and market value should visually outrank decorative labels. */
-.dashboard-spotlight__copy .eyebrow,
+/* The item name and market value should visually outrank secondary labels. */
 .dashboard-panel__head span,
 .dashboard-rank-tile > small {
   letter-spacing: 0.01em;
+}
+
+.market-empty-state {
+  padding: 28px 4px 30px;
+  border-top: 1px solid #d7dbe1;
+  border-bottom: 1px solid #d7dbe1;
+}
+
+.market-empty-state h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.market-empty-state p {
+  margin: 8px 0 14px;
+  color: #68707d;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.market-empty-state a {
+  color: #243041;
+  font-size: 13px;
+  font-weight: 900;
+  text-underline-offset: 3px;
 }
 
 @media (min-width: 721px) {
@@ -80,6 +143,12 @@
 }
 
 @media (max-width: 720px) {
+  .home-context-nav {
+    gap: 16px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+  }
+
   /* On mobile, preserve object identity before exposing secondary market detail. */
   .dashboard-spotlight {
     grid-template-columns: 112px minmax(0, 1fr);
