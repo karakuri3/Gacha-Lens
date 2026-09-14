@@ -78,6 +78,7 @@ jobs:
           const path = require('node:path');
           const origin = process.env.VISUAL_QA_ORIGIN || 'http://127.0.0.1:3000';
           const prefix = process.env.VISUAL_QA_PREFIX || '';
+          const screenshotStyle = 'nextjs-portal { display: none !important; }';
           const viewports = [
             ['360x800', 360, 800],
             ['390x844', 390, 844],
@@ -96,6 +97,7 @@ jobs:
             await page.screenshot({
               path: path.join('visual-qa', `${prefix}${screenName}--${viewportName}.png`),
               fullPage: true,
+              style: screenshotStyle,
             });
           }
 
@@ -120,11 +122,11 @@ jobs:
                 } else {
                   await capture(page, 'home-empty', '/', viewportName);
                   const detailHref = await firstProductHref(page, '/series', 'catalog', viewportName);
-                  await page.screenshot({ path: path.join('visual-qa', `${prefix}catalog--${viewportName}.png`), fullPage: true });
+                  await page.screenshot({ path: path.join('visual-qa', `${prefix}catalog--${viewportName}.png`), fullPage: true, style: screenshotStyle });
                   await capture(page, 'detail', detailHref, viewportName);
                   await capture(page, 'ranking-empty', '/ranking', viewportName);
                   const upcomingDetailHref = await firstProductHref(page, '/series?release=upcoming', 'upcoming', viewportName);
-                  await page.screenshot({ path: path.join('visual-qa', `${prefix}upcoming--${viewportName}.png`), fullPage: true });
+                  await page.screenshot({ path: path.join('visual-qa', `${prefix}upcoming--${viewportName}.png`), fullPage: true, style: screenshotStyle });
                   await capture(page, 'upcoming-detail', upcomingDetailHref, viewportName);
                 }
 
