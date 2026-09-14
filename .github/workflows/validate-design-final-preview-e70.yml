@@ -1,0 +1,161 @@
+name: Validate #303 final exact Preview e70
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate-design-final-preview-e70.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-design-final-preview-e70-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  real-data-visuals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXACT_PREVIEW_ORIGIN: https://e174e4c3-gacha-lens.senpingxingzuo.workers.dev
+      KNOWN_TRANSIENT_ROUTE: /series/group/gashapon-4570118184252000
+    steps:
+      - name: Checkout validation head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install pinned screenshot browser
+        run: |
+          set -euo pipefail
+          DEPS="$RUNNER_TEMP/gachalens-final-preview-qa"
+          mkdir -p "$DEPS"
+          cd "$DEPS"
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-audit --no-fund playwright@1.55.0
+          "$DEPS/node_modules/.bin/playwright" install --with-deps chromium
+          echo "VISUAL_QA_DEPS=$DEPS" >> "$GITHUB_ENV"
+
+      - name: Capture bounded exact-Preview real-data evidence
+        run: |
+          set -euo pipefail
+          mkdir -p visual-qa-final
+          cat > "$RUNNER_TEMP/capture-final-preview.cjs" <<'NODE'
+          const { chromium } = require(process.env.VISUAL_QA_DEPS + '/node_modules/playwright');
+          const path = require('node:path');
+          const origin = process.env.EXACT_PREVIEW_ORIGIN;
+          const knownTransientRoute = process.env.KNOWN_TRANSIENT_ROUTE;
+          const viewports = [
+            ['360x800', 360, 800],
+            ['390x844', 390, 844],
+            ['desktop-1440x1000', 1440, 1000],
+          ];
+          const brandedErrors = [
+            '商品情報を取得できません',
+            'Data source configuration is unavailable.',
+            'Product data could not be retrieved.',
+          ];
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          let retryCount = 0;
+
+          async function open(page, label, route, viewportName) {
+            const url = `${origin}${route}`;
+            let response = null;
+            for (let attempt = 1; attempt <= 3; attempt += 1) {
+              response = await page.goto(url, { waitUntil: 'networkidle' });
+              const status = response?.status();
+              console.log(`[final-preview] ${viewportName} ${label} attempt=${attempt} status=${status} route=${route}`);
+              if (response?.ok()) {
+                if (attempt > 1) retryCount += attempt - 1;
+                break;
+              }
+              const retryable = status >= 500 && status < 600 && attempt < 3;
+              if (!retryable) {
+                const snippet = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
+                throw new Error(`${label} ${viewportName}: HTTP ${status}; route=${route}; body=${snippet}`);
+              }
+              await sleep(attempt * 2000);
+            }
+
+            if (!response?.ok()) throw new Error(`${label} ${viewportName}: persistent non-success; route=${route}`);
+            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+            if (overflow > 1) throw new Error(`${label} ${viewportName}: horizontal overflow ${overflow}px; route=${route}`);
+            const body = await page.locator('body').innerText();
+            for (const marker of brandedErrors) {
+              if (body.includes(marker)) throw new Error(`${label} ${viewportName}: branded data-source error; route=${route}`);
+            }
+            return body;
+          }
+
+          async function capture(page, label, route, viewportName) {
+            await open(page, label, route, viewportName);
+            await page.screenshot({
+              path: path.join('visual-qa-final', `${label}--${viewportName}.png`),
+              fullPage: true,
+            });
+          }
+
+          async function catalogEvidence(page, viewportName) {
+            await open(page, 'catalog', '/series', viewportName);
+            await page.screenshot({ path: path.join('visual-qa-final', `catalog--${viewportName}.png`), fullPage: true });
+            const cards = page.locator('a.product-card');
+            const count = Math.min(await cards.count(), 60);
+            if (count < 1) throw new Error(`catalog ${viewportName}: no product cards`);
+
+            let firstHref = '';
+            let longestHref = '';
+            let longestLength = -1;
+            for (let i = 0; i < count; i += 1) {
+              const card = cards.nth(i);
+              const href = await card.getAttribute('href');
+              if (!href || !href.startsWith('/series/')) continue;
+              if (!firstHref) firstHref = href;
+              const text = (await card.innerText()).replace(/\s+/g, ' ').trim();
+              if (text.length > longestLength) {
+                longestLength = text.length;
+                longestHref = href;
+              }
+            }
+            if (!firstHref) throw new Error(`catalog ${viewportName}: no usable detail href`);
+            console.log(`[final-preview] ${viewportName} firstHref=${firstHref} longestHref=${longestHref || firstHref} longestTextLength=${longestLength}`);
+            return { firstHref, longestHref: longestHref || firstHref };
+          }
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            try {
+              for (const [viewportName, width, height] of viewports) {
+                const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+                await capture(page, 'home-real', '/', viewportName);
+                const { firstHref, longestHref } = await catalogEvidence(page, viewportName);
+                await capture(page, 'detail-real', firstHref, viewportName);
+                await capture(page, 'long-name-detail-real', longestHref, viewportName);
+                await capture(page, 'parent-detail-real', '/series/group/tarts-y901096', viewportName);
+                await capture(page, 'known-transient-real', knownTransientRoute, viewportName);
+                await capture(page, 'ranking-real', '/ranking', viewportName);
+                await page.close();
+              }
+              console.log(`[final-preview] bounded_5xx_retry_count=${retryCount}`);
+            } finally {
+              await browser.close();
+            }
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          node "$RUNNER_TEMP/capture-final-preview.cjs"
+
+      - name: Upload final exact-Preview visual evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gachalens-e70-final-preview-visual-qa
+          path: visual-qa-final/*.png
+          if-no-files-found: warn
+          retention-days: 14
