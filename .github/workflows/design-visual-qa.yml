@@ -20,7 +20,7 @@ concurrency:
 jobs:
   screenshots:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 25
     env:
       GACHA_DATA_SOURCE: sample
     steps:
@@ -48,13 +48,16 @@ jobs:
           npm install --ignore-scripts --no-audit --no-fund playwright@1.55.0
           "$DEPS/node_modules/.bin/playwright" install --with-deps chromium
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libfaketime
+          sudo apt-get install -y -qq faketime
           echo "VISUAL_QA_DEPS=$DEPS" >> "$GITHUB_ENV"
 
-      - name: Start exact-branch app with sample data
+      - name: Compile production bundle without prerender data access
+        run: npx next build --experimental-build-mode compile
+
+      - name: Start production-equivalent exact branch with sample data
         run: |
           set -euo pipefail
-          npm run dev -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next.log" 2>&1 &
+          setsid bash -lc 'npm run start -- --hostname 127.0.0.1 --port 3000' >"$RUNNER_TEMP/gachalens-next.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/gachalens-next.pid"
           for _ in $(seq 1 120); do
             if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
@@ -87,6 +90,8 @@ jobs:
           async function open(page, screenName, route, viewportName) {
             const response = await page.goto(`${origin}${route}`, { waitUntil: 'networkidle' });
             if (!response || !response.ok()) throw new Error(`${screenName} ${viewportName}: HTTP ${response?.status()}`);
+            const devUi = await page.locator('nextjs-portal').count();
+            if (devUi > 0) throw new Error(`${screenName} ${viewportName}: Next.js development UI detected`);
             const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
             if (overflow > 1) throw new Error(`${screenName} ${viewportName}: horizontal overflow ${overflow}px`);
           }
@@ -111,8 +116,8 @@ jobs:
             try {
               for (const [viewportName, width, height] of viewports) {
                 const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
-
                 if (process.env.VISUAL_QA_POPULATED === '1') {
+                  await page.clock.install({ time: new Date('2026-03-22T03:00:00.000Z') });
                   await capture(page, 'home-populated', '/', viewportName);
                   await capture(page, 'ranking-populated', '/ranking', viewportName);
                   const releasedHref = await firstProductHref(page, '/series?release=released', 'released-catalog', viewportName);
@@ -127,7 +132,6 @@ jobs:
                   await page.screenshot({ path: path.join('visual-qa', `${prefix}upcoming--${viewportName}.png`), fullPage: true });
                   await capture(page, 'upcoming-detail', upcomingDetailHref, viewportName);
                 }
-
                 await page.close();
               }
             } finally {
@@ -140,16 +144,16 @@ jobs:
           NODE
           node "$RUNNER_TEMP/capture-gachalens.cjs"
 
-      - name: Restart with deterministic evidence-fresh clock
+      - name: Restart production server with deterministic evidence-fresh clock
         run: |
           set -euo pipefail
-          kill "$(cat "$RUNNER_TEMP/gachalens-next.pid")" || true
+          PID="$(cat "$RUNNER_TEMP/gachalens-next.pid")"
+          kill -TERM -- "-$PID" 2>/dev/null || kill -TERM "$PID" 2>/dev/null || true
           for _ in $(seq 1 40); do
-            if ! kill -0 "$(cat "$RUNNER_TEMP/gachalens-next.pid")" 2>/dev/null; then break; fi
+            if ! kill -0 "$PID" 2>/dev/null; then break; fi
             sleep 0.25
           done
-          rm -rf .next
-          faketime '2026-03-22 12:00:00' npm run dev -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next-populated.log" 2>&1 &
+          setsid bash -lc "faketime '2026-03-22 12:00:00' npm run start -- --hostname 127.0.0.1 --port 3000" >"$RUNNER_TEMP/gachalens-next-populated.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/gachalens-next.pid"
           for _ in $(seq 1 120); do
             if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
