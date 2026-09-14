@@ -2,7 +2,7 @@
 
 Updated: 2026-09-14 JST
 
-Infrastructure migration, Fair Use recovery, release-governance repair, Foundation migration repair, framework security, Japanese category routing and rerelease canonicalization are complete. Current priority is to finish the already-proven parent-series cache candidate without bypassing independent review, then reconcile the product-specific design candidate to current `main`, then choose the next revenue experiment from a fresh scorecard.
+Infrastructure migration, Fair Use recovery, release-governance repair, Foundation migration repair, framework security, Japanese category routing and rerelease canonicalization are complete. The current operating order is: finish independently gated release candidates, establish the Collector Editorial product baseline, then re-measure fresh user demand through #319 before choosing affiliate execution or demand-weighted market-quality work.
 
 ## Completed recovery / governance / security train
 
@@ -22,16 +22,16 @@ Infrastructure migration, Fair Use recovery, release-governance repair, Foundati
 - [x] #307 merged; stale CI runs cancelled to reduce redundant Actions usage
 - [ ] re-enable either scheduled write lane only under a new lane-specific approval
 
-## P1 current release candidate — #285 / #286 parent-series edge cache
+## P1 release candidate — #285 / #286 parent-series edge cache
 
 - [x] bounded matcher implementation exists
-- [x] current branch rebased/reconciled to current `main` with behind 0 at checkpoint
-- [x] PR Code Quality `34816583524` PASS
-- [x] Cloudflare cache proof `34816583550` PASS
-- [x] Cloudflare runtime smoke `34816583572` PASS
+- [x] current candidate reconciled to current `main` at its frozen checkpoint
+- [x] exact-head PR Code Quality PASS
+- [x] exact-head Cloudflare runtime smoke PASS
+- [x] exact-head Cloudflare cache proof PASS
 - [x] dedicated parent-series exact-Preview proof PASS through validation-only #308
 - [x] parent-series cold `MISS` -> `HIT` -> `HIT`
-- [x] byte-identical 64,736-byte HTML within proof run
+- [x] byte-identical 64,736-byte HTML within the proof run
 - [x] `series-detail-1800-v1`, no `Set-Cookie`
 - [x] public runtime/auth/security checks PASS
 - [x] #308 closed without merge
@@ -44,38 +44,61 @@ Infrastructure migration, Fair Use recovery, release-governance repair, Foundati
 - [ ] close #285 only after released behavior is verified
 - [ ] do not claim measured Production egress savings without actual measurement
 
-## P1 product experience — #303 Collector Editorial design
+## P1 product experience — #303 Collector Editorial
 
 - [x] product-specific design direction and `DESIGN.md` exist
-- [x] initial object-first home/design implementation exists
-- [x] design-contract/visual-QA scaffolding exists
-- [ ] reconcile #303 non-destructively onto then-current `main`
-- [ ] inspect all overlap with landed framework/category/rerelease/CI changes
-- [ ] rerun exact-head Code Quality and applicable Cloudflare build/runtime validation
-- [ ] validate real Japanese data at 360 px
-- [ ] validate real Japanese data at 390 px
-- [ ] validate desktop
-- [ ] review home, catalog/search, series detail and ranking
-- [ ] review no-evidence state
-- [ ] review missing-image state
-- [ ] review long Japanese names
-- [ ] review loading and error states
-- [ ] establish/approve screenshot visual-regression evidence
-- [ ] confirm market/data semantics are unchanged
-- [ ] independent review as required by the final release risk
-- [ ] release only after complete visual/product gate passes
+- [x] #303 reconciled non-destructively with current `main` at checkpoint `3b215a9c777431cbf049ec4966b83f474f146953`
+- [x] current frozen head `37c8523acd44dd319dd06e79d3cc5f8e82edf1c8` is ahead 38 / behind 0 at the checkpoint
+- [x] exact-head PR Code Quality PASS
+- [x] exact-head Cloudflare vinext PASS
+- [x] exact-head Cloudflare runtime smoke PASS
+- [x] exact-head Cloudflare cache proof PASS
+- [x] Design Visual QA PASS
+- [x] production-faithful visual harness integrated through #316
+- [x] real Japanese-data validation through #317/#318
+- [x] final #318 pass returned HTTP 200 on all 21 bounded reads with zero 5xx retries
+- [x] 360 px / 390 px / desktop reviewed
+- [x] home, catalog/search, parent series, variant detail and ranking reviewed
+- [x] long Japanese names and populated/fallback states reviewed
+- [x] strengthened visual artifact includes 33 screenshots with no blocking layout issue
+- [x] market/data semantics intentionally unchanged
+- [x] validation-only #317/#318 closed without merge after evidence capture
+- [ ] obtain genuine independent Reviewer/Verifier disposition required for this substantial release
+- [ ] keep #303 Draft until that independent gate passes
+- [ ] after PASS, re-fetch `main`, recheck head/base drift and apply complete Auto-Merge + Production Release gates
+- [ ] release only through normal merge-triggered Cloudflare Production path, then bounded public smoke
 
-## P1 business / monetization decision
+## P1 business decision — #319 fresh scorecard
 
-Before reviving old data-dependent monetization Drafts:
-- [ ] run a fresh current-state business scorecard
-- [ ] measure current first-party outbound demand and monetization coverage
-- [ ] compare monetization opportunity against further market-depth/data-scale work
-- [ ] make the next experiment decision from current evidence rather than the 2026-09-06 snapshot
+- [x] run a fresh current-state Production scorecard on 2026-09-14 using SELECT-only reads
+- [x] measure current first-party outbound demand and affiliate coverage
+- [x] measure current market breadth/depth/history/signals
+- [x] record truthfulness states for unavailable Search Console/PostHog/revenue data
+- [x] create #319 as the current business decision gate
+- [x] mark #263/#266/#268 and Drafts #264/#267/#269 HOLD rather than treating 2026-09-06 inputs as current
 
-If monetization still wins:
-- [ ] refresh/recompute #264 cohort on then-current data
-- [ ] reconcile #264 onto current `main`
+Fresh decision evidence at the #319 checkpoint:
+- 10,241 series / 23,808 variants
+- 176 market listings; 163 variants fresh <30d; fresh coverage 0.6846%
+- 161 / 163 fresh covered variants have only one listing
+- 198 observations; 22 listings re-observed; re-observation rate 12.5%
+- 0 new listings and 0 new observations in the last 7d
+- stock/restock review-safe signals 0 / 0
+- outbound clicks: 34 / 30d, **0 / 7d**, 14 distinct variants / 30d
+- verified affiliate provenance listings: 10, all Rakuten
+- affiliate-eligible exact `(variant_id, provider)` clicks: **0 / 34 = 0%**
+
+Current policy:
+- [ ] first establish/release the current product-quality baseline through governance
+- [ ] observe fresh post-release first-party usage; do not use rolling 30d historical residue alone
+- [ ] recompute exact Rakuten/Yahoo demand/listing overlap from then-current Production data
+- [ ] choose affiliate execution only if current demand makes it a materially useful experiment
+- [ ] if demand remains weak, prefer demand-weighted market-quality/re-observation on actually used pages/variants before broad Data Scale
+- [ ] do not invent a numeric demand threshold in advance; decide from the actual post-release distribution/sample size
+
+If affiliate execution later wins:
+- [ ] recompute #264 cohort from then-current data
+- [ ] reconcile #264 onto then-current `main`
 - [ ] reconcile/revalidate #267 provider-read binding
 - [ ] reconcile/revalidate #269 durable authorization ledger
 - [ ] independently review the ledger before release
@@ -92,15 +115,19 @@ If monetization still wins:
 - [ ] prove any future docs-only skip without breaking runtime-relevant Preview builds
 - [ ] close #284 only when its actual current acceptance criteria are met
 
-## HOLD — #257 / #260 R5 Data Scale
+## HOLD — broad Data Scale #119 / #257 / #260
 
-- [ ] keep HOLD unless a fresh business scorecard shows cross-provider depth work outranks current product quality / monetization
-- [ ] if reprioritized, recompute all data-dependent inputs and rebase/revalidate from then-current `main`
+- [x] #119 metadata corrected from stale P0 to HOLD
+- [x] #119 linked to #319 current business decision
+- [ ] keep broad Data Scale HOLD unless fresh post-product evidence shows cross-provider depth work has higher user/revenue ROI
+- [ ] prefer demand-weighted data quality before broad provider expansion when demand is sparse
+- [ ] if reprioritized, recompute all data-dependent inputs and reconcile/revalidate from then-current `main`
 
 ## Backlog hygiene
 
 - [ ] review stale Draft #232 in a separate bounded cleanup task; do not delete history or silently discard still-useful decisions
-- [ ] consolidate future canonical-doc updates so `HANDOFF`, `STATUS`, `DECISIONS` and `TODO` do not drift from live GitHub state again
+- [x] synchronize `HANDOFF`, `STATUS`, `DECISIONS` and `TODO` through the #319 docs-only update candidate
+- [ ] keep future canonical-doc updates consolidated so live GitHub state and docs do not drift again
 
 ## Hard boundaries
 
