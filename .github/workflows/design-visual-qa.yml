@@ -49,10 +49,13 @@ jobs:
           "$DEPS/node_modules/.bin/playwright" install --with-deps chromium
           echo "VISUAL_QA_DEPS=$DEPS" >> "$GITHUB_ENV"
 
-      - name: Start exact-branch app with sample data
+      - name: Build exact-branch app with sample data
+        run: npm run build
+
+      - name: Start production-equivalent app with sample data
         run: |
           set -euo pipefail
-          npm run dev -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next.log" 2>&1 &
+          npm run start -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/gachalens-next.pid"
           for _ in $(seq 1 120); do
             if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
@@ -84,6 +87,8 @@ jobs:
           async function open(page, screenName, route, viewportName) {
             const response = await page.goto(`${origin}${route}`, { waitUntil: 'networkidle' });
             if (!response || !response.ok()) throw new Error(`${screenName} ${viewportName}: HTTP ${response?.status()}`);
+            const devUi = await page.locator('nextjs-portal').count();
+            if (devUi > 0) throw new Error(`${screenName} ${viewportName}: Next.js development UI detected`);
             const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
             if (overflow > 1) throw new Error(`${screenName} ${viewportName}: horizontal overflow ${overflow}px`);
           }
