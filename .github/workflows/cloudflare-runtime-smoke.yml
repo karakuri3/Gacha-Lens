@@ -27,8 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      DEPLOYED_SHA: ccd4deff6dfab7e4845cf9e78fd8dbf01e917d08
-      PREVIEW_URL: https://7d3442b6-gacha-lens.senpingxingzuo.workers.dev
+      DEPLOYED_SHA: 8f3608527b40374d553da71eedb6fc8b2eaa2ec1
+      PREVIEW_URL: https://e121c70b-gacha-lens.senpingxingzuo.workers.dev
       BROWSER_ACCEPT: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
     steps:
       - name: Checkout current pull-request head
