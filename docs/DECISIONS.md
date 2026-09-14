@@ -70,15 +70,7 @@ The framework/security repair train was completed through #291/#287. Do not rest
 
 ## D-166 — #303 Collector Editorial is the released product baseline
 
-#303 is no longer a pending Draft. It released after:
-- current-main non-destructive reconciliation;
-- independent Reviewer + Verifier PASS;
-- natural test/lint `34856915575` PASS;
-- compatibility `34856915830` PASS;
-- screenshots `34856915548` PASS;
-- exact-head runtime `34856915847` PASS;
-- isolated cache proof `34856915789` PASS;
-- Cloudflare Workers build `5e69aab5-9673-45dc-b535-cf021fffcffd` PASS.
+#303 is no longer a pending Draft. It released after current-main reconciliation, independent Reviewer + Verifier PASS, and natural test/lint, compatibility, screenshot, exact-runtime, isolated-cache-proof and Cloudflare Workers build gates.
 
 Merge commit: `8a090d116fda6234c53d327760c9ce1c933fdd6e`.
 
@@ -86,13 +78,13 @@ Cloudflare Production was directly verified at 100% traffic on version `c2ede0e8
 
 ## D-167 — fresh #319 scorecard supersedes dated affiliate priority
 
-The 2026-09-14 SELECT-only scorecard remains the pre-release/current-state reference. Its low affiliate overlap and shallow market coverage mean the old 2026-09-06 affiliate cohort is historical prioritization evidence, not a current execution target.
+The 2026-09-14 SELECT-only scorecard remains the pre-release reference. Its low affiliate overlap and shallow market coverage mean the old 2026-09-06 affiliate cohort is historical prioritization evidence, not a current execution target.
 
 #263/#266/#268 and #264/#267/#269 remain HOLD until fresh post-release demand reactivates the lane.
 
 ## D-168 — low data coverage does not automatically reactivate broad Data Scale
 
-#119/#257/#260 remain HOLD. Low market coverage alone is not a user-value signal. Prefer demand-weighted data quality unless fresh usage proves broader collection has higher user/revenue ROI.
+#119/#257/#260 remain HOLD. #257/#260 are explicitly marked `[HOLD]`. Low market coverage alone is not a user-value signal. Prefer demand-weighted data quality unless fresh usage proves broader collection has higher user/revenue ROI.
 
 ## D-169 — analytics/revenue availability is a truthfulness state
 
@@ -111,9 +103,7 @@ Unavailable sources must not be reported as zero or used to justify purchasing/e
 - Web Analytics site configured for `gachalens.com`;
 - automatic RUM injection;
 - mode `Enable, excluding visitor data in the EU`;
-- Path visibility for `/`, `/series`, `/series/group/...`.
-
-Cloudflare's current documented RUM behavior does not use browser storage such as cookies/localStorage/sessionStorage/IndexedDB for analytics and discards source IP at the nearest data center rather than storing it in core logs/databases.
+- Path visibility available.
 
 Do not broaden collection by removing the EU exclusion without a separate privacy decision.
 
@@ -123,26 +113,48 @@ Do not broaden collection by removing the EU exclusion without a separate privac
 
 This makes future click evidence cleaner but does not retroactively validate old rows.
 
-## D-172 — post-release business measurement starts at a clean epoch
+## D-172 — T1 supersedes T0 for decision-quality post-release measurement
 
-Use:
+The initial instrumentation boundary was:
 
-**T0 = 2026-09-15 00:00 JST**
+`T0 = 2026-09-15 00:00 JST`
 
-for the fresh #319 measurement phase.
+T0 remains valid only as an instrumentation seed. Operator/assistant release verification opened Production routes between 00:00 and 00:30, and those page loads legitimately contaminate Cloudflare Web Analytics.
 
-Do not treat pre-T0 Web Analytics values or the old 34-click rolling window as clean post-product demand. The old click audit found 23/34 events in same-day same-page 3+ provider bursts, so those rows are not reliable as organic purchase intent.
+The aligned business-decision window is therefore:
 
-Align the same post-T0 window across Cloudflare Visits/Page views/Path and Production-only outbound clicks. Compute an intent/conversion-like rate only where the denominator is meaningful.
+**T1 = 2026-09-15 00:30 JST**
+
+Use T1 for both Cloudflare Visits/Page views/Path and Production-only `outbound_clicks`.
+
+Operational consequences:
+- treat 00:00–00:30 as verification-contaminated, not organic business demand;
+- do not delete or rewrite earlier analytics/click evidence;
+- after T1, routine #319 observation must not open `gachalens.com` Production content from the operator/assistant workflow;
+- inspect Cloudflare management analytics and SELECT-only DB aggregates instead;
+- if an exact T1 interval cannot be isolated safely, wait for a naturally separated window rather than estimate/subtract traffic;
+- compute intent/conversion-like rates only with a meaningful denominator.
+
+The rolling 24h dashboard observed immediately after T1 showed 17 Page views / 17 Visits, but was operator-dominated: direct 17, Opera 16, Windows 17 and paths matching release verification. It is verification evidence, not business demand.
+
+Initial post-T1 SELECT-only `outbound_clicks` seed was 0 events / 0 variants / 0 providers. This is not a demand verdict because the clean window had only just begun.
+
+## D-173 — stale #232 must not be rebased into the current Agent OS
+
+#232 is closed unmerged. Its useful core — treat external AI/development advice as hypothesis input, verify primary evidence and current-system delta, use bounded measurement, preserve safety/review gates — is retained in backlog #326.
+
+Do not merge or rebase #232 as-is. Revisit #326 only after #319 or when a concrete development bottleneck makes the procedure directly useful; if revived, recreate the smallest current-main-compatible delta and run fresh gates.
 
 ## Current ordered decision
 
-1. Observe fresh post-T0 behavior on the live #303 baseline.
-2. Continue #319 from aligned current windows, not historical rolling residue.
-3. If meaningful demand overlaps affiliate-eligible inventory, recompute/reconcile the affiliate stack before execution.
-4. If demand exists but market evidence is shallow/stale on used pages, prefer demand-weighted market-quality/re-observation.
-5. Keep #119/#257/#260 broad Data Scale HOLD unless fresh evidence proves higher user/revenue ROI.
-6. Keep #284 separate and approval-bound; do not bundle analytics/build settings changes.
-7. Keep both scheduled write lanes disabled until separately authorized.
+1. Preserve the clean T1 window; do not generate operator Production traffic during routine #319 observation.
+2. Observe aligned post-T1 Cloudflare Visits/Page views/Path plus Production-only outbound clicks.
+3. Continue #319 from current behavior, not historical rolling residue.
+4. If meaningful demand overlaps affiliate-eligible inventory, recompute/reconcile the affiliate stack before execution.
+5. If demand exists but market evidence is shallow/stale on used pages, prefer demand-weighted market-quality/re-observation.
+6. If demand is too sparse to choose either lane, prioritize qualified discovery/traffic rather than broad Data Scale by default.
+7. Keep #119/#257/#260 broad Data Scale HOLD unless fresh evidence proves higher user/revenue ROI.
+8. Keep #284 separate and approval-bound; do not bundle analytics/build settings changes.
+9. Keep both scheduled write lanes disabled until separately authorized.
 
 This order is not blanket merge/Production/provider/workflow/Secret/billing approval.
