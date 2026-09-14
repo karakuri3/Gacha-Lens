@@ -1,114 +1,121 @@
 # Gacha Lens Ordered TODO
 
-Updated: 2026-09-05 JST — Final Release/Cutover complete; normal development ready
+Updated: 2026-09-13 JST
 
-The complete ordered TODO checkpoint immediately before this closeout is preserved byte-for-byte at `docs/history/2026-09-05-pre-final-cutover-TODO.md`.
+Infrastructure migration and the Supabase Fair Use recovery are complete. Current priority is clean incident closeout, governance/CI normalization, dependency security, then user value.
 
-## Company infrastructure migration — DONE
+## P0 recovery gate — #219/#238
 
-- [x] stop avoidable Vercel build cost during migration
-- [x] establish Cloudflare parallel environment
-- [x] prove Gacha Lens Cloudflare runtime compatibility
-- [x] prove portable P0 cache/egress behavior
-- [x] complete Supabase Stage 5 isolated validation
-- [x] merge server-only runtime boundary before DB grant hardening
-- [x] apply scoped Production table-grant hardening
-- [x] apply scoped future default-privilege Candidate A
-- [x] remove unused `pg_graphql` after fresh zero-dependency preflight
-- [x] synchronize Production Supabase migrations back to Git
-- [x] merge Cloudflare runtime to main
-- [x] deploy main to Cloudflare Production
-- [x] move authoritative DNS from Vercel nameservers to Cloudflare
-- [x] attach `gachalens.com` Worker Custom Domain
-- [x] move `www` canonical redirect to Cloudflare and preserve path/query
-- [x] remove old Vercel apex/www/wildcard web routing
-- [x] verify homepage/ranking/schedule/series/stock/restocks/robots/sitemap smoke
-- [x] verify former Vercel `x-next-cache-tags` 500 URL succeeds on Cloudflare
-- [x] verify Cloudflare error metrics and prior-version rollback path
-- [x] disable routine Vercel Git builds with `ignoreCommand: "exit 0"`
-- [x] synchronize final HANDOFF / STATUS / DECISIONS / TODO / cutover record
+- [x] next billing cycle visibly active: `2026-09-12 -> 2026-10-12`
+- [x] active Fair Use restriction / HTTP 402 cleared
+- [x] fresh usage baseline: org Egress `0 / 5 GB`, overage `0 GB`
+- [x] separated provider usage samples remained `0.00 GB`; org-wide upper bound is comfortably <=0.12 GB/day and therefore bounds Gacha below the target
+- [x] minimal public smoke: `/`, `/series`, `/series/group/tarts-y901096` healthy
+- [x] former amplifier non-recurrence: about `681,290 -> 681,324` (`+34` over roughly five days)
+- [x] #281/#282 reassessed: outage resolved; containment no longer needed
+- [x] canonical recovery evidence synchronized in #250
+- [ ] close #281 as resolved
+- [ ] close #282 unmerged
+- [ ] close #219/#238 as completed incident/freeze work
+- [ ] keep P3/Official variables false after closure until separate lane approvals
 
-Infrastructure migration is not the next work queue after this checkpoint.
+## P0 scheduled-write safety — #280 COMPLETE
 
-## P0 — Issue #219 shared Supabase Egress risk — CONTINUE AS MEASURED RELIABILITY LANE
+- [x] `P3_BOUNDED_SEED_V2_AUTO_ENABLED=false`
+- [x] `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
+- [x] legacy ingestion remains disabled
+- [x] repeated P3 natural no-op/write0 evidence
+- [x] repeated Official natural no-op/write0 evidence
+- [x] reset-day Official #18 `34680299101` no-op/write0
+- [x] reset-day P3 #95 `34689497050` no-op/write0
+- [x] #280 closed
+- [ ] re-enable only under new lane-specific approval
 
-Final cutover does not prove the billed-byte trajectory is safe.
+## P1 security — #287
 
-Next true gate remains read-only observation:
-- [ ] observe current Supabase uncached Egress trajectory without resetting useful counters
-- [ ] compare post-cutover request/read shape with pre-mitigation evidence where possible
-- [ ] determine whether sitemap + Cloudflare/P0 cache/runtime changes materially reduce expensive reads
-- [ ] keep #219 open until Fair Use/402 risk is credibly controlled
+- [x] static triage completed; installed baseline behind security releases
+- [x] smallest preferred targets identified: Next/`eslint-config-next` 16.3.3, React/ReactDOM 19.2.8
+- [ ] regenerate lockfile normally in isolated branch
+- [ ] run fresh `npm audit` and classify remaining dependency paths
+- [ ] full Node tests + lint + vinext/Cloudflare build
+- [ ] exact Cloudflare Preview smoke
+- [ ] never use `npm audit fix --force`
+- [ ] never hand-edit `package-lock.json`
 
-If Egress remains materially high:
-- [ ] attribute remaining public request paths
-- [ ] quantify expensive signal-table/full-loader reads
-- [ ] identify unnecessary wide/raw hydration
-- [ ] bound/filter/cache remaining reads without semantic regression
-- [ ] validate each mitigation with exact-head CI, Cloudflare preview/version, Production smoke, and post-release measurement
+## Governance / CI prerequisites
 
-Do not buy a paid plan merely to hide avoidable amplification. A paid-plan decision requires current pricing/terms and explicit approval.
+### #265 / #262
+- [x] exact `c8d671abc9be785f3c6c34a3ff6ceef858e07d3a` implemented/validated
+- [ ] genuine independent review
+- [ ] refresh exact evidence on current main
+- [ ] land and close #262 only when policy is authoritative on main
 
-## P1 — Business/reliability scoreboard reassessment
+### #258
+- [x] exact `76dac8708abaffd2ffcada7d7aa64bdc49b06e90` prior runtime/cache/CQ PASS
+- [ ] re-confirm deployed Cloudflare Production source identity
+- [ ] repin/revalidate if Production moved
+- [ ] satisfy workflow-file approval boundary
+- [ ] land after #265
 
-Normal development is now allowed, but choose work by evidence:
+## User value
 
-**Reliability / Cost -> User Value -> Traffic -> Click -> Revenue**
+### #253 Japanese category routing
+- [ ] after #265/#258 and #287, rebase to current main
+- [ ] exact CI/Preview/browser/runtime proof
+- [ ] release under applicable Production authority
 
-Measure/re-fetch as available:
-- [ ] Search Console impressions / clicks / CTR / indexation
-- [ ] product/series page traffic and top landing/search pages
-- [ ] outbound shop clicks and click-through rate
-- [ ] affiliate conversion/revenue instrumentation and actual revenue where available
-- [ ] data freshness / coverage quality
-- [ ] Supabase/Cloudflare request efficiency and cost trajectory
-- [ ] identify the single highest-leverage bottleneck and choose one bounded experiment
+### #261 rerelease canonical fix
+- [ ] rebase/revalidate after #253
+- [ ] release code under applicable authority while keeping `OFFICIAL_BOUNDED_AUTO_ENABLED=false`
+- [ ] request separate lane-specific re-enable only if natural F0 should resume
 
-Do not automatically return to Data Scale depth work merely because the old technical diagnosis was `depth_insufficient`.
+## Reliability / cost
 
-## P2 — Data Scale depth work — HOLD UNTIL P1 CHOICE
+### #284 docs-only Cloudflare builds
+- [x] Build Watch supports `docs/*` exclusion
+- [ ] apply only under separate settings approval
+- [ ] prove docs-only skip and runtime-change Preview still works
 
-Last canonical pre-Egress snapshot remains historical evidence, not an authorization.
+### #285 / #286 parent-series edge cache
+- [x] bounded matcher implementation + CQ + exact Preview PASS
+- [ ] run one bounded healthy parent-series cold->warm exact-Preview proof
+- [ ] measure origin behavior before claiming savings
+- [ ] release only if measured value justifies it
 
-If P1 later proves depth scaling is highest leverage:
-- [ ] design the smallest bounded cohort
-- [ ] preserve strict variant/parent/provider/native/public-URL identity and collision guards
-- [ ] define request/write ceilings and fail-closed behavior
-- [ ] define user/business success metrics, not only row/depth metrics
-- [ ] prove repository/disposable behavior before Production execution
-- [ ] obtain required review/approval for provider execution, workflow mutation, migration/schema action, or Production write
+## Monetization / DB lane
 
-No #228 authority may be reused.
+### #264 -> #267 -> #273 -> #269
+- [ ] after user-value/security prerequisites, run fresh business scorecard
+- [ ] if affiliate monetization dominates, refresh/rebase #264 cohort and #267 provider-read binding
+- [ ] independently review #273 and reconcile Production history only with exact evidence; no blind `db push`
+- [ ] independently review/revalidate #269
+- [ ] obtain fresh exact provider-read approval; never reuse old tokens
+- [ ] provider calls and persistence remain separately unauthorized until their exact gates
 
-## Separate non-blocking infrastructure debt
+## HOLD
 
-- [ ] decide whether Workers Logs should be enabled and with what retention/cost policy; current cutover evidence is error metrics only
-- [ ] keep `pg_net` relocation HOLD until fresh need/risk evidence
-- [ ] keep Candidate B global PUBLIC function-default revoke HOLD until blast radius is justified
-- [ ] re-evaluate `market_listings(series_id)`/other FK indexes only when current workload justifies them
-- [ ] re-evaluate unused-index cleanup separately
-- [ ] close/archive historical isolated Draft PRs when their evidence no longer needs an open PR surface
-- [ ] consider retiring the non-live Vercel rollback artifact only after an appropriate stabilization period and explicit decision
+- [ ] #257/#260 R5 Data Scale remains HOLD unless fresh evidence says depth outranks user value/monetization
 
-## HOLD — existing prohibitions
+## Canonical docs — #250
 
-- [ ] DO NOT invoke another R4 write under consumed #228 approval
-- [ ] DO NOT retry #214 or #228
-- [ ] DO NOT reuse Production repair authority or prior review substitutions
-- [ ] DO NOT make new provider calls under consumed authority
-- [ ] DO NOT dispatch/change workflows without applicable approval
-- [ ] DO NOT change Secrets/Variables by implication
-- [ ] DO NOT merge/dispatch F0/#142 without its boundary
-- [ ] DO NOT remediate unrelated advisor findings by implication
-- [ ] DO NOT invoke paid reviewer/actions or paid-plan changes without approval
-- [ ] DO NOT use destructive actions without approval
-- [ ] DO NOT weaken strict matcher/identity guards
-- [ ] DO NOT scrape Mercari or Amazon
-- [ ] DO NOT touch `supabase/.temp/cli-latest`
-- [ ] keep `.github/workflows/gacha-ingestion.yml` disabled
-- [ ] no automatic RPC retry
+- [x] recovery state synchronized
+- [x] scheduled lanes remain disabled after recovery
+- [x] #281/#282 disposition recorded
+- [x] post-freeze release order recorded
+- [ ] require exact-head Code Quality green
+- [ ] merge docs-only PR through GitHub; never direct-push main
+
+## Hard boundaries
+
 - [ ] no direct main push
-
-## Canonical history
-
-`docs/history/2026-09-05-pre-final-cutover-TODO.md`
+- [ ] no Production DB/schema/data/history by implication
+- [ ] no DNS/Auth/write/admin change by implication
+- [ ] no workflow dispatch/change by implication
+- [ ] no Secrets/Variables change by implication
+- [ ] no scheduled-lane re-enable by implication
+- [ ] no provider/load experiment by implication
+- [ ] no paid/destructive action without approval
+- [ ] no automatic RPC retry
+- [ ] keep ingestion disabled
+- [ ] never touch `supabase/.temp/cli-latest`
+- [ ] no Mercari/Amazon scraping
