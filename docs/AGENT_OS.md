@@ -2,7 +2,7 @@
 
 Status: repository operating policy
 
-Agent OS v1 is the safe, reviewable development loop for Gacha Lens. It allows an agent to carry a bounded, non-Production task through validation and a Draft PR without asking for approval at every ordinary engineering step. Agent OS alone does not authorize a merge or release: an autonomous merge must pass `docs/AUTO_MERGE_POLICY.md`, and its normal Git-triggered Vercel release must also pass `docs/PRODUCTION_RELEASE_POLICY.md`. Production DB actions, workflow dispatches, Secrets / Variables changes, paid operations, destructive work, and other standing exclusions remain unauthorized.
+Agent OS v1 is the safe, reviewable development loop for Gacha Lens. It allows an agent to carry a bounded, non-Production task through validation and a Draft PR without asking for approval at every ordinary engineering step. Agent OS alone does not authorize a merge or release: an autonomous merge must pass `docs/AUTO_MERGE_POLICY.md`, and its normal Git-triggered Cloudflare Production application release must also pass `docs/PRODUCTION_RELEASE_POLICY.md`. Production DB actions, workflow dispatches, Secrets / Variables changes, paid operations, destructive work, and other standing exclusions remain unauthorized.
 
 ## 1. Instruction and source precedence
 
@@ -308,7 +308,7 @@ Rules:
 - Exactly one queue-state label should apply to an Agent task.
 - Existing product labels such as `bug`, `documentation`, or `enhancement` may coexist.
 - The Issue remains the task contract; the Draft PR links it and contains validation/review evidence.
-- Agents may advance only reversible working states for their assigned task. A Draft PR may advance to merge readiness and merge without a routine human acknowledgement only when `docs/AUTO_MERGE_POLICY.md` passes; a resulting normal Vercel release also requires `docs/PRODUCTION_RELEASE_POLICY.md` to pass.
+- Agents may advance only reversible working states for their assigned task. A Draft PR may advance to merge readiness and merge without a routine human acknowledgement only when `docs/AUTO_MERGE_POLICY.md` passes; a resulting normal Cloudflare Production application release also requires `docs/PRODUCTION_RELEASE_POLICY.md` to pass.
 - A requested change moves the task back to `Agent Working`; a validation failure moves it no further than `Verification` until repaired.
 - Label creation/project-board setup is a separate repository-administration action. Agent OS v1 defines the convention but does not mutate repository settings.
 
@@ -320,7 +320,7 @@ PRs should remain Draft through autonomous repair. Use a `codex/` branch, link t
 - `docs/AGENT_OS.md`: detailed Agent OS operating policy
 - `docs/AGENT_QUEUE.md`: authoritative bounded queue selection, continuation, and durable-resume procedure
 - `docs/AUTO_MERGE_POLICY.md`: sole standing route for an eligible autonomous PR merge
-- `docs/PRODUCTION_RELEASE_POLICY.md`: sole standing route for the normal Git-triggered Vercel Production release
+- `docs/PRODUCTION_RELEASE_POLICY.md`: sole standing route for the normal Git-triggered Cloudflare Production application release
 - `docs/DECISIONS.md`: durable product and operating decisions
 - `docs/HANDOFF.md`: fresh-thread operational handoff and live approval boundary
 - `docs/STATUS.md`: compact live-state snapshot
