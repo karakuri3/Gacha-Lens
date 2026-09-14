@@ -184,18 +184,18 @@ function Metric({ label, value, accent = false }) {
 function RankingTile({ item, rank }) {
   const change = priceChangePercent(item);
   const sold = item.sold_count ?? item.market_summary?.sold_count ?? 0;
-  const hasMarketPrice = hasPriceRankingEvidence(item);
+  const schedule = formatSchedule(item);
   const meta = Number.isFinite(change)
     ? `${formatChange(change)} ・ 売れた数 ${sold.toLocaleString("ja-JP")}件`
     : sold > 0
       ? `${sellThroughLabel(item.market_summary)} ・ 売れた数 ${sold.toLocaleString("ja-JP")}件`
-      : item.series_name || formatSchedule(item);
+      : [item.series_name, schedule !== "未定" ? schedule : ""].filter(Boolean).join(" ・ ") || "商品情報を見る";
   return (
     <Link href={variantHref(item)} className="dashboard-rank-tile">
       <span className={`dashboard-rank-tile__rank rank-${rank}`}>{rank}</span>
       <div className="dashboard-rank-tile__image"><ProductImage item={item} alt={item.name} priority={rank <= 3} /></div>
       <strong>{item.name}</strong>
-      <span>{hasMarketPrice ? formatMarketEvidenceValue(item.market_evidence) : `定価 ${formatYen(item.price)}`}</span>
+      <span>{rankingPrimaryEvidence(item)}</span>
       <small>{meta}</small>
     </Link>
   );
@@ -279,10 +279,25 @@ function spotlightMetrics(item) {
   }
 
   const schedule = formatSchedule(item);
-  if (schedule) {
+  if (schedule !== "未定") {
     metrics.push({ label: "発売", value: schedule, accent: false });
   }
   return metrics;
+}
+
+function rankingPrimaryEvidence(item) {
+  if (hasPriceRankingEvidence(item)) return formatMarketEvidenceValue(item.market_evidence);
+
+  const retailPrice = Number(item.price);
+  if (Number.isFinite(retailPrice) && retailPrice > 0) return `定価 ${formatYen(retailPrice)}`;
+
+  const stock = stockStatusLabel(item.stock_summary ?? item.availability_summary ?? {});
+  if (stock !== "未取得") return stock;
+
+  const sellThrough = sellThroughLabel(item.market_summary);
+  if (sellThrough !== "データ不足") return sellThrough;
+
+  return "商品情報を見る";
 }
 
 function hasAvailabilitySignal(item) {
