@@ -58,15 +58,28 @@ jobs:
             'Data source configuration is unavailable.',
             'Product data could not be retrieved.',
           ];
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
           async function open(page, label, route, viewportName) {
-            const response = await page.goto(`${origin}${route}`, { waitUntil: 'networkidle' });
-            if (!response || !response.ok()) throw new Error(`${label} ${viewportName}: HTTP ${response?.status()}`);
+            const url = `${origin}${route}`;
+            let response = null;
+            for (let attempt = 1; attempt <= 3; attempt += 1) {
+              response = await page.goto(url, { waitUntil: 'networkidle' });
+              const status = response?.status();
+              console.log(`[visual-qa] ${viewportName} ${label} attempt=${attempt} status=${status} route=${route}`);
+              if (response?.ok()) break;
+              if (!status || status < 500 || status >= 600 || attempt === 3) {
+                const snippet = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 500);
+                throw new Error(`${label} ${viewportName}: HTTP ${status}; route=${route}; body=${snippet}`);
+              }
+              await sleep(attempt * 2000);
+            }
+
             const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-            if (overflow > 1) throw new Error(`${label} ${viewportName}: horizontal overflow ${overflow}px`);
+            if (overflow > 1) throw new Error(`${label} ${viewportName}: horizontal overflow ${overflow}px; route=${route}`);
             const body = await page.locator('body').innerText();
             for (const marker of brandedErrors) {
-              if (body.includes(marker)) throw new Error(`${label} ${viewportName}: branded data-source error detected`);
+              if (body.includes(marker)) throw new Error(`${label} ${viewportName}: branded data-source error detected; route=${route}`);
             }
             return body;
           }
@@ -102,6 +115,7 @@ jobs:
               }
             }
             if (!firstHref) throw new Error(`catalog ${viewportName}: no usable detail href`);
+            console.log(`[visual-qa] ${viewportName} firstHref=${firstHref} longestHref=${longestHref || firstHref} longestTextLength=${longestLength}`);
             return { firstHref, longestHref: longestHref || firstHref };
           }
 
@@ -129,9 +143,10 @@ jobs:
           node "$RUNNER_TEMP/capture-real-preview.cjs"
 
       - name: Upload exact-Preview real-data visual evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: gachalens-7fc-real-preview-visual-qa
           path: visual-qa-real/*.png
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
