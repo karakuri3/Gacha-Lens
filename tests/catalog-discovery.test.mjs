@@ -16,6 +16,7 @@ const seriesPage = read("app/series/page.js");
 const schedulePage = read("app/schedule/page.js");
 const categoriesPage = read("app/categories/page.js");
 const homePage = read("app/page.js");
+const header = read("components/Header.js");
 const repository = read("lib/data/supabase-gacha-repository.js");
 const css = read("app/globals.css");
 
@@ -118,10 +119,11 @@ test("34 schedule metrics do not include market or profit labels", () => {
   assert.doesNotMatch(schedulePage, /market_evidence|profit_estimate|利益目安|参考相場/);
 });
 
-test("35 home search submits to series query", () => {
-  assert.match(homePage, /<form action="\/series" method="get" role="search">/);
-  assert.match(homePage, /name="q"/);
-  assert.match(homePage, /name="scope" value="series"/);
+test("35 global search submits to series query and home does not duplicate it", () => {
+  assert.match(header, /<form className="global-search" action="\/series" method="get" role="search">/);
+  assert.match(header, /<input name="q"/);
+  assert.doesNotMatch(homePage, /<form[^>]+role="search"/);
+  assert.doesNotMatch(homePage, /home-catalog-search/);
 });
 test("35a home upcoming module is series-first while market ranking stays variant-first", () => {
   assert.match(homePage, /getRankingSeries\("released", "variant"\)/);
