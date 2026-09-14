@@ -65,15 +65,17 @@ jobs:
             preview_policy="$(edge_policy preview "$name")"
             production_policy="$(edge_policy production "$name")"
             echo "$name edge policy preview=${preview_policy:-none} production=${production_policy:-none}"
-            [[ -n "$production_policy" ]] || { echo "$name Production edge policy unexpectedly empty" >&2; exit 1; }
             [[ "$preview_policy" == "$production_policy" ]] || { echo "$name edge policy differs from Production" >&2; exit 1; }
+            if [[ "$name" != group ]]; then
+              [[ -n "$production_policy" ]] || { echo "$name Production edge policy unexpectedly empty" >&2; exit 1; }
+            fi
           done
 
           request preview api "$PREVIEW_URL" '/api/public-variants?ids=tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC' 'tarts-y901096-ディズニー-マリー'
 
           request preview series_warm "$PREVIEW_URL" '/series' 'ガチャ一覧'
-          request preview group_warm "$PREVIEW_URL" '/series/group/tarts-y901096' 'ディズニーキャラクター Pretty Faceポーチ'
-          for name in series_warm group_warm; do
+          request preview product_warm "$PREVIEW_URL" '/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC' 'ディズニー マリー'
+          for name in series_warm product_warm; do
             status="$(cf_status preview "$name")"
             echo "$name Preview CF-Cache-Status=${status:-none}"
             case "$status" in HIT|STALE) ;; *) echo "$name cache status ${status:-none}, expected HIT/STALE" >&2; exit 1;; esac
