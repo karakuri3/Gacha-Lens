@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import ProductImage from "@/components/ProductImage";
@@ -18,13 +18,8 @@ import {
   customerTags,
   formatMarketEvidenceValue,
   formatSchedule,
-  formatScore,
   formatYen,
-  opportunityScore,
-  priceUpsideScore,
-  scarcityScore,
   stockStatusLabel,
-  watchScore,
 } from "@/lib/domain/public-display-clean";
 
 // Keep variant details framework-dynamic. A previous force-static design was
@@ -118,9 +113,7 @@ export default async function VariantDetailPage({ params }) {
               <div><dt>定価</dt><dd>{formatYen(item.price)}</dd></div>
             </dl>
 
-            <div className="metric-grid" style={{ marginTop: 22 }}>
-              {isReleased ? <ReleasedHeroMetrics item={item} /> : <UpcomingHeroMetrics item={item} />}
-            </div>
+            {isReleased ? <ReleasedHeroMetrics item={item} /> : <UpcomingHeroMetrics item={item} />}
 
             {tags.length > 0 ? (
               <div className="tag-row" style={{ marginTop: 18 }}>
@@ -160,10 +153,9 @@ export default async function VariantDetailPage({ params }) {
           <section id="price" className="card panel price-history-panel">
             <div className="section-head">
               <div>
-                <p className="eyebrow">PRICE PULSE</p>
                 <h2 className="section-title">価格の動き</h2>
               </div>
-              <span className="data-note">{item.market_evidence?.label || "データ不足"}</span>
+              <span className="data-note">{marketEvidenceLabel(item)}</span>
             </div>
             <PriceTrendChart item={item} />
           </section>
@@ -171,7 +163,7 @@ export default async function VariantDetailPage({ params }) {
 
         <section id="overview" className="detail-sections">
           <div className="card panel">
-            <h2>{isReleased ? "判断ポイント" : "発売前の見方"}</h2>
+            <h2>{isReleased ? "確認できる市場情報" : "発売前の見方"}</h2>
             {isReleased ? <ReleasedSummary item={item} /> : <UpcomingSummary item={item} />}
           </div>
 
@@ -228,32 +220,46 @@ export default async function VariantDetailPage({ params }) {
 }
 
 function ReleasedHeroMetrics({ item }) {
-  return buildReleasedCustomerMetrics(item).map((metric) => <Metric key={metric.label} {...metric} />);
+  const metrics = visibleDetailMetrics(buildReleasedCustomerMetrics(item), ["定価", "注目度"]);
+  if (!metrics.length) return null;
+  return (
+    <div className="metric-grid detail-evidence-grid" style={{ marginTop: 22 }}>
+      {metrics.map((metric) => <Metric key={metric.label} {...normalizeEvidenceMetric(metric)} />)}
+    </div>
+  );
 }
 
 function UpcomingHeroMetrics({ item }) {
-  return buildUpcomingCustomerMetrics(item).map((metric) => <Metric key={metric.label} {...metric} />);
+  const metrics = visibleDetailMetrics(buildUpcomingCustomerMetrics(item), ["価格", "発売"]);
+  if (!metrics.length) return null;
+  return (
+    <div className="metric-grid detail-evidence-grid" style={{ marginTop: 22 }}>
+      {metrics.map((metric) => <Metric key={metric.label} {...metric} />)}
+    </div>
+  );
 }
 
 function ReleasedSummary({ item }) {
+  const metrics = visibleDetailMetrics(buildReleasedCustomerMetrics(item), ["定価", "注目度"])
+    .map(normalizeEvidenceMetric);
+  if (!metrics.length) {
+    return <p className="section-sub">まだ相場を判断できるだけの実観測データがありません。</p>;
+  }
   return (
-    <div className="metric-grid">
-      {buildReleasedCustomerMetrics(item).map((metric) => (
-        <Metric key={metric.label} {...metric} />
-      ))}
+    <div className="metric-grid detail-evidence-grid">
+      {metrics.map((metric) => <Metric key={metric.label} {...metric} />)}
     </div>
   );
 }
 
 function UpcomingSummary({ item }) {
+  const metrics = visibleDetailMetrics(buildUpcomingCustomerMetrics(item), ["価格", "発売"]);
+  if (!metrics.length) {
+    return <p className="section-sub">発売前スコアは根拠が揃ってから表示します。</p>;
+  }
   return (
-    <div className="metric-grid">
-      <Metric label="先行注目度" value={formatScore(item.forecast_score)} tone="highlight" />
-      <Metric label="話題化期待" value={formatScore(priceUpsideScore(item))} />
-      <Metric label="入手難度" value={formatScore(scarcityScore(item))} />
-      <Metric label="注目度" value={formatScore(opportunityScore(item))} tone="highlight" />
-      <Metric label="発売" value={formatSchedule(item)} />
-      <Metric label="価格" value={formatYen(item.price)} />
+    <div className="metric-grid detail-evidence-grid">
+      {metrics.map((metric) => <Metric key={metric.label} {...metric} />)}
     </div>
   );
 }
@@ -261,15 +267,34 @@ function UpcomingSummary({ item }) {
 function MarketBreakdown({ item }) {
   const summary = item.market_summary || {};
   const evidence = item.market_evidence || summary.evidence || {};
+  const evidenceValue = formatMarketEvidenceValue(evidence);
+  const metrics = visibleDetailMetrics([
+    evidenceValue !== "データ不足"
+      ? { label: marketEvidenceLabel(item), value: evidenceValue, meta: evidence.explanation, tone: "highlight" }
+      : null,
+    statsMetric(summary.type_stats?.rare_single, "レア単品"),
+    statsMetric(summary.type_stats?.secret_single, "シークレット"),
+    (summary.active_listing_count ?? 0) > 0
+      ? { label: "確認できた出品", value: `${summary.active_listing_count.toLocaleString("ja-JP")}件` }
+      : null,
+    (summary.sold_count ?? 0) > 0
+      ? { label: "確認できた成約", value: `${summary.sold_count.toLocaleString("ja-JP")}件` }
+      : null,
+    summary.price_confidence?.label && summary.price_confidence.label !== "未取得"
+      ? { label: "価格データの信頼度", value: summary.price_confidence.label }
+      : null,
+    summary.last_observed_at
+      ? { label: "直近の観測", value: formatObservedAt(summary.last_observed_at) }
+      : null,
+  ].filter(Boolean));
+
+  if (!metrics.length) {
+    return <p className="section-sub">まだ相場を判断できるだけの実観測データがありません。</p>;
+  }
+
   return (
-    <div className="metric-grid">
-      <Metric label={evidence.label || "データ不足"} value={formatMarketEvidenceValue(evidence)} meta={evidence.explanation} tone="highlight" />
-      <EvidenceMetric stats={summary.type_stats?.rare_single} fallbackLabel="レア単品" />
-      <EvidenceMetric stats={summary.type_stats?.secret_single} fallbackLabel="シークレット" />
-      <Metric label="出品数" value={(summary.active_listing_count ?? 0).toLocaleString("ja-JP")} />
-      <Metric label="売れた数" value={(summary.sold_count ?? 0).toLocaleString("ja-JP")} />
-      <Metric label="信頼度" value={summary.price_confidence?.label ?? "データ不足"} />
-      <Metric label="直近更新" value={formatObservedAt(summary.last_observed_at)} />
+    <div className="metric-grid detail-evidence-grid">
+      {metrics.map((metric) => <Metric key={metric.label} {...metric} />)}
     </div>
   );
 }
@@ -292,27 +317,33 @@ function UpcomingNotice({ item }) {
 function StockPanel({ item }) {
   const summary = item.stock_summary || item.availability_summary;
   const label = stockStatusLabel(summary);
+  const reports = item.stock_reports ?? [];
+  const hasObservedStock = label !== "未取得" || reports.length > 0;
   return (
     <div id="stock" className="card panel">
       <h2>在庫状況</h2>
-      <div className={`stock-signal stock-signal--${summary?.latest_stock_status || "unknown"}`} style={{ marginBottom: 12 }}>
-        <strong>{label}</strong>
-        <span>{label === "未取得" ? "データ不足" : "動きあり"}</span>
-      </div>
-      <p className="section-sub">
-        店頭やオンラインで確認できた在庫の動きを表示します。
-      </p>
-      {(item.stock_reports ?? []).length ? (
-        <div className="detail-signal-list">
-          {(item.stock_reports ?? []).slice(0, 5).map((report) => (
-            <div key={report.id || report.reported_at}>
-              <strong>{report.status_label || stockStatusLabel({ latest_stock_status: report.status })}</strong>
-              <span>{[report.region, report.shop_name].filter(Boolean).join(" / ") || "場所未登録"}</span>
-              <time>{formatObservedAt(report.reported_at)}</time>
+      {hasObservedStock ? (
+        <>
+          <div className={`stock-signal stock-signal--${summary?.latest_stock_status || "unknown"}`} style={{ marginBottom: 12 }}>
+            <strong>{label === "未取得" ? "在庫報告あり" : label}</strong>
+            <span>実観測データ</span>
+          </div>
+          <p className="section-sub">店頭やオンラインで確認できた在庫の動きです。</p>
+          {reports.length ? (
+            <div className="detail-signal-list">
+              {reports.slice(0, 5).map((report) => (
+                <div key={report.id || report.reported_at}>
+                  <strong>{report.status_label || stockStatusLabel({ latest_stock_status: report.status })}</strong>
+                  <span>{[report.region, report.shop_name].filter(Boolean).join(" / ") || "場所未登録"}</span>
+                  <time>{formatObservedAt(report.reported_at)}</time>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      ) : null}
+          ) : null}
+        </>
+      ) : (
+        <p className="section-sub">まだ在庫の実観測はありません。未取得を在庫状態として扱いません。</p>
+      )}
     </div>
   );
 }
@@ -344,9 +375,39 @@ function Metric({ label, value, tone = "", meta = "" }) {
   );
 }
 
-function EvidenceMetric({ stats, fallbackLabel }) {
-  if (!stats || (!Number.isFinite(stats.primary_price) && stats.listing_count === 0)) return null;
-  return <Metric label={stats.label || fallbackLabel} value={formatYen(stats.primary_price)} meta={stats.explanation} />;
+function visibleDetailMetrics(metrics = [], omitLabels = []) {
+  const unavailable = new Set(["未取得", "データ不足", "算出待ち"]);
+  const omitted = new Set(omitLabels);
+  return metrics.filter((metric) => {
+    if (!metric || omitted.has(metric.label)) return false;
+    const value = String(metric.value ?? "").trim();
+    return Boolean(value) && !unavailable.has(value) && !value.includes("データ不足");
+  });
+}
+
+function normalizeEvidenceMetric(metric) {
+  if (!metric) return metric;
+  if (["データ不足", "未取得"].includes(metric.label) && String(metric.value || "").includes("確認")) {
+    return { ...metric, label: "確認できた出品価格" };
+  }
+  return metric;
+}
+
+function statsMetric(stats, fallbackLabel) {
+  if (!stats || (!Number.isFinite(stats.primary_price) && (stats.listing_count ?? 0) === 0)) return null;
+  return {
+    label: stats.label || fallbackLabel,
+    value: Number.isFinite(stats.primary_price) ? formatYen(stats.primary_price) : `${stats.listing_count.toLocaleString("ja-JP")}件`,
+    meta: stats.explanation,
+  };
+}
+
+function marketEvidenceLabel(item) {
+  const evidence = item.market_evidence || item.market_summary?.evidence || {};
+  const value = formatMarketEvidenceValue(evidence);
+  if (value === "データ不足") return "観測データなし";
+  if (evidence.label && !["データ不足", "未取得"].includes(evidence.label)) return evidence.label;
+  return "確認できた出品価格";
 }
 
 function formatObservedAt(value) {

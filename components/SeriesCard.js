@@ -33,8 +33,8 @@ export default function SeriesCard({ series, priority = false, scope = "variant"
           emptyLabel="画像なし"
         />
       </div>
-      <div>
-        <div className="tag-row" style={{ marginBottom: 10 }}>
+      <div className="product-card__identity">
+        <div className="tag-row product-card__status">
           <span className="tag">{isReleased ? "発売中" : "発売予定"}</span>
           <span className="tag">{isSeries ? "シリーズ" : (series.rarity || series.category || "単品")}</span>
         </div>
@@ -45,20 +45,20 @@ export default function SeriesCard({ series, priority = false, scope = "variant"
             : `${series.series_name ?? series.brand} / ${series.role ?? series.character}`}
         </div>
       </div>
-      <div className="metric-grid">
-        {metrics.map((metric) => (
-          <div key={metric.label} className="metric">
-            <div className="metric__label">{metric.label}</div>
-            <div className={`metric__value ${metric.tone ? `is-${metric.tone}` : ""}`}>
-              {metric.value}
+      {metrics.length > 0 ? (
+        <dl className="product-evidence" aria-label="商品データ">
+          {metrics.map((metric) => (
+            <div key={metric.label} className="product-evidence__row">
+              <dt>{metric.label}</dt>
+              <dd className={metric.tone ? `is-${metric.tone}` : ""}>{metric.value}</dd>
+              {metric.meta ? <small>{metric.meta}</small> : null}
             </div>
-            {metric.meta ? <small>{metric.meta}</small> : null}
-          </div>
-        ))}
-      </div>
+          ))}
+        </dl>
+      ) : null}
       {tags.length > 0 ? (
-        <div className="tag-row">
-          {tags.map((tag) => (
+        <div className="tag-row product-card__signals">
+          {tags.slice(0, 3).map((tag) => (
             <span key={tag} className="tag tag--signal">{tag}</span>
           ))}
         </div>
@@ -68,7 +68,11 @@ export default function SeriesCard({ series, priority = false, scope = "variant"
 }
 
 function visibleCardMetrics(metrics = [], isReleased) {
-  const unavailable = new Set(["未取得", "データ不足"]);
-  const filtered = metrics.filter((metric) => metric.meta || /相場|出品価格|データ不足/.test(metric.label) || !unavailable.has(metric.value));
-  return (filtered.length ? filtered : metrics).slice(0, isReleased ? 4 : 3);
+  const unavailable = new Set(["未取得", "データ不足", "算出待ち", "0点"]);
+  return metrics
+    .filter((metric) => {
+      const value = String(metric?.value ?? "").trim();
+      return Boolean(value) && !unavailable.has(value) && !value.includes("データ不足");
+    })
+    .slice(0, isReleased ? 3 : 3);
 }

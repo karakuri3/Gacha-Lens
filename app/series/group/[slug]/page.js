@@ -44,6 +44,7 @@ export default async function ParentSeriesDetailPage({ params }) {
   const market = item.market_summary ?? {};
   const completeSetEvidence = market.type_stats?.complete_set ?? {};
   const completeSetReference = item.complete_set_reference;
+  const heroEvidence = buildSeriesHeroEvidence({ released, item, variants, market, completeSetEvidence });
   const detailUrl = absoluteSiteUrl(seriesHref(item));
   const structuredData = buildParentSeriesStructuredData({
     name: item.name,
@@ -70,51 +71,37 @@ export default async function ParentSeriesDetailPage({ params }) {
           <Link href="/">ホーム</Link><span>/</span><Link href="/series?scope=series">シリーズ一覧</Link><span>/</span><strong>{item.name}</strong>
         </nav>
 
-        <section className="detail-hero">
+        <section className="detail-hero collector-detail-hero">
           <div className="detail-media">
             <div className="detail-image">
               <ProductImage src={item.image_url} alt={item.name} priority emptyLabel="シリーズ画像未取得" />
             </div>
           </div>
-          <div className="detail-panel">
-            <div className="tag-row">
+          <div className="detail-panel collector-detail-panel">
+            <div className="tag-row collector-detail-status">
               <span className="tag">{released ? "発売中" : "発売予定"}</span>
               <span className="tag">シリーズ</span>
-              <span className="tag">{formatSchedule(item)}</span>
+              {formatSchedule(item) !== "未定" ? <span className="tag">{formatSchedule(item)}</span> : null}
             </div>
             <h1 className="page-title detail-title">{item.name}</h1>
-            <p className="page-lead" style={{ marginTop: 12 }}>{item.brand || item.character || "公式商品"}</p>
+            <p className="page-lead collector-detail-byline">{item.brand || item.character || "公式商品"}</p>
 
-            <dl className="detail-facts">
+            <dl className="detail-facts collector-detail-facts">
               <div><dt>メーカー</dt><dd>{item.brand || "未登録"}</dd></div>
               <div><dt>作品</dt><dd>{item.franchise || item.character || "未登録"}</dd></div>
               <div><dt>カテゴリ</dt><dd>{item.category || "未登録"}</dd></div>
               <div><dt>ラインナップ</dt><dd>{variants.length ? `${variants.length}種` : "確認中"}</dd></div>
-              <div><dt>発売</dt><dd>{formatSchedule(item)}</dd></div>
-              <div><dt>価格</dt><dd>{formatYen(item.price)}</dd></div>
+              {formatSchedule(item) !== "未定" ? <div><dt>発売</dt><dd>{formatSchedule(item)}</dd></div> : null}
+              {Number.isFinite(Number(item.price)) && Number(item.price) > 0 ? <div><dt>価格</dt><dd>{formatYen(Number(item.price))}</dd></div> : null}
             </dl>
 
-            <div className="metric-grid" style={{ marginTop: 22 }}>
-              {released ? (
-                <>
-                  <Metric label={completeSetAggregateLabel(completeSetEvidence)} value={formatCompleteSetAggregate(completeSetEvidence)} meta={completeSetEvidence.explanation} tone="highlight" />
-                  <Metric label={market.type_stats?.partial_set?.label || "セット価格データ不足"} value={formatYen(market.partial_set)} />
-                  <Metric label="売れた数" value={`${market.sold_count ?? 0}件`} />
-                  <Metric label="在庫状況" value={stockStatusLabel(item.stock_summary)} />
-                  <Metric label="注目度" value={formatScore(watchScore(item))} tone="highlight" />
-                </>
-              ) : (
-                <>
-                  <Metric label="価格" value={formatYen(item.price)} />
-                  <Metric label="先行注目度" value={formatScore(item.forecast_score)} tone="highlight" />
-                  <Metric label="注目度" value={formatScore(opportunityScore(item))} tone="highlight" />
-                  <Metric label="ラインナップ" value={variants.length ? `${variants.length}種` : "確認中"} />
-                  <Metric label="発売" value={formatSchedule(item)} />
-                </>
-              )}
-            </div>
+            {heroEvidence.length ? (
+              <dl className="detail-evidence-list" aria-label="市場・流通情報">
+                {heroEvidence.map((metric) => <Metric key={metric.label} {...metric} />)}
+              </dl>
+            ) : null}
 
-            <div className="detail-actions">
+            <div className="detail-actions collector-detail-actions">
               <FavoriteButton item={{
                 slug: `series-${item.slug}`,
                 entity_type: "series",
@@ -122,8 +109,8 @@ export default async function ParentSeriesDetailPage({ params }) {
                 series_name: "シリーズ",
                 image_url: item.image_url,
                 is_released: released,
-                primary_label: released ? completeSetAggregateLabel(completeSetEvidence) : "発売",
-                primary_value: released ? formatCompleteSetAggregate(completeSetEvidence) : formatSchedule(item),
+                primary_label: released && formatCompleteSetAggregate(completeSetEvidence) !== "データ不足" ? completeSetAggregateLabel(completeSetEvidence) : "発売",
+                primary_value: released && formatCompleteSetAggregate(completeSetEvidence) !== "データ不足" ? formatCompleteSetAggregate(completeSetEvidence) : formatSchedule(item),
               }} />
               {item.official_url ? <Link href={item.official_url} className="button-link" target="_blank" rel="noreferrer">公式ページ</Link> : null}
             </div>
@@ -131,7 +118,7 @@ export default async function ParentSeriesDetailPage({ params }) {
         </section>
 
         {completeSetReference ? (
-          <section className="card panel" style={{ marginTop: 24 }} aria-labelledby="complete-set-reference-title">
+          <section className="collector-detail-section" aria-labelledby="complete-set-reference-title">
             <div className="section-head">
               <div>
                 <p className="eyebrow">COMPLETE SET</p>
@@ -139,17 +126,17 @@ export default async function ParentSeriesDetailPage({ params }) {
                 <p className="section-sub">{completeSetReference.note}</p>
               </div>
             </div>
-            <div className="metric-grid">
+            <dl className="detail-evidence-list detail-evidence-list--compact">
               <Metric label={completeSetReference.lineup_label} value={formatYen(completeSetReference.price)} tone="highlight" />
               <Metric label="出品先" value={completeSetReference.provider_label} />
-            </div>
-            <div className="detail-actions">
+            </dl>
+            <div className="detail-actions collector-detail-actions">
               <a href={completeSetReference.source_url} className="button-link" target="_blank" rel="noopener noreferrer">出品ページを見る</a>
             </div>
           </section>
         ) : null}
 
-        <section className="card panel" style={{ marginTop: 24 }}>
+        <section className="collector-detail-section collector-lineup-section">
           <div className="section-head">
             <div>
               <p className="eyebrow">LINEUP</p>
@@ -162,7 +149,7 @@ export default async function ParentSeriesDetailPage({ params }) {
             <Link href={{ pathname: "/series", query: { scope: "variant", q: item.name } }} className="text-link">単品一覧で見る</Link>
           </div>
           {variants.length ? (
-            <div className="lineup-grid">
+            <div className="lineup-grid collector-lineup-list">
               {variants.map((variant) => (
                 <Link key={variant.variant_id || variant.id} href={variantHref(variant)}>
                   <span className="lineup-grid__image">
@@ -175,7 +162,7 @@ export default async function ParentSeriesDetailPage({ params }) {
               ))}
             </div>
           ) : (
-            <div className="empty">公式ラインナップを確認中です。シリーズ情報は先に利用できます。</div>
+            <div className="empty collector-detail-empty">公式ラインナップを確認中です。シリーズ情報は先に利用できます。</div>
           )}
         </section>
       </div>
@@ -185,12 +172,50 @@ export default async function ParentSeriesDetailPage({ params }) {
 
 function Metric({ label, value, tone = "", meta = "" }) {
   return (
-    <div className="metric">
-      <div className="metric__label">{label}</div>
-      <div className={`metric__value ${tone ? `is-${tone}` : ""}`}>{value}</div>
+    <div className="collector-evidence-row">
+      <dt>{label}</dt>
+      <dd className={tone ? `is-${tone}` : ""}>{value}</dd>
       {meta ? <small>{meta}</small> : null}
     </div>
   );
+}
+
+function buildSeriesHeroEvidence({ released, item, variants, market, completeSetEvidence }) {
+  const metrics = [];
+  if (released) {
+    const completeValue = formatCompleteSetAggregate(completeSetEvidence);
+    if (completeValue !== "データ不足") {
+      metrics.push({ label: completeSetAggregateLabel(completeSetEvidence), value: completeValue, meta: completeSetEvidence.explanation, tone: "highlight" });
+    }
+
+    if (Number.isFinite(Number(market.partial_set)) && Number(market.partial_set) > 0) {
+      metrics.push({ label: market.type_stats?.partial_set?.label || "セット参考価格", value: formatYen(Number(market.partial_set)) });
+    }
+
+    const sold = Number(market.sold_count);
+    if (Number.isFinite(sold) && sold > 0) metrics.push({ label: "売れた数", value: `${sold.toLocaleString("ja-JP")}件` });
+
+    const stock = stockStatusLabel(item.stock_summary);
+    if (stock !== "未取得") metrics.push({ label: "在庫状況", value: stock });
+
+    const attention = watchScore(item);
+    if (metrics.length > 0 && Number.isFinite(attention) && attention > 0) metrics.push({ label: "注目度", value: formatScore(attention), tone: "highlight" });
+    return metrics;
+  }
+
+  const price = Number(item.price);
+  if (Number.isFinite(price) && price > 0) metrics.push({ label: "価格", value: formatYen(price) });
+
+  const forecast = Number(item.forecast_score);
+  if (Number.isFinite(forecast) && forecast > 0) metrics.push({ label: "先行注目度", value: formatScore(forecast), tone: "highlight" });
+
+  const opportunity = opportunityScore(item);
+  if (Number.isFinite(opportunity) && opportunity > 0) metrics.push({ label: "注目度", value: formatScore(opportunity), tone: "highlight" });
+  if (variants.length) metrics.push({ label: "ラインナップ", value: `${variants.length}種` });
+
+  const schedule = formatSchedule(item);
+  if (schedule !== "未定") metrics.push({ label: "発売", value: schedule });
+  return metrics;
 }
 
 function formatCompleteSetAggregate(evidence = {}) {
@@ -198,5 +223,5 @@ function formatCompleteSetAggregate(evidence = {}) {
 }
 
 function completeSetAggregateLabel(evidence = {}) {
-  return evidence.tier === "insufficient" ? "セット価格データ不足" : evidence.label || "セット価格データ不足";
+  return evidence.tier === "insufficient" ? "セット価格データ不足" : evidence.label || "セット参考価格";
 }
