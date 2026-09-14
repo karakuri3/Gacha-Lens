@@ -199,7 +199,7 @@ function buildSeriesHeroEvidence({ released, item, variants, market, completeSet
     if (stock !== "未取得") metrics.push({ label: "在庫状況", value: stock });
 
     const attention = watchScore(item);
-    if (Number.isFinite(attention) && attention > 0) metrics.push({ label: "注目度", value: formatScore(attention), tone: "highlight" });
+    if (metrics.length > 0 && Number.isFinite(attention) && attention > 0) metrics.push({ label: "注目度", value: formatScore(attention), tone: "highlight" });
     return metrics;
   }
 
