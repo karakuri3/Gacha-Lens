@@ -6,12 +6,13 @@ import { fileURLToPath } from "node:url";
 const read = async (relative) => readFile(fileURLToPath(new URL(`../${relative}`, import.meta.url)), "utf8");
 
 test("Gacha Lens design contract is wired into the app", async () => {
-  const [contract, layout, page, card, seriesDetail, css, detailCss] = await Promise.all([
+  const [contract, layout, page, card, seriesDetail, variantDetail, css, detailCss] = await Promise.all([
     read("DESIGN.md"),
     read("app/layout.js"),
     read("app/page.js"),
     read("components/SeriesCard.js"),
     read("app/series/group/[slug]/page.js"),
+    read("app/series/[slug]/page.js"),
     read("app/product-design.css"),
     read("app/product-detail-design.css"),
   ]);
@@ -49,9 +50,14 @@ test("Gacha Lens design contract is wired into the app", async () => {
   assert.match(page, /sellThrough !== "データ不足"/);
 
   // Catalog results are object/evidence records, not nested KPI-card grids.
+  // The value is normalized before filtering so placeholder numerics such as
+  // 注目度 0点 are treated as absence rather than as market evidence.
   assert.match(card, /className="product-evidence"/);
   assert.equal(card.includes('className="metric-grid"'), false);
-  assert.match(card, /!unavailable\.has\(metric\.value\)/);
+  assert.match(card, /const value = String\(metric\?\.value \?\? ""\)\.trim\(\)/);
+  assert.match(card, /"0点"/);
+  assert.match(card, /!unavailable\.has\(value\)/);
+  assert.match(card, /!value\.includes\("データ不足"\)/);
   assert.match(css, /\.catalog-results-head ~ \.grid--cards \.product-card\s*\{[\s\S]*border-radius:\s*0/);
   assert.match(css, /\.product-evidence__row\s*\{/);
 
@@ -67,6 +73,16 @@ test("Gacha Lens design contract is wired into the app", async () => {
   assert.match(detailCss, /\.collector-detail-hero \.detail-image\s*\{[\s\S]*box-shadow:\s*none/);
   assert.match(detailCss, /\.collector-evidence-row\s*\{[\s\S]*border-bottom:/);
   assert.match(detailCss, /\.collector-lineup-list > a\s*\{[\s\S]*border-radius:\s*0/);
+
+  // Variant detail follows the same evidence-first rule. Official price and
+  // release metadata stay in facts; missing market/stock values do not become
+  // prominent KPI cards, and zero-value attention scores are omitted.
+  assert.match(variantDetail, /visibleDetailMetrics\(buildReleasedCustomerMetrics\(item\), \["定価", "注目度"\]\)/);
+  assert.match(variantDetail, /still|/);
+  assert.match(variantDetail, /まだ在庫の実観測はありません。未取得を在庫状態として扱いません。/);
+  assert.equal(variantDetail.includes("PRICE PULSE"), false);
+  assert.match(css, /\.detail-hero\s*\{[\s\S]*border-radius:\s*0\s*!important/);
+  assert.match(css, /\.detail-evidence-grid \.metric\s*\{[\s\S]*border-radius:\s*0/);
 
   for (const forbidden of ["linear-gradient(", "radial-gradient(", "backdrop-filter:", "text-shadow:"]) {
     assert.equal(css.includes(forbidden), false, `product design layer must not introduce ${forbidden}`);
