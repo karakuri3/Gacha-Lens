@@ -1,0 +1,134 @@
+name: Validate #303 loading and error visuals
+
+on:
+  pull_request:
+    paths:
+      - "app/visual-qa/**"
+      - ".github/workflows/validate-design-loading-error-d5.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-design-loading-error-d5-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  state-visuals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GACHA_DATA_SOURCE: sample
+    steps:
+      - name: Checkout exact validation head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install pinned screenshot browser
+        run: |
+          set -euo pipefail
+          DEPS="$RUNNER_TEMP/gachalens-state-visual-qa"
+          mkdir -p "$DEPS"
+          cd "$DEPS"
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-audit --no-fund playwright@1.55.0
+          "$DEPS/node_modules/.bin/playwright" install --with-deps chromium
+          echo "VISUAL_QA_DEPS=$DEPS" >> "$GITHUB_ENV"
+
+      - name: Start exact-head fixture app
+        run: |
+          set -euo pipefail
+          npm run dev -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-state.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/gachalens-state.pid"
+          for _ in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:3000/visual-qa/loading >/dev/null 2>&1; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/gachalens-state.pid")" 2>/dev/null; then
+              cat "$RUNNER_TEMP/gachalens-state.log"
+              exit 1
+            fi
+            sleep 0.5
+          done
+          cat "$RUNNER_TEMP/gachalens-state.log"
+          exit 1
+
+      - name: Capture loading and error components
+        run: |
+          set -euo pipefail
+          mkdir -p visual-qa-states
+          cat > "$RUNNER_TEMP/capture-states.cjs" <<'NODE'
+          const { chromium } = require(process.env.VISUAL_QA_DEPS + '/node_modules/playwright');
+          const path = require('node:path');
+          const origin = 'http://127.0.0.1:3000';
+          const screenshotStyle = 'nextjs-portal { display: none !important; }';
+          const viewports = [
+            ['360x800', 360, 800],
+            ['390x844', 390, 844],
+            ['desktop-1440x1000', 1440, 1000],
+          ];
+
+          async function assertBase(page, label, viewportName) {
+            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+            if (overflow > 1) throw new Error(`${label} ${viewportName}: horizontal overflow ${overflow}px`);
+          }
+
+          async function capture(page, label, route, viewportName) {
+            const response = await page.goto(`${origin}${route}`, { waitUntil: 'networkidle' });
+            if (!response || !response.ok()) throw new Error(`${label} ${viewportName}: HTTP ${response?.status()}`);
+            await assertBase(page, label, viewportName);
+            await page.screenshot({
+              path: path.join('visual-qa-states', `${label}--${viewportName}.png`),
+              fullPage: true,
+              style: screenshotStyle,
+            });
+          }
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            try {
+              for (const [viewportName, width, height] of viewports) {
+                const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+
+                await capture(page, 'loading', '/visual-qa/loading', viewportName);
+                const loading = page.locator('[aria-label="読み込み中"][aria-busy="true"]');
+                if (await loading.count() !== 1) throw new Error(`loading ${viewportName}: loading state missing`);
+
+                await capture(page, 'error', '/visual-qa/error', viewportName);
+                await page.getByText('商品情報を取得できません', { exact: true }).waitFor();
+                if (await page.getByRole('button', { name: '再試行' }).count() !== 1) throw new Error(`error ${viewportName}: retry action missing`);
+                if (await page.getByRole('link', { name: 'ホームへ戻る' }).count() !== 1) throw new Error(`error ${viewportName}: home action missing`);
+
+                await page.close();
+              }
+            } finally {
+              await browser.close();
+            }
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          node "$RUNNER_TEMP/capture-states.cjs"
+
+      - name: Upload state visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gachalens-d5-loading-error-visual-qa
+          path: visual-qa-states/*.png
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Print app log on failure
+        if: failure()
+        run: cat "$RUNNER_TEMP/gachalens-state.log" || true
