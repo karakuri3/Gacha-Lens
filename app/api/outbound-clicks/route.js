@@ -2,10 +2,12 @@ import {
   hasServiceRoleSupabaseConfig as hasSupabaseConfig,
   serviceRoleSupabase as supabase,
 } from "@/lib/supabase/service-role-client";
+import { shouldRecordOutboundClickRequest } from "@/lib/domain/outbound-click-tracking";
 
 const PROVIDERS = new Set(["mercari", "yahoo", "rakuten", "amazon", "official"]);
 
 export async function POST(request) {
+  if (!shouldRecordOutboundClickRequest(request.url)) return new Response(null, { status: 204 });
   if (!hasSupabaseConfig) return new Response(null, { status: 204 });
   const body = await request.json().catch(() => ({}));
   const provider = String(body.provider || "");
