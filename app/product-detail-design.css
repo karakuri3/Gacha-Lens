@@ -4,9 +4,14 @@
 .collector-detail-hero {
   gap: 24px;
   align-items: start;
+  margin: 0;
   padding: 18px 0 28px;
+  border: 0;
   border-top: 1px solid #d7dbe1;
   border-bottom: 1px solid #d7dbe1;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .collector-detail-hero .detail-image {
