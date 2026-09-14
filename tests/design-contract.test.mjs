@@ -6,10 +6,11 @@ import { fileURLToPath } from "node:url";
 const read = async (relative) => readFile(fileURLToPath(new URL(`../${relative}`, import.meta.url)), "utf8");
 
 test("Gacha Lens design contract is wired into the app", async () => {
-  const [contract, layout, page, css] = await Promise.all([
+  const [contract, layout, page, card, css] = await Promise.all([
     read("DESIGN.md"),
     read("app/layout.js"),
     read("app/page.js"),
+    read("components/SeriesCard.js"),
     read("app/product-design.css"),
   ]);
 
@@ -43,6 +44,13 @@ test("Gacha Lens design contract is wired into the app", async () => {
   assert.match(page, /schedule !== "未定"/);
   assert.match(page, /stock !== "未取得"/);
   assert.match(page, /sellThrough !== "データ不足"/);
+
+  // Catalog results are object/evidence records, not nested KPI-card grids.
+  assert.match(card, /className="product-evidence"/);
+  assert.equal(card.includes('className="metric-grid"'), false);
+  assert.match(card, /!unavailable\.has\(metric\.value\)/);
+  assert.match(css, /\.catalog-results-head ~ \.grid--cards \.product-card\s*\{[\s\S]*border-radius:\s*0/);
+  assert.match(css, /\.product-evidence__row\s*\{/);
 
   for (const forbidden of ["linear-gradient(", "radial-gradient(", "backdrop-filter:", "text-shadow:"]) {
     assert.equal(css.includes(forbidden), false, `product design layer must not introduce ${forbidden}`);
