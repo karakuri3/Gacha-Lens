@@ -1,0 +1,127 @@
+name: Design Visual QA
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "DESIGN.md"
+      - ".github/workflows/design-visual-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: design-visual-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GACHA_DATA_SOURCE: sample
+    steps:
+      - name: Checkout exact pull-request head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install pinned screenshot browser
+        run: |
+          set -euo pipefail
+          DEPS="$RUNNER_TEMP/gachalens-visual-qa"
+          mkdir -p "$DEPS"
+          cd "$DEPS"
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-audit --no-fund playwright@1.55.0
+          "$DEPS/node_modules/.bin/playwright" install --with-deps chromium
+          echo "VISUAL_QA_DEPS=$DEPS" >> "$GITHUB_ENV"
+
+      - name: Start exact-branch app with sample data
+        run: |
+          set -euo pipefail
+          npm run dev -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/gachalens-next.pid"
+          for _ in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/gachalens-next.pid")" 2>/dev/null; then
+              cat "$RUNNER_TEMP/gachalens-next.log"
+              exit 1
+            fi
+            sleep 0.5
+          done
+          cat "$RUNNER_TEMP/gachalens-next.log"
+          exit 1
+
+      - name: Capture product-state screenshots
+        run: |
+          set -euo pipefail
+          mkdir -p visual-qa
+          cat > "$RUNNER_TEMP/capture-gachalens.cjs" <<'NODE'
+          const { chromium } = require(process.env.VISUAL_QA_DEPS + '/node_modules/playwright');
+          const path = require('node:path');
+
+          const screens = [
+            ['home', '/'],
+            ['catalog', '/series'],
+            ['ranking', '/ranking'],
+            ['detail', '/series/chiikawa-osuwari-usagi'],
+            ['upcoming', '/series?release=upcoming'],
+            ['upcoming-detail', '/series/onepiece-wanted-luffy'],
+          ];
+          const viewports = [
+            ['360x800', 360, 800],
+            ['390x844', 390, 844],
+            ['desktop-1440x1000', 1440, 1000],
+          ];
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            try {
+              for (const [viewportName, width, height] of viewports) {
+                const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+                for (const [screenName, route] of screens) {
+                  const response = await page.goto(`http://127.0.0.1:3000${route}`, { waitUntil: 'networkidle' });
+                  if (!response || !response.ok()) throw new Error(`${screenName} ${viewportName}: HTTP ${response?.status()}`);
+                  await page.screenshot({
+                    path: path.join('visual-qa', `${screenName}--${viewportName}.png`),
+                    fullPage: true,
+                  });
+                }
+                await page.close();
+              }
+            } finally {
+              await browser.close();
+            }
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          node "$RUNNER_TEMP/capture-gachalens.cjs"
+
+      - name: Upload exact-head visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gachalens-design-visual-qa-${{ github.event.pull_request.head.sha || github.sha }}
+          path: visual-qa/*.png
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Print app log on failure
+        if: failure()
+        run: cat "$RUNNER_TEMP/gachalens-next.log" || true
