@@ -48,16 +48,16 @@ jobs:
           npm install --ignore-scripts --no-audit --no-fund playwright@1.55.0
           "$DEPS/node_modules/.bin/playwright" install --with-deps chromium
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libfaketime
+          sudo apt-get install -y -qq faketime
           echo "VISUAL_QA_DEPS=$DEPS" >> "$GITHUB_ENV"
 
-      - name: Build current-date exact branch with sample data
-        run: npm run build
+      - name: Compile production bundle without prerender data reads
+        run: npx next build --experimental-build-mode compile
 
       - name: Start production-equivalent current-date app
         run: |
           set -euo pipefail
-          npm run start -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next.log" 2>&1 &
+          setsid npm run start -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/gachalens-next.pid"
           for _ in $(seq 1 120); do
             if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
@@ -145,17 +145,20 @@ jobs:
           NODE
           node "$RUNNER_TEMP/capture-gachalens.cjs"
 
-      - name: Rebuild and restart with deterministic evidence-fresh clock
+      - name: Restart same production bundle with deterministic evidence-fresh clock
         run: |
           set -euo pipefail
-          kill "$(cat "$RUNNER_TEMP/gachalens-next.pid")" || true
-          for _ in $(seq 1 40); do
-            if ! kill -0 "$(cat "$RUNNER_TEMP/gachalens-next.pid")" 2>/dev/null; then break; fi
+          PID="$(cat "$RUNNER_TEMP/gachalens-next.pid")"
+          kill -TERM -- "-$PID" 2>/dev/null || kill -TERM "$PID" 2>/dev/null || true
+          for _ in $(seq 1 60); do
+            if ! kill -0 "$PID" 2>/dev/null && ! curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then break; fi
             sleep 0.25
           done
-          rm -rf .next
-          faketime '2026-03-22 12:00:00' npm run build
-          faketime '2026-03-22 12:00:00' npm run start -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next-populated.log" 2>&1 &
+          if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
+            echo "current-date server did not stop cleanly"
+            exit 1
+          fi
+          setsid faketime '2026-03-22 12:00:00' npm run start -- --hostname 127.0.0.1 --port 3000 >"$RUNNER_TEMP/gachalens-next-populated.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/gachalens-next.pid"
           for _ in $(seq 1 120); do
             if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then
