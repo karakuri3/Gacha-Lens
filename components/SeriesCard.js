@@ -68,8 +68,11 @@ export default function SeriesCard({ series, priority = false, scope = "variant"
 }
 
 function visibleCardMetrics(metrics = [], isReleased) {
-  const unavailable = new Set(["未取得", "データ不足"]);
+  const unavailable = new Set(["未取得", "データ不足", "算出待ち", "0点"]);
   return metrics
-    .filter((metric) => !unavailable.has(metric.value) && !String(metric.value).includes("データ不足"))
+    .filter((metric) => {
+      const value = String(metric?.value ?? "").trim();
+      return Boolean(value) && !unavailable.has(value) && !value.includes("データ不足");
+    })
     .slice(0, isReleased ? 3 : 3);
 }
