@@ -155,9 +155,9 @@ test("categories index is parent-series-first while filtered catalog URLs stay n
 test("parent category catalog retains a series-only category and its exact parent count", () => {
   const repository = source("lib/data/supabase-gacha-repository.js");
   const categorySource = repository.slice(repository.indexOf("export async function fetchSupabaseParentSeriesCategoryCatalog"), repository.indexOf("export async function fetchSupabaseUpcomingParentSeriesMonths"));
-  assert.match(categorySource, /fetchTable\(supabaseClient, TABLE_MAP\.series, "id,category,image_url,is_released"\)/);
+  assert.match(categorySource, /fetchTable\(supabaseClient, TABLE_MAP\.series, "id,category,image_url,is_released,release_date"\)/);
   assert.match(categorySource, /series_count \+= 1/);
-  assert.match(categorySource, /if \(!row\.is_released\) group\.upcoming_count \+= 1/);
+  assert.match(categorySource, /effectiveReleaseState\(row, \{ now \}\)/);
   assert.doesNotMatch(categorySource, /TABLE_MAP\.variants|countPublicVariants/);
 });
 
