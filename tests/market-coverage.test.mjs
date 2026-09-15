@@ -462,12 +462,14 @@ test("safe-query checker requires both target and parent evidence", () => {
   assert.equal(isSafeMarketSearchQuery("勇者", variant, series), false);
 });
 
-test("manual workflow defaults to dry-run without changing schedule frequency", async () => {
+test("legacy workflow defaults manual dispatch to dry-run and has no schedule trigger", async () => {
   const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
+  const triggers = workflow.slice(workflow.indexOf("on:"), workflow.indexOf("\njobs:"));
+  assert.match(triggers, /workflow_dispatch:/);
+  assert.doesNotMatch(triggers, /\bschedule:/);
+  assert.equal((triggers.match(/^\s+- cron:/gm) ?? []).length, 0);
   assert.match(workflow, /default: dry-run/);
   assert.match(workflow, /concurrency:/);
-  assert.equal((workflow.match(/^\s+- cron:/gm) ?? []).length, 3);
-  assert.match(workflow, /"17,47 \* \* \* \*"/);
 });
 
 test("market APIs use the shared bounded retry and timeout policy", async () => {
@@ -638,10 +640,9 @@ test("upsert path enforces safety and creates review issues", async () => {
   assert.match(source, /filter\(\(row\) => row\.review_required\)[\s\S]*createImportIssue/);
 });
 
-test("scheduled and manual ingestion share one non-cancelling concurrency group", async () => {
+test("legacy manual ingestion keeps the non-cancelling concurrency group", async () => {
   const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
   assert.match(workflow, /group: gacha-ingestion\s+cancel-in-progress: false/);
-  assert.equal((workflow.match(/^\s+- cron:/gm) ?? []).length, 3);
   assert.match(workflow, /default: dry-run/);
   assert.match(workflow, /"17,47 \* \* \* \*"\)[\s\S]*mode=rollout/);
 });
@@ -757,7 +758,7 @@ test("all source fetch invokes both source families", async () => {
   assert.equal(result.configuredSources, 3);
 });
 
-test("manual workflow defaults to planner APIs while scheduled market uses the rollout contract", async () => {
+test("manual workflow defaults to planner APIs while dormant schedule routing remains fail-closed", async () => {
   const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url), "utf8");
   assert.match(workflow, /source_scope:[\s\S]*default: planner-apis/);
   assert.match(workflow, /execute_sources:[\s\S]*default: false/);
@@ -765,7 +766,6 @@ test("manual workflow defaults to planner APIs while scheduled market uses the r
   assert.match(workflow, /if \[ -n "\$SCHEDULE" \]; then[\s\S]*source_scope=planner-apis/);
   assert.match(workflow, /"17,47 \* \* \* \*"\)[\s\S]*execute_sources=true/);
   assert.match(workflow, /MARKET_SOURCE_SCOPE: \$\{\{ steps\.ingestion\.outputs\.source_scope \}\}/);
-  assert.equal((workflow.match(/^\s+- cron:/gm) ?? []).length, 3);
 });
 
 test("manual write guard runs before the ingestion process is spawned", async () => {
