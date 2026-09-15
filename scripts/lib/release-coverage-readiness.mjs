@@ -1,4 +1,10 @@
 const MONTH_RE = /^20\d{2}-(0[1-9]|1[0-2])$/;
+const CURRENT_LANE_DAILY_SERIES_CAP = 4;
+const CURRENT_LANE_PROVIDER_DAILY_CAPS = Object.freeze({
+  bandai_gashapon: 2,
+  takaratomy_arts: 2,
+});
+const CURRENT_LANE_PROVIDERS = Object.freeze(Object.keys(CURRENT_LANE_PROVIDER_DAILY_CAPS));
 
 export const OFFICIAL_RELEASE_COVERAGE_CAPABILITIES = Object.freeze([
   Object.freeze({
@@ -117,7 +123,8 @@ export function buildOfficialReleaseCoverageCapabilityMatrix() {
 }
 
 export function buildReleaseCoverageReadinessReport(input = {}) {
-  const dailySeriesCap = positiveInteger(input.daily_series_cap ?? 4, "daily_series_cap");
+  const countUnit = normalizeCountUnit(input.count_unit);
+  const dailySeriesCap = normalizeCurrentLaneDailySeriesCap(input.daily_series_cap);
   const freshnessSloDays = positiveInteger(input.freshness_slo_days ?? 7, "freshness_slo_days");
   const planningMonth = normalizePlanningMonth(input.planning_month);
   const months = normalizeMonths(input.months, planningMonth);
@@ -134,7 +141,7 @@ export function buildReleaseCoverageReadinessReport(input = {}) {
   const totalKnownGap = currentLaneMissing + futureDiscoveryMissing + separateLaneMissing + unsupportedMissing;
   const totalReference = sum(monthReports, "reference_count");
   const totalCatalog = sum(monthReports, "catalog_count");
-  const daysToCurrentLaneCatchup = currentLaneMissing === 0 ? 0 : Math.ceil(currentLaneMissing / dailySeriesCap);
+  const daysToCurrentLaneCatchup = Math.max(0, ...monthReports.map((month) => month.days_to_current_lane_catchup_at_current_cap));
   const worstCoverage = monthReports.reduce((worst, month) => {
     if (month.coverage_ratio == null) return worst;
     return worst == null ? month.coverage_ratio : Math.min(worst, month.coverage_ratio);
@@ -142,15 +149,17 @@ export function buildReleaseCoverageReadinessReport(input = {}) {
   const unclassifiedShortfall = sum(monthReports, "unclassified_shortfall");
 
   return {
-    schema_version: 3,
+    schema_version: 4,
     source_scope: "offline_sanitized_counts_only",
     database_writes: 0,
     provider_requests: 0,
     assumptions: {
       planning_month: planningMonth,
+      count_unit: countUnit,
       current_lane_daily_series_cap: dailySeriesCap,
+      current_lane_provider_daily_caps: { ...CURRENT_LANE_PROVIDER_DAILY_CAPS },
       freshness_slo_days: freshnessSloDays,
-      reference_count_semantics: "sanitized comparison benchmark, not an authoritative market total",
+      reference_count_semantics: "sanitized like-for-like series benchmark, not an authoritative market total",
       future_discovery_semantics: "supported-source future-month gaps require a separately reviewed discovery expansion and are never divided by the current F0 cap",
       separate_lane_semantics: "supported by a distinct reviewed lane; never divide by the current F0 cap",
       parser_health_evidence: "fresh read-only parser health is required separately before any activation decision",
@@ -215,6 +224,7 @@ export function formatReleaseCoverageReadinessMarkdown(report) {
     "# Official release coverage readiness",
     "",
     `Verdict: **${report.verdict}**`,
+    `Count unit: **${report.assumptions.count_unit}**`,
     "",
     "| Month | Horizon | Catalog | Reference | Coverage | Current-lane missing | Future-discovery missing | Separate-lane missing | Unsupported missing | Current-lane catch-up days | Current lane closes full gap | Meets SLO |",
     "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | :---: |",
@@ -250,9 +260,11 @@ function buildMonthReport(month, { dailySeriesCap, freshnessSloDays }) {
     throw new Error(`month ${month.month} known gap exceeds reference shortfall`);
   }
 
-  const catchupDays = month.current_lane_missing === 0
-    ? 0
-    : Math.ceil(month.current_lane_missing / dailySeriesCap);
+  const catchupDays = currentLaneCatchupDays({
+    totalMissing: month.current_lane_missing,
+    byProvider: month.current_lane_missing_by_provider,
+    dailySeriesCap,
+  });
   const unclassifiedShortfall = totalShortfall - knownGap;
   const currentLaneCanCloseFullGap = month.horizon === "current"
     && month.future_discovery_missing === 0
@@ -308,6 +320,22 @@ function buildWorkstreams({
   ].filter(Boolean);
 }
 
+function normalizeCountUnit(value) {
+  if (String(value ?? "").trim() !== "series") {
+    throw new Error("count_unit must be explicit series; normalize comparison evidence before planning");
+  }
+  return "series";
+}
+
+function normalizeCurrentLaneDailySeriesCap(value) {
+  if (value == null) return CURRENT_LANE_DAILY_SERIES_CAP;
+  const number = positiveInteger(value, "daily_series_cap");
+  if (number !== CURRENT_LANE_DAILY_SERIES_CAP) {
+    throw new Error(`daily_series_cap must match current reviewed cap ${CURRENT_LANE_DAILY_SERIES_CAP}`);
+  }
+  return number;
+}
+
 function normalizePlanningMonth(value) {
   const month = String(value ?? "").trim();
   if (!MONTH_RE.test(month)) throw new Error("planning_month must be explicit YYYY-MM");
@@ -324,17 +352,51 @@ function normalizeMonths(value, planningMonth) {
     if (!MONTH_RE.test(month) || seen.has(month)) throw new Error("month keys must be unique YYYY-MM values");
     if (month < planningMonth) throw new Error(`month ${month} precedes planning_month; current/future coverage only`);
     seen.add(month);
+    const currentLaneMissing = nonNegativeInteger(entry.current_lane_missing ?? 0, `${month}.current_lane_missing`);
     return {
       month,
       horizon: month === planningMonth ? "current" : "future",
       catalog_count: nonNegativeInteger(entry.catalog_count, `${month}.catalog_count`),
       reference_count: nonNegativeInteger(entry.reference_count, `${month}.reference_count`),
-      current_lane_missing: nonNegativeInteger(entry.current_lane_missing ?? 0, `${month}.current_lane_missing`),
+      current_lane_missing: currentLaneMissing,
+      current_lane_missing_by_provider: normalizeCurrentLaneProviderGap(
+        entry.current_lane_missing_by_provider,
+        currentLaneMissing,
+        month,
+      ),
       future_discovery_missing: nonNegativeInteger(entry.future_discovery_missing ?? 0, `${month}.future_discovery_missing`),
       separate_lane_missing: nonNegativeInteger(entry.separate_lane_missing ?? 0, `${month}.separate_lane_missing`),
       unsupported_source_missing: nonNegativeInteger(entry.unsupported_source_missing ?? 0, `${month}.unsupported_source_missing`),
     };
   }).sort((left, right) => left.month.localeCompare(right.month));
+}
+
+function normalizeCurrentLaneProviderGap(value, total, month) {
+  if (value == null) {
+    if (total === 0) return Object.fromEntries(CURRENT_LANE_PROVIDERS.map((provider) => [provider, 0]));
+    throw new Error(`${month}.current_lane_missing_by_provider is required when current_lane_missing is non-zero`);
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${month}.current_lane_missing_by_provider must be an object`);
+  }
+  const unknown = Object.keys(value).filter((provider) => !CURRENT_LANE_PROVIDERS.includes(provider));
+  if (unknown.length) throw new Error(`${month}.current_lane_missing_by_provider has unsupported provider ${unknown[0]}`);
+  const normalized = Object.fromEntries(CURRENT_LANE_PROVIDERS.map((provider) => [
+    provider,
+    nonNegativeInteger(value[provider] ?? 0, `${month}.current_lane_missing_by_provider.${provider}`),
+  ]));
+  if (Object.values(normalized).reduce((sum, count) => sum + count, 0) !== total) {
+    throw new Error(`${month}.current_lane_missing_by_provider must sum to current_lane_missing`);
+  }
+  return normalized;
+}
+
+function currentLaneCatchupDays({ totalMissing, byProvider, dailySeriesCap }) {
+  if (totalMissing === 0) return 0;
+  return Math.max(
+    Math.ceil(totalMissing / dailySeriesCap),
+    ...CURRENT_LANE_PROVIDERS.map((provider) => Math.ceil(byProvider[provider] / CURRENT_LANE_PROVIDER_DAILY_CAPS[provider])),
+  );
 }
 
 function nonNegativeInteger(value, label) {
