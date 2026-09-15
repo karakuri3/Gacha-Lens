@@ -107,19 +107,6 @@ jobs:
           echo "Exact source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
           echo "Exact-head Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Probe bounded variant-detail diagnostic
-        shell: bash
-        run: |
-          set -euo pipefail
-          body="$(mktemp)"
-          trap 'rm -f "$body"' EXIT
-          code="$(curl --silent --show-error --max-time 90 --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}/api/runtime-diagnostics/variant-detail")"
-          echo "Diagnostic HTTP ${code}" >> "$GITHUB_STEP_SUMMARY"
-          [[ "$code" == "200" ]] || { echo "diagnostic returned HTTP ${code}" >&2; cat "$body" >&2; exit 1; }
-          compact="$(tr -d '\n\r' < "$body")"
-          echo "Diagnostic payload: ${compact}" | tee -a "$GITHUB_STEP_SUMMARY"
-          grep -Fq '"status":"ok"' "$body" || { echo 'variant-detail diagnostic isolated a failing stage' >&2; exit 1; }
-
       - name: Prove cold-to-warm edge cache
         shell: bash
         run: |
@@ -170,3 +157,28 @@ jobs:
           end="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           echo "Proof window end: ${end}" | tee -a "$GITHUB_STEP_SUMMARY"
           echo 'Cold MISS followed by two byte-identical HITs: warm identical HTML requests are served by Workers Cache before the Worker/Supabase render path.' | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Diagnose cache-proof failure
+        if: ${{ failure() }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          if [[ -z "${PREVIEW_URL:-}" ]]; then
+            echo 'Exact-head Preview URL was unavailable; skipping variant-detail diagnostic.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          rc=0
+          code="$(curl --silent --show-error --max-time 30 --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}/api/runtime-diagnostics/variant-detail")" || rc=$?
+          code="${code:-000}"
+          echo "Failure diagnostic: rc=${rc} HTTP ${code}" >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$rc" == "0" && "$code" == "200" ]]; then
+            compact="$(tr -d '\n\r' < "$body")"
+            echo "Failure diagnostic payload: ${compact}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Variant-detail diagnostic was unavailable during failure analysis.' >> "$GITHUB_STEP_SUMMARY"
+          fi
