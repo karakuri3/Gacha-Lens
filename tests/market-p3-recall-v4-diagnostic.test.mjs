@@ -105,9 +105,10 @@ test("decision aggregates sanitized safety_reason and keeps wins variant-level",
   assert.equal(decision.v4_retrieval_win_count, 1); assert.equal(decision.v4_only_record_count, 2); assert.equal(decision.top_v4_rejection_reasons.not_single_item, 2);
 });
 
-test("V4 workflow is dispatch-only, read-only, and leaves Production Auto unchanged", () => {
+test("V4 workflow is dispatch-only, read-only, and leaves the P3 Production path dispatch-only", () => {
   assert.match(workflow, /^on:\s*\r?\n\s+workflow_dispatch:/m); assert.doesNotMatch(workflow, /schedule:|upsertRows|deleteRowsByIds|bounded-seed-v2-auto\.mjs/);
   assert.match(workflow, /YAHOO_SHOPPING_REQUEST_DELAY_MS: "5000"/); assert.match(workflow, /manual-market-audit-guard\.mjs scan/);
   assert.match(workflow, /group: gacha-market-bounded-v2/); assert.match(workflow, /cancel-in-progress: false/);
-  assert.match(auto, /17 \*\/3 \* \* \*/);
+  const autoTriggers = auto.slice(auto.indexOf("on:"), auto.indexOf("\npermissions:"));
+  assert.match(autoTriggers, /workflow_dispatch:/); assert.doesNotMatch(autoTriggers, /\bschedule:/);
 });
