@@ -1,5 +1,7 @@
 # Supabase Cron ingestion
 
+> **Legacy reference only.** This document records the retired Supabase Cron ingestion design. Do not use it to enable current Production scheduling. Current repository policy keeps `.github/workflows/gacha-ingestion.yml` manual-only/disabled for automatic scheduling; reviewed automatic lanes are managed separately.
+
 Supabase Cron becomes the primary free-operation runner. GitHub Actions remains the fallback runner for daily recovery and log comparison.
 
 ## Runtime shape
@@ -119,7 +121,7 @@ The template also unschedules the old `gacha-ingest-x-10min`, `gacha-ingest-mark
 
 ## Fallback
 
-Keep `.github/workflows/gacha-ingestion.yml` enabled. If Cron or the app endpoint fails, run the GitHub Action manually. With `X_FETCH_ENABLED=false`, `npm run db:upsert-all` executes the safe official -> market -> stock order. X remains available through an explicit `--task=x` run after credentials are configured.
+Do **not** enable `.github/workflows/gacha-ingestion.yml` as an automatic fallback. Its scheduled triggers are retired under #339 Phase A. The workflow remains available only as an explicitly authorized manual path, and repository policy still requires human approval for every `workflow_dispatch`. Automatic ingestion must use the separately reviewed lane that owns that provider/task.
 
 ## Market collection stance
 
