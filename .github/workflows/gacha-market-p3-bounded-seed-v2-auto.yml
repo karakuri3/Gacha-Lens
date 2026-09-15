@@ -1,8 +1,6 @@
 name: Gacha Market P3 Bounded Seed V2 Automatic
 
 on:
-  schedule:
-    - cron: "17 */3 * * *"
   workflow_dispatch:
     inputs:
       confirmation:

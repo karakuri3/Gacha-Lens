@@ -68,7 +68,8 @@ test("V5 arms are sequential and workflow is zero-write dispatch-only isolation"
   let active = 0; let maximum = 0; const order = [];
   await runRecallV5ArmsSequentially([["v2"], ["v4"], ["v5"]], async (name) => { active += 1; maximum = Math.max(maximum, active); order.push(name); await Promise.resolve(); active -= 1; return { request_diagnostics: { aggregate: { requests_rate_limited: 0, requests_timed_out: 0, requests_permanently_failed: 0 } } }; });
   assert.equal(maximum, 1); assert.deepEqual(order, ["v2", "v4", "v5"]);
-  assert.match(workflow, /^on:\s*\r?\n\s+workflow_dispatch:/m); assert.doesNotMatch(workflow, /schedule:|upsertRows|deleteRowsByIds|bounded-seed-v2-auto\.mjs/); assert.match(workflow, /group: gacha-market-bounded-v2/); assert.match(workflow, /YAHOO_SHOPPING_REQUEST_DELAY_MS: "5000"/); assert.match(auto, /17 \*\/3 \* \* \*/);
+  assert.match(workflow, /^on:\s*\r?\n\s+workflow_dispatch:/m); assert.doesNotMatch(workflow, /schedule:|upsertRows|deleteRowsByIds|bounded-seed-v2-auto\.mjs/); assert.match(workflow, /group: gacha-market-bounded-v2/); assert.match(workflow, /YAHOO_SHOPPING_REQUEST_DELAY_MS: "5000"/);
+  const autoTriggers = auto.slice(auto.indexOf("on:"), auto.indexOf("\npermissions:")); assert.match(autoTriggers, /workflow_dispatch:/); assert.doesNotMatch(autoTriggers, /\bschedule:/);
 });
 
 function buildV5Audit(count, bounded = true, allReview = false) {
