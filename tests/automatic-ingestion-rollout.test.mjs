@@ -350,9 +350,14 @@ test("simulation scans secrets before upload", () => assert.ok(simulationWorkflo
 test("simulation has exact main guard", () => assert.match(simulationWorkflow, /test "\$GITHUB_SHA" = "\$origin_main_sha"/));
 test("simulation runs fixed market dry-run", () => assert.match(simulationWorkflow, /--mode=dry-run[\s\S]*--limit=5[\s\S]*--priority=1[\s\S]*--release=released[\s\S]*--source-scope=planner-apis/));
 
-test("Production schedules remain unchanged", () => {
-  for (const cron of ["7 * * * *", "17,47 * * * *", "37 * * * *"]) assert.match(productionWorkflow, new RegExp(cron.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.equal((productionWorkflow.match(/^\s+- cron:/gm) ?? []).length, 3);
+test("legacy Production workflow is dispatch-only", () => {
+  const triggers = productionWorkflow.slice(
+    productionWorkflow.indexOf("on:"),
+    productionWorkflow.indexOf("\njobs:"),
+  );
+  assert.match(triggers, /workflow_dispatch:/);
+  assert.doesNotMatch(triggers, /\bschedule:/);
+  assert.equal((triggers.match(/^\s+- cron:/gm) ?? []).length, 0);
 });
 test("scheduled throttle blocks are successful expected no-ops", () => {
   for (const [history, reason] of [
