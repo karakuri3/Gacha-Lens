@@ -33,15 +33,16 @@ function candidate() {
   };
 }
 
-test("P3 v2 auto workflow is scheduled every three hours and has only a canary confirmation input", () => {
-  assert.match(workflow, /cron:\s*"17 \*\/3 \* \* \*"/); assert.match(workflow, /workflow_dispatch:/);
+test("P3 v2 auto workflow is dispatch-only and has only a canary confirmation input", () => {
+  const triggers = workflow.slice(workflow.indexOf("on:"), workflow.indexOf("\npermissions:"));
+  assert.match(triggers, /workflow_dispatch:/); assert.doesNotMatch(triggers, /\bschedule:/); assert.equal((triggers.match(/^\s+- cron:/gm) ?? []).length, 0);
   const inputs = workflow.match(/inputs:([\s\S]*?)\r?\n\r?\npermissions:/)?.[1] ?? "";
   assert.match(inputs, /confirmation/); assert.doesNotMatch(inputs, /(limit|priority|release|variant|series|provider|listing|url|query)/);
   assert.match(workflow, /group:\s*gacha-market-bounded-v2/); assert.match(workflow, /cancel-in-progress:\s*false/);
   assert.match(workflow, /node-version:\s*24/); assert.match(workflow, /timeout-minutes:\s*40/);
 });
 
-test("P3 v2 scheduled gate is disabled unless both dedicated variables are exact", () => {
+test("dormant P3 v2 scheduled gate remains fail-closed unless both dedicated variables are exact", () => {
   const input = { event_name: "schedule", ref: "refs/heads/main", head_sha: sha, origin_main_sha: sha };
   for (const value of [{}, { auto_enabled: "false", auto_approval: P3_BOUNDED_SEED_V2_AUTO_APPROVAL }, { auto_enabled: "true", auto_approval: "wrong" }]) assert.throws(() => validateP3BoundedSeedV2AutoInvocation({ ...input, ...value }));
   assert.equal(validateP3BoundedSeedV2AutoInvocation({ ...input, auto_enabled: "true", auto_approval: P3_BOUNDED_SEED_V2_AUTO_APPROVAL }), "scheduled-auto");
