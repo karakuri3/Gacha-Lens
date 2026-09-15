@@ -14,7 +14,7 @@ export async function POST(request, context) {
     error: "In-app ingestion execution has been retired from the web runtime.",
     executor: "github-actions",
     workflow: ".github/workflows/gacha-ingestion.yml",
-    nextAction: "Run or inspect the Gacha ingestion GitHub Actions workflow. Scheduled ingestion is owned by GitHub Actions.",
+    nextAction: "Use the legacy ingestion workflow only as an explicitly authorized manual path. Automatic ingestion is owned by separate reviewed lanes.",
   }, { status: 410 });
 }
 
