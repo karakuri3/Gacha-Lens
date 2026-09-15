@@ -8,6 +8,7 @@ import {
 } from "../lib/domain/market-workflow-evidence.js";
 
 const PHASE_6_F_2_DIGEST = "3a1f4c194e724afd68853491ce6642573020358f6aae8d1eb81a4530ec9165af";
+const PHASE_339_A_DIGEST = "2fa8da08db2b921cc32ede30d0911ae1f103f77d58f25987139ec65c6eb0a561";
 const INTERMEDIATE_PHASE_6_F_2_DIGEST = "11f35c5bba9c4dbd7559d06d5273da15bae939e0134b7c5419e82939212d183e";
 const STALE_DIGEST = "f18afcb0ec0bbec8e1bf69a12c95d00c2914759f1fa801f44db11550668208f8";
 const WINDOWS_RAW_DIGEST = "031e7133203c2cd6866f1b82c4e7721a6ba76ef95b6e517df7509a17f4b63877";
@@ -29,14 +30,15 @@ test("content changes and trailing newline changes remain detectable", () => {
   assert.notEqual(productionWorkflowDigest(source), productionWorkflowDigest(source.trimEnd()));
 });
 
-test("the committed Production workflow resolves to the reviewed Phase 6-F.2 digest", async () => {
+test("the committed legacy workflow resolves to the reviewed #339 Phase A manual-only digest", async () => {
   const workflow = await readFile(new URL("../.github/workflows/gacha-ingestion.yml", import.meta.url));
-  assert.equal(productionWorkflowDigest(workflow), PHASE_6_F_2_DIGEST);
+  assert.equal(productionWorkflowDigest(workflow), PHASE_339_A_DIGEST);
   assert.equal(isReviewedProductionWorkflow(workflow), true);
 });
 
-test("the allowlist contains the reviewed Phase 6-F.2 digest once", () => {
+test("the allowlist preserves Phase 6-F.2 history and contains #339 Phase A exactly once", () => {
   assert.equal(REVIEWED_PRODUCTION_WORKFLOW_DIGESTS.filter((digest) => digest === PHASE_6_F_2_DIGEST).length, 1);
+  assert.equal(REVIEWED_PRODUCTION_WORKFLOW_DIGESTS.filter((digest) => digest === PHASE_339_A_DIGEST).length, 1);
   assert.equal(REVIEWED_PRODUCTION_WORKFLOW_DIGESTS.includes(INTERMEDIATE_PHASE_6_F_2_DIGEST), false);
   assert.equal(REVIEWED_PRODUCTION_WORKFLOW_DIGESTS.includes(STALE_DIGEST), false);
   assert.equal(REVIEWED_PRODUCTION_WORKFLOW_DIGESTS.includes(WINDOWS_RAW_DIGEST), false);
