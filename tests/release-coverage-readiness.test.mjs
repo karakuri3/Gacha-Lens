@@ -6,6 +6,12 @@ import {
   formatReleaseCoverageReadinessMarkdown,
 } from "../scripts/lib/release-coverage-readiness.mjs";
 
+const seriesPlan = (input) => ({ count_unit: "series", ...input });
+const providerGap = (bandai, tarts) => ({
+  bandai_gashapon: bandai,
+  takaratomy_arts: tarts,
+});
+
 test("capability matrix records discovery, detail, lineup, refresh, and activation envelopes", () => {
   const matrix = buildOfficialReleaseCoverageCapabilityMatrix();
   const gashaponAuto = matrix.find((entry) => entry.id === "f0_gashapon_auto");
@@ -56,17 +62,25 @@ test("capability matrix records discovery, detail, lineup, refresh, and activati
 });
 
 test("architecture gap wins while future discovery is tracked separately from the F0 cap", () => {
-  const report = buildReleaseCoverageReadinessReport({
+  const report = buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
     daily_series_cap: 4,
     freshness_slo_days: 7,
     months: [
-      { month: "2026-09", catalog_count: 5, reference_count: 293, current_lane_missing: 20, separate_lane_missing: 10, unsupported_source_missing: 258 },
+      {
+        month: "2026-09",
+        catalog_count: 5,
+        reference_count: 293,
+        current_lane_missing: 20,
+        current_lane_missing_by_provider: providerGap(10, 10),
+        separate_lane_missing: 10,
+        unsupported_source_missing: 258,
+      },
       { month: "2026-10", catalog_count: 2, reference_count: 215, future_discovery_missing: 18, separate_lane_missing: 5, unsupported_source_missing: 190 },
     ],
-  });
+  }));
 
-  assert.equal(report.schema_version, 3);
+  assert.equal(report.schema_version, 4);
   assert.equal(report.verdict, "COVERAGE_ARCHITECTURE_EXPANSION_REQUIRED");
   assert.equal(report.totals.current_lane_missing, 20);
   assert.equal(report.totals.future_discovery_missing, 18);
@@ -77,6 +91,7 @@ test("architecture gap wins while future discovery is tracked separately from th
   assert.equal(report.months[1].horizon, "future");
   assert.equal(report.months[1].days_to_current_lane_catchup_at_current_cap, 0);
   assert.equal(report.months[1].current_lane_can_close_full_gap, false);
+  assert.deepEqual(report.assumptions.current_lane_provider_daily_caps, providerGap(2, 2));
   assert.deepEqual(report.workstreams, [
     "SUPPORTED_SOURCE_FRESHNESS_REPAIR",
     "FUTURE_MONTH_DISCOVERY_EXPANSION",
@@ -87,14 +102,71 @@ test("architecture gap wins while future discovery is tracked separately from th
   assert.equal(report.database_writes, 0);
 });
 
+test("provider-specific caps prevent optimistic current-lane catch-up math", () => {
+  const balanced = buildReleaseCoverageReadinessReport(seriesPlan({
+    planning_month: "2026-09",
+    freshness_slo_days: 10,
+    months: [{
+      month: "2026-09",
+      catalog_count: 88,
+      reference_count: 100,
+      current_lane_missing: 12,
+      current_lane_missing_by_provider: providerGap(6, 6),
+    }],
+  }));
+  const bandaiSkewed = buildReleaseCoverageReadinessReport(seriesPlan({
+    planning_month: "2026-09",
+    freshness_slo_days: 10,
+    months: [{
+      month: "2026-09",
+      catalog_count: 88,
+      reference_count: 100,
+      current_lane_missing: 12,
+      current_lane_missing_by_provider: providerGap(12, 0),
+    }],
+  }));
+
+  assert.equal(balanced.totals.days_to_current_lane_catchup_at_current_cap, 3);
+  assert.equal(bandaiSkewed.totals.days_to_current_lane_catchup_at_current_cap, 6);
+});
+
+test("current-lane provider split is mandatory, exact, and provider-bounded", () => {
+  assert.throws(() => buildReleaseCoverageReadinessReport(seriesPlan({
+    planning_month: "2026-09",
+    months: [{ month: "2026-09", catalog_count: 99, reference_count: 100, current_lane_missing: 1 }],
+  })), /current_lane_missing_by_provider is required/);
+
+  assert.throws(() => buildReleaseCoverageReadinessReport(seriesPlan({
+    planning_month: "2026-09",
+    months: [{
+      month: "2026-09",
+      catalog_count: 98,
+      reference_count: 100,
+      current_lane_missing: 2,
+      current_lane_missing_by_provider: providerGap(1, 0),
+    }],
+  })), /must sum to current_lane_missing/);
+
+  assert.throws(() => buildReleaseCoverageReadinessReport(seriesPlan({
+    planning_month: "2026-09",
+    months: [{
+      month: "2026-09",
+      catalog_count: 99,
+      reference_count: 100,
+      current_lane_missing: 1,
+      current_lane_missing_by_provider: { ...providerGap(1, 0), unknown: 0 },
+    }],
+  })), /unsupported provider unknown/);
+});
+
 test("future supported-source gap requires future discovery expansion", () => {
-  const report = buildReleaseCoverageReadinessReport({
+  const report = buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
     months: [
       { month: "2026-09", catalog_count: 100, reference_count: 100 },
       { month: "2026-10", catalog_count: 90, reference_count: 100, future_discovery_missing: 10 },
     ],
-  });
+  }));
 
   assert.equal(report.verdict, "FUTURE_DISCOVERY_EXPANSION_REQUIRED");
   assert.equal(report.totals.days_to_current_lane_catchup_at_current_cap, 0);
@@ -102,48 +174,70 @@ test("future supported-source gap requires future discovery expansion", () => {
 });
 
 test("future month cannot be mislabeled as current-lane catch-up", () => {
-  assert.throws(() => buildReleaseCoverageReadinessReport({
+  assert.throws(() => buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
-    months: [
-      { month: "2026-10", catalog_count: 90, reference_count: 100, current_lane_missing: 10 },
-    ],
-  }), /future coverage cannot be assigned to current_lane_missing/);
+    months: [{
+      month: "2026-10",
+      catalog_count: 90,
+      reference_count: 100,
+      current_lane_missing: 10,
+      current_lane_missing_by_provider: providerGap(5, 5),
+    }],
+  })), /future coverage cannot be assigned to current_lane_missing/);
 });
 
 test("future discovery bucket cannot be used for current month", () => {
-  assert.throws(() => buildReleaseCoverageReadinessReport({
+  assert.throws(() => buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
-    months: [
-      { month: "2026-09", catalog_count: 90, reference_count: 100, future_discovery_missing: 10 },
-    ],
-  }), /future_discovery_missing requires a future month/);
+    months: [{ month: "2026-09", catalog_count: 90, reference_count: 100, future_discovery_missing: 10 }],
+  })), /future_discovery_missing requires a future month/);
 });
 
 test("planning month is mandatory and never inferred from input order or contents", () => {
-  assert.throws(() => buildReleaseCoverageReadinessReport({
+  assert.throws(() => buildReleaseCoverageReadinessReport(seriesPlan({
     months: [{ month: "2026-09", catalog_count: 10, reference_count: 10 }],
-  }), /planning_month must be explicit YYYY-MM/);
+  })), /planning_month must be explicit YYYY-MM/);
 });
 
 test("historical months are rejected because this planner is current and future only", () => {
-  assert.throws(() => buildReleaseCoverageReadinessReport({
+  assert.throws(() => buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
     months: [
       { month: "2026-08", catalog_count: 10, reference_count: 10 },
       { month: "2026-09", catalog_count: 10, reference_count: 10 },
     ],
-  }), /precedes planning_month; current\/future coverage only/);
+  })), /precedes planning_month; current\/future coverage only/);
+});
+
+test("count unit must be explicit like-for-like series evidence", () => {
+  assert.throws(() => buildReleaseCoverageReadinessReport({
+    planning_month: "2026-09",
+    months: [{ month: "2026-09", catalog_count: 10, reference_count: 10 }],
+  }), /count_unit must be explicit series/);
+  assert.throws(() => buildReleaseCoverageReadinessReport({
+    count_unit: "items",
+    planning_month: "2026-09",
+    months: [{ month: "2026-09", catalog_count: 10, reference_count: 10 }],
+  }), /count_unit must be explicit series/);
+});
+
+test("current lane total cap is pinned to the reviewed Production policy", () => {
+  assert.throws(() => buildReleaseCoverageReadinessReport(seriesPlan({
+    planning_month: "2026-09",
+    daily_series_cap: 5,
+    months: [{ month: "2026-09", catalog_count: 10, reference_count: 10 }],
+  })), /daily_series_cap must match current reviewed cap 4/);
 });
 
 test("separate reviewed lanes are not divided by the F0 cap", () => {
-  const report = buildReleaseCoverageReadinessReport({
+  const report = buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
     daily_series_cap: 4,
     freshness_slo_days: 7,
     months: [
-      { month: "2026-09", catalog_count: 90, reference_count: 100, current_lane_missing: 0, separate_lane_missing: 10, unsupported_source_missing: 0 },
+      { month: "2026-09", catalog_count: 90, reference_count: 100, separate_lane_missing: 10, unsupported_source_missing: 0 },
     ],
-  });
+  }));
 
   assert.equal(report.verdict, "SEPARATE_LANE_ACTION_REQUIRED");
   assert.equal(report.totals.days_to_current_lane_catchup_at_current_cap, 0);
@@ -152,14 +246,18 @@ test("separate reviewed lanes are not divided by the F0 cap", () => {
 });
 
 test("current-lane gap can be feasible inside the SLO", () => {
-  const report = buildReleaseCoverageReadinessReport({
+  const report = buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
     daily_series_cap: 4,
     freshness_slo_days: 3,
-    months: [
-      { month: "2026-09", catalog_count: 88, reference_count: 100, current_lane_missing: 12 },
-    ],
-  });
+    months: [{
+      month: "2026-09",
+      catalog_count: 88,
+      reference_count: 100,
+      current_lane_missing: 12,
+      current_lane_missing_by_provider: providerGap(6, 6),
+    }],
+  }));
 
   assert.equal(report.verdict, "CURRENT_LANE_CATCHUP_FEASIBLE");
   assert.equal(report.months[0].days_to_current_lane_catchup_at_current_cap, 3);
@@ -168,35 +266,46 @@ test("current-lane gap can be feasible inside the SLO", () => {
   assert.equal(report.release_coverage_slo.parser_health_evidence_required_before_activation, true);
 });
 
-test("current-lane gap fails when throughput misses SLO", () => {
-  const report = buildReleaseCoverageReadinessReport({
+test("current-lane gap fails when provider throughput misses SLO", () => {
+  const report = buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
     daily_series_cap: 4,
     freshness_slo_days: 3,
-    months: [
-      { month: "2026-09", catalog_count: 80, reference_count: 100, current_lane_missing: 20 },
-    ],
-  });
+    months: [{
+      month: "2026-09",
+      catalog_count: 88,
+      reference_count: 100,
+      current_lane_missing: 12,
+      current_lane_missing_by_provider: providerGap(12, 0),
+    }],
+  }));
 
   assert.equal(report.verdict, "CURRENT_LANE_THROUGHPUT_INSUFFICIENT");
-  assert.equal(report.totals.days_to_current_lane_catchup_at_current_cap, 5);
+  assert.equal(report.totals.days_to_current_lane_catchup_at_current_cap, 6);
 });
 
 test("complete coverage is ready", () => {
-  const report = buildReleaseCoverageReadinessReport({
+  const report = buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
     months: [{ month: "2026-09", catalog_count: 100, reference_count: 100 }],
-  });
+  }));
   assert.equal(report.verdict, "COVERAGE_READY");
   assert.equal(report.totals.known_gap, 0);
   assert.deepEqual(report.workstreams, []);
 });
 
 test("unclassified reference shortfall fails closed as architecture expansion", () => {
-  const report = buildReleaseCoverageReadinessReport({
+  const report = buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
-    months: [{ month: "2026-09", catalog_count: 5, reference_count: 10, current_lane_missing: 1, unsupported_source_missing: 1 }],
-  });
+    months: [{
+      month: "2026-09",
+      catalog_count: 5,
+      reference_count: 10,
+      current_lane_missing: 1,
+      current_lane_missing_by_provider: providerGap(1, 0),
+      unsupported_source_missing: 1,
+    }],
+  }));
   assert.equal(report.verdict, "COVERAGE_ARCHITECTURE_EXPANSION_REQUIRED");
   assert.equal(report.months[0].unclassified_shortfall, 3);
   assert.equal(report.totals.unclassified_shortfall, 3);
@@ -204,22 +313,38 @@ test("unclassified reference shortfall fails closed as architecture expansion", 
 });
 
 test("known gap cannot exceed reference shortfall", () => {
-  assert.throws(() => buildReleaseCoverageReadinessReport({
+  assert.throws(() => buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
-    months: [{ month: "2026-09", catalog_count: 9, reference_count: 10, current_lane_missing: 1, separate_lane_missing: 1 }],
-  }), /known gap exceeds reference shortfall/);
+    months: [{
+      month: "2026-09",
+      catalog_count: 9,
+      reference_count: 10,
+      current_lane_missing: 1,
+      current_lane_missing_by_provider: providerGap(1, 0),
+      separate_lane_missing: 1,
+    }],
+  })), /known gap exceeds reference shortfall/);
 });
 
-test("markdown keeps coverage, safety, and workstream evidence visible", () => {
-  const report = buildReleaseCoverageReadinessReport({
+test("markdown keeps count unit, coverage, safety, and workstream evidence visible", () => {
+  const report = buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
     months: [
-      { month: "2026-09", catalog_count: 5, reference_count: 10, current_lane_missing: 2, separate_lane_missing: 1, unsupported_source_missing: 2 },
+      {
+        month: "2026-09",
+        catalog_count: 5,
+        reference_count: 10,
+        current_lane_missing: 2,
+        current_lane_missing_by_provider: providerGap(1, 1),
+        separate_lane_missing: 1,
+        unsupported_source_missing: 2,
+      },
       { month: "2026-10", catalog_count: 8, reference_count: 10, future_discovery_missing: 2 },
     ],
-  });
+  }));
   const markdown = formatReleaseCoverageReadinessMarkdown(report);
   assert.match(markdown, /COVERAGE_ARCHITECTURE_EXPANSION_REQUIRED/);
+  assert.match(markdown, /Count unit: \*\*series\*\*/);
   assert.match(markdown, /\| 2026-09 \| current \| 5 \| 10 \| 50\.0% \|/);
   assert.match(markdown, /Current-lane missing: \*\*2\*\*/);
   assert.match(markdown, /Future-discovery missing: \*\*2\*\*/);
