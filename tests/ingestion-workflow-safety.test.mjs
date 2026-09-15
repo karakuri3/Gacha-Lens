@@ -68,7 +68,12 @@ test("main verification reports drift through preflight instead of bypassing its
 test("blocked preflight excludes ingestion", () => assert.match(production, /execution_preflight\.outputs\.allowed == 'true'/));
 test("blocked preflight excludes cleanup", () => assert.match(production, /execution_preflight\.outputs\.allowed == 'true'[\s\S]*Clean replaced provisional/));
 test("Production report upload is always guarded", () => assert.match(production, /always\(\)[\s\S]*Upload sanitized ingestion run report/));
-test("schedule values are unchanged", () => { for (const cron of ["7 * * * *", "17,47 * * * *", "37 * * * *"]) assert.match(production, new RegExp(cron.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))); });
+test("legacy Production workflow is manual-only", () => {
+  const triggers = production.slice(production.indexOf("on:"), production.indexOf("\njobs:"));
+  assert.match(triggers, /workflow_dispatch:/);
+  assert.doesNotMatch(triggers, /\bschedule:/);
+  assert.equal((triggers.match(/^\s+- cron:/gm) ?? []).length, 0);
+});
 test("automatic write variable defaults false", () => assert.match(production, /AUTOMATIC_INGESTION_WRITE_ENABLED:[^\n]*false/));
 test("manual approval input exists", () => assert.match(production, /production_write_approval:/));
 test("process write guard exists", () => { assert.match(runner, /INGESTION_WRITE_DISABLED/); assert.match(runner, /INGESTION_EXECUTION_AUTHORIZED/); });
