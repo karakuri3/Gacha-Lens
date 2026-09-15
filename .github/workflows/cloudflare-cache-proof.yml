@@ -11,8 +11,9 @@ on:
 
 permissions:
   contents: read
+  checks: read
 
-# Both live-preview workflows hit the same isolated Worker/Supabase runtime.
+# Both live-preview workflows hit the same exact-head Worker/Supabase runtime.
 # Serialize them so CI does not manufacture origin pressure that normal smoke
 # traffic is not intended to test.
 concurrency:
@@ -22,30 +23,89 @@ concurrency:
 jobs:
   isolated-cache-proof:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
-      # Evidence-only pin for the reconciled #303 head; triggers and runtime assertions are unchanged.
-      DEPLOYED_SHA: 859de0749b80316fb12f2283f2bd133f8a7d548f
-      PREVIEW_URL: https://44cae106-gacha-lens.senpingxingzuo.workers.dev
+      TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Checkout current pull-request head
+      - name: Checkout exact pull-request head
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
-      - name: Prove runtime sources match isolated preview
+      - name: Resolve exact-head Cloudflare Preview
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git cat-file -e "${DEPLOYED_SHA}^{commit}"
-          changed="$(git diff --name-only "$DEPLOYED_SHA" HEAD -- app components lib worker jsconfig.json next.config.mjs package.json package-lock.json)"
-          if [[ -n "$changed" ]]; then
-            echo 'Runtime source drift exists after the pinned cache-proof preview:' >&2
-            echo "$changed" >&2
+
+          actual_sha="$(git rev-parse HEAD)"
+          [[ "$actual_sha" == "$TARGET_SHA" ]] || {
+            echo "Checkout SHA ${actual_sha} does not match target ${TARGET_SHA}." >&2
             exit 1
-          fi
-          echo "Runtime source tree is byte-equivalent to cache-proof preview commit ${DEPLOYED_SHA}." >> "$GITHUB_STEP_SUMMARY"
-          echo "Preview URL: ${PREVIEW_URL}" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          candidate=''
+          status=''
+          conclusion=''
+
+          for attempt in $(seq 1 40); do
+            payload="$(curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs?per_page=100")"
+
+            candidate="$(jq -c --arg sha "$TARGET_SHA" '
+              [.check_runs[]
+                | select(.name == "Workers Builds: gacha-lens" and .head_sha == $sha)]
+              | sort_by(.id)
+              | last // empty
+            ' <<<"$payload")"
+
+            if [[ -n "$candidate" ]]; then
+              status="$(jq -r '.status // ""' <<<"$candidate")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$candidate")"
+              if [[ "$status" == 'completed' ]]; then
+                break
+              fi
+            fi
+
+            echo "Cloudflare exact-head build not complete yet (attempt ${attempt}/40)." >> "$GITHUB_STEP_SUMMARY"
+            sleep 15
+          done
+
+          [[ -n "$candidate" ]] || {
+            echo "No Cloudflare Workers check run found for exact head ${TARGET_SHA}." >&2
+            exit 1
+          }
+          [[ "$status" == 'completed' ]] || {
+            echo "Cloudflare Workers check did not complete within the bounded wait." >&2
+            exit 1
+          }
+          [[ "$conclusion" == 'success' ]] || {
+            echo "Cloudflare Workers exact-head build concluded ${conclusion:-unknown}." >&2
+            exit 1
+          }
+
+          summary="$(jq -r '.output.summary // ""' <<<"$candidate" | tr -d '\r')"
+          preview_url="$(printf '%s\n' "$summary" | grep -Eo 'https://[A-Za-z0-9-]+-gacha-lens\.senpingxingzuo\.workers\.dev' | head -1 || true)"
+          check_id="$(jq -r '.id' <<<"$candidate")"
+
+          case "$preview_url" in
+            https://*-gacha-lens.senpingxingzuo.workers.dev) ;;
+            *)
+              echo 'Cloudflare check succeeded but did not expose an approved exact-head Preview URL.' >&2
+              printf '%s\n' "$summary" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "PREVIEW_URL=${preview_url}" >> "$GITHUB_ENV"
+          echo "Cloudflare check run: ${check_id}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact-head Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Probe bounded variant-detail diagnostic
         shell: bash
