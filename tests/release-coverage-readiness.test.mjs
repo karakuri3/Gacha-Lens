@@ -110,13 +110,29 @@ test("future month cannot be mislabeled as current-lane catch-up", () => {
   }), /future coverage cannot be assigned to current_lane_missing/);
 });
 
-test("future discovery bucket cannot be used for current or historical month", () => {
+test("future discovery bucket cannot be used for current month", () => {
   assert.throws(() => buildReleaseCoverageReadinessReport({
     planning_month: "2026-09",
     months: [
       { month: "2026-09", catalog_count: 90, reference_count: 100, future_discovery_missing: 10 },
     ],
   }), /future_discovery_missing requires a future month/);
+});
+
+test("planning month is mandatory and never inferred from input order or contents", () => {
+  assert.throws(() => buildReleaseCoverageReadinessReport({
+    months: [{ month: "2026-09", catalog_count: 10, reference_count: 10 }],
+  }), /planning_month must be explicit YYYY-MM/);
+});
+
+test("historical months are rejected because this planner is current and future only", () => {
+  assert.throws(() => buildReleaseCoverageReadinessReport({
+    planning_month: "2026-09",
+    months: [
+      { month: "2026-08", catalog_count: 10, reference_count: 10 },
+      { month: "2026-09", catalog_count: 10, reference_count: 10 },
+    ],
+  }), /precedes planning_month; current\/future coverage only/);
 });
 
 test("separate reviewed lanes are not divided by the F0 cap", () => {
@@ -192,18 +208,6 @@ test("known gap cannot exceed reference shortfall", () => {
     planning_month: "2026-09",
     months: [{ month: "2026-09", catalog_count: 9, reference_count: 10, current_lane_missing: 1, separate_lane_missing: 1 }],
   }), /known gap exceeds reference shortfall/);
-});
-
-test("planning month defaults deterministically to the earliest supplied month", () => {
-  const report = buildReleaseCoverageReadinessReport({
-    months: [
-      { month: "2026-10", catalog_count: 10, reference_count: 10 },
-      { month: "2026-09", catalog_count: 10, reference_count: 10 },
-    ],
-  });
-  assert.equal(report.assumptions.planning_month, "2026-09");
-  assert.equal(report.months[0].horizon, "current");
-  assert.equal(report.months[1].horizon, "future");
 });
 
 test("markdown keeps coverage, safety, and workstream evidence visible", () => {
