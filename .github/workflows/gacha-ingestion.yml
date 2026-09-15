@@ -75,10 +75,6 @@ on:
         required: false
         default: ""
         type: string
-  schedule:
-    - cron: "7 * * * *"
-    - cron: "17,47 * * * *"
-    - cron: "37 * * * *"
 
 jobs:
   upsert:

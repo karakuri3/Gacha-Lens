@@ -12,9 +12,9 @@ Status: non-Production compatibility proof. Do not attach `gachalens.com`, chang
 
 ## Architecture change under proof
 
-Scheduled ingestion is already owned by `.github/workflows/gacha-ingestion.yml`. Production Supabase currently has no deployed Edge Functions and no `cron.job` entries for the retired Supabase ingestion path.
+Automatic ingestion is owned by separately reviewed GitHub Actions lanes. The legacy `.github/workflows/gacha-ingestion.yml` is manual-only and must not own a schedule. Production Supabase currently has no deployed Edge Functions and no `cron.job` entries for the retired Supabase ingestion path.
 
-The previous `/api/ingest/[task]` implementation launched repository scripts through `node:child_process`. A Cloudflare Worker cannot execute local child processes, so the POC removes this batch executor from the web runtime. The endpoint remains authenticated but returns HTTP 410 and points operators to the GitHub Actions ingestion workflow.
+The previous `/api/ingest/[task]` implementation launched repository scripts through `node:child_process`. A Cloudflare Worker cannot execute local child processes, so the POC removes this batch executor from the web runtime. The endpoint remains authenticated but returns HTTP 410 and points operators to the explicitly authorized manual GitHub Actions ingestion path when manual recovery is required.
 
 The POC also removes ingestion script directories from Next.js output-file tracing because those scripts are batch-worker assets, not web-serving assets.
 
@@ -48,7 +48,7 @@ Do not place privileged Supabase credentials in repository files or build logs. 
 5. Admin/review authorization, cookies and timing-safe token checks work in the Worker runtime.
 6. All public pages, search/filter, market data, restock data, community reports and outbound affiliate flows pass smoke tests.
 7. SEO metadata, sitemap, robots behavior and canonical URLs match Production.
-8. The GitHub Actions ingestion workflow continues to operate independently of the web host.
+8. Reviewed GitHub Actions ingestion lanes continue to operate independently of the web host; the legacy ingestion workflow remains manual-only.
 9. Response/security headers and observability are equivalent or stronger than Production.
 10. A rollback path to the existing Vercel deployment is documented and rehearsed before DNS changes.
 

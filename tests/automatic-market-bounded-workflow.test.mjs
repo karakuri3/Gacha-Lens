@@ -15,10 +15,10 @@ const manualWorkflow = fs.readFileSync(".github/workflows/gacha-market-bounded-m
 const yahooFetcher = fs.readFileSync("lib/fetchers/yahoo-shopping-fetcher.js", "utf8");
 const autoDigest = "d8dc4bf3cc7613f6eff0dcecc948539c0a02d46c5aa1d5076487b9b9b97e49e9";
 const previousAutoDigest = "5801f3e2958b35cc4b27d48f1e5f820bf1c3bd9f8381790b27ad5098f9c2b29f";
-const legacyDigest = "3a1f4c194e724afd68853491ce6642573020358f6aae8d1eb81a4530ec9165af";
+const legacyDigest = "2fa8da08db2b921cc32ede30d0911ae1f103f77d58f25987139ec65c6eb0a561";
 const orphanRuns = ["30688709185", "30761206126", "31174863521", "31191456665", "31322475822", "31411326808", "31412968526"];
 
-test("legacy Production workflow remains byte-for-byte on its reviewed digest", () => {
+test("legacy Production workflow resolves to the reviewed manual-only digest", () => {
   assert.equal(productionWorkflowDigest(legacyWorkflow), legacyDigest);
 });
 test("automatic workflow has exactly one scheduled trigger", () => {
