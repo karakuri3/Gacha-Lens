@@ -119,7 +119,7 @@ export function buildOfficialReleaseCoverageCapabilityMatrix() {
 export function buildReleaseCoverageReadinessReport(input = {}) {
   const dailySeriesCap = positiveInteger(input.daily_series_cap ?? 4, "daily_series_cap");
   const freshnessSloDays = positiveInteger(input.freshness_slo_days ?? 7, "freshness_slo_days");
-  const planningMonth = normalizePlanningMonth(input.planning_month, input.months);
+  const planningMonth = normalizePlanningMonth(input.planning_month);
   const months = normalizeMonths(input.months, planningMonth);
 
   const monthReports = months.map((month) => buildMonthReport(month, {
@@ -254,7 +254,7 @@ function buildMonthReport(month, { dailySeriesCap, freshnessSloDays }) {
     ? 0
     : Math.ceil(month.current_lane_missing / dailySeriesCap);
   const unclassifiedShortfall = totalShortfall - knownGap;
-  const currentLaneCanCloseFullGap = month.horizon !== "future"
+  const currentLaneCanCloseFullGap = month.horizon === "current"
     && month.future_discovery_missing === 0
     && month.separate_lane_missing === 0
     && month.unsupported_source_missing === 0
@@ -308,17 +308,10 @@ function buildWorkstreams({
   ].filter(Boolean);
 }
 
-function normalizePlanningMonth(value, months) {
-  const explicit = String(value ?? "").trim();
-  if (explicit) {
-    if (!MONTH_RE.test(explicit)) throw new Error("planning_month must be YYYY-MM");
-    return explicit;
-  }
-  const candidates = Array.isArray(months)
-    ? months.map((entry) => String(entry?.month ?? "").trim()).filter((month) => MONTH_RE.test(month)).sort()
-    : [];
-  if (!candidates.length) throw new Error("planning_month must be YYYY-MM when no valid month exists");
-  return candidates[0];
+function normalizePlanningMonth(value) {
+  const month = String(value ?? "").trim();
+  if (!MONTH_RE.test(month)) throw new Error("planning_month must be explicit YYYY-MM");
+  return month;
 }
 
 function normalizeMonths(value, planningMonth) {
@@ -329,10 +322,11 @@ function normalizeMonths(value, planningMonth) {
   return value.map((entry) => {
     const month = String(entry?.month ?? "").trim();
     if (!MONTH_RE.test(month) || seen.has(month)) throw new Error("month keys must be unique YYYY-MM values");
+    if (month < planningMonth) throw new Error(`month ${month} precedes planning_month; current/future coverage only`);
     seen.add(month);
     return {
       month,
-      horizon: month > planningMonth ? "future" : month === planningMonth ? "current" : "historical",
+      horizon: month === planningMonth ? "current" : "future",
       catalog_count: nonNegativeInteger(entry.catalog_count, `${month}.catalog_count`),
       reference_count: nonNegativeInteger(entry.reference_count, `${month}.reference_count`),
       current_lane_missing: nonNegativeInteger(entry.current_lane_missing ?? 0, `${month}.current_lane_missing`),
