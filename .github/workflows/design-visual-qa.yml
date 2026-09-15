@@ -140,6 +140,15 @@ jobs:
                     'variant',
                   );
                   await capture(page, 'variant-detail-populated', releasedVariantHref, viewportName);
+                  const upcomingDetailHref = await firstProductHref(
+                    page,
+                    '/series?release=upcoming',
+                    'upcoming-fixed-clock',
+                    viewportName,
+                    'series',
+                  );
+                  await page.screenshot({ path: path.join('visual-qa', `${prefix}upcoming-fixed-clock--${viewportName}.png`), fullPage: true, style: screenshotStyle });
+                  await capture(page, 'upcoming-series-detail-fixed-clock', upcomingDetailHref, viewportName);
                 } else {
                   await capture(page, 'home-empty', '/', viewportName);
                   const seriesDetailHref = await firstProductHref(page, '/series', 'series-catalog', viewportName, 'series');
@@ -154,15 +163,7 @@ jobs:
                   );
                   await capture(page, 'variant-detail', variantDetailHref, viewportName);
                   await capture(page, 'ranking-empty', '/ranking', viewportName);
-                  const upcomingDetailHref = await firstProductHref(
-                    page,
-                    '/series?release=upcoming',
-                    'upcoming',
-                    viewportName,
-                    'series',
-                  );
-                  await page.screenshot({ path: path.join('visual-qa', `${prefix}upcoming--${viewportName}.png`), fullPage: true, style: screenshotStyle });
-                  await capture(page, 'upcoming-series-detail', upcomingDetailHref, viewportName);
+                  await capture(page, 'upcoming-current-date', '/series?release=upcoming', viewportName);
                 }
 
                 await page.close();
