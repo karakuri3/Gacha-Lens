@@ -351,7 +351,9 @@ test("manual official workflows and market P3 V2 automatic behavior remain isola
   assert.match(manualWriteWorkflow, /name: Gacha Official Bounded Write/);
   assert.match(manualWriteWorkflow, /APPROVE_OFFICIAL_BOUNDED:/);
   assert.doesNotMatch(manualWriteWorkflow, /OFFICIAL_BOUNDED_AUTO_/);
-  assert.match(marketAutoWorkflow, /cron:\s*"17 \*\/3 \* \* \*"/);
+  const marketAutoTriggers = marketAutoWorkflow.slice(marketAutoWorkflow.indexOf("on:"), marketAutoWorkflow.indexOf("\npermissions:"));
+  assert.match(marketAutoTriggers, /workflow_dispatch:/);
+  assert.doesNotMatch(marketAutoTriggers, /\bschedule:/);
   assert.doesNotMatch(marketAutoWorkflow, /OFFICIAL_BOUNDED_AUTO_/);
 });
 
