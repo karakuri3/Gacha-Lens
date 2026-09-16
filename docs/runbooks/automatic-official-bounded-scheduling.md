@@ -12,25 +12,37 @@ variables below are required:
 - `OFFICIAL_BOUNDED_AUTO_ENABLED=true`
 - `OFFICIAL_BOUNDED_AUTO_APPROVAL=APPROVE_OFFICIAL_BOUNDED_AUTO_V1`
 
-When the enable variable is absent or not exactly `true`, the scheduled run
-creates a sanitized disabled artifact and performs no provider fetch and no
-database write. An enabled gate with a missing, stale, or malformed approval
-fails closed. The approval is bound to the reviewed automatic policy version,
+The scheduled job now performs a lightweight direct-Node pre-gate immediately
+after checkout. When the enable variable is absent or not exactly `true`, the
+run creates a sanitized disabled artifact and skips `actions/setup-node`, npm
+cache restore, `npm ci`, provider fetches, and database access. If the lane is
+enabled but the approval is missing, stale, or malformed, the pre-gate fails
+closed before dependency setup.
+
+Only an exactly armed run proceeds to dependency setup. It then verifies that
+its checkout exactly matches the current `origin/main` revision and runs the
+existing full gate again with that verified main SHA before any provider access
+or writes. The approval remains bound to the reviewed automatic policy version,
 so unrelated main revisions do not require a rebind. Any behavior-changing
 automatic policy revision must increment the approval version and receive a new
-explicit approval. Every run still verifies that its checkout exactly matches
-the current `origin/main` revision before provider access or writes.
+explicit approval.
 
 ## Execution boundary
 
-An enabled run performs these phases in order:
+An armed run performs these phases in order:
 
-1. Verify the checked-out SHA is the current `origin/main` SHA.
-2. Run the existing read-only official live audit.
-3. Validate all sources, apply contracts, review state, and bounded totals.
-4. Apply the accepted operations in one PostgreSQL transaction.
-5. Verify every target row and the exact before/after count delta.
-6. Secret-scan and upload the audit and automatic result.
+1. Pass the lightweight false-by-default pre-gate.
+2. Set up Node dependencies and verify the checked-out SHA is the current `origin/main` SHA.
+3. Re-run the existing full automatic gate with the verified main SHA.
+4. Run the existing read-only official live audit.
+5. Validate all sources, apply contracts, review state, and bounded totals.
+6. Apply the accepted operations in one PostgreSQL transaction.
+7. Verify every target row and the exact before/after count delta.
+8. Secret-scan and upload the audit and automatic result.
+
+Disabled or unarmed runs stop before dependency setup and still secret-scan,
+upload, and verify their sanitized terminal result. No provider request or
+Production database write is used to validate the early-gate path.
 
 The automatic caps reuse the established live-audit envelope:
 
