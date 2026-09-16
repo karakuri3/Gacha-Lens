@@ -1,8 +1,8 @@
 import "./globals.css";
 import "./product-design.css";
 import "./product-detail-design.css";
+import "./consumer-r1.css";
 import Header from "@/components/Header";
-import AppSidebar from "@/components/AppSidebar";
 import Footer from "@/components/Footer";
 import StructuredData from "@/components/StructuredData";
 import {
@@ -88,9 +88,8 @@ export default function RootLayout({ children }) {
       <body>
         <StructuredData value={websiteJsonLd} />
         <Header />
-        <div className="app-frame">
-          <AppSidebar />
-          <div className="app-content">
+        <div className="consumer-app-frame">
+          <div className="app-content consumer-app-content">
             {children}
             <Footer />
           </div>
