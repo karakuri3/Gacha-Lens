@@ -31,7 +31,9 @@ test("V3 aliases remove only presentation text while preserving series and varia
 test("recall diagnostic is dispatch-only, read-only, and leaves all production workflows isolated", () => {
   assert.match(workflow, /^on:\s*\r?\n\s+workflow_dispatch:/m); assert.doesNotMatch(workflow, /schedule:|upsertRows|deleteRowsByIds|market-p3-bounded-seed-v2-auto\.mjs/);
   assert.match(workflow, /manual-market-audit-guard\.mjs scan/); assert.match(workflow, /steps\.scan\.outcome == 'success'/);
-  assert.match(oldAuto, /17 \*\/3 \* \* \*/); assert.match(manual, /APPROVE_P3_BOUNDED_SEED_V2/); assert.match(genericAuto, /AUTOMATIC_MARKET_BOUNDED_AUTO_ENABLED/);
+  const oldAutoTriggers = oldAuto.slice(oldAuto.indexOf("on:"), oldAuto.indexOf("\npermissions:"));
+  assert.match(oldAutoTriggers, /workflow_dispatch:/); assert.doesNotMatch(oldAutoTriggers, /\bschedule:/);
+  assert.match(manual, /APPROVE_P3_BOUNDED_SEED_V2/); assert.match(genericAuto, /AUTOMATIC_MARKET_BOUNDED_AUTO_ENABLED/);
 });
 
 test("recall diagnostic builds each arm from sanitized request and retrieval metrics", () => {
