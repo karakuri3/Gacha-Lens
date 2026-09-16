@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { Client } from "pg";
 import {
   authorizeOfficialAutomaticWrite,
   buildOfficialAutoBlockedResult,
@@ -14,7 +13,6 @@ import {
   validateOfficialAutoResult,
 } from "../lib/domain/official-bounded-auto.js";
 import { requireOfficialDatabaseUrl } from "../lib/domain/official-bounded-write.js";
-import { createOfficialPostgresTransactionAdapter } from "../lib/server/official-bounded-postgres.js";
 
 const command = process.argv[2];
 const args = parseArgs(process.argv.slice(3));
@@ -22,12 +20,31 @@ const rootDirectory = path.resolve(required(args["output-dir"], "--output-dir"))
 const resultDirectory = path.join(rootDirectory, "result");
 const auditDirectory = path.resolve(args["audit-dir"] || path.join(rootDirectory, "audit"));
 
-if (command === "gate") await resolveGate();
+if (command === "pre-gate") resolvePreGate();
+else if (command === "gate") await resolveGate();
 else if (command === "prepare") await prepareWrite();
 else if (command === "execute") await executeWrite();
 else if (command === "scan") scanArtifact();
 else if (command === "verify") verifyResult();
 else throw scriptError("official_auto_command_invalid");
+
+function resolvePreGate() {
+  const headSha = process.env.GITHUB_SHA || args["head-sha"];
+  const gate = resolveOfficialAutoGate({
+    enabled: process.env.OFFICIAL_BOUNDED_AUTO_ENABLED,
+    approval: process.env.OFFICIAL_BOUNDED_AUTO_APPROVAL,
+    eventName: process.env.GITHUB_EVENT_NAME || args["event-name"],
+    ref: process.env.GITHUB_REF || args.ref,
+    headSha,
+    originMainSha: headSha,
+  });
+  if (gate.state !== "enabled") {
+    writeResult(buildOfficialAutoGateResult({ workflow: workflowIdentity(), gate }));
+  }
+  writeOutput("execute", gate.state === "enabled");
+  writeOutput("gate_state", gate.state);
+  if (gate.state === "blocked") throw scriptError(gate.reason_code);
+}
 
 async function resolveGate() {
   const gate = resolveOfficialAutoGate({
@@ -80,6 +97,10 @@ async function executeWrite() {
       originMainSha: args["origin-main-sha"],
     });
     const connectionString = requireOfficialDatabaseUrl(process.env.SUPABASE_DB_URL);
+    const [{ Client }, { createOfficialPostgresTransactionAdapter }] = await Promise.all([
+      import("pg"),
+      import("../lib/server/official-bounded-postgres.js"),
+    ]);
     client = new Client({ connectionString, application_name: "gacha-official-bounded-auto" });
     await client.connect();
     result = await executeOfficialAutomaticTransaction({

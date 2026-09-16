@@ -21,13 +21,25 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+      - name: Resolve false-by-default official automatic pre-gate
+        id: pre_gate
+        continue-on-error: true
+        env:
+          OFFICIAL_BOUNDED_AUTO_ENABLED: ${{ vars.OFFICIAL_BOUNDED_AUTO_ENABLED || '' }}
+          OFFICIAL_BOUNDED_AUTO_APPROVAL: ${{ vars.OFFICIAL_BOUNDED_AUTO_APPROVAL || '' }}
+        run: >-
+          node scripts/official-bounded-auto.mjs pre-gate
+          --output-dir=${{ runner.temp }}/gacha-official-bounded-auto
       - uses: actions/setup-node@v6
+        if: ${{ steps.pre_gate.outputs.execute == 'true' }}
         with:
           node-version: 24
           cache: npm
       - run: npm ci
+        if: ${{ steps.pre_gate.outputs.execute == 'true' }}
       - name: Verify exact current main revision
         id: main
+        if: ${{ steps.pre_gate.outputs.execute == 'true' }}
         continue-on-error: true
         shell: bash
         run: |
@@ -44,9 +56,9 @@ jobs:
           echo "origin_main_sha=$origin_main_sha" >> "$GITHUB_OUTPUT"
           echo "main_verified=$main_verified" >> "$GITHUB_OUTPUT"
           test "$main_verified" = "true"
-      - name: Resolve false-by-default official automatic gate
+      - name: Resolve exact-main official automatic gate
         id: gate
-        if: ${{ always() }}
+        if: ${{ always() && steps.pre_gate.outputs.execute == 'true' }}
         continue-on-error: true
         env:
           OFFICIAL_BOUNDED_AUTO_ENABLED: ${{ vars.OFFICIAL_BOUNDED_AUTO_ENABLED || '' }}
@@ -92,7 +104,7 @@ jobs:
         id: scan
         if: ${{ always() }}
         run: >-
-          npm run official:bounded-auto -- scan
+          node scripts/official-bounded-auto.mjs scan
           --output-dir=${{ runner.temp }}/gacha-official-bounded-auto
       - name: Upload sanitized official automatic artifact
         if: ${{ always() && steps.scan.outcome == 'success' }}
@@ -105,5 +117,5 @@ jobs:
       - name: Enforce official automatic result
         if: ${{ always() && steps.scan.outcome == 'success' }}
         run: >-
-          npm run official:bounded-auto -- verify
+          node scripts/official-bounded-auto.mjs verify
           --output-dir=${{ runner.temp }}/gacha-official-bounded-auto
