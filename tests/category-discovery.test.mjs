@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   categoryDiscoveryHref,
+  categoryDiscoveryLookupCandidates,
   categoryDiscoveryPageHref,
   collectPublicCategoryFacets,
   decodeCategoryDiscoveryParam,
@@ -102,14 +103,18 @@ test("category variant pagination covers 61 and 121 public variants without over
   }
 });
 
-test("category route helpers preserve Japanese, literal percent signs, spaces, ampersands, plus signs, and slashes", () => {
+test("category route helpers keep non-ASCII params edge-safe while preserving ASCII and literal percent names", () => {
   for (const name of ["\u30df\u30cb\u30c1\u30e5\u30a2", "100% & +", "Title/Feature"]) {
     const segment = categoryDiscoveryHref(name).split("/").at(-1);
-    assert.equal(decodeCategoryDiscoveryParam(decodeURIComponent(segment)), name);
+    assert.equal(categoryDiscoveryLookupCandidates(segment).at(-1), name);
   }
+  const japanese = "\u30df\u30cb\u30c1\u30e5\u30a2";
+  const edgeSafeJapanese = encodeURIComponent(encodeURIComponent(japanese));
+  assert.equal(categoryDiscoveryHref(japanese), `/categories/${edgeSafeJapanese}`);
   assert.equal(categoryDiscoveryPageHref("Figures"), "/categories/Figures");
   assert.equal(categoryDiscoveryPageHref("Figures", 2), "/categories/Figures?page=2");
-  assert.equal(discoveryFacetHref("category", "\u30df\u30cb\u30c1\u30e5\u30a2"), "/categories/%E3%83%9F%E3%83%8B%E3%83%81%E3%83%A5%E3%82%A2");
+  assert.equal(discoveryFacetHref("category", japanese), `/categories/${edgeSafeJapanese}`);
+  assert.equal(decodeCategoryDiscoveryParam("100%25"), "100%25");
 });
 
 test("category pages use parent-series filtering, canonical metadata, and noindex pagination", () => {
@@ -178,7 +183,6 @@ test("category detail pages keep local text while sitemap retains only canonical
   }
   const sitemap = source("app/sitemap.js");
   assert.match(sitemap, /categories\.map\(\(facet\)/);
-  assert.match(sitemap, /\/categories\/\$\{encodeURIComponent\(facet\.name\)\}/);
-  assert.doesNotMatch(sitemap, /categoryDiscoveryPageHref/);
+  assert.match(sitemap, /categoryDiscoveryHref\(facet\.name\)/);
   assert.match(sitemap, /MAX_SITEMAP_URLS = 50000/);
 });
