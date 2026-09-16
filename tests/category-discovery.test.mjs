@@ -114,7 +114,7 @@ test("category route helpers preserve Japanese, literal percent signs, spaces, a
 
 test("category pages use parent-series filtering, canonical metadata, and noindex pagination", () => {
   const text = source("app/categories/[name]/page.js");
-  assert.match(text, /getPublicCategorySeriesPage/);
+  assert.match(text, /getTargetedPublicCategorySeriesPage/);
   assert.match(text, /if \(!result\) notFound\(\)/);
   assert.match(text, /pageSize: 60/);
   assert.match(text, /noIndex: page > 1/);

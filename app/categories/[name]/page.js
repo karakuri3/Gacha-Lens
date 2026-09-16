@@ -3,13 +3,13 @@ import { cache } from "react";
 import { CategoryDiscoveryLanding } from "@/components/DiscoveryFacetPages";
 import { categoryDiscoveryLookupCandidates, categoryDiscoveryPageHref } from "@/lib/domain/category-discovery";
 import { normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
-import { getPublicCategorySeriesPage } from "@/lib/series";
 import { buildPageMetadata } from "@/lib/site-metadata";
+import { getTargetedPublicCategorySeriesPage } from "@/lib/targeted-category-series-page";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const getCategoryDiscoveryPage = cache((name, page) => getPublicCategorySeriesPage(name, { page, pageSize: 60 }));
+const getCategoryDiscoveryPage = cache((name, page) => getTargetedPublicCategorySeriesPage(name, { page, pageSize: 60 }));
 
 async function resolvePage(params, searchParams) {
   const names = categoryDiscoveryLookupCandidates((await params).name);
