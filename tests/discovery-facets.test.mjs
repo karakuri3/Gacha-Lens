@@ -9,6 +9,7 @@ import {
   discoveryFacetLookupCandidates,
   discoveryFacetHref,
   discoveryFacetPageHref,
+  encodeDiscoveryRouteSegment,
   findPublicDiscoveryFacet,
   isMeaningfulDiscoveryFacetName,
   paginatePublicDiscoveryFacetSeries,
@@ -63,11 +64,15 @@ test("blank and unknown facet labels are excluded", () => {
   }
 });
 
-test("facet lookup and URL encoding are deterministic", () => {
+test("facet lookup and edge-safe URL encoding are deterministic", () => {
   const facets = [{ name: "機動戦士ガンダム", series_count: 2, variant_count: 7 }];
+  const once = encodeURIComponent(facets[0].name);
+  const twice = encodeURIComponent(once);
   assert.deepEqual(findPublicDiscoveryFacet(facets, "機動戦士ガンダム"), facets[0]);
-  assert.equal(discoveryFacetHref("franchise", facets[0].name), `/franchises/${encodeURIComponent(facets[0].name)}`);
-  assert.equal(decodeDiscoveryFacetParam(decodeURIComponent(encodeURIComponent(facets[0].name))), facets[0].name);
+  assert.equal(encodeDiscoveryRouteSegment(facets[0].name), twice);
+  assert.equal(encodeDiscoveryRouteSegment("Disney"), "Disney");
+  assert.equal(discoveryFacetHref("franchise", facets[0].name), `/franchises/${twice}`);
+  assert.deepEqual(discoveryFacetLookupCandidates(twice), [twice, once, facets[0].name]);
   assert.equal(discoveryFacetPageHref("franchise", facets[0].name), discoveryFacetHref("franchise", facets[0].name));
   assert.equal(discoveryFacetPageHref("franchise", facets[0].name, 2), `${discoveryFacetHref("franchise", facets[0].name)}?page=2`);
 });
@@ -161,12 +166,13 @@ test("facet detail pages use targeted public queries instead of the sitemap popu
   assert.match(functionSource, /throw new Error\("Public discovery series page failed publication validation"\)/);
 });
 
-test("sitemap includes indexable discovery routes and preserves the global cap", () => {
+test("sitemap includes edge-safe discovery routes and preserves the global cap", () => {
   const text = source("app/sitemap.js");
   assert.match(text, /path: "\/franchises"/);
   assert.match(text, /path: "\/brands"/);
-  assert.match(text, /\/franchises\/\$\{encodeURIComponent\(facet\.name\)\}/);
-  assert.match(text, /\/brands\/\$\{encodeURIComponent\(facet\.name\)\}/);
+  assert.match(text, /discoveryFacetHref\("franchise", facet\.name\)/);
+  assert.match(text, /discoveryFacetHref\("brand", facet\.name\)/);
+  assert.match(text, /categoryDiscoveryHref\(facet\.name\)/);
   assert.match(text, /MAX_SITEMAP_URLS = 50000/);
   assert.match(text, /entries\.length > MAX_SITEMAP_URLS/);
 });
@@ -184,12 +190,12 @@ test("public detail pages avoid global facet scans and preserve local display va
   assert.match(catalog, /href="\/brands"/);
 });
 
-test("targeted facet lookup tries raw first and decodes valid percent-encoded params once", () => {
+test("targeted facet lookup tries raw first and decodes at most two valid percent-encoding layers", () => {
   assert.deepEqual(discoveryFacetLookupCandidates("バンダイ"), ["バンダイ"]);
-  assert.deepEqual(discoveryFacetLookupCandidates("%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4"), [
-    "%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4",
-    "バンダイ",
-  ]);
+  const once = encodeURIComponent("バンダイ");
+  const twice = encodeURIComponent(once);
+  assert.deepEqual(discoveryFacetLookupCandidates(once), [once, "バンダイ"]);
+  assert.deepEqual(discoveryFacetLookupCandidates(twice), [twice, once, "バンダイ"]);
   assert.deepEqual(discoveryFacetLookupCandidates("100%値"), ["100%値"]);
   assert.deepEqual(discoveryFacetLookupCandidates("100%25"), ["100%25", "100%"]);
 });
