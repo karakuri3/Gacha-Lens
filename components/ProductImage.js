@@ -4,6 +4,11 @@ import Image from "next/image";
 import { useState } from "react";
 import { normalizeImageUrl, resolvePresentationImage } from "@/lib/domain/variant-image-presentation";
 
+const CONTAINED_IMAGE_STYLE = Object.freeze({
+  objectFit: "contain",
+  objectPosition: "center",
+});
+
 export default function ProductImage({
   item,
   src,
@@ -61,6 +66,7 @@ function ResolvedProductImage({ primarySrc, fallbackSrc, imageScope, alt, sizes,
         priority={priority}
         loading={priority ? undefined : "lazy"}
         className="product-image__media"
+        style={CONTAINED_IMAGE_STYLE}
         onError={() => {
           if (presentation.uses_fallback) {
             setFallbackFailed(true);
