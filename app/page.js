@@ -27,17 +27,9 @@ export default async function Home() {
       <div className="site-shell consumer-home__shell">
         <section className="consumer-home-hero" aria-labelledby="home-title">
           <div className="consumer-home-hero__copy">
-            <p className="consumer-home-hero__eyebrow">CAPSULE TOY DISCOVERY</p>
-            <h1 id="home-title">次に回したいガチャを、見つける。</h1>
-            <p>新作・発売日・定価・ラインナップを画像からすばやく。相場は実データがある商品だけ表示します。</p>
+            <h1 id="home-title">新作ガチャを探す</h1>
+            <p>今月・来月の発売情報を画像からチェック。定価とラインナップを見ながら、気になるシリーズをすぐ探せます。</p>
           </div>
-
-          <form className="consumer-home-search" action="/series" method="get" role="search">
-            <input type="hidden" name="scope" value="series" />
-            <label className="sr-only" htmlFor="home-search">ガチャを検索</label>
-            <input id="home-search" name="q" type="search" placeholder="ガチャ名・作品・メーカーで検索" />
-            <button type="submit">検索</button>
-          </form>
 
           <nav className="consumer-home-quick" aria-label="発売時期から探す">
             <Link href={`/series?scope=series&month=${currentMonth}&sort=newest`}>
@@ -76,7 +68,6 @@ export default async function Home() {
 
         <section className="consumer-home-explore" aria-labelledby="explore-title">
           <div>
-            <p className="consumer-home-section__eyebrow">BROWSE</p>
             <h2 id="explore-title">別の切り口から探す</h2>
           </div>
           <nav aria-label="別の探し方">
@@ -96,7 +87,6 @@ function HomeShelf({ id, title, description, href, items = [] }) {
     <section className="consumer-home-section" aria-labelledby={`${id}-title`}>
       <div className="consumer-home-section__head">
         <div>
-          <p className="consumer-home-section__eyebrow">DISCOVER</p>
           <h2 id={`${id}-title`}>{title}</h2>
           <p>{description}</p>
         </div>

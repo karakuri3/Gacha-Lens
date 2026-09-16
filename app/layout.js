@@ -2,6 +2,7 @@ import "./globals.css";
 import "./product-design.css";
 import "./product-detail-design.css";
 import "./consumer-r1.css";
+import "./consumer-r1-polish.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StructuredData from "@/components/StructuredData";

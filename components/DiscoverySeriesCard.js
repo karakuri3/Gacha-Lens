@@ -20,7 +20,7 @@ export default function DiscoverySeriesCard({ item, priority = false }) {
     <Link href={seriesHref(item)} className="consumer-discovery-card">
       <div className="consumer-discovery-card__media">
         <ProductImage
-          item={undefined}
+          item={item}
           src={item?.image_url || item?.imageUrl}
           imageScope="series"
           alt={item?.name || "ガチャ商品"}

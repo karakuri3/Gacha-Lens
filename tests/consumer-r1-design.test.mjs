@@ -10,6 +10,7 @@ test("R1 public shell removes the permanent dashboard sidebar and loads the cons
   const layout = source("app/layout.js");
   assert.doesNotMatch(layout, /AppSidebar/);
   assert.match(layout, /import "\.\/consumer-r1\.css"/);
+  assert.match(layout, /import "\.\/consumer-r1-polish\.css"/);
   assert.match(layout, /consumer-app-frame/);
 });
 
@@ -24,14 +25,15 @@ test("R1 header makes search and compact consumer navigation primary", () => {
   assert.match(header, /ガチャ名・作品・メーカーで検索/);
 });
 
-test("R1 homepage is image-led discovery instead of a market dashboard", () => {
+test("R1 homepage is image-led discovery instead of a market dashboard or marketing landing page", () => {
   const home = source("app/page.js");
   assert.match(home, /DiscoverySeriesCard/);
   assert.match(home, /getParentSeriesCatalogPage/);
-  assert.match(home, /次に回したいガチャを、見つける。/);
+  assert.match(home, /新作ガチャを探す/);
   assert.match(home, /今月/);
   assert.match(home, /来月/);
   assert.match(home, /発売中/);
+  assert.doesNotMatch(home, /consumer-home-search|CAPSULE TOY DISCOVERY|>DISCOVER<|>BROWSE</);
   assert.doesNotMatch(home, /PriceTrendChart/);
   assert.doesNotMatch(home, /dashboard-panel|dashboard-ranking|dashboard-mini-table/);
 });
@@ -39,6 +41,7 @@ test("R1 homepage is image-led discovery instead of a market dashboard", () => {
 test("canonical discovery card keeps official facts first and market evidence truthful", () => {
   const card = source("components/DiscoverySeriesCard.js");
   assert.match(card, /ProductImage/);
+  assert.match(card, /item=\{item\}/);
   assert.match(card, /seriesHref/);
   assert.match(card, /formatYen/);
   assert.match(card, /formatSchedule/);
