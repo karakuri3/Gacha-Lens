@@ -12,16 +12,31 @@ test("category detail route uses the targeted parent-series read path", () => {
   assert.doesNotMatch(route, /getPublicCategorySeriesPage/);
 });
 
-test("targeted category read takes the scoped fast path before the raw-value fallback", () => {
+test("Production category detail uses one catalog-only relation query before the raw-value fallback", () => {
   const helper = source("lib/targeted-category-series-page.js");
-  assert.match(helper, /readCategoryPage\(requestedName, requestedPage, pageSize\)/);
-  assert.match(helper, /getParentSeriesCatalogPage\(\{ category, page, pageSize, sort: "newest" \}\)/);
+  assert.match(helper, /loadCachedSupabaseCategoryPage/);
+  assert.match(helper, /\.from\("series"\)/);
+  assert.match(helper, /variants!inner\(id,variant_type,series_id,slug,name\)/);
+  assert.match(helper, /\.eq\("category", category\)/);
+  assert.match(helper, /referencedTable: "variants"/);
   assert.match(helper, /if \(direct\.total > 0\) return buildResult\(direct, requestedName\)/);
   assert.match(helper, /findPublicCategoryFacet\(await getParentSeriesCategoryCatalog\(\), requestedName\)/);
-  assert.match(helper, /readCategoryPage\(facet\.filter_value, requestedPage, pageSize\)/);
   assert.ok(
     helper.indexOf("readCategoryPage(requestedName") < helper.indexOf("getParentSeriesCategoryCatalog()"),
     "normal category requests must use the targeted query before the broad raw-value fallback",
   );
-  assert.doesNotMatch(helper, /fetchSupabaseParentSeriesCategoryCatalog/);
+  assert.doesNotMatch(helper, /market_listings|x_reactions|restock_events|stock_reports/);
+});
+
+test("category summary preserves card identity, release, image, price and lineup count fields", () => {
+  const helper = source("lib/targeted-category-series-page.js");
+  for (const contract of [
+    /series_id: series\.id/,
+    /series_slug: series\.slug/,
+    /entity_type: "series"/,
+    /variant_count: variants\.length/,
+    /imageUrl: series\.image_url/,
+    /price/,
+    /effectiveReleaseState\(series\)/,
+  ]) assert.match(helper, contract);
 });
