@@ -12,9 +12,15 @@ test("category detail route uses the targeted parent-series read path", () => {
   assert.doesNotMatch(route, /getPublicCategorySeriesPage/);
 });
 
+test("Production category detail keeps decoded route values out of Next unstable cache", () => {
+  const helper = source("lib/targeted-category-series-page.js");
+  assert.doesNotMatch(helper, /import\s+\{\s*unstable_cache\s*\}\s+from\s+["']next\/cache["']/);
+  assert.doesNotMatch(helper, /loadCachedSupabaseCategoryPage/);
+  assert.match(helper, /fetchSupabaseCategorySeriesSummaryPage\(category, \{ page, pageSize \}\)/);
+});
+
 test("Production category detail uses one catalog-only relation query before the raw-value fallback", () => {
   const helper = source("lib/targeted-category-series-page.js");
-  assert.match(helper, /loadCachedSupabaseCategoryPage/);
   assert.match(helper, /\.from\("series"\)/);
   assert.match(helper, /variants!inner\(id,variant_type,series_id,slug,name\)/);
   assert.match(helper, /\.eq\("category", category\)/);
