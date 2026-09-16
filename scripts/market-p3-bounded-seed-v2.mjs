@@ -27,6 +27,9 @@ export async function executeP3BoundedSeedV2({
   fixed_limit = null,
   execution_mode = "manual-v2",
   stage = "p3-bounded-seed-v2",
+  additional_excluded_variant_ids = [],
+  target_variant_ids = null,
+  rotation_key = null,
   validate_invocation = () => validateP3BoundedSeedV2Invocation({ event_name: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF, confirmation: process.env.P3_BOUNDED_SEED_V2_CONFIRMATION, expected_main_sha: options["expected-main-sha"], head_sha: process.env.GITHUB_SHA, origin_main_sha: options["origin-main-sha"] }),
 } = {}) {
   const output = path.resolve(output_dir || options["output-dir"] || "market-p3-bounded-seed-v2");
@@ -38,50 +41,80 @@ export async function executeP3BoundedSeedV2({
   let before = null;
   let rows = null;
   let resolved_execution_mode = execution_mode;
+  let attemptedVariantIds = [];
+  let resolvedRotationKey = null;
 
   try {
     limit = parseP3BoundedSeedV2Limit(fixed_limit ?? options.limit);
     if (fixed_limit !== null && limit !== fixed_limit) throw new Error("P3 bounded seed v2 fixed limit is invalid.");
     const invocation_mode = validate_invocation();
     if (typeof invocation_mode === "string") resolved_execution_mode = invocation_mode;
-  const data = await loadMarketCoverageData({ catalog: await loadOfficialCatalog() });
-  const profile = loadMarketManualCanarySelectionProfile(path.resolve("config/market-manual-canary-selection.json"));
-  const runId = String(process.env.GITHUB_RUN_ID ?? "").trim();
-  if (!/^\d+$/.test(runId)) throw new Error("P3 bounded seed v2 requires a GitHub workflow run ID.");
-  const plan = planPriorityThreeSeedSearchQueries(data.catalog, data.coverageRows, { excludedVariantIds: manualCanarySelectionOptions(profile).excludedVariantIds, maxVariantsPerSeries: 1, limit, rotationKey: `priority-3-bounded-seed-v2:${runId}` });
-  const selectedSeriesIds = plan.selected.map((entry) => String(entry.seriesId ?? "").trim());
-  if (plan.selected.length > limit || plan.queries.length !== plan.selected.length || selectedSeriesIds.some((id) => !id) || new Set(selectedSeriesIds).size !== selectedSeriesIds.length || plan.queries.some((query) => query.query_profile !== PRIORITY_THREE_SEED_QUERY_PROFILE)) {
-    throw new Error("P3 bounded seed v2 collection contract is invalid.");
-  }
-  const fetched = assertMarketFetchComplete(await fetchMarketListingsRaw({ catalog: data.catalog, queries: plan.queries, sourceScope: MARKET_SOURCE_SCOPES.PLANNER_APIS }));
-  const safety = applyMarketCandidateSafety({ records: fetched.records, queryPlan: plan.queries, catalog: data.catalog });
-  report = buildSanitizedMarketCandidateAudit({
-    records: safety.records, queryPlan: plan.queries, catalog: data.catalog,
-    runContext: { mode: "dry-run", source_scope: "planner-apis", run_id: process.env.GITHUB_RUN_ID, run_attempt: process.env.GITHUB_RUN_ATTEMPT, head_sha: process.env.GITHUB_SHA, event_name: process.env.GITHUB_EVENT_NAME },
-    summary: { safety_assessed_records: safety.records.filter((row) => row.market_safety_assessed).length, no_result_variants: calculateP3BoundedSeedNoResultVariants(plan.selected.length, safety.summary.variants_with_results), listing_upserts: 0, observations_created: 0, ingestion_runs_written: 0 },
-  });
-  fs.writeFileSync(path.join(output, "market-candidate-audit.json"), `${JSON.stringify(report, null, 2)}\n`);
-  fs.writeFileSync(path.join(output, "market-candidate-audit.md"), renderMarketCandidateAuditMarkdown(report));
-  if (report.result.report_complete !== true || Number(report.result.truncated_count) !== 0) throw new Error("P3 bounded seed v2 retrieval is incomplete.");
-  selection = selectP3BoundedSeedV2Candidates(report.candidates, { limit });
-  before = await store.fetchCounts();
-  if (!selection.selected.length) {
-    writeResult(output, buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), execution_mode: resolved_execution_mode, requested_limit: limit, selection, report, before, after: await store.fetchCounts(), status: "no-op" }));
-    console.log(JSON.stringify({ ok: true, status: "no-op", database_writes: 0 }));
-  } else {
+
+    const data = await loadMarketCoverageData({ catalog: await loadOfficialCatalog() });
+    const profile = loadMarketManualCanarySelectionProfile(path.resolve("config/market-manual-canary-selection.json"));
+    const runId = String(process.env.GITHUB_RUN_ID ?? "").trim();
+    if (!/^\d+$/.test(runId)) throw new Error("P3 bounded seed v2 requires a GitHub workflow run ID.");
+
+    const profileExcluded = manualCanarySelectionOptions(profile).excludedVariantIds;
+    const additionalExcluded = normalizeIdSet(additional_excluded_variant_ids);
+    const excludedVariantIds = new Set([...profileExcluded, ...additionalExcluded]);
+    const targetVariantIds = target_variant_ids == null ? null : normalizeIdSet(target_variant_ids);
+    const coverageRows = targetVariantIds == null
+      ? data.coverageRows
+      : data.coverageRows.filter((row) => targetVariantIds.has(String(row.variantId ?? "")));
+    resolvedRotationKey = normalizeRotationKey(rotation_key) || `priority-3-bounded-seed-v2:${runId}`;
+
+    const plan = planPriorityThreeSeedSearchQueries(data.catalog, coverageRows, {
+      excludedVariantIds,
+      maxVariantsPerSeries: 1,
+      limit,
+      rotationKey: resolvedRotationKey,
+    });
+    attemptedVariantIds = plan.selected.map((entry) => String(entry.variantId ?? "").trim()).filter(Boolean);
+    const selectedSeriesIds = plan.selected.map((entry) => String(entry.seriesId ?? "").trim());
+    if (plan.selected.length > limit || plan.queries.length !== plan.selected.length || selectedSeriesIds.some((id) => !id) || new Set(selectedSeriesIds).size !== selectedSeriesIds.length || plan.queries.some((query) => query.query_profile !== PRIORITY_THREE_SEED_QUERY_PROFILE)) {
+      throw new Error("P3 bounded seed v2 collection contract is invalid.");
+    }
+
+    const fetched = assertMarketFetchComplete(await fetchMarketListingsRaw({ catalog: data.catalog, queries: plan.queries, sourceScope: MARKET_SOURCE_SCOPES.PLANNER_APIS }));
+    const safety = applyMarketCandidateSafety({ records: fetched.records, queryPlan: plan.queries, catalog: data.catalog });
+    report = buildSanitizedMarketCandidateAudit({
+      records: safety.records,
+      queryPlan: plan.queries,
+      catalog: data.catalog,
+      runContext: { mode: "dry-run", source_scope: "planner-apis", run_id: process.env.GITHUB_RUN_ID, run_attempt: process.env.GITHUB_RUN_ATTEMPT, head_sha: process.env.GITHUB_SHA, event_name: process.env.GITHUB_EVENT_NAME },
+      summary: { safety_assessed_records: safety.records.filter((row) => row.market_safety_assessed).length, no_result_variants: calculateP3BoundedSeedNoResultVariants(plan.selected.length, safety.summary.variants_with_results), listing_upserts: 0, observations_created: 0, ingestion_runs_written: 0 },
+    });
+    fs.writeFileSync(path.join(output, "market-candidate-audit.json"), `${JSON.stringify(report, null, 2)}\n`);
+    fs.writeFileSync(path.join(output, "market-candidate-audit.md"), renderMarketCandidateAuditMarkdown(report));
+    if (report.result.report_complete !== true || Number(report.result.truncated_count) !== 0) throw new Error("P3 bounded seed v2 retrieval is incomplete.");
+
+    selection = selectP3BoundedSeedV2Candidates(report.candidates, { limit });
+    before = await store.fetchCounts();
+    if (!selection.selected.length) {
+      const result = buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), execution_mode: resolved_execution_mode, requested_limit: limit, selection, report, before, after: await store.fetchCounts(), status: "no-op" });
+      writeResult(output, result);
+      console.log(JSON.stringify({ ok: true, status: "no-op", database_writes: 0 }));
+      return { result, attempted_variant_ids: attemptedVariantIds, rotation_key: resolvedRotationKey };
+    }
+
     rows = buildP3BoundedSeedV2Rows({ candidates: selection.selected, workflow: workflowIdentity(), stage });
     const [variantIdRows, matchedVariantRows, sourceUrlRows, existingListings, existingObservations] = await Promise.all([
-      store.fetchRowsByVariantIds(rows.listingRows.map((row) => row.variant_id)), store.fetchRowsByMatchedVariantIds(rows.listingRows.map((row) => row.variant_id)),
-      store.fetchRowsBySourceUrls(rows.listingRows.map((row) => row.source_url)), store.fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)), store.fetchRowsByIds("market_listing_observations", rows.observationRows.map((row) => row.id)),
+      store.fetchRowsByVariantIds(rows.listingRows.map((row) => row.variant_id)),
+      store.fetchRowsByMatchedVariantIds(rows.listingRows.map((row) => row.variant_id)),
+      store.fetchRowsBySourceUrls(rows.listingRows.map((row) => row.source_url)),
+      store.fetchRowsByIds("market_listings", rows.listingRows.map((row) => row.id)),
+      store.fetchRowsByIds("market_listing_observations", rows.observationRows.map((row) => row.id)),
     ]);
     assertP3BoundedSeedV2Prewrite({ rows, variantListings: [...variantIdRows, ...matchedVariantRows], sourceUrlRows, existingListings, existingObservations });
     const outcome = await persistP3BoundedSeedV2({ rows, store });
-    writeResult(output, buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), execution_mode: resolved_execution_mode, requested_limit: limit, selection, rows, report, before, after: await store.fetchCounts(), outcome, status: "succeeded" }));
+    const result = buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), execution_mode: resolved_execution_mode, requested_limit: limit, selection, rows, report, before, after: await store.fetchCounts(), outcome, status: "succeeded" });
+    writeResult(output, result);
     console.log(JSON.stringify({ ok: true, status: "succeeded", database_writes: outcome.database_writes }));
-  }
-} catch (error) {
-  const rollback = error?.bounded_result?.rollback;
-  const status = rollback?.attempted ? rollback.verified ? "rolled-back" : "rollback-failed" : "blocked";
+    return { result, attempted_variant_ids: attemptedVariantIds, rotation_key: resolvedRotationKey };
+  } catch (error) {
+    const rollback = error?.bounded_result?.rollback;
+    const status = rollback?.attempted ? rollback.verified ? "rolled-back" : "rollback-failed" : "blocked";
     writeResult(output, buildP3BoundedSeedV2Result({ workflow: workflowIdentity(), execution_mode: resolved_execution_mode, requested_limit: limit, selection, rows, report, before, after: await safeCounts(store), error, status }));
     throw error;
   }
@@ -95,3 +128,5 @@ function createStore() { return { fetchRowsByIds: (table, ids) => fetchIn(table,
 function fetchIn(table, column, values, select) { if (!values.length) return []; const escaped = values.map((value) => `"${String(value).replaceAll('"', '\\"')}"`).join(","); return fetchRows(table, { select, pageSize: 100, params: { [column]: `in.(${escaped})`, order: "id.asc" } }); }
 async function safeCounts(value) { try { return await value.fetchCounts(); } catch { return null; } }
 function parseOptions(args) { return Object.fromEntries(args.filter((arg) => arg.startsWith("--") && arg.includes("=")).map((arg) => { const [key, ...rest] = arg.slice(2).split("="); return [key, rest.join("=")]; })); }
+function normalizeIdSet(value) { const values = value instanceof Set ? [...value] : Array.isArray(value) ? value : []; return new Set(values.map((entry) => String(entry ?? "").trim()).filter(Boolean)); }
+function normalizeRotationKey(value) { return String(value ?? "").normalize("NFKC").replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim().slice(0, 160); }
