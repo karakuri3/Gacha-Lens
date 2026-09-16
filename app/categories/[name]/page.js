@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { CategoryDiscoveryLanding } from "@/components/DiscoveryFacetPages";
-import { categoryDiscoveryLookupCandidates, categoryDiscoveryPageHref } from "@/lib/domain/category-discovery";
+import { categoryDiscoveryPageHref } from "@/lib/domain/category-discovery";
 import { normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
 import { buildPageMetadata } from "@/lib/site-metadata";
 import { getTargetedPublicCategorySeriesPage } from "@/lib/targeted-category-series-page";
@@ -12,13 +12,9 @@ export const revalidate = 0;
 const getCategoryDiscoveryPage = cache((name, page) => getTargetedPublicCategorySeriesPage(name, { page, pageSize: 60 }));
 
 async function resolvePage(params, searchParams) {
-  const names = categoryDiscoveryLookupCandidates((await params).name);
+  const name = (await params).name;
   const page = normalizeDiscoveryFacetPage((await searchParams)?.page);
-  for (const name of names) {
-    const result = await getCategoryDiscoveryPage(name, page);
-    if (result) return result;
-  }
-  return null;
+  return getCategoryDiscoveryPage(name, page);
 }
 
 export async function generateMetadata({ params, searchParams }) {
