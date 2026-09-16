@@ -12,12 +12,16 @@ test("category detail route uses the targeted parent-series read path", () => {
   assert.doesNotMatch(route, /getPublicCategorySeriesPage/);
 });
 
-test("targeted category read queries one category instead of enumerating the category catalog", () => {
+test("targeted category read takes the scoped fast path before the raw-value fallback", () => {
   const helper = source("lib/targeted-category-series-page.js");
-  assert.match(helper, /getParentSeriesCatalogPage\(\{/);
-  assert.match(helper, /category: requestedName/);
-  assert.match(helper, /pageSize/);
-  assert.match(helper, /sort: "newest"/);
-  assert.doesNotMatch(helper, /getParentSeriesCategoryCatalog/);
+  assert.match(helper, /readCategoryPage\(requestedName, requestedPage, pageSize\)/);
+  assert.match(helper, /getParentSeriesCatalogPage\(\{ category, page, pageSize, sort: "newest" \}\)/);
+  assert.match(helper, /if \(direct\.total > 0\) return buildResult\(direct, requestedName\)/);
+  assert.match(helper, /findPublicCategoryFacet\(await getParentSeriesCategoryCatalog\(\), requestedName\)/);
+  assert.match(helper, /readCategoryPage\(facet\.filter_value, requestedPage, pageSize\)/);
+  assert.ok(
+    helper.indexOf("readCategoryPage(requestedName") < helper.indexOf("getParentSeriesCategoryCatalog()"),
+    "normal category requests must use the targeted query before the broad raw-value fallback",
+  );
   assert.doesNotMatch(helper, /fetchSupabaseParentSeriesCategoryCatalog/);
 });
