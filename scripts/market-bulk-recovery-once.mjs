@@ -7,24 +7,29 @@ import { executeP3BoundedSeedV2 } from "./market-p3-bounded-seed-v2.mjs";
 import { fetchRowCount } from "./supabase-rest.mjs";
 
 export const BULK_RECOVERY_CONFIRMATION = "APPROVE_GACHA_MARKET_BULK_RECOVERY_20260916";
-export const BULK_RECOVERY_MAX_TARGETS = 100;
-export const BULK_RECOVERY_MAX_ROUNDS = 7;
+export const BULK_RECOVERY_MAX_TARGETS = 1250;
+export const BULK_RECOVERY_MAX_ROUNDS = 50;
 export const BULK_RECOVERY_ROUND_LIMIT = 25;
-export const BULK_RECOVERY_LOOKBACK_DAYS = 30;
+export const BULK_RECOVERY_LOOKBACK_DAYS = 90;
 
 export function selectBulkRecoveryTargets(rows = [], { now = new Date(), lookbackDays = BULK_RECOVERY_LOOKBACK_DAYS } = {}) {
   const current = validDate(now);
   if (!current) throw new Error("Bulk market recovery now is invalid.");
   const cutoff = current.getTime() - lookbackDays * 24 * 60 * 60 * 1000;
-  return rows.filter((row) => {
-    const release = validDate(row?.releaseDate);
-    return row?.released === true
-      && Number(row?.eligibleListingCount) === 0
-      && Number(row?.priority) === 3
-      && release
-      && release.getTime() >= cutoff
-      && release.getTime() <= current.getTime();
-  });
+  return rows
+    .filter((row) => {
+      const release = validDate(row?.releaseDate);
+      return row?.released === true
+        && Number(row?.eligibleListingCount) === 0
+        && Number(row?.priority) === 3
+        && release
+        && release.getTime() >= cutoff
+        && release.getTime() <= current.getTime();
+    })
+    .sort((left, right) => {
+      const releaseDelta = (validDate(right?.releaseDate)?.getTime() ?? 0) - (validDate(left?.releaseDate)?.getTime() ?? 0);
+      return releaseDelta || String(left?.variantId ?? "").localeCompare(String(right?.variantId ?? ""), "ja");
+    });
 }
 
 export function summarizeBulkRecoverySeriesDepth(rows = []) {
@@ -39,6 +44,16 @@ export function summarizeBulkRecoverySeriesDepth(rows = []) {
     distinct_series: counts.size,
     max_variants_per_series: values.length ? Math.max(...values) : 0,
   };
+}
+
+export function calculateBulkRecoveryRounds(targetCount, maxVariantsPerSeries) {
+  const targets = Number(targetCount);
+  const seriesDepth = Number(maxVariantsPerSeries);
+  if (!Number.isInteger(targets) || targets < 0 || !Number.isInteger(seriesDepth) || seriesDepth < 0) {
+    throw new Error("Bulk market recovery round inputs are invalid.");
+  }
+  if (targets === 0) return 0;
+  return Math.max(Math.ceil(targets / BULK_RECOVERY_ROUND_LIMIT), seriesDepth);
 }
 
 export function validateBulkRecoveryInvocation({ event_name, ref, confirmation, head_sha, origin_main_sha } = {}) {
@@ -74,20 +89,22 @@ export async function runBulkMarketRecoveryOnce({
   const targetIds = targets.map((row) => String(row.variantId));
   const targetSet = new Set(targetIds);
   if (targetSet.size !== targetIds.length) throw new Error("Bulk market recovery targets are not unique.");
-  if (targets.length > BULK_RECOVERY_MAX_TARGETS) throw new Error("Bulk market recovery target count exceeds the fixed cap.");
+  if (targets.length > BULK_RECOVERY_MAX_TARGETS) {
+    throw new Error(`Bulk market recovery target count ${targets.length} exceeds the fixed cap ${BULK_RECOVERY_MAX_TARGETS}.`);
+  }
 
   const depth = summarizeBulkRecoverySeriesDepth(targets);
-  if (depth.max_variants_per_series > BULK_RECOVERY_MAX_ROUNDS) {
-    throw new Error("Bulk market recovery requires more rounds than the fixed safety cap.");
+  const requiredRounds = calculateBulkRecoveryRounds(targets.length, depth.max_variants_per_series);
+  if (requiredRounds > BULK_RECOVERY_MAX_ROUNDS) {
+    throw new Error(`Bulk market recovery requires ${requiredRounds} rounds, above the fixed cap ${BULK_RECOVERY_MAX_ROUNDS}.`);
   }
 
   const attempted = new Set();
   const persisted = new Set();
   const rounds = [];
   const runId = String(process.env.GITHUB_RUN_ID ?? "").trim();
-  const roundCount = Math.min(BULK_RECOVERY_MAX_ROUNDS, depth.max_variants_per_series);
 
-  for (let round = 1; round <= roundCount; round += 1) {
+  for (let round = 1; round <= requiredRounds; round += 1) {
     const roundDir = path.join(output, `round-${String(round).padStart(2, "0")}`);
     const execution = await executeP3BoundedSeedV2({
       output_dir: roundDir,
@@ -137,6 +154,7 @@ export async function runBulkMarketRecoveryOnce({
       lookback_days: BULK_RECOVERY_LOOKBACK_DAYS,
       round_limit: BULK_RECOVERY_ROUND_LIMIT,
       max_rounds: BULK_RECOVERY_MAX_ROUNDS,
+      required_rounds: requiredRounds,
       max_targets: BULK_RECOVERY_MAX_TARGETS,
       one_variant_per_series_per_round: true,
       strict_matcher_unchanged: true,
@@ -188,6 +206,7 @@ function renderSummary(summary) {
     `- Status: ${summary.status}`,
     `- Targets: ${summary.target_count}`,
     `- Distinct series: ${summary.distinct_target_series}`,
+    `- Required rounds: ${summary.contract.required_rounds}`,
     `- Attempted: ${summary.attempted_count}`,
     `- Persisted: ${summary.persisted_count}`,
     `- Covered after: ${summary.covered_after_count}`,
