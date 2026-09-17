@@ -227,7 +227,14 @@ test("cards and detail routes use presentation data without changing canonical i
 });
 
 test("public listing surfaces request display presentation while category and parent-series visuals remain series scoped", () => {
-  for (const relativePath of ["app/page.js", "app/ranking/page.js", "app/schedule/page.js", "app/stock/page.js", "app/restocks/page.js", "app/favorites/page.js"]) {
+  const home = source("app/page.js");
+  const discoveryCard = source("components/DiscoverySeriesCard.js");
+  assert.match(home, /DiscoverySeriesCard/);
+  assert.match(discoveryCard, /<ProductImage/);
+  assert.match(discoveryCard, /item=\{item\}/);
+  assert.match(discoveryCard, /imageScope="series"/);
+
+  for (const relativePath of ["app/ranking/page.js", "app/schedule/page.js", "app/stock/page.js", "app/restocks/page.js", "app/favorites/page.js"]) {
     assert.match(source(relativePath), /<ProductImage item=/);
   }
   assert.match(source("app/categories/page.js"), /<ProductImage src=\{category\.image_url\}/);

@@ -129,16 +129,19 @@ test("34 schedule metrics do not include market or profit labels", () => {
   assert.doesNotMatch(schedulePage, /market_evidence|profit_estimate|利益目安|参考相場/);
 });
 
-test("35 global search submits to series query and home does not duplicate it", () => {
-  assert.match(header, /<form className="global-search" action="\/series" method="get" role="search">/);
+test("35 global search remains the canonical search entry while home does not duplicate a search form", () => {
+  assert.match(header, /<form className="global-search consumer-global-search" action="\/series" method="get" role="search">/);
   assert.match(header, /<input name="q"/);
   assert.doesNotMatch(homePage, /<form[^>]+role="search"/);
-  assert.doesNotMatch(homePage, /home-catalog-search/);
+  assert.doesNotMatch(homePage, /home-catalog-search|consumer-home-search/);
 });
-test("35a home upcoming module is series-first while market ranking stays variant-first", () => {
-  assert.match(homePage, /getRankingSeries\("released", "variant"\)/);
-  assert.match(homePage, /getRankingSeries\("upcoming", "series"\)/);
-  assert.match(homePage, /href=\{seriesHref\(item\)\}/);
+test("35a R1 home discovery is series-first and does not reintroduce ranking-dashboard reads", () => {
+  assert.match(homePage, /getParentSeriesCatalogPage/);
+  assert.match(homePage, /month: currentMonth/);
+  assert.match(homePage, /month: nextMonth/);
+  assert.match(homePage, /release: "released"/);
+  assert.match(homePage, /DiscoverySeriesCard/);
+  assert.doesNotMatch(homePage, /getRankingSeries|PriceTrendChart|dashboard-ranking/);
 });
 test("36 zero result message is present", () => assert.match(seriesPage, /条件に一致する商品が見つかりませんでした/));
 test("37 clear filter action is present", () => assert.match(seriesPage, /条件をすべてクリア/));
