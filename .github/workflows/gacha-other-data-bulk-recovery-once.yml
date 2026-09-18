@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - .github/ops/gacha-other-data-bulk-recovery-20260917.token
+      - .github/ops/gacha-other-data-bulk-recovery-repair-20260918.token
 
 permissions:
   contents: read
@@ -38,7 +38,7 @@ jobs:
       X_RAW_FEED_URLS: ${{ secrets.X_RAW_FEED_URLS }}
       X_RAW_FEED_SOURCES_JSON: ${{ secrets.X_RAW_FEED_SOURCES_JSON }}
       X_SEARCH_MAX_RESULTS: ${{ secrets.X_SEARCH_MAX_RESULTS }}
-      GACHA_OTHER_DATA_BULK_RECOVERY_CONFIRMATION: APPROVE_GACHA_OTHER_DATA_BULK_RECOVERY_20260917
+      GACHA_OTHER_DATA_BULK_RECOVERY_CONFIRMATION: APPROVE_GACHA_OTHER_DATA_BULK_RECOVERY_REPAIR_20260918
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -53,8 +53,8 @@ jobs:
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = "push"
           test "$GITHUB_REF" = "refs/heads/main"
-          test -f .github/ops/gacha-other-data-bulk-recovery-20260917.token
-          marker="$(tr -d '\r\n' < .github/ops/gacha-other-data-bulk-recovery-20260917.token)"
+          test -f .github/ops/gacha-other-data-bulk-recovery-repair-20260918.token
+          marker="$(tr -d '\r\n' < .github/ops/gacha-other-data-bulk-recovery-repair-20260918.token)"
           test "$marker" = "$GACHA_OTHER_DATA_BULK_RECOVERY_CONFIRMATION"
           git fetch --no-tags origin main --depth=1
           origin_main_sha="$(git rev-parse origin/main)"
@@ -78,13 +78,36 @@ jobs:
           };
           console.log(JSON.stringify(counts, null, 2));
           NODE
-      - name: Bulk refresh official detail lineups
+      - name: Bulk refresh official non-rerelease detail lineups
         shell: bash
+        env:
+          OFFICIAL_RERELEASE_POLICY: skip
+          OFFICIAL_RERELEASE_SKIP_CONFIRMATION: APPROVE_OFFICIAL_RERELEASE_SKIP_FOR_ONE_TIME_RECOVERY_V1
         run: |
           set -euo pipefail
           for round in $(seq 1 16); do
-            echo "official bulk round ${round}/16"
+            echo "official safe bulk round ${round}/16"
             npm run ingest:official
+            ROUND="${round}" node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { getGeneratedDataPath } from './scripts/generated-paths.mjs';
+          import { partitionLegacyOfficialRecords } from './lib/domain/official-upsert-safety.js';
+          const file = getGeneratedDataPath('official-raw.json');
+          const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+          const records = Array.isArray(parsed.records) ? parsed.records : [];
+          const { blockedRecords } = partitionLegacyOfficialRecords(records);
+          const summary = {
+            round: Number(process.env.ROUND),
+            records: records.length,
+            detailFetched: Number(parsed.detailFetched ?? 0),
+            remainingDetails: Number(parsed.remainingDetails ?? 0),
+            rereleaseRecordsSkipped: blockedRecords.length,
+          };
+          const output = path.join(process.env.RUNNER_TEMP, 'gacha-other-data-bulk-recovery', `official-round-${String(summary.round).padStart(2, '0')}.json`);
+          fs.writeFileSync(output, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
+          console.log(JSON.stringify(summary));
+          NODE
             remaining="$(node --input-type=module <<'NODE'
           import fs from 'node:fs';
           import { getGeneratedDataPath } from './scripts/generated-paths.mjs';
