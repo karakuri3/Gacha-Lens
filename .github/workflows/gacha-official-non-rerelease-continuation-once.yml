@@ -1,0 +1,160 @@
+name: Gacha Official Non-Rerelease Continuation One-Time Recovery
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/ops/gacha-official-non-rerelease-continuation-20260919.token
+
+permissions:
+  contents: read
+
+jobs:
+  official-non-rerelease-continuation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      GACHA_DATA_SOURCE: supabase
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      OFFICIAL_SOURCE_URLS: https://gashapon.jp/schedule/,https://gashapon.jp/products/,https://www.takaratomy-arts.co.jp/items/gacha/search.html?order=release&p=1&sort=0
+      OFFICIAL_DETAIL_FETCH_LIMIT: 500
+      OFFICIAL_DETAIL_FETCH_DELAY_MS: 200
+      OFFICIAL_SOURCE_FETCH_DELAY_MS: 200
+      OFFICIAL_TARTS_PAGES_PER_RUN: 8
+      GACHA_OFFICIAL_NON_RERELEASE_CONTINUATION_CONFIRMATION: APPROVE_GACHA_OFFICIAL_NON_RERELEASE_CONTINUATION_20260919
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Verify one-time continuation marker and exact current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "push"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test -f .github/ops/gacha-official-non-rerelease-continuation-20260919.token
+          marker="$(tr -d '\r\n' < .github/ops/gacha-official-non-rerelease-continuation-20260919.token)"
+          test "$marker" = "$GACHA_OFFICIAL_NON_RERELEASE_CONTINUATION_CONFIRMATION"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+
+      - name: Snapshot Production counts before continuation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/gacha-official-non-rerelease-continuation"
+          node --input-type=module <<'NODE' > "${RUNNER_TEMP}/gacha-official-non-rerelease-continuation/before.json"
+          import { fetchRowCount } from './scripts/supabase-rest.mjs';
+          const counts = {
+            series: await fetchRowCount('series'),
+            variants: await fetchRowCount('variants'),
+            provisional_variants: await fetchRowCount('variants', { variant_type: 'eq.provisional' }),
+            restock_events: await fetchRowCount('restock_events'),
+            import_issues: await fetchRowCount('import_issues'),
+          };
+          console.log(JSON.stringify(counts, null, 2));
+          NODE
+
+      - name: Continue official non-rerelease detail backlog
+        shell: bash
+        env:
+          OFFICIAL_RERELEASE_POLICY: skip
+          OFFICIAL_RERELEASE_SKIP_CONFIRMATION: APPROVE_OFFICIAL_RERELEASE_SKIP_FOR_ONE_TIME_RECOVERY_V1
+        run: |
+          set -euo pipefail
+          root="${RUNNER_TEMP}/gacha-official-non-rerelease-continuation"
+          mkdir -p "$root"
+          for round in $(seq 1 28); do
+            echo "official continuation round ${round}/28"
+            npm run ingest:official
+            ROUND="${round}" node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { getGeneratedDataPath } from './scripts/generated-paths.mjs';
+          import { partitionLegacyOfficialRecords } from './lib/domain/official-upsert-safety.js';
+          const file = getGeneratedDataPath('official-raw.json');
+          const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+          const records = Array.isArray(parsed.records) ? parsed.records : [];
+          const { blockedRecords } = partitionLegacyOfficialRecords(records);
+          const summary = {
+            round: Number(process.env.ROUND),
+            records: records.length,
+            detailFetched: Number(parsed.detailFetched ?? 0),
+            remainingDetails: Number(parsed.remainingDetails ?? 0),
+            rereleaseRecordsSkipped: blockedRecords.length,
+          };
+          const root = path.join(process.env.RUNNER_TEMP, 'gacha-official-non-rerelease-continuation');
+          fs.writeFileSync(path.join(root, `official-round-${String(summary.round).padStart(2, '0')}.json`), `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
+          fs.writeFileSync(path.join(root, 'final-remaining.txt'), `${summary.remainingDetails}\n`, 'utf8');
+          console.log(JSON.stringify(summary));
+          NODE
+            remaining="$(cat "$root/final-remaining.txt")"
+            echo "official remaining detail pages: ${remaining}"
+            if [ "${remaining}" -le 0 ]; then
+              break
+            fi
+          done
+
+      - name: Snapshot Production counts after continuation
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="${RUNNER_TEMP}/gacha-official-non-rerelease-continuation"
+          mkdir -p "$root"
+          node --input-type=module <<'NODE' > "$root/after.json"
+          import { fetchRowCount } from './scripts/supabase-rest.mjs';
+          const counts = {
+            series: await fetchRowCount('series'),
+            variants: await fetchRowCount('variants'),
+            provisional_variants: await fetchRowCount('variants', { variant_type: 'eq.provisional' }),
+            restock_events: await fetchRowCount('restock_events'),
+            import_issues: await fetchRowCount('import_issues'),
+          };
+          console.log(JSON.stringify(counts, null, 2));
+          NODE
+          node --input-type=module <<'NODE' > "$root/summary.json"
+          import fs from 'node:fs';
+          const root = process.env.RUNNER_TEMP + '/gacha-official-non-rerelease-continuation';
+          const before = JSON.parse(fs.readFileSync(root + '/before.json', 'utf8'));
+          const after = JSON.parse(fs.readFileSync(root + '/after.json', 'utf8'));
+          const remaining = fs.existsSync(root + '/final-remaining.txt')
+            ? Number(fs.readFileSync(root + '/final-remaining.txt', 'utf8').trim())
+            : null;
+          const deltas = Object.fromEntries(Object.keys(after).map((key) => [key, Number(after[key]) - Number(before[key])]));
+          console.log(JSON.stringify({
+            before,
+            after,
+            deltas,
+            remainingDetails: Number.isFinite(remaining) ? remaining : null,
+            backlogExhausted: remaining === 0,
+          }, null, 2));
+          NODE
+          cat "$root/summary.json"
+
+      - name: Upload sanitized continuation summary
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gacha-official-non-rerelease-continuation-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-official-non-rerelease-continuation
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Require backlog exhaustion for Phase A completion
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          file="${RUNNER_TEMP}/gacha-official-non-rerelease-continuation/final-remaining.txt"
+          test -f "$file"
+          remaining="$(cat "$file")"
+          echo "final remaining detail pages: ${remaining}"
+          test "${remaining}" -le 0
