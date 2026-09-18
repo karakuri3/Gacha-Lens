@@ -57,6 +57,20 @@ test("production count drift blocks the read-only audit", () => {
   assert.ok(report.blockers.includes("production_database_delta_detected"));
 });
 
+test("partial schedule source blocks the recovery audit", () => {
+  const report = buildOfficialRereleaseRecoveryAudit({
+    scheduleRecords: [rereleaseRecord()],
+    catalog: { series: [series("gashapon-1")], restock_events: [] },
+    databaseBefore: counts,
+    databaseAfter: counts,
+    observedAt: "2026-09-19T00:00:00.000Z",
+    workflow: { run_id: "1", head_sha: "a".repeat(40), event_name: "workflow_dispatch" },
+    source: { ok: true, schedule_pages: 13, records: 1, issues: 1 },
+  });
+  assert.equal(report.final_verdict, "OFFICIAL_RERELEASE_RECOVERY_AUDIT_BLOCKED");
+  assert.ok(report.blockers.includes("source_incomplete"));
+});
+
 test("workflow is dispatch-only and exposes no Production write credential", () => {
   const workflow = fs.readFileSync(".github/workflows/gacha-official-rerelease-recovery-audit.yml", "utf8");
   assert.match(workflow, /workflow_dispatch:/);
