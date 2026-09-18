@@ -4,6 +4,8 @@ import { officialProducts, officialSchedule } from "../lib/data/official-input.j
 import {
   assertLegacyOfficialRecordsSafe,
   loadExistingRealVariantSeriesIdsStrict,
+  partitionLegacyOfficialRecords,
+  resolveLegacyOfficialRereleasePolicy,
 } from "../lib/domain/official-upsert-safety.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { fetchRows, upsertRows } from "./supabase-rest.mjs";
@@ -12,10 +14,17 @@ loadEnvFile(".env.local");
 
 const generatedOfficial = loadGeneratedOfficialRaw();
 const officialRows = dedupeById([...generatedOfficial.records, ...officialSchedule, ...officialProducts]);
-assertLegacyOfficialRecordsSafe(officialRows);
-const seriesRows = dedupeRowsById(officialRows.map(toSeriesRow));
+const rereleasePolicy = resolveLegacyOfficialRereleasePolicy({
+  policy: process.env.OFFICIAL_RERELEASE_POLICY,
+  confirmation: process.env.OFFICIAL_RERELEASE_SKIP_CONFIRMATION,
+});
+const { safeRecords, blockedRecords } = partitionLegacyOfficialRecords(officialRows);
+if (rereleasePolicy === "block") assertLegacyOfficialRecordsSafe(officialRows);
+const legacyUpsertRows = rereleasePolicy === "skip" ? safeRecords : officialRows;
+const skippedRereleaseRecords = rereleasePolicy === "skip" ? blockedRecords.length : 0;
+const seriesRows = dedupeRowsById(legacyUpsertRows.map(toSeriesRow));
 const existingRealVariantSeriesIds = await loadExistingRealVariantSeriesIdsStrict(fetchRows);
-const variantRows = dedupeRowsById(officialRows.flatMap((series) => {
+const variantRows = dedupeRowsById(legacyUpsertRows.flatMap((series) => {
   const variants = asArray(series.variants || series.items || series.lineup || series.line_up);
   if (variants.length) return variants.map((variant) => toVariantRow(variant, series));
   const seriesId = toSeriesRow(series).id;
@@ -37,6 +46,9 @@ console.log(JSON.stringify({
   generatedRows: generatedOfficial.records.length,
   generatedIssues: generatedOfficial.issues.length,
   sourceRows: officialRows.length,
+  legacyUpsertRows: legacyUpsertRows.length,
+  skippedRereleaseRecords,
+  rereleasePolicy,
   series: seriesRows.length,
   variants: variantRows.length,
   importIssues: issueRows.length,
