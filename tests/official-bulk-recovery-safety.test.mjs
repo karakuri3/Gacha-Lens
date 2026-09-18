@@ -12,7 +12,26 @@ const ordinary = { id: "ordinary", name: "ordinary" };
 const rerelease = {
   id: "rerelease",
   name: "rerelease",
-  release_history: [{ release_date: "2025-01-01" }, { release_date: "2026-01-01" }],
+  raw: {
+    rerelease: {
+      is_rerelease: true,
+      original_release: {
+        year: 2025,
+        month: 1,
+        release_date: null,
+        release_month: "1月",
+        release_week: "未定",
+        precision: "month",
+      },
+      current_schedule: {
+        year: 2026,
+        release_date: null,
+        release_month: "9月",
+        release_week: "第2週",
+        precision: "week",
+      },
+    },
+  },
 };
 
 test("legacy official policy remains fail-closed by default", () => {
