@@ -1,0 +1,63 @@
+name: Gacha Official Residual Read-Only Audit
+
+on:
+  push:
+    branches:
+      - audit/363-official-residual-classification
+    paths:
+      - .github/ops/gacha-official-residual-audit-20260919.token
+
+permissions:
+  contents: read
+
+jobs:
+  official-residual-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      INGESTION_WRITE_DISABLED: "true"
+      MARKET_BACKFILL_WRITE_DISABLED: "true"
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GACHA_OFFICIAL_RESIDUAL_AUDIT_CONFIRMATION: APPROVE_GACHA_OFFICIAL_RESIDUAL_AUDIT_PR_HEAD_V2_20260919
+      EXPECTED_BASE_MAIN_SHA: a63aadbbbb197dca3270aa4c16048ae426386825
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Verify one-time audit marker and exact current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "push"
+          test "$GITHUB_REF" = "refs/heads/audit/363-official-residual-classification"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -f .github/ops/gacha-official-residual-audit-20260919.token
+          marker="$(tr -d '\r\n' < .github/ops/gacha-official-residual-audit-20260919.token)"
+          test "$marker" = "$GACHA_OFFICIAL_RESIDUAL_AUDIT_CONFIRMATION"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$EXPECTED_BASE_MAIN_SHA"
+          test "$(git merge-base HEAD origin/main)" = "$EXPECTED_BASE_MAIN_SHA"
+
+      - name: Run full residual read-only audit
+        run: >-
+          npm run official:residual-audit --
+          --output-dir=${{ runner.temp }}/gacha-official-residual-audit
+          --expected-head-sha=${{ github.sha }}
+          --run-id=${{ github.run_id }}
+
+      - name: Upload sanitized residual audit
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gacha-official-residual-audit-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-official-residual-audit
+          if-no-files-found: error
+          retention-days: 14

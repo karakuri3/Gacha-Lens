@@ -12,6 +12,7 @@
     "build": "next build",
     "fetch:official": "node scripts/collect-official-data.mjs",
     "official:audit-live": "node scripts/official-live-audit.mjs",
+    "official:residual-audit": "node scripts/official-residual-audit.mjs",
     "official:source-expansion-diagnostic": "node scripts/official-source-expansion-diagnostic.mjs",
     "official:bounded-write": "node scripts/official-bounded-write.mjs",
     "official:bounded-auto": "node scripts/official-bounded-auto.mjs",
