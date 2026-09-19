@@ -1,4 +1,4 @@
-import { getPublicSitemapIdentifiers } from "@/lib/series";
+import { getPublicRootSitemapIdentifiers } from "@/lib/series";
 import { getEditorialGuideSlugs } from "@/lib/domain/editorial-guides";
 import { absoluteSiteUrl } from "@/lib/site-metadata";
 import { unstable_cache } from "next/cache";
@@ -8,7 +8,7 @@ const MAX_SITEMAP_URLS = 50000;
 export const revalidate = 86400;
 
 const getDailyPublicSitemapIdentifiers = unstable_cache(
-  () => getPublicSitemapIdentifiers(),
+  () => getPublicRootSitemapIdentifiers(),
   ["gacha-public-root-sitemap-v1"],
   { revalidate: 86400 }
 );
