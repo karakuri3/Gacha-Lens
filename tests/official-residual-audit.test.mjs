@@ -90,6 +90,7 @@ test("workflow is one-time, exact-main and exposes no Production write lane", ()
   assert.match(workflow, /INGESTION_WRITE_DISABLED: "true"/);
   assert.match(workflow, /refs\/heads\/audit\/363-official-residual-classification/);
   assert.match(workflow, /EXPECTED_BASE_MAIN_SHA: a63aadbbbb197dca3270aa4c16048ae426386825/);
+  assert.match(workflow, /fetch-depth: 0/);
   assert.match(workflow, /git merge-base HEAD origin\/main/);
   assert.doesNotMatch(workflow, /SUPABASE_DB_URL/);
   assert.doesNotMatch(workflow, /ingest:/);
