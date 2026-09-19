@@ -142,7 +142,7 @@ test("root and observer sitemaps use daily cache boundaries without changing sit
   assert.match(rootSitemap, /gacha-public-root-sitemap-v1/);
   assert.match(rootSitemap, /export const revalidate = 86400/);
   assert.match(rootSitemap, /getDailyPublicSitemapIdentifiers/);
-  assert.match(rootSitemap, /getPublicSitemapIdentifiers/);
+  assert.match(rootSitemap, /getPublicRootSitemapIdentifiers/);
   assert.match(rootSitemap, /Public sitemap exceeds/);
   assert.doesNotMatch(rootSitemap, /variantSlugs\.map|parentSeriesSlugs\.map/);
   assert.doesNotMatch(rootSitemap, /series-sitemap\.xml|variant-sitemap\.xml/);
@@ -161,6 +161,22 @@ test("root and observer sitemaps use daily cache boundaries without changing sit
     assert.match(route, /application\/xml; charset=utf-8/);
     assert.match(route, /buildObserverSitemapXml/);
   }
+});
+
+test("root and series sitemaps use a bounded parent source instead of rescanning public variants", () => {
+  const identifiers = source("lib/data/public-sitemap-identifiers.js");
+  const series = source("lib/series.js");
+  const root = source("app/sitemap.js");
+
+  assert.match(identifiers, /PARENT_SITEMAP_SELECT = "id,slug,franchise,brand,category,variants!inner\(\)"/);
+  assert.match(identifiers, /MAX_PARENT_SITEMAP_ROWS = 50000/);
+  assert.match(identifiers, /referencedTable: "variants"/);
+  assert.match(identifiers, /Public sitemap parent source exceeds/);
+  assert.doesNotMatch(root, /getPublicSitemapIdentifiers/);
+  assert.match(root, /getPublicRootSitemapIdentifiers/);
+  assert.match(series, /loadCachedPublicSitemapParents/);
+  assert.match(series, /public-series-sitemap-parents/);
+  assert.match(series, /buildPublicParentSitemapData/);
 });
 
 test("series-only observer reads only bounded official series columns without a mutation path", () => {
