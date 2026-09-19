@@ -177,6 +177,8 @@ test("root and series sitemaps use a bounded parent source instead of rescanning
   assert.match(series, /loadCachedPublicSitemapParents/);
   assert.match(series, /public-series-sitemap-parents/);
   assert.match(series, /buildPublicParentSitemapData/);
+  assert.match(series, /getVariantObserverSitemapEntries[\\s\\S]*getSeriesSlugs\\(\\)/);
+  assert.doesNotMatch(series, /getVariantObserverSitemapEntries[\\s\\S]{0,180}getPublicSitemapIdentifiers/);
 });
 
 test("series-only observer reads only bounded official series columns without a mutation path", () => {
