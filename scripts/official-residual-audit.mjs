@@ -11,9 +11,9 @@ import { fetchRowCount, fetchRows } from "./supabase-rest.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const outputDirectory = path.resolve(required(args["output-dir"], "--output-dir"));
-const expectedMainSha = normalizedSha(required(args["expected-main-sha"], "--expected-main-sha"));
+const expectedHeadSha = normalizedSha(required(args["expected-head-sha"], "--expected-head-sha"));
 const currentSha = currentHeadSha();
-if (!expectedMainSha || currentSha !== expectedMainSha) throw new Error("official_residual_audit_main_sha_mismatch");
+if (!expectedHeadSha || currentSha !== expectedHeadSha) throw new Error("official_residual_audit_head_sha_mismatch");
 if (String(process.env.INGESTION_WRITE_DISABLED || "").trim() !== "true") throw new Error("official_residual_audit_write_disable_missing");
 
 const databaseBefore = await captureCounts("before");
