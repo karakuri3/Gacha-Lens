@@ -69,7 +69,7 @@ test("root and observer sitemaps preserve discovery without duplicating product-
     assert.match(text, new RegExp(route.replace("/", "\\/")));
   }
   assert.doesNotMatch(text, /path: "\/trends"/);
-  assert.match(text, /getPublicSitemapIdentifiers/);
+  assert.match(text, /getPublicRootSitemapIdentifiers/);
   assert.doesNotMatch(text, /\/series\/\$\{encodeURIComponent\(slug\)\}/);
   assert.doesNotMatch(text, /\/series\/group\/\$\{encodeURIComponent\(slug\)\}/);
   assert.match(variantObserver, /pathPrefix: "\/series\/"/);
