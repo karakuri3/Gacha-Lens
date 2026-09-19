@@ -61,15 +61,19 @@ test("robots allows public pages and blocks APIs and administration", () => {
   assert.match(text, /sitemap\.xml/);
 });
 
-test("sitemap contains discovery and legal routes but not the redirect-only trends route", () => {
+test("root and observer sitemaps preserve discovery without duplicating product-scale URLs", () => {
   const text = source("app/sitemap.js");
+  const variantObserver = source("app/variant-sitemap.xml/route.js");
+  const seriesObserver = source("app/series-sitemap.xml/route.js");
   for (const route of ["/ranking", "/schedule", "/series", "/categories", "/privacy", "/terms", "/disclaimer", "/affiliate-disclosure", "/operator", "/contact"]) {
     assert.match(text, new RegExp(route.replace("/", "\\/")));
   }
   assert.doesNotMatch(text, /path: "\/trends"/);
   assert.match(text, /getPublicSitemapIdentifiers/);
-  assert.match(text, /\/series\/\$\{encodeURIComponent\(slug\)\}/);
-  assert.match(text, /\/series\/group\/\$\{encodeURIComponent\(slug\)\}/);
+  assert.doesNotMatch(text, /\/series\/\$\{encodeURIComponent\(slug\)\}/);
+  assert.doesNotMatch(text, /\/series\/group\/\$\{encodeURIComponent\(slug\)\}/);
+  assert.match(variantObserver, /pathPrefix: "\/series\/"/);
+  assert.match(seriesObserver, /pathPrefix: "\/series\/group\/"/);
   assert.match(text, /MAX_SITEMAP_URLS = 50000/);
 });
 
