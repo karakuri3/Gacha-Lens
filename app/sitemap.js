@@ -1,4 +1,4 @@
-import { getPublicSitemapIdentifiers } from "@/lib/series";
+import { getPublicRootSitemapIdentifiers } from "@/lib/series";
 import { getEditorialGuideSlugs } from "@/lib/domain/editorial-guides";
 import { absoluteSiteUrl } from "@/lib/site-metadata";
 import { unstable_cache } from "next/cache";
@@ -8,7 +8,7 @@ const MAX_SITEMAP_URLS = 50000;
 export const revalidate = 86400;
 
 const getDailyPublicSitemapIdentifiers = unstable_cache(
-  () => getPublicSitemapIdentifiers(),
+  () => getPublicRootSitemapIdentifiers(),
   ["gacha-public-root-sitemap-v1"],
   { revalidate: 86400 }
 );
@@ -32,7 +32,7 @@ export default async function sitemap() {
     { path: "/operator", frequency: "yearly", priority: 0.3 },
     { path: "/contact", frequency: "yearly", priority: 0.3 },
   ];
-  const { variantSlugs, parentSeriesSlugs, franchises, brands, categories } = await getDailyPublicSitemapIdentifiers();
+  const { franchises, brands, categories } = await getDailyPublicSitemapIdentifiers();
   const guideSlugs = getEditorialGuideSlugs();
 
   const entries = [
@@ -45,16 +45,6 @@ export default async function sitemap() {
       url: absoluteSiteUrl(`/guides/${encodeURIComponent(slug)}`),
       changeFrequency: "monthly",
       priority: 0.6,
-    })),
-    ...variantSlugs.map((slug) => ({
-      url: absoluteSiteUrl(`/series/${encodeURIComponent(slug)}`),
-      changeFrequency: "daily",
-      priority: 0.8,
-    })),
-    ...parentSeriesSlugs.map((slug) => ({
-      url: absoluteSiteUrl(`/series/group/${encodeURIComponent(slug)}`),
-      changeFrequency: "daily",
-      priority: 0.8,
     })),
     ...franchises.map((facet) => ({
       url: absoluteSiteUrl(`/franchises/${encodeURIComponent(facet.name)}`),
