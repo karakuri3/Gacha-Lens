@@ -3,7 +3,7 @@ name: Gacha Official Residual Read-Only Audit
 on:
   push:
     branches:
-      - main
+      - audit/363-official-residual-classification
     paths:
       - .github/ops/gacha-official-residual-audit-20260919.token
 
@@ -19,7 +19,8 @@ jobs:
       MARKET_BACKFILL_WRITE_DISABLED: "true"
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      GACHA_OFFICIAL_RESIDUAL_AUDIT_CONFIRMATION: APPROVE_GACHA_OFFICIAL_RESIDUAL_AUDIT_20260919
+      GACHA_OFFICIAL_RESIDUAL_AUDIT_CONFIRMATION: APPROVE_GACHA_OFFICIAL_RESIDUAL_AUDIT_PR_HEAD_20260919
+      EXPECTED_BASE_MAIN_SHA: a63aadbbbb197dca3270aa4c16048ae426386825
 
     steps:
       - uses: actions/checkout@v6
@@ -34,18 +35,20 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = "push"
-          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_REF" = "refs/heads/audit/363-official-residual-classification"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -f .github/ops/gacha-official-residual-audit-20260919.token
           marker="$(tr -d '\r\n' < .github/ops/gacha-official-residual-audit-20260919.token)"
           test "$marker" = "$GACHA_OFFICIAL_RESIDUAL_AUDIT_CONFIRMATION"
           git fetch --no-tags origin main --depth=1
-          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_BASE_MAIN_SHA"
+          test "$(git merge-base HEAD origin/main)" = "$EXPECTED_BASE_MAIN_SHA"
 
       - name: Run full residual read-only audit
         run: >-
           npm run official:residual-audit --
           --output-dir=${{ runner.temp }}/gacha-official-residual-audit
-          --expected-main-sha=${{ github.sha }}
+          --expected-head-sha=${{ github.sha }}
           --run-id=${{ github.run_id }}
 
       - name: Upload sanitized residual audit
