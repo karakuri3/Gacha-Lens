@@ -144,6 +144,7 @@ test("root and observer sitemaps use daily cache boundaries without changing sit
   assert.match(rootSitemap, /getDailyPublicSitemapIdentifiers/);
   assert.match(rootSitemap, /getPublicSitemapIdentifiers/);
   assert.match(rootSitemap, /Public sitemap exceeds/);
+  assert.doesNotMatch(rootSitemap, /variantSlugs\.map|parentSeriesSlugs\.map/);
   assert.doesNotMatch(rootSitemap, /series-sitemap\.xml|variant-sitemap\.xml/);
 
   assert.match(seriesRoute, /unstable_cache/);
