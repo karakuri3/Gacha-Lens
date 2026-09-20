@@ -72,7 +72,9 @@ test("detail, favorites and sitemap cannot publish provisional URLs", () => {
   assert.match(read("app/series/[slug]/page.js"), /if \(!item\) notFound\(\)/);
   assert.match(read("app/favorites/page.js"), /\/api\/public-variants/);
   assert.match(read("app/api/public-variants/route.js"), /getPublicFavoriteIdentifiers/);
-  assert.match(read("app/sitemap.js"), /getPublicSitemapIdentifiers/);
+  assert.match(read("app/sitemap.js"), /getPublicRootSitemapIdentifiers/);
+  assert.match(read("lib/data/public-sitemap-identifiers.js"), /referencedTable: "variants"/);
+  assert.match(read("lib/data/public-sitemap-identifiers.js"), /variant_type\.is\.null,variant_type\.neq\.provisional/);
   assert.match(read("lib/domain/sitemap-publication.js"), /isPublicVariant/);
   assert.doesNotMatch(read("app/series/[slug]/page.js"), /application\/ld\+json/);
 });

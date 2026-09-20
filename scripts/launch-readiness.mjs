@@ -131,26 +131,43 @@ export function isSitemapSourceReady(sourceText) {
   ]);
 }
 
-export function isObserverSitemapSourceReady({ robotsText, seriesRouteText, variantRouteText, publicationText }) {
+export function isObserverSitemapSourceReady({ robotsText, seriesRouteText, variantRouteText, variantShardRouteText, publicationText }) {
   return hasEvery(robotsText, [
     'absoluteSiteUrl("/sitemap.xml")',
     'absoluteSiteUrl("/series-sitemap.xml")',
     'absoluteSiteUrl("/variant-sitemap.xml")',
     'disallow: ["/api/", "/review/", "/supabase-series"]',
   ])
-    && [seriesRouteText, variantRouteText].every((route) => (
-      hasEvery(route, [
-        'export const dynamic = "force-static"',
-        "export const revalidate = 86400",
-        "unstable_cache",
-        "new Response(buildObserverSitemapXml(entries",
-        '"Content-Type": "application/xml; charset=utf-8"',
-      ])
-      && !route.includes("force-dynamic")
-    ))
+    && hasEvery(seriesRouteText, [
+      'export const dynamic = "force-static"',
+      "export const revalidate = 86400",
+      "unstable_cache",
+      "new Response(buildObserverSitemapXml(entries",
+      '"Content-Type": "application/xml; charset=utf-8"',
+    ])
+    && !seriesRouteText.includes("force-dynamic")
+    && hasEvery(variantRouteText, [
+      'export const dynamic = "force-static"',
+      "export const revalidate = 86400",
+      "unstable_cache",
+      "getVariantObserverSitemapShardCount",
+      "buildSitemapIndexXml",
+      '"Content-Type": "application/xml; charset=utf-8"',
+    ])
+    && !variantRouteText.includes("force-dynamic")
+    && hasEvery(variantShardRouteText, [
+      'export const dynamic = "force-dynamic"',
+      "unstable_cache",
+      "getVariantObserverSitemapEntries",
+      "buildObserverSitemapXml",
+      'pathPrefix: "/series/"',
+      '"Content-Type": "application/xml; charset=utf-8"',
+    ])
     && hasEvery(publicationText, [
       "MAX_OBSERVER_SITEMAP_URLS = 50000",
       "Observer sitemap exceeds ${MAX_OBSERVER_SITEMAP_URLS} URLs",
+      "Sitemap index exceeds ${MAX_OBSERVER_SITEMAP_URLS} entries",
+      "buildSitemapIndexXml",
       "collectSeriesObserverEntries",
       "collectVariantObserverEntries",
     ]);
@@ -161,6 +178,7 @@ function buildStaticChecks(root) {
   const sitemap = source(root, "app/sitemap.js");
   const seriesObserverRoute = source(root, "app/series-sitemap.xml/route.js");
   const variantObserverRoute = source(root, "app/variant-sitemap.xml/route.js");
+  const variantObserverShardRoute = source(root, "app/variant-sitemap/[page]/route.js");
   const sitemapPublication = source(root, "lib/domain/sitemap-publication.js");
   const affiliateProviders = source(root, "lib/domain/affiliate-providers.js");
   const marketLinks = source(root, "lib/domain/market-links.js");
@@ -211,10 +229,11 @@ function buildStaticChecks(root) {
         robotsText: robots,
         seriesRouteText: seriesObserverRoute,
         variantRouteText: variantObserverRoute,
+        variantShardRouteText: variantObserverShardRoute,
         publicationText: sitemapPublication,
       }) ? "pass" : "fail",
       true,
-      "Root, series, and variant observer sitemaps must remain published with independent 50,000 URL fail-closed caps and daily low-egress cache boundaries."
+      "Root and series observer sitemaps plus the sharded variant sitemap index must remain published with bounded fail-closed caps and daily low-egress cache boundaries."
     ),
     check(
       "public_catalog_routes",

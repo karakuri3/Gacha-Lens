@@ -62,6 +62,10 @@ const PUBLIC_SITEMAP_PATHS = new Set([
   "/variant-sitemap.xml",
 ]);
 
+function isPublicSitemapPath(pathname) {
+  return PUBLIC_SITEMAP_PATHS.has(pathname) || /^\/variant-sitemap\/[1-9]\d*$/.test(pathname);
+}
+
 function isNextInternalRequest(request) {
   return [
     "rsc",
@@ -142,7 +146,7 @@ function getEdgeCachePolicy(request) {
     return EDGE_CACHE_POLICIES.publicDocument;
   }
 
-  if (url.searchParams.size === 0 && PUBLIC_SITEMAP_PATHS.has(url.pathname)) {
+  if (url.searchParams.size === 0 && isPublicSitemapPath(url.pathname)) {
     return EDGE_CACHE_POLICIES.publicSitemap;
   }
 
