@@ -193,6 +193,7 @@ test("Phase A3 writer workflow is manual-only, separately approved, and fail-clo
   assert.match(script, /scanOfficialPhaseA3Residuals/);
   assert.match(script, /assertOfficialPhaseA3Expectation/);
   assert.ok((script.match(/exactCurrentMainSha\(\)/g) || []).length >= 2);
+  assert.match(script, /phase_a3_write_variants_trigger_boundary_changed/);
   assert.match(script, /executeOfficialPhaseA3VariantTransaction/);
   assert.match(script, /verifyDirectPostState/);
   assert.match(script, /commit_outcome_unknown/);
