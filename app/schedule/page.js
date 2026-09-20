@@ -1,6 +1,6 @@
 import Link from "next/link";
 import ProductImage from "@/components/ProductImage";
-import { getParentSeriesCatalogPage, getUpcomingParentSeriesScheduleMonths } from "@/lib/series";
+import { getScheduleParentSeriesPage, getUpcomingParentSeriesScheduleMonths } from "@/lib/series";
 import { seriesHref } from "@/lib/variant-url";
 import {
   formatCatalogMonth,
@@ -29,7 +29,7 @@ export default async function SchedulePage({ searchParams }) {
   const currentMonth = currentCatalogMonth();
   const requestedMonth = normalizeCatalogMonth(params?.month);
   const selectedMonth = requestedMonth || availableMonths.find((month) => month >= currentMonth) || availableMonths[0] || currentMonth;
-  const catalogPage = await getParentSeriesCatalogPage({
+  const catalogPage = await getScheduleParentSeriesPage({
     month: selectedMonth,
     sort: "newest",
     page: 1,
