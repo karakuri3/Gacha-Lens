@@ -128,6 +128,11 @@ test("Phase A3 stable write contract ignores bounded live metadata drift but not
   identityChanged.variants[0].slug = "stable-different";
   const third = buildOfficialPhaseA3Plan({ safeRecords: [identityChanged] });
   assert.notEqual(first.write_contract_digest, third.write_contract_digest);
+
+  const imageScopeChanged = structuredClone(base);
+  imageScopeChanged.variants[0].image_scope = "series";
+  const fourth = buildOfficialPhaseA3Plan({ safeRecords: [imageScopeChanged] });
+  assert.notEqual(first.write_contract_digest, fourth.write_contract_digest);
 });
 
 test("Phase A3 rejects rerelease leakage and deterministically disambiguates duplicate variant identities", () => {
