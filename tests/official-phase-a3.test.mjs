@@ -240,7 +240,7 @@ test("Phase A3 exact-main preflight is one-time, read-only, drift-aware, and sec
   const workflow = fs.readFileSync(".github/workflows/gacha-official-phase-a3-main-preflight.yml", "utf8");
   const marker = fs.readFileSync(".github/ops/gacha-official-phase-a3-main-preflight-writer-20260920.token", "utf8").trim();
 
-  assert.equal(marker, "APPROVE_GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_WRITER_V1_20260920");
+  assert.equal(marker, "APPROVE_GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_WRITER_V2_20260920");
   assert.match(workflow, /branches:\s*\n\s*- main/);
   assert.match(workflow, /paths:\s*\n\s*- \.github\/ops\/gacha-official-phase-a3-main-preflight-writer-20260920\.token/);
   assert.match(workflow, /concurrency:/);
