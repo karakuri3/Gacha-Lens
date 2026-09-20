@@ -175,8 +175,7 @@ function read(file) {
 
 
 test("schedule read path avoids signal fan-out and returns embedded variant counts", () => {
-  const repository = source("lib/data/supabase-gacha-repository.js");
-  const series = source("lib/series.js");
+  const series = read("lib/series.js");
   const scheduleRead = repository.slice(
     repository.indexOf("export async function fetchSupabaseScheduleSeriesPage"),
     repository.indexOf("export async function fetchSupabaseParentSeriesByIds"),
