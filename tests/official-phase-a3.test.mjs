@@ -107,7 +107,7 @@ test("Phase A3 plan writes variants only and is deterministic", () => {
   assert.ok(one.variant_rows.every((row) => row.variant_type !== "provisional"));
 });
 
-test("Phase A3 rejects rerelease leakage and duplicate variant ids", () => {
+test("Phase A3 rejects rerelease leakage and deterministically disambiguates duplicate variant identities", () => {
   assert.throws(
     () => buildOfficialPhaseA3Plan({
       safeRecords: [record("rr", "https://gashapon.jp/products/detail.php?jan_code=2", { rerelease: true })],
@@ -116,14 +116,17 @@ test("Phase A3 rejects rerelease leakage and duplicate variant ids", () => {
   );
 
   const a = record("a", "https://gashapon.jp/products/detail.php?jan_code=1");
-  const b = record("b", "https://gashapon.jp/products/detail.php?jan_code=2");
-  b.variants[0].id = a.variants[0].id;
-  assert.throws(() => buildOfficialPhaseA3Plan({ safeRecords: [a, b] }), /phase_a3_duplicate_variant_id/);
+  a.variants[1].id = a.variants[0].id;
+  a.variants[1].slug = a.variants[0].slug;
+  const plan = buildOfficialPhaseA3Plan({ safeRecords: [a] });
+  assert.equal(plan.target_variants, 2);
+  assert.equal(plan.identity_disambiguations, 1);
+  assert.equal(new Set(plan.variant_rows.map((row) => row.id)).size, 2);
+  assert.equal(new Set(plan.variant_rows.map((row) => row.slug)).size, 2);
+  assert.equal(plan.variant_rows[1].raw.id, a.variants[1].id);
 
-  const c = record("c", "https://gashapon.jp/products/detail.php?jan_code=3");
-  const d = record("d", "https://gashapon.jp/products/detail.php?jan_code=4");
-  d.variants[0].slug = c.variants[0].slug;
-  assert.throws(() => buildOfficialPhaseA3Plan({ safeRecords: [c, d] }), /phase_a3_duplicate_variant_slug/);
+  const reversed = buildOfficialPhaseA3Plan({ safeRecords: [a] });
+  assert.equal(plan.plan_digest, reversed.plan_digest);
 });
 
 test("Phase A3 accepts only approved HTTPS provider URLs", () => {
@@ -180,13 +183,17 @@ test("preflight is ready only with a complete scan and zero database delta", () 
 
 test("frozen Phase A3 expectation fails closed on any cohort drift", () => {
   const snapshot = {
-    plan: { plan_digest: "sha256:" + "a".repeat(64) },
+    plan: { plan_digest: "sha256:" + "a".repeat(64), identity_disambiguations: 1 },
     counts: {
       known_undetailed: 10,
       safe_records: 5,
       safe_variants: 20,
       rerelease_records: 2,
       unresolved_records: 3,
+    },
+    plan: {
+      plan_digest: "sha256:" + "a".repeat(64),
+      identity_disambiguations: 1,
     },
     scan: {
       held_shared_detailed_urls: 2,
@@ -202,6 +209,7 @@ test("frozen Phase A3 expectation fails closed on any cohort drift", () => {
     unresolved_records: 3,
     held_shared_detailed_urls: 2,
     held_unsupported_provider_urls: 1,
+    identity_disambiguations: 1,
   }));
   assert.throws(() => assertOfficialPhaseA3Expectation(snapshot, { safe_records: 6 }), /phase_a3_expectation_mismatch/);
   assert.throws(() => assertOfficialPhaseA3Expectation(snapshot, { held_shared_detailed_urls: 3 }), /phase_a3_expectation_mismatch/);
