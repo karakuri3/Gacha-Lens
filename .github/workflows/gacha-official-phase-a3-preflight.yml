@@ -1,0 +1,64 @@
+name: Gacha Official Phase A3 Read-Only Preflight
+
+on:
+  push:
+    branches:
+      - fix/363-phase-a3-targeted-non-rerelease
+    paths:
+      - .github/ops/gacha-official-phase-a3-preflight-20260920.token
+
+permissions:
+  contents: read
+
+jobs:
+  phase-a3-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      INGESTION_WRITE_DISABLED: "true"
+      MARKET_BACKFILL_WRITE_DISABLED: "true"
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GACHA_OFFICIAL_PHASE_A3_PREFLIGHT_CONFIRMATION: APPROVE_GACHA_OFFICIAL_PHASE_A3_PREFLIGHT_V1_20260920
+      EXPECTED_BASE_MAIN_SHA: c51b945eb06f5ae3726f0d40657745ab7386b894
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Verify read-only marker and exact current main base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "push"
+          test "$GITHUB_REF" = "refs/heads/fix/363-phase-a3-targeted-non-rerelease"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -f .github/ops/gacha-official-phase-a3-preflight-20260920.token
+          marker="$(tr -d '\r\n' < .github/ops/gacha-official-phase-a3-preflight-20260920.token)"
+          test "$marker" = "$GACHA_OFFICIAL_PHASE_A3_PREFLIGHT_CONFIRMATION"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$EXPECTED_BASE_MAIN_SHA"
+          test "$(git merge-base HEAD origin/main)" = "$EXPECTED_BASE_MAIN_SHA"
+
+      - name: Run full Phase A3 read-only preflight
+        id: preflight
+        run: >-
+          npm run official:phase-a3-preflight --
+          --output-dir=${{ runner.temp }}/gacha-official-phase-a3-preflight
+          --expected-head-sha=${{ github.sha }}
+          --run-id=${{ github.run_id }}
+
+      - name: Upload sanitized Phase A3 preflight
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gacha-official-phase-a3-preflight-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-official-phase-a3-preflight
+          if-no-files-found: error
+          retention-days: 14
