@@ -8,11 +8,11 @@ import {
 import { fetchRowCount, fetchRows } from "./supabase-rest.mjs";
 
 export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3", allowEmptyPlan = false } = {}) {
-  const [knownDetailedRows, knownOfficialRecords] = await Promise.all([
+  const [allVariantRows, knownOfficialRecords] = await Promise.all([
     fetchRows("variants", {
-      select: "id,series_id,series:series!inner(id,official_url)",
-      params: { variant_type: "neq.provisional", order: "id.asc" },
-      operationName: operationPrefix + ".known_detailed",
+      select: "id,slug,series_id,variant_type,series:series!inner(id,official_url)",
+      params: { order: "id.asc" },
+      operationName: operationPrefix + ".all_variant_identities",
     }),
     fetchRows("series", {
       select: "id,name,official_url,release_date",
@@ -21,12 +21,13 @@ export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3
     }),
   ]);
 
+  const realVariantRows = allVariantRows.filter((row) => row.variant_type !== "provisional");
   const knownDetailedSeriesIds = [...new Set(
-    knownDetailedRows.map((row) => String(row.series_id || row.series?.id || "").trim()).filter(Boolean),
+    realVariantRows.map((row) => String(row.series_id || row.series?.id || "").trim()).filter(Boolean),
   )];
   const detailedSeriesIdSet = new Set(knownDetailedSeriesIds);
   const knownDetailedOfficialUrls = [...new Set(
-    knownDetailedRows.map((row) => canonicalOfficialUrl(row.series?.official_url)).filter(Boolean),
+    realVariantRows.map((row) => canonicalOfficialUrl(row.series?.official_url)).filter(Boolean),
   )];
   const detailedUrlSet = new Set(knownDetailedOfficialUrls);
   const knownUndetailedRecords = knownOfficialRecords.filter(
@@ -71,6 +72,15 @@ export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3
     fetchedRecords: fetched.records,
   });
   const plan = buildOfficialPhaseA3Plan(classification, { allowEmpty: allowEmptyPlan });
+  const existingVariantIds = new Set(allVariantRows.map((row) => String(row.id || "").trim()).filter(Boolean));
+  const existingVariantSlugs = new Set(allVariantRows.map((row) => String(row.slug || "").trim()).filter(Boolean));
+  if (plan.variant_rows.some((row) => existingVariantIds.has(row.id))) {
+    throw phaseA3Error("phase_a3_preflight_existing_variant_id_collision");
+  }
+  if (plan.variant_rows.some((row) => existingVariantSlugs.has(row.slug))) {
+    throw phaseA3Error("phase_a3_preflight_existing_variant_slug_collision");
+  }
+
   const priorityScanComplete = Number(fetched.priorityDetails) === priorityDetailUrls.length
     && Number(fetched.detailFetched) === priorityDetailUrls.length;
 
