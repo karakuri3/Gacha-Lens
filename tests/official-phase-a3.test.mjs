@@ -102,9 +102,37 @@ test("Phase A3 plan writes variants only and is deterministic", () => {
   const two = buildOfficialPhaseA3Plan({ safeRecords: [second, first] });
 
   assert.equal(one.plan_digest, two.plan_digest);
+  assert.equal(one.write_contract_digest, two.write_contract_digest);
   assert.equal(one.target_series, 2);
   assert.equal(one.target_variants, 4);
   assert.ok(one.variant_rows.every((row) => row.variant_type !== "provisional"));
+});
+
+test("Phase A3 stable write contract ignores bounded live metadata drift but not identity drift", () => {
+  const base = record("stable", "https://gashapon.jp/products/detail.php?jan_code=stable");
+  const first = buildOfficialPhaseA3Plan({ safeRecords: [base] });
+
+  const metadataChanged = structuredClone(base);
+  metadataChanged.price = 500;
+  metadataChanged.release_date = "2026-10-01";
+  metadataChanged.variants[0].image_url = "https://example.invalid/changed.jpg";
+  metadataChanged.variants[0].raw = { parser_note: "changed" };
+  const second = buildOfficialPhaseA3Plan({ safeRecords: [metadataChanged] });
+
+  assert.notEqual(first.plan_digest, second.plan_digest);
+  assert.equal(first.write_contract_digest, second.write_contract_digest);
+
+  const identityChanged = structuredClone(base);
+  identityChanged.variants[0].name = "Different Variant";
+  identityChanged.variants[0].id = "stable-different";
+  identityChanged.variants[0].slug = "stable-different";
+  const third = buildOfficialPhaseA3Plan({ safeRecords: [identityChanged] });
+  assert.notEqual(first.write_contract_digest, third.write_contract_digest);
+
+  const imageScopeChanged = structuredClone(base);
+  imageScopeChanged.variants[0].image_scope = "series";
+  const fourth = buildOfficialPhaseA3Plan({ safeRecords: [imageScopeChanged] });
+  assert.notEqual(first.write_contract_digest, fourth.write_contract_digest);
 });
 
 test("Phase A3 rejects rerelease leakage and deterministically disambiguates duplicate variant identities", () => {
@@ -192,6 +220,7 @@ test("frozen Phase A3 expectation fails closed on any cohort drift", () => {
     },
     plan: {
       plan_digest: "sha256:" + "a".repeat(64),
+      write_contract_digest: "sha256:" + "b".repeat(64),
       identity_disambiguations: 1,
     },
     scan: {
@@ -201,6 +230,7 @@ test("frozen Phase A3 expectation fails closed on any cohort drift", () => {
   };
   assert.doesNotThrow(() => assertOfficialPhaseA3Expectation(snapshot, {
     plan_digest: snapshot.plan.plan_digest,
+    write_contract_digest: snapshot.plan.write_contract_digest,
     known_undetailed: 10,
     safe_records: 5,
     safe_variants: 20,
@@ -240,7 +270,7 @@ test("Phase A3 exact-main preflight is one-time, read-only, drift-aware, and sec
   const workflow = fs.readFileSync(".github/workflows/gacha-official-phase-a3-main-preflight.yml", "utf8");
   const marker = fs.readFileSync(".github/ops/gacha-official-phase-a3-main-preflight-writer-20260920.token", "utf8").trim();
 
-  assert.equal(marker, "APPROVE_GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_WRITER_V2_20260920");
+  assert.equal(marker, "APPROVE_GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_WRITER_V3_20260921");
   assert.match(workflow, /branches:\s*\n\s*- main/);
   assert.match(workflow, /paths:\s*\n\s*- \.github\/ops\/gacha-official-phase-a3-main-preflight-writer-20260920\.token/);
   assert.match(workflow, /concurrency:/);

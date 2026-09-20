@@ -90,6 +90,7 @@ async function executeWrite() {
       report,
       auditRunId: args["audit-run-id"],
       planDigest: process.env.PHASE_A3_PLAN_DIGEST,
+      writeContractDigest: process.env.PHASE_A3_WRITE_CONTRACT_DIGEST,
       approval: process.env.PHASE_A3_WRITE_APPROVAL,
       headSha: currentSha,
       originMainSha: exactCurrentMainSha(),
@@ -98,6 +99,7 @@ async function executeWrite() {
     const restBefore = await captureOfficialPhaseA3Counts();
     const rescan = await scanOfficialPhaseA3Residuals({ operationPrefix: "phase_a3_write_rescan" });
     const restAfter = await captureOfficialPhaseA3Counts();
+    plan = rescan.plan;
     const rescanReport = validateOfficialPhaseA3Snapshot(buildOfficialPhaseA3Snapshot({
       classification: rescan.classification,
       plan: rescan.plan,
@@ -115,7 +117,6 @@ async function executeWrite() {
       workflow: { run_id: process.env.GITHUB_RUN_ID, head_sha: currentSha, event_name: "workflow_dispatch" },
     }));
     assertOfficialPhaseA3Expectation(rescanReport, authorization.expectation);
-    plan = rescan.plan;
 
     if (!countsMatchAudit(restAfter, authorization.database)
       || Number(rescanReport.counts.known_undetailed) !== Number(authorization.expectation.known_undetailed)) {
@@ -282,6 +283,8 @@ function verifyResult() {
     head_sha: result.head_sha,
     audit_run_id: result.audit_run_id,
     plan_digest: result.execution_plan_digest,
+    write_contract_digest: result.execution_write_contract_digest,
+    metadata_drift: result.metadata_drift,
     target_series: result.plan.target_series,
     target_variants: result.plan.target_variants,
     database_writes: result.database.writes,

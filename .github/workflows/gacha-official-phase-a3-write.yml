@@ -12,11 +12,15 @@ on:
         required: true
         type: string
       plan_digest:
-        description: Exact approved Phase A3 plan digest
+        description: Exact approved Phase A3 full plan digest
+        required: true
+        type: string
+      write_contract_digest:
+        description: Exact approved Phase A3 stable write contract digest
         required: true
         type: string
       approval:
-        description: APPROVE_GACHA_PHASE_A3_WRITE:<MAIN_SHA>:<AUDIT_RUN_ID>:<PLAN_DIGEST>
+        description: APPROVE_GACHA_PHASE_A3_WRITE_V2:<MAIN_SHA>:<AUDIT_RUN_ID>:<PLAN_DIGEST>:<WRITE_CONTRACT_DIGEST>
         required: true
         type: string
 
@@ -87,6 +91,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           PHASE_A3_PLAN_DIGEST: ${{ inputs.plan_digest }}
+          PHASE_A3_WRITE_CONTRACT_DIGEST: ${{ inputs.write_contract_digest }}
           PHASE_A3_WRITE_APPROVAL: ${{ inputs.approval }}
         run: >-
           npm run official:phase-a3-write -- execute

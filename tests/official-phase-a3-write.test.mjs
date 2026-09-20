@@ -12,13 +12,15 @@ const HEAD = "a".repeat(40);
 const OTHER = "b".repeat(40);
 const RUN_ID = "35503717593";
 const DIGEST = "sha256:" + "c".repeat(64);
-const APPROVAL = `APPROVE_GACHA_PHASE_A3_WRITE:${HEAD}:${RUN_ID}:${DIGEST}`;
+const CONTRACT_DIGEST = "sha256:" + "e".repeat(64);
+const APPROVAL = `APPROVE_GACHA_PHASE_A3_WRITE_V2:${HEAD}:${RUN_ID}:${DIGEST}:${CONTRACT_DIGEST}`;
 
 test("Phase A3 writer authorizes only the exact successful main audit identity", () => {
   const authorization = authorizeOfficialPhaseA3Write({
     report: auditFixture(),
     auditRunId: RUN_ID,
     planDigest: DIGEST,
+    writeContractDigest: CONTRACT_DIGEST,
     approval: APPROVAL,
     headSha: HEAD,
     originMainSha: HEAD,
@@ -27,6 +29,10 @@ test("Phase A3 writer authorizes only the exact successful main audit identity",
   assert.equal(authorization.head_sha, HEAD);
   assert.equal(authorization.audit_run_id, RUN_ID);
   assert.equal(authorization.plan_digest, DIGEST);
+  assert.equal(authorization.write_contract_digest, CONTRACT_DIGEST);
+  assert.equal(authorization.approval_mode, "stable_contract_v2");
+  assert.equal(authorization.expectation.plan_digest, null);
+  assert.equal(authorization.expectation.write_contract_digest, CONTRACT_DIGEST);
   assert.equal(authorization.expectation.safe_records, 1828);
   assert.equal(authorization.expectation.safe_variants, 11350);
   assert.equal(authorization.expectation.rerelease_records, 374);
@@ -38,6 +44,7 @@ test("Phase A3 writer rejects main, run, digest, approval, event, and database d
   const base = {
     auditRunId: RUN_ID,
     planDigest: DIGEST,
+    writeContractDigest: CONTRACT_DIGEST,
     approval: APPROVAL,
     headSha: HEAD,
     originMainSha: HEAD,
@@ -45,7 +52,8 @@ test("Phase A3 writer rejects main, run, digest, approval, event, and database d
   assert.throws(() => authorizeOfficialPhaseA3Write({ ...base, report: auditFixture(), originMainSha: OTHER }), /main_sha_mismatch/);
   assert.throws(() => authorizeOfficialPhaseA3Write({ ...base, report: auditFixture(), auditRunId: "1" }), /audit_run_mismatch/);
   assert.throws(() => authorizeOfficialPhaseA3Write({ ...base, report: auditFixture(), planDigest: "sha256:" + "d".repeat(64) }), /plan_digest_mismatch/);
-  assert.throws(() => authorizeOfficialPhaseA3Write({ ...base, report: auditFixture(), approval: `APPROVE_GACHA_PHASE_A3_WRITE:${HEAD}:${RUN_ID}:sha256:${"d".repeat(64)}` }), /approval_mismatch/);
+  assert.throws(() => authorizeOfficialPhaseA3Write({ ...base, report: auditFixture(), writeContractDigest: "sha256:" + "f".repeat(64) }), /write_contract_digest_mismatch/);
+  assert.throws(() => authorizeOfficialPhaseA3Write({ ...base, report: auditFixture(), approval: `APPROVE_GACHA_PHASE_A3_WRITE_V2:${HEAD}:${RUN_ID}:${DIGEST}:sha256:${"f".repeat(64)}` }), /approval_mismatch/);
 
   const wrongEvent = auditFixture();
   wrongEvent.workflow.event_name = "workflow_dispatch";
@@ -125,10 +133,13 @@ test("commit-outcome-unknown can never validate as committed success", () => {
       head_sha: HEAD,
       audit_run_id: RUN_ID,
       plan_digest: DIGEST,
+      write_contract_digest: CONTRACT_DIGEST,
+      approval_mode: "stable_contract_v2",
       expectation: { safe_records: 1828, safe_variants: 11350 },
     },
     plan: {
       plan_digest: DIGEST,
+      write_contract_digest: CONTRACT_DIGEST,
       target_series: 1828,
       target_variants: 11350,
       identity_disambiguations: 25,
@@ -180,8 +191,9 @@ test("Phase A3 writer workflow is manual-only, separately approved, and fail-clo
   assert.doesNotMatch(workflow, /\bschedule:|\bpush:|\bpull_request:|\bworkflow_run:|\brepository_dispatch:/);
   assert.match(workflow, /audit_run_id:/);
   assert.match(workflow, /plan_digest:/);
+  assert.match(workflow, /write_contract_digest:/);
   assert.match(workflow, /approval:/);
-  assert.match(workflow, /APPROVE_GACHA_PHASE_A3_WRITE/);
+  assert.match(workflow, /APPROVE_GACHA_PHASE_A3_WRITE_V2/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /INGESTION_WRITE_DISABLED: "true"/);
   assert.match(workflow, /MARKET_BACKFILL_WRITE_DISABLED: "true"/);
@@ -253,6 +265,7 @@ function auditFixture() {
     },
     plan: {
       plan_digest: DIGEST,
+      write_contract_digest: CONTRACT_DIGEST,
       target_series: 1828,
       target_variants: 11350,
       identity_disambiguations: 25,
