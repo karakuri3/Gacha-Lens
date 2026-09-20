@@ -5,6 +5,7 @@ import {
   assertOfficialPhaseA3Expectation,
   buildOfficialPhaseA3Plan,
   buildOfficialPhaseA3Snapshot,
+  buildOfficialPhaseA3VariantRow,
   classifyOfficialPhaseA3Residuals,
   validateOfficialPhaseA3Snapshot,
   isAllowedOfficialPhaseA3Url,
@@ -53,6 +54,26 @@ test("Phase A3 never turns unresolved records into write candidates", () => {
   assert.equal(plan.target_series, 1);
   assert.equal(plan.target_variants, 2);
   assert.equal(classification.unresolvedRecords.length, 1);
+});
+
+test("Phase A3 variant row preserves legacy data-quality fields", () => {
+  const source = record("full", "https://gashapon.jp/products/detail.php?jan_code=10");
+  source.variants[0] = {
+    ...source.variants[0],
+    rarity: "レア",
+    role: "単品",
+    axes: { ace: 70 },
+    signals: { sample: true },
+    tags: ["限定"],
+    raw: { image_scope: "series", evidence: "official" },
+  };
+  const row = buildOfficialPhaseA3VariantRow(source.variants[0], source);
+  assert.equal(row.rarity, "レア");
+  assert.equal(row.role, "単品");
+  assert.deepEqual(row.axes, { ace: 70 });
+  assert.deepEqual(row.signals, { sample: true });
+  assert.deepEqual(row.tags, ["限定"]);
+  assert.deepEqual(row.raw, { image_scope: "series", evidence: "official" });
 });
 
 test("Phase A3 plan writes variants only and is deterministic", () => {
