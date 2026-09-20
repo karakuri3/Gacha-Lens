@@ -64,6 +64,7 @@ test("robots allows public pages and blocks APIs and administration", () => {
 test("root and observer sitemaps preserve discovery without duplicating product-scale URLs", () => {
   const text = source("app/sitemap.js");
   const variantObserver = source("app/variant-sitemap.xml/route.js");
+  const variantShard = source("app/variant-sitemap/[page]/route.js");
   const seriesObserver = source("app/series-sitemap.xml/route.js");
   for (const route of ["/ranking", "/schedule", "/series", "/categories", "/privacy", "/terms", "/disclaimer", "/affiliate-disclosure", "/operator", "/contact"]) {
     assert.match(text, new RegExp(route.replace("/", "\\/")));
