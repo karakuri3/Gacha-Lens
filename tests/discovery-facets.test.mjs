@@ -126,6 +126,26 @@ test("public sitemap fetch remains identity-only, paged, and deterministic", () 
   assert.doesNotMatch(text, /market|signal|stock|reaction/i);
 });
 
+test("facet indexes use bounded parent counts instead of rescanning all public variants in Supabase mode", () => {
+  const identifiers = source("lib/data/public-sitemap-identifiers.js");
+  const series = source("lib/series.js");
+  const discovery = series.slice(
+    series.indexOf("export async function getPublicDiscoveryFacets"),
+    series.indexOf("export async function getPublicCategoryCatalogPage"),
+  );
+
+  assert.match(identifiers, /DISCOVERY_PARENT_SELECT = "id,slug,franchise,brand,category,variants!inner\(count\)"/);
+  assert.match(identifiers, /fetchPublicDiscoveryParentRows/);
+  assert.match(discovery, /loadCachedPublicDiscoveryParents/);
+  assert.match(discovery, /buildPublicDiscoveryFacetsFromParentRows/);
+  assert.ok(
+    discovery.indexOf("loadCachedPublicDiscoveryParents") < discovery.indexOf("getPublicSitemapIdentifiers()"),
+    "Supabase discovery must use the parent-count source before the non-Supabase fallback",
+  );
+  assert.match(series, /function embeddedVariantCount\(value\)/);
+  assert.match(series, /variant_count: \[\.\.\.group\.seriesCounts\.values\(\)\]\.reduce/);
+});
+
 test("targeted discovery fetch applies exact franchise and brand filters with public child rows", () => {
   const text = source("lib/data/supabase-gacha-repository.js");
   assert.match(text, /fetchSupabasePublicDiscoveryFacetSeriesPage/);
