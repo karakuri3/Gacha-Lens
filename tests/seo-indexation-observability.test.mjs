@@ -174,15 +174,19 @@ test("root and observer sitemaps use daily cache boundaries without changing sit
   assert.match(variantRoute, /buildSitemapIndexXml/);
   assert.match(variantShardRoute, /gacha-public-variant-observer-sitemap-shard-v1/);
   assert.match(variantShardRoute, /getDailyVariantObserverSitemapEntries/);
-  assert.match(variantShardRoute, /pathPrefix: "\/series\/"\s*\)/);
+  assert.match(variantShardRoute, /pathPrefix: "\/series\/",/);
 
   for (const route of [seriesRoute, variantRoute]) {
     assert.match(route, /export const dynamic = "force-static"/);
     assert.match(route, /export const revalidate = 86400/);
     assert.doesNotMatch(route, /force-dynamic/);
     assert.match(route, /application\/xml; charset=utf-8/);
-    assert.match(route, /buildObserverSitemapXml/);
   }
+  assert.match(seriesRoute, /buildObserverSitemapXml/);
+  assert.match(variantRoute, /buildSitemapIndexXml/);
+  assert.match(variantShardRoute, /export const dynamic = "force-dynamic"/);
+  assert.match(variantShardRoute, /application\/xml; charset=utf-8/);
+  assert.match(variantShardRoute, /buildObserverSitemapXml/);
 });
 
 test("root and series sitemaps use a bounded parent source instead of rescanning public variants", () => {
