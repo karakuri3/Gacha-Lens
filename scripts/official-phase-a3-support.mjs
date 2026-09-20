@@ -6,7 +6,7 @@ import {
 } from "../lib/domain/official-phase-a3.js";
 import { fetchRowCount, fetchRows } from "./supabase-rest.mjs";
 
-export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3" } = {}) {
+export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3", allowEmptyPlan = false } = {}) {
   const [knownDetailedRows, knownOfficialRecords] = await Promise.all([
     fetchRows("variants", {
       select: "id,series_id,series:series!inner(id,official_url)",
@@ -56,7 +56,7 @@ export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3
     knownDetailedOfficialUrls,
     fetchedRecords: fetched.records,
   });
-  const plan = buildOfficialPhaseA3Plan(classification);
+  const plan = buildOfficialPhaseA3Plan(classification, { allowEmpty: allowEmptyPlan });
   const priorityScanComplete = Number(fetched.detailFetched) >= priorityDetailUrls.length
     && classification.knownUndetailedRecords.length === priorityDetailUrls.length;
 
