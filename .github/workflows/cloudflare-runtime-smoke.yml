@@ -264,26 +264,42 @@ jobs:
             exit 1
           }
 
-          request_get categories_warm '/categories' 'カテゴリから探す'
-          request_get series_warm '/series' 'ガチャ一覧'
-          request_get category_detail_warm "$category_path" 'ガシャポン'
-          request_get ranking_warm '/ranking'
+          require_warm_cache() {
+            local name="$1"
+            local path="$2"
+            local needle="${3:-}"
+            local attempt cf_status delay
+
+            for attempt in 1 2 3; do
+              request_get "$name" "$path" "$needle"
+              cf_status="$(cf_cache_status "$name")"
+              case "$cf_status" in
+                HIT|STALE)
+                  echo "$name edge cache: $cf_status (proof attempt $attempt)" >> "$GITHUB_STEP_SUMMARY"
+                  return 0
+                  ;;
+                MISS)
+                  if [[ "$attempt" -lt 3 ]]; then
+                    delay=$((attempt * 2))
+                    echo "$name edge cache is MISS after recovered HTTP 200; retrying cache proof after ${delay}s" | tee -a "$GITHUB_STEP_SUMMARY"
+                    sleep "$delay"
+                    continue
+                  fi
+                  ;;
+              esac
+
+              echo "$name was ${cf_status:-none}, expected HIT or STALE by proof attempt $attempt" >&2
+              return 1
+            done
+          }
+
+          require_warm_cache categories_warm '/categories' 'カテゴリから探す'
+          require_warm_cache series_warm '/series' 'ガチャ一覧'
+          require_warm_cache category_detail_warm "$category_path" 'ガシャポン'
+          require_warm_cache ranking_warm '/ranking'
+          require_warm_cache series_sitemap_warm '/series-sitemap.xml'
+
           request_get restocks_warm '/restocks'
-          request_get series_sitemap_warm '/series-sitemap.xml'
-
-          for name in categories_warm series_warm category_detail_warm ranking_warm series_sitemap_warm; do
-            cf_status="$(cf_cache_status "$name")"
-            case "$cf_status" in
-              HIT|STALE)
-                echo "$name edge cache: $cf_status" >> "$GITHUB_STEP_SUMMARY"
-                ;;
-              *)
-                echo "$name was ${cf_status:-none}, expected HIT or STALE" >&2
-                exit 1
-                ;;
-            esac
-          done
-
           restocks_status="$(cf_cache_status restocks_warm)"
           case "$restocks_status" in
             MISS|HIT|STALE)
