@@ -251,6 +251,14 @@ jobs:
             }
           done
 
+
+          invalid_variant_shard_code="$(curl --silent --show-error --max-time 60 --output "$tmp/variant-sitemap-invalid.body" --write-out '%{http_code}' "${PREVIEW_URL}/variant-sitemap/5001")"
+          [[ "$invalid_variant_shard_code" == "404" ]] || {
+            echo "Out-of-range variant sitemap shard returned $invalid_variant_shard_code, expected 404" >&2
+            exit 1
+          }
+          echo 'Out-of-range variant sitemap shard boundary: HTTP 404' >> "$GITHUB_STEP_SUMMARY"
+
           [[ -z "$(edge_policy catalog_search)" ]] || {
             echo 'Query/search variant unexpectedly received a shared edge-cache policy.' >&2
             exit 1
