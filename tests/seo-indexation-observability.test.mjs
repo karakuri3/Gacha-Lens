@@ -203,7 +203,8 @@ test("root and series sitemaps use a bounded parent source instead of rescanning
   assert.match(identifiers, /PARENT_SITEMAP_SELECT = "id,slug,franchise,brand,category,variants!inner\(\)"/);
   assert.match(identifiers, /MAX_PARENT_SITEMAP_ROWS = 50000/);
   assert.match(identifiers, /referencedTable: "variants"/);
-  assert.match(identifiers, /Public sitemap parent source exceeds/);
+  assert.match(identifiers, /overflowLabel: "Public sitemap parent source"/);
+  assert.match(identifiers, /throw new Error\(\`\$\{overflowLabel\} exceeds \$\{MAX_PARENT_SITEMAP_ROWS\} rows\`\)/);
   assert.doesNotMatch(root, /getPublicSitemapIdentifiers/);
   assert.match(root, /getPublicRootSitemapIdentifiers/);
   assert.match(series, /loadCachedPublicSitemapParents/);
