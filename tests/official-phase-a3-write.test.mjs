@@ -167,6 +167,9 @@ test("commit-outcome-unknown can never validate as committed success", () => {
   assert.equal(result.final_verdict, "OFFICIAL_PHASE_A3_WRITE_COMMIT_OUTCOME_UNKNOWN");
   assert.equal(result.transaction.state, "commit_outcome_unknown");
   assert.equal(result.post_verify.ok, true);
+  assert.equal(result.database.writes, null);
+  assert.equal(result.database.writes_confirmed, false);
+  assert.equal(result.database.possible_writes, 11350);
 });
 
 test("Phase A3 writer workflow is manual-only, separately approved, and fail-closed", () => {
@@ -194,6 +197,8 @@ test("Phase A3 writer workflow is manual-only, separately approved, and fail-clo
   assert.match(script, /verifyDirectPostState/);
   assert.match(script, /commit_outcome_unknown/);
   assert.match(script, /committed_post_verify_failed/);
+  assert.match(script, /gacha-phase-a3-post-verify/);
+  assert.match(script, /phase_a3_write_rollback_unverified/);
   assert.match(script, /findOfficialBoundedLeaks/);
   assert.doesNotMatch(script, /DELETE FROM|TRUNCATE|DROP TABLE|ALTER TABLE/i);
 });
