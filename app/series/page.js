@@ -1,6 +1,6 @@
 import Link from "next/link";
 import SeriesCard from "@/components/SeriesCard";
-import { getCategoryCatalog, getParentSeriesCatalogPage, getRankingSeries, getSeriesCatalogCounts, getSeriesCatalogPage } from "@/lib/series";
+import { getParentSeriesCategoryCatalog, getParentSeriesCatalogPage, getRankingSeries, getSeriesCatalogCounts, getSeriesCatalogPage } from "@/lib/series";
 import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display-clean";
 import {
   buildCatalogHref,
@@ -53,7 +53,7 @@ export default async function SeriesPage({ searchParams }) {
       ? Promise.resolve(null)
       : (query.scope === "series" ? getParentSeriesCatalogPage : getSeriesCatalogPage)({ ...query, pageSize: PAGE_SIZE }),
     getSeriesCatalogCounts(),
-    getCategoryCatalog(),
+    getParentSeriesCategoryCatalog(),
   ]);
 
   const filtered = catalogPage
