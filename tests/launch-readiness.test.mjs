@@ -108,7 +108,7 @@ test("observer sitemap readiness requires root, series, variant index, shard, an
   assert.equal(isObserverSitemapSourceReady(input), true);
   assert.equal(isObserverSitemapSourceReady({ ...input, robotsText: input.robotsText.replace('absoluteSiteUrl("/variant-sitemap.xml")', "") }), false);
   assert.equal(isObserverSitemapSourceReady({ ...input, seriesRouteText: input.seriesRouteText.replace("new Response(buildObserverSitemapXml(entries", "new Response(entries") }), false);
-  assert.equal(isObserverSitemapSourceReady({ ...input, variantRouteText: input.variantRouteText.replace("buildSitemapIndexXml", "") }), false);
+  assert.equal(isObserverSitemapSourceReady({ ...input, variantRouteText: input.variantRouteText.replaceAll("buildSitemapIndexXml", "") }), false);
   assert.equal(isObserverSitemapSourceReady({ ...input, variantShardRouteText: input.variantShardRouteText.replace('pathPrefix: "/series/"', "") }), false);
   assert.equal(isObserverSitemapSourceReady({ ...input, publicationText: input.publicationText.replace("MAX_OBSERVER_SITEMAP_URLS = 50000", "") }), false);
 });
