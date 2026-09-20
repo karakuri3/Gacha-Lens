@@ -74,6 +74,7 @@ try {
 
   for (const [key, value] of Object.entries({
     plan_digest: report.plan.plan_digest,
+    write_contract_digest: report.plan.write_contract_digest,
     known_undetailed: report.counts.known_undetailed,
     safe_records: report.counts.safe_records,
     safe_variants: report.counts.safe_variants,
@@ -88,6 +89,7 @@ try {
     ok: true,
     final_verdict: report.final_verdict,
     plan_digest: report.plan.plan_digest,
+    write_contract_digest: report.plan.write_contract_digest,
     known_undetailed: report.counts.known_undetailed,
     safe_records: report.counts.safe_records,
     safe_variants: report.counts.safe_variants,
