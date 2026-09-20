@@ -229,6 +229,10 @@ test("Phase A3 preflight workflow is branch-only and contains no write lane", ()
   assert.match(support, /const detailFetchLimit = priorityDetailUrls\.length/);
   assert.match(support, /Number\(fetched\.detailFetched\) === priorityDetailUrls\.length/);
   assert.doesNotMatch(support, /priorityDetailUrls\.length \+ 500/);
+  assert.match(support, /all_variant_identities/);
+  assert.match(support, /phase_a3_preflight_existing_variant_id_collision/);
+  assert.match(support, /phase_a3_preflight_existing_variant_slug_collision/);
+  assert.doesNotMatch(support, /variant_type: "neq\.provisional"/);
 });
 
 function record(id, officialUrl, { rerelease = false } = {}) {
