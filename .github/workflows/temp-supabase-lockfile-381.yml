@@ -9,7 +9,7 @@ on:
       - .github/workflows/temp-supabase-lockfile-381.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate-lockfile:
@@ -49,6 +49,19 @@ jobs:
           }
           console.log(JSON.stringify({ ok: true, changed_packages: changed }, null, 2));
           NODE
+      - name: Commit verified lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo "No lockfile changes to commit."
+          else
+            git commit -m "fix(runtime): lock Supabase transient retry client"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: supabase-lockfile-381
