@@ -1,4 +1,5 @@
 import { getVariantObserverSitemapEntries } from "@/lib/series";
+import { MAX_VARIANT_SITEMAP_SHARDS } from "@/lib/data/public-sitemap-identifiers";
 import { buildObserverSitemapXml } from "@/lib/domain/sitemap-publication";
 import { absoluteSiteUrl } from "@/lib/site-metadata";
 import { unstable_cache } from "next/cache";
@@ -14,7 +15,7 @@ const getDailyVariantObserverSitemapEntries = unstable_cache(
 export async function GET(_request, { params }) {
   const { page: rawPage } = await params;
   const page = Number(rawPage);
-  if (!Number.isInteger(page) || page < 1) {
+  if (!Number.isInteger(page) || page < 1 || page > MAX_VARIANT_SITEMAP_SHARDS) {
     return new Response("Not found", { status: 404 });
   }
 
