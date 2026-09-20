@@ -6,6 +6,8 @@ const source = readFileSync(new URL("../worker/index.js", import.meta.url), "utf
 const variantDetailSource = readFileSync(new URL("../app/series/[slug]/page.js", import.meta.url), "utf8");
 const parentSeriesDetailSource = readFileSync(new URL("../app/series/group/[slug]/page.js", import.meta.url), "utf8");
 
+const runtimeSmokeSource = readFileSync(new URL("../.github/workflows/cloudflare-runtime-smoke.yml", import.meta.url), "utf8");
+
 const DAILY_DISCOVERY_INDEXES = ["/categories", "/brands", "/franchises"];
 
 test("expensive discovery indexes use a bounded daily public HTML policy", () => {
@@ -95,4 +97,13 @@ test("series detail and sitemap cache contracts remain unchanged", () => {
   assert.match(source, /isPublicSitemapPath\(url\.pathname\)/);
   assert.match(source, /url\.hostname\.endsWith\(PREVIEW_HOST_SUFFIX\)/);
   assert.match(source, /url\.searchParams\.has\("cacheproof"\)/);
+});
+
+test("runtime cache proof retries propagation without accepting MISS", () => {
+  assert.match(runtimeSmokeSource, /require_warm_cache\(\)/);
+  assert.match(runtimeSmokeSource, /for attempt in 1 2 3/);
+  assert.match(runtimeSmokeSource, /HIT\|STALE/);
+  assert.match(runtimeSmokeSource, /MISS/);
+  assert.match(runtimeSmokeSource, /expected HIT or STALE by proof attempt/);
+  assert.doesNotMatch(runtimeSmokeSource, /MISS\|HIT\|STALE[\s\S]{0,200}return 0/);
 });
