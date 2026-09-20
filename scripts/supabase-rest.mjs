@@ -309,10 +309,16 @@ function parseContentRangeTotal(value = "") {
 
 async function performReliableSupabaseRead(request, options = {}) {
   const operationName = safeOperationName(options.operationName);
+  const timeoutCeilingMs = boundedInteger(
+    options.timeoutCeilingMs,
+    SUPABASE_READ_RELIABILITY_CONTRACT.timeout_ms,
+    30_000,
+    SUPABASE_READ_RELIABILITY_CONTRACT.timeout_ms,
+  );
   const timeoutMs = boundedInteger(
     options.timeoutMs,
     1,
-    SUPABASE_READ_RELIABILITY_CONTRACT.timeout_ms,
+    timeoutCeilingMs,
     SUPABASE_READ_RELIABILITY_CONTRACT.timeout_ms,
   );
   const maxAttempts = boundedInteger(

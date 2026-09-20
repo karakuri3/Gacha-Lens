@@ -5,7 +5,7 @@ import {
   classifyOfficialPhaseA3Residuals,
   isAllowedOfficialPhaseA3Url,
 } from "../lib/domain/official-phase-a3.js";
-import { fetchRowCount, fetchRows } from "./supabase-rest.mjs";
+import { fetchExactRowCountReliable, fetchRows } from "./supabase-rest.mjs";
 
 export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3", allowEmptyPlan = false } = {}) {
   const [allVariantRows, knownOfficialRecords] = await Promise.all([
@@ -104,12 +104,25 @@ export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3
 
 export async function captureOfficialPhaseA3Counts() {
   return {
-    series: await fetchRowCount("series"),
-    variants: await fetchRowCount("variants"),
-    provisional_variants: await fetchRowCount("variants", { variant_type: "eq.provisional" }),
-    restock_events: await fetchRowCount("restock_events"),
-    import_issues: await fetchRowCount("import_issues"),
+    series: await phaseA3ExactCount("series", {}, "phase_a3_snapshot.series"),
+    variants: await phaseA3ExactCount("variants", {}, "phase_a3_snapshot.variants"),
+    provisional_variants: await phaseA3ExactCount(
+      "variants",
+      { variant_type: "eq.provisional" },
+      "phase_a3_snapshot.provisional_variants",
+    ),
+    restock_events: await phaseA3ExactCount("restock_events", {}, "phase_a3_snapshot.restock_events"),
+    import_issues: await phaseA3ExactCount("import_issues", {}, "phase_a3_snapshot.import_issues"),
   };
+}
+
+async function phaseA3ExactCount(table, params, operationName) {
+  const { count } = await fetchExactRowCountReliable(table, params, {
+    operationName,
+    timeoutMs: 30_000,
+    timeoutCeilingMs: 30_000,
+  });
+  return count;
 }
 
 export function officialPhaseA3DatabaseDelta(before = {}, after = {}) {

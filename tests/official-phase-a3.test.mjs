@@ -263,6 +263,15 @@ test("Phase A3 preflight workflow is branch-only and contains no write lane", ()
   assert.match(support, /phase_a3_preflight_existing_variant_id_collision/);
   assert.match(support, /phase_a3_preflight_existing_variant_slug_collision/);
   assert.doesNotMatch(support, /variant_type: "neq\.provisional"/);
+  assert.match(support, /fetchExactRowCountReliable/);
+  assert.doesNotMatch(support, /\bfetchRowCount\b/);
+  assert.match(support, /phase_a3_snapshot\.series/);
+  assert.match(support, /phase_a3_snapshot\.variants/);
+  assert.match(support, /phase_a3_snapshot\.provisional_variants/);
+  assert.match(support, /phase_a3_snapshot\.restock_events/);
+  assert.match(support, /phase_a3_snapshot\.import_issues/);
+  assert.match(support, /timeoutMs: 30_000/);
+  assert.match(support, /timeoutCeilingMs: 30_000/);
 });
 
 
@@ -270,7 +279,7 @@ test("Phase A3 exact-main preflight is one-time, read-only, drift-aware, and sec
   const workflow = fs.readFileSync(".github/workflows/gacha-official-phase-a3-main-preflight.yml", "utf8");
   const marker = fs.readFileSync(".github/ops/gacha-official-phase-a3-main-preflight-writer-20260920.token", "utf8").trim();
 
-  assert.equal(marker, "APPROVE_GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_WRITER_V5_20260921");
+  assert.equal(marker, "APPROVE_GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_WRITER_V7_20260921");
   assert.match(workflow, /branches:\s*\n\s*- main/);
   assert.match(workflow, /paths:\s*\n\s*- \.github\/ops\/gacha-official-phase-a3-main-preflight-writer-20260920\.token/);
   assert.match(workflow, /concurrency:/);
