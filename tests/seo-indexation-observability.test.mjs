@@ -185,6 +185,8 @@ test("root and observer sitemaps use daily cache boundaries without changing sit
   assert.match(seriesRoute, /buildObserverSitemapXml/);
   assert.match(variantRoute, /buildSitemapIndexXml/);
   assert.match(variantShardRoute, /export const dynamic = "force-dynamic"/);
+  assert.match(variantShardRoute, /MAX_VARIANT_SITEMAP_SHARDS/);
+  assert.match(variantShardRoute, /page > MAX_VARIANT_SITEMAP_SHARDS/);
   assert.match(variantShardRoute, /application\/xml; charset=utf-8/);
   assert.match(variantShardRoute, /buildObserverSitemapXml/);
 });
@@ -209,8 +211,8 @@ test("root and series sitemaps use a bounded parent source instead of rescanning
   assert.doesNotMatch(series, /getVariantObserverSitemapEntries[\s\S]{0,300}getPublicSitemapIdentifiers/);
 
   const shardSource = source("lib/data/public-sitemap-identifiers.js");
-  assert.match(shardSource, /VARIANT_SITEMAP_SHARD_SIZE = 10000/);
-  assert.match(shardSource, /MAX_VARIANT_SITEMAP_SHARDS = 500/);
+  assert.match(shardSource, /VARIANT_SITEMAP_SHARD_SIZE = 1000/);
+  assert.match(shardSource, /MAX_VARIANT_SITEMAP_SHARDS = 5000/);
   assert.match(shardSource, /fetchPublicVariantSitemapPage/);
   assert.match(shardSource, /\.order\("id", \{ ascending: true \}\)/);
   assert.match(shardSource, /\.range\(from, from \+ pageSize - 1\)/);
