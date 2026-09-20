@@ -3,6 +3,7 @@ import {
   buildOfficialPhaseA3Plan,
   canonicalOfficialUrl,
   classifyOfficialPhaseA3Residuals,
+  isAllowedOfficialPhaseA3Url,
 } from "../lib/domain/official-phase-a3.js";
 import { fetchRowCount, fetchRows } from "./supabase-rest.mjs";
 
@@ -26,7 +27,7 @@ export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3
   const detailedSet = new Set(knownDetailedOfficialUrls);
   const priorityDetailUrls = knownOfficialRecords
     .map((row) => canonicalOfficialUrl(row.official_url))
-    .filter((url) => url && !detailedSet.has(url));
+    .filter((url) => url && !detailedSet.has(url) && isAllowedOfficialPhaseA3Url(url));
 
   if (priorityDetailUrls.length > 7500) throw phaseA3Error("phase_a3_residual_limit_exceeded");
   const detailFetchLimit = Math.min(8000, Math.max(1000, priorityDetailUrls.length + 500));
@@ -57,8 +58,7 @@ export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3
     fetchedRecords: fetched.records,
   });
   const plan = buildOfficialPhaseA3Plan(classification, { allowEmpty: allowEmptyPlan });
-  const priorityScanComplete = Number(fetched.detailFetched) >= priorityDetailUrls.length
-    && classification.knownUndetailedRecords.length === priorityDetailUrls.length;
+  const priorityScanComplete = Number(fetched.detailFetched) >= priorityDetailUrls.length;
 
   if (!priorityScanComplete) throw phaseA3Error("phase_a3_incomplete_priority_scan");
 
