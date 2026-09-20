@@ -53,7 +53,11 @@ function createSeriesObserverClient(rows, calls) {
   const data = [...rows].sort((a, b) => String(a.id).localeCompare(String(b.id)));
   const query = {
     select() { return query; },
-    eq() { return query; },
+    eq(column, value) { calls.push({ type: "eq", column, value }); return query; },
+    not(column, operator, value) { calls.push({ type: "not", column, operator, value }); return query; },
+    neq(column, value) { calls.push({ type: "neq", column, value }); return query; },
+    gt(column, value) { calls.push({ type: "gt", column, value }); return query; },
+    or(filter) { calls.push({ type: "or", filter }); return query; },
     order(column, options) { calls.push({ type: "order", column, options }); return query; },
     range(from, to) {
       calls.push({ type: "range", from, to });
@@ -199,7 +203,8 @@ test("root and series sitemaps use a bounded parent source instead of rescanning
   assert.match(identifiers, /PARENT_SITEMAP_SELECT = "id,slug,franchise,brand,category,variants!inner\(\)"/);
   assert.match(identifiers, /MAX_PARENT_SITEMAP_ROWS = 50000/);
   assert.match(identifiers, /referencedTable: "variants"/);
-  assert.match(identifiers, /Public sitemap parent source exceeds/);
+  assert.match(identifiers, /overflowLabel: "Public sitemap parent source"/);
+  assert.match(identifiers, /throw new Error\(\`\$\{overflowLabel\} exceeds \$\{MAX_PARENT_SITEMAP_ROWS\} rows\`\)/);
   assert.doesNotMatch(root, /getPublicSitemapIdentifiers/);
   assert.match(root, /getPublicRootSitemapIdentifiers/);
   assert.match(series, /loadCachedPublicSitemapParents/);
@@ -224,9 +229,26 @@ test("series-only observer reads only bounded official series columns without a 
   assert.match(identifiers, /fetchBoundedSeriesObserverRows/);
   assert.match(pagination, /id,slug,name,brand,official_url,price,release_date,release_month,source_type,updated_at/);
   assert.match(pagination, /\.eq\("source_type", "official_site"\)/);
+  assert.match(pagination, /\.not\("slug", "is", null\)/);
+  assert.match(pagination, /\.not\("name", "is", null\)/);
+  assert.match(pagination, /\.not\("brand", "is", null\)/);
+  assert.match(pagination, /\.not\("official_url", "is", null\)/);
+  assert.match(pagination, /\.gt\("price", 0\)/);
+  assert.match(pagination, /observerCutoff\(options\.today\)/);
+  assert.match(pagination, /release_date\.gte\.\$\{cutoff\.date\}/);
+  assert.match(pagination, /release_month\.gte\.\$\{cutoff\.month\}/);
   assert.match(pagination, /\.range\(offset, offset \+ requestSize - 1\)/);
   assert.match(pagination, /Series observer source exceeds/);
   assert.doesNotMatch(pagination, /\.insert\(|\.update\(|\.delete\(|\.upsert\(/i);
+});
+
+test("series observer pushes the 180-day publication window into the Supabase read", async () => {
+  const calls = [];
+  await fetchBoundedSeriesObserverRows(createSeriesObserverClient([series()], calls), { today: TODAY });
+  const cutoff = calls.find((call) => call.type === "or")?.filter || "";
+  assert.match(cutoff, /release_date\.gte\.2026-02-27/);
+  assert.match(cutoff, /release_month\.gte\.2026-02/);
+  assert.ok(calls.some((call) => call.type === "gt" && call.column === "price" && call.value === 0));
 });
 
 test("series observer reads deterministic 1000-row pages and reaches safe records after the first API page", async () => {
