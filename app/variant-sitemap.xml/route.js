@@ -1,22 +1,22 @@
-import { getVariantObserverSitemapEntries } from "@/lib/series";
-import { buildObserverSitemapXml } from "@/lib/domain/sitemap-publication";
+import { getVariantObserverSitemapShardCount } from "@/lib/series";
+import { buildSitemapIndexXml } from "@/lib/domain/sitemap-publication";
 import { absoluteSiteUrl } from "@/lib/site-metadata";
 import { unstable_cache } from "next/cache";
 
 export const dynamic = "force-static";
 export const revalidate = 86400;
 
-const getDailyVariantObserverSitemapEntries = unstable_cache(
-  () => getVariantObserverSitemapEntries(),
-  ["gacha-public-variant-observer-sitemap-v1"],
+const getDailyVariantObserverSitemapShardCount = unstable_cache(
+  () => getVariantObserverSitemapShardCount(),
+  ["gacha-public-variant-observer-sitemap-index-v1"],
   { revalidate: 86400 }
 );
 
 export async function GET() {
-  const entries = await getDailyVariantObserverSitemapEntries();
-  return new Response(buildObserverSitemapXml(entries, {
+  const shardCount = await getDailyVariantObserverSitemapShardCount();
+  const paths = Array.from({ length: shardCount }, (_, index) => `/variant-sitemap/${index + 1}`);
+  return new Response(buildSitemapIndexXml(paths, {
     siteUrl: absoluteSiteUrl("/"),
-    pathPrefix: "/series/",
   }), {
     headers: { "Content-Type": "application/xml; charset=utf-8" },
   });
