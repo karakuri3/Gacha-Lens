@@ -107,10 +107,10 @@ test("29 previous and next month calculation works", () => assert.equal(shiftCat
 test("30 December advances to next January", () => assert.equal(shiftCatalogMonth("2026-12", 1), "2027-01"));
 test("31 January returns to previous December", () => assert.equal(shiftCatalogMonth("2026-01", -1), "2025-12"));
 test("32 schedule uses parent series data and series links", () => {
-  assert.match(schedulePage, /getParentSeriesCatalogPage/);
+  assert.match(schedulePage, /getScheduleParentSeriesPage/);
   assert.match(schedulePage, /getUpcomingParentSeriesScheduleMonths/);
   assert.match(schedulePage, /seriesHref\(item\)/);
-  assert.doesNotMatch(schedulePage, /getSeriesCatalogPage/);
+  assert.doesNotMatch(schedulePage, /getSeriesCatalogPage/);\n  assert.doesNotMatch(schedulePage, /getParentSeriesCatalogPage/);
   assert.doesNotMatch(schedulePage, /variantHref\(item\)/);
 });
 test("33 undated series are kept out of week groups without deriving a variant date", () => {
@@ -171,3 +171,20 @@ test("Japanese month label is stable", () => assert.equal(formatCatalogMonth("20
 function read(file) {
   return fs.readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
 }
+
+
+test("schedule read path avoids signal fan-out and returns embedded variant counts", () => {
+  const repository = source("lib/data/supabase-gacha-repository.js");
+  const series = source("lib/series.js");
+  const scheduleRead = repository.slice(
+    repository.indexOf("export async function fetchSupabaseScheduleSeriesPage"),
+    repository.indexOf("export async function fetchSupabaseParentSeriesByIds"),
+  );
+  assert.match(scheduleRead, /variants\(count\)/);
+  assert.match(scheduleRead, /applyMonthFilter/);
+  assert.match(scheduleRead, /variant_count: Number\(variants\?\.\[0\]\?\.count \?\? 0\)/);
+  assert.doesNotMatch(scheduleRead, /fetchSignalsForCatalog/);
+  assert.doesNotMatch(scheduleRead, /marketListings|restockEvents|stockReports|xReactions/);
+  assert.match(series, /loadCachedScheduleSeriesPage/);
+  assert.match(series, /getScheduleParentSeriesPage/);
+});
