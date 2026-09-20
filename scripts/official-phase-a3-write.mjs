@@ -130,6 +130,7 @@ async function executeWrite() {
     client = new Client({ connectionString, application_name: "gacha-phase-a3-production-write" });
     await client.connect();
 
+    await assertVariantsTableHasNoUserTriggers(client);
     directBefore = await captureDirectCounts(client);
     if (!countsMatchAudit(directBefore, authorization.database)
       || Number(directBefore.official_without_real) !== Number(authorization.expectation.known_undetailed)) {
@@ -299,6 +300,21 @@ async function verifyDirectPostState(client, before, after, plan) {
     insertedSlugCount,
     targetDetailedCount,
   });
+}
+
+async function assertVariantsTableHasNoUserTriggers(client) {
+  const result = await client.query(`
+    SELECT count(*)::int AS n
+    FROM pg_trigger t
+    JOIN pg_class c ON c.oid = t.tgrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname = 'variants'
+      AND t.tgisinternal = false
+  `);
+  if (Number(result.rows?.[0]?.n || 0) !== 0) {
+    throw phaseA3WriteError("phase_a3_write_variants_trigger_boundary_changed");
+  }
 }
 
 async function captureDirectCounts(client) {
