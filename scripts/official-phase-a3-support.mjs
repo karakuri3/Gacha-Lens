@@ -117,7 +117,11 @@ export async function captureOfficialPhaseA3Counts() {
 }
 
 async function phaseA3ExactCount(table, params, operationName) {
-  const { count } = await fetchExactRowCountReliable(table, params, { operationName });
+  const { count } = await fetchExactRowCountReliable(table, params, {
+    operationName,
+    timeoutMs: 30_000,
+    timeoutCeilingMs: 30_000,
+  });
   return count;
 }
 

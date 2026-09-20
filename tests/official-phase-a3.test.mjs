@@ -270,6 +270,8 @@ test("Phase A3 preflight workflow is branch-only and contains no write lane", ()
   assert.match(support, /phase_a3_snapshot\.provisional_variants/);
   assert.match(support, /phase_a3_snapshot\.restock_events/);
   assert.match(support, /phase_a3_snapshot\.import_issues/);
+  assert.match(support, /timeoutMs: 30_000/);
+  assert.match(support, /timeoutCeilingMs: 30_000/);
 });
 
 
