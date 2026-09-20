@@ -235,6 +235,31 @@ test("Phase A3 preflight workflow is branch-only and contains no write lane", ()
   assert.doesNotMatch(support, /variant_type: "neq\.provisional"/);
 });
 
+
+test("Phase A3 exact-main preflight is one-time, read-only, drift-aware, and secret-scanned", () => {
+  const workflow = fs.readFileSync(".github/workflows/gacha-official-phase-a3-main-preflight.yml", "utf8");
+  const marker = fs.readFileSync(".github/ops/gacha-official-phase-a3-main-preflight-20260920.token", "utf8").trim();
+
+  assert.equal(marker, "APPROVE_GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_V1_20260920");
+  assert.match(workflow, /branches:\s*\n\s*- main/);
+  assert.match(workflow, /paths:\s*\n\s*- \.github\/ops\/gacha-official-phase-a3-main-preflight-20260920\.token/);
+  assert.match(workflow, /concurrency:/);
+  assert.match(workflow, /cancel-in-progress: false/);
+  assert.match(workflow, /INGESTION_WRITE_DISABLED: "true"/);
+  assert.match(workflow, /MARKET_BACKFILL_WRITE_DISABLED: "true"/);
+  assert.match(workflow, /continue-on-error: true/);
+  assert.match(workflow, /official:phase-a3-preflight/);
+  assert.match(workflow, /official-live-audit-guard\.mjs scan/);
+  assert.match(workflow, /steps\.main_start\.outcome/);
+  assert.match(workflow, /steps\.main_end\.outcome/);
+  assert.match(workflow, /OFFICIAL_PHASE_A3_PREFLIGHT_READY/);
+  assert.match(workflow, /report\.workflow\?\.head_sha !== process\.env\.GITHUB_SHA/);
+  assert.match(workflow, /Object\.values\(report\.database\?\.delta \|\| \{\}\)/);
+  assert.ok((workflow.match(/git rev-parse origin\/main/g) || []).length >= 2);
+  assert.doesNotMatch(workflow, /workflow_dispatch:|schedule:/);
+  assert.doesNotMatch(workflow, /SUPABASE_DB_URL|db:upsert|ingest:official|official:bounded-write/);
+});
+
 function record(id, officialUrl, { rerelease = false } = {}) {
   return {
     id,
