@@ -1,0 +1,119 @@
+name: Gacha Official Phase A3 Main Read-Only Preflight
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/ops/gacha-official-phase-a3-main-preflight-20260920.token
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gacha-official-phase-a3-main-preflight
+  cancel-in-progress: false
+
+jobs:
+  phase-a3-main-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      INGESTION_WRITE_DISABLED: "true"
+      MARKET_BACKFILL_WRITE_DISABLED: "true"
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_CONFIRMATION: APPROVE_GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_V1_20260920
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Verify one-time marker and exact main at start
+        id: main_start
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "push"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -f .github/ops/gacha-official-phase-a3-main-preflight-20260920.token
+          marker="$(tr -d '\r\n' < .github/ops/gacha-official-phase-a3-main-preflight-20260920.token)"
+          test "$marker" = "$GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_CONFIRMATION"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+
+      - name: Run full Phase A3 exact-main read-only preflight
+        id: preflight
+        continue-on-error: true
+        run: >-
+          npm run official:phase-a3-preflight --
+          --output-dir=${{ runner.temp }}/gacha-official-phase-a3-main-preflight
+          --expected-head-sha=${{ github.sha }}
+          --run-id=${{ github.run_id }}
+
+      - name: Scan sanitized Phase A3 artifact for secret leakage
+        id: scan
+        if: ${{ always() }}
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: >-
+          node scripts/official-live-audit-guard.mjs scan
+          --directory=${{ runner.temp }}/gacha-official-phase-a3-main-preflight
+
+      - name: Verify exact main remained unchanged through scan
+        id: main_end
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+
+      - name: Upload sanitized Phase A3 exact-main preflight
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gacha-official-phase-a3-main-preflight-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-official-phase-a3-main-preflight
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce exact-main preflight readiness
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.main_start.outcome }}" = "success"
+          test "${{ steps.preflight.outcome }}" = "success"
+          test "${{ steps.scan.outcome }}" = "success"
+          test "${{ steps.main_end.outcome }}" = "success"
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const reportPath = path.join(process.env.RUNNER_TEMP, "gacha-official-phase-a3-main-preflight", "official-phase-a3-preflight.json");
+          const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+          if (report.final_verdict !== "OFFICIAL_PHASE_A3_PREFLIGHT_READY") throw new Error("phase_a3_main_preflight_not_ready");
+          if (report.workflow?.head_sha !== process.env.GITHUB_SHA) throw new Error("phase_a3_main_preflight_head_sha_mismatch");
+          if (report.execution?.mode !== "read-only" || report.execution?.writes_allowed !== false) throw new Error("phase_a3_main_preflight_not_read_only");
+          if (Object.values(report.database?.delta || {}).some((value) => Number(value) !== 0)) throw new Error("phase_a3_main_preflight_database_drift");
+          console.log(JSON.stringify({
+            ok: true,
+            head_sha: report.workflow.head_sha,
+            plan_digest: report.plan.plan_digest,
+            known_undetailed: report.counts.known_undetailed,
+            safe_records: report.counts.safe_records,
+            safe_variants: report.counts.safe_variants,
+            rerelease_records: report.counts.rerelease_records,
+            unresolved_records: report.counts.unresolved_records,
+            database_writes: 0
+          }, null, 2));
+          NODE
