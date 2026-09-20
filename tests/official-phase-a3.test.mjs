@@ -7,6 +7,7 @@ import {
   buildOfficialPhaseA3Snapshot,
   classifyOfficialPhaseA3Residuals,
   validateOfficialPhaseA3Snapshot,
+  isAllowedOfficialPhaseA3Url,
 } from "../lib/domain/official-phase-a3.js";
 
 const counts = {
@@ -85,7 +86,12 @@ test("Phase A3 rejects rerelease leakage and duplicate variant ids", () => {
   assert.throws(() => buildOfficialPhaseA3Plan({ safeRecords: [c, d] }), /phase_a3_duplicate_variant_slug/);
 });
 
-test("Phase A3 rejects unsupported providers", () => {
+test("Phase A3 accepts only approved HTTPS provider URLs", () => {
+  assert.equal(isAllowedOfficialPhaseA3Url("https://gashapon.jp/products/detail.php?jan_code=1"), true);
+  assert.equal(isAllowedOfficialPhaseA3Url("https://www.takaratomy-arts.co.jp/items/item.html?n=1"), true);
+  assert.equal(isAllowedOfficialPhaseA3Url("http://gashapon.jp/products/detail.php?jan_code=1"), false);
+  assert.equal(isAllowedOfficialPhaseA3Url("https://example.com/products/1"), false);
+
   assert.throws(
     () => buildOfficialPhaseA3Plan({
       safeRecords: [record("x", "https://example.com/products/1")],
