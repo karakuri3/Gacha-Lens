@@ -97,16 +97,19 @@ test("robots and sitemap checks pass", () => {
   assert.equal(check(result, "observer_sitemaps").status, "pass");
 });
 
-test("observer sitemap readiness requires both routes, all robot entries, and the 50,000 URL contract", () => {
+test("observer sitemap readiness requires root, series, variant index, shard, and bounded URL contracts", () => {
   const input = {
     robotsText: fs.readFileSync(path.join(ROOT, "app/robots.js"), "utf8"),
     seriesRouteText: fs.readFileSync(path.join(ROOT, "app/series-sitemap.xml/route.js"), "utf8"),
     variantRouteText: fs.readFileSync(path.join(ROOT, "app/variant-sitemap.xml/route.js"), "utf8"),
+    variantShardRouteText: fs.readFileSync(path.join(ROOT, "app/variant-sitemap/[page]/route.js"), "utf8"),
     publicationText: fs.readFileSync(path.join(ROOT, "lib/domain/sitemap-publication.js"), "utf8"),
   };
   assert.equal(isObserverSitemapSourceReady(input), true);
   assert.equal(isObserverSitemapSourceReady({ ...input, robotsText: input.robotsText.replace('absoluteSiteUrl("/variant-sitemap.xml")', "") }), false);
   assert.equal(isObserverSitemapSourceReady({ ...input, seriesRouteText: input.seriesRouteText.replace("new Response(buildObserverSitemapXml(entries", "new Response(entries") }), false);
+  assert.equal(isObserverSitemapSourceReady({ ...input, variantRouteText: input.variantRouteText.replace("buildSitemapIndexXml", "") }), false);
+  assert.equal(isObserverSitemapSourceReady({ ...input, variantShardRouteText: input.variantShardRouteText.replace('pathPrefix: "/series/"', "") }), false);
   assert.equal(isObserverSitemapSourceReady({ ...input, publicationText: input.publicationText.replace("MAX_OBSERVER_SITEMAP_URLS = 50000", "") }), false);
 });
 
