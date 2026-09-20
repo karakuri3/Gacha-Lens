@@ -188,6 +188,10 @@ test("frozen Phase A3 expectation fails closed on any cohort drift", () => {
       rerelease_records: 2,
       unresolved_records: 3,
     },
+    scan: {
+      held_shared_detailed_urls: 2,
+      held_unsupported_provider_urls: 1,
+    },
   };
   assert.doesNotThrow(() => assertOfficialPhaseA3Expectation(snapshot, {
     plan_digest: snapshot.plan.plan_digest,
@@ -196,8 +200,11 @@ test("frozen Phase A3 expectation fails closed on any cohort drift", () => {
     safe_variants: 20,
     rerelease_records: 2,
     unresolved_records: 3,
+    held_shared_detailed_urls: 2,
+    held_unsupported_provider_urls: 1,
   }));
   assert.throws(() => assertOfficialPhaseA3Expectation(snapshot, { safe_records: 6 }), /phase_a3_expectation_mismatch/);
+  assert.throws(() => assertOfficialPhaseA3Expectation(snapshot, { held_shared_detailed_urls: 3 }), /phase_a3_expectation_mismatch/);
 });
 
 test("Phase A3 preflight workflow is branch-only and contains no write lane", () => {
