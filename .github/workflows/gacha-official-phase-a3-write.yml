@@ -1,0 +1,130 @@
+name: Gacha Official Phase A3 Production Write
+
+permissions:
+  contents: read
+  actions: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      audit_run_id:
+        description: Exact approved Phase A3 main read-only preflight run ID
+        required: true
+        type: string
+      plan_digest:
+        description: Exact approved Phase A3 plan digest
+        required: true
+        type: string
+      approval:
+        description: APPROVE_GACHA_PHASE_A3_WRITE:<MAIN_SHA>:<AUDIT_RUN_ID>:<PLAN_DIGEST>
+        required: true
+        type: string
+
+jobs:
+  phase-a3-production-write:
+    concurrency:
+      group: gacha-official-phase-a3-production-write
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      INGESTION_WRITE_DISABLED: "true"
+      MARKET_BACKFILL_WRITE_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Verify exact current main
+        id: main
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+
+      - name: Inspect exact Phase A3 audit artifact
+        id: metadata
+        if: ${{ steps.main.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: >-
+          npm run official:phase-a3-write -- metadata
+          --output-dir=${{ runner.temp }}/gacha-phase-a3-write/result
+          --audit-run-id=${{ inputs.audit_run_id }}
+          --head-sha=${{ github.sha }}
+
+      - name: Download exact Phase A3 audit artifact
+        id: download
+        if: ${{ steps.metadata.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: gacha-official-phase-a3-main-preflight-${{ inputs.audit_run_id }}
+          path: ${{ runner.temp }}/gacha-phase-a3-write/audit
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.audit_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Rescan, authorize, execute variants-only transaction, and post-verify
+        id: execute
+        if: ${{ steps.main.outcome == 'success' && steps.metadata.outcome == 'success' && steps.download.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PHASE_A3_PLAN_DIGEST: ${{ inputs.plan_digest }}
+          PHASE_A3_WRITE_APPROVAL: ${{ inputs.approval }}
+        run: >-
+          npm run official:phase-a3-write -- execute
+          --output-dir=${{ runner.temp }}/gacha-phase-a3-write/result
+          --audit-dir=${{ runner.temp }}/gacha-phase-a3-write/audit
+          --audit-run-id=${{ inputs.audit_run_id }}
+          --run-id=${{ github.run_id }}
+
+      - name: Ensure sanitized result exists for every outcome
+        if: ${{ always() }}
+        run: >-
+          npm run official:phase-a3-write -- ensure-result
+          --output-dir=${{ runner.temp }}/gacha-phase-a3-write/result
+          --run-id=${{ github.run_id }}
+
+      - name: Scan sanitized Phase A3 write result
+        id: scan
+        if: ${{ always() }}
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PHASE_A3_WRITE_APPROVAL: ${{ inputs.approval }}
+          GH_READ_TOKEN: ${{ github.token }}
+        run: >-
+          npm run official:phase-a3-write -- scan
+          --output-dir=${{ runner.temp }}/gacha-phase-a3-write/result
+
+      - name: Upload sanitized Phase A3 write result
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gacha-official-phase-a3-write-result-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-phase-a3-write/result
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce fully committed and post-verified result
+        if: ${{ always() && steps.scan.outcome == 'success' }}
+        run: >-
+          npm run official:phase-a3-write -- verify
+          --output-dir=${{ runner.temp }}/gacha-phase-a3-write/result
