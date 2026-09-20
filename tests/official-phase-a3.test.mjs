@@ -78,6 +78,11 @@ test("Phase A3 rejects rerelease leakage and duplicate variant ids", () => {
   const b = record("b", "https://gashapon.jp/products/detail.php?jan_code=2");
   b.variants[0].id = a.variants[0].id;
   assert.throws(() => buildOfficialPhaseA3Plan({ safeRecords: [a, b] }), /phase_a3_duplicate_variant_id/);
+
+  const c = record("c", "https://gashapon.jp/products/detail.php?jan_code=3");
+  const d = record("d", "https://gashapon.jp/products/detail.php?jan_code=4");
+  d.variants[0].slug = c.variants[0].slug;
+  assert.throws(() => buildOfficialPhaseA3Plan({ safeRecords: [c, d] }), /phase_a3_duplicate_variant_slug/);
 });
 
 test("Phase A3 rejects unsupported providers", () => {
