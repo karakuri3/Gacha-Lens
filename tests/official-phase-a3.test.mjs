@@ -65,6 +65,7 @@ test("Phase A3 variant row preserves legacy data-quality fields", () => {
     axes: { ace: 70 },
     signals: { sample: true },
     tags: ["限定"],
+    image_scope: "series",
     raw: { image_scope: "series", evidence: "official" },
   };
   const row = buildOfficialPhaseA3VariantRow(source.variants[0], source);
@@ -73,7 +74,9 @@ test("Phase A3 variant row preserves legacy data-quality fields", () => {
   assert.deepEqual(row.axes, { ace: 70 });
   assert.deepEqual(row.signals, { sample: true });
   assert.deepEqual(row.tags, ["限定"]);
-  assert.deepEqual(row.raw, { image_scope: "series", evidence: "official" });
+  assert.equal(row.raw.image_scope, "series");
+  assert.deepEqual(row.raw.raw, { image_scope: "series", evidence: "official" });
+  assert.equal(row.raw.id, "full-v1");
 });
 
 test("Phase A3 plan writes variants only and is deterministic", () => {
