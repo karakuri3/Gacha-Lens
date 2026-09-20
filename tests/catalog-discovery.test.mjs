@@ -110,7 +110,8 @@ test("32 schedule uses parent series data and series links", () => {
   assert.match(schedulePage, /getScheduleParentSeriesPage/);
   assert.match(schedulePage, /getUpcomingParentSeriesScheduleMonths/);
   assert.match(schedulePage, /seriesHref\(item\)/);
-  assert.doesNotMatch(schedulePage, /getSeriesCatalogPage/);\n  assert.doesNotMatch(schedulePage, /getParentSeriesCatalogPage/);
+  assert.doesNotMatch(schedulePage, /getSeriesCatalogPage/);
+  assert.doesNotMatch(schedulePage, /getParentSeriesCatalogPage/);
   assert.doesNotMatch(schedulePage, /variantHref\(item\)/);
 });
 test("33 undated series are kept out of week groups without deriving a variant date", () => {
