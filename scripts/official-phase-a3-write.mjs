@@ -203,6 +203,7 @@ async function executeWrite() {
       throw verificationError || phaseA3WriteError("phase_a3_write_post_verify_failed");
     }
 
+    const rollbackVerified = transaction.state === "rolled_back" && transaction.rollback_verified === true;
     const result = buildOfficialPhaseA3WriteResult({
       workflow: workflowIdentity(),
       authorization,
@@ -210,8 +211,12 @@ async function executeWrite() {
       transaction,
       before: directBefore,
       after: directAfter,
-      reasonCode: transaction.reason_code || "phase_a3_write_rolled_back",
-      finalVerdict: "OFFICIAL_PHASE_A3_WRITE_ROLLED_BACK",
+      reasonCode: rollbackVerified
+        ? (transaction.reason_code || "phase_a3_write_rolled_back")
+        : "phase_a3_write_rollback_unverified",
+      finalVerdict: rollbackVerified
+        ? "OFFICIAL_PHASE_A3_WRITE_ROLLED_BACK"
+        : "OFFICIAL_PHASE_A3_WRITE_BLOCKED",
     });
     writeResult(result);
     throw phaseA3WriteError(result.reason_code || "phase_a3_write_rolled_back");
