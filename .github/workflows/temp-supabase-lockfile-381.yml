@@ -1,0 +1,33 @@
+name: Temporary Supabase lockfile generation
+
+on:
+  push:
+    branches:
+      - fix/runtime-supabase-transient-retry-381
+    paths:
+      - package.json
+      - .github/workflows/temp-supabase-lockfile-381.yml
+
+permissions:
+  contents: read
+
+jobs:
+  generate-lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Generate lockfile with exact retry-capable Supabase client
+        run: npm install @supabase/supabase-js@2.102.0 --package-lock-only --ignore-scripts
+      - name: Verify resolved version
+        run: node -e "const l=require('./package-lock.json'); if(l.packages['node_modules/@supabase/supabase-js']?.version!=='2.102.0') process.exit(1)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supabase-lockfile-381
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
