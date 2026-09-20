@@ -56,6 +56,7 @@ const expectation = {
   safe_variants: process.env.PHASE_A3_EXPECTED_SAFE_VARIANTS,
   rerelease_records: process.env.PHASE_A3_EXPECTED_RERELEASE_RECORDS,
   unresolved_records: process.env.PHASE_A3_EXPECTED_UNRESOLVED_RECORDS,
+  identity_disambiguations: process.env.PHASE_A3_EXPECTED_IDENTITY_DISAMBIGUATIONS,
   held_shared_detailed_urls: process.env.PHASE_A3_EXPECTED_HELD_SHARED_DETAILED_URLS,
   held_unsupported_provider_urls: process.env.PHASE_A3_EXPECTED_HELD_UNSUPPORTED_PROVIDER_URLS,
 };
@@ -93,6 +94,7 @@ console.log(JSON.stringify({
   safe_variants: report.counts.safe_variants,
   rerelease_records: report.counts.rerelease_records,
   unresolved_records: report.counts.unresolved_records,
+  identity_disambiguations: report.plan.identity_disambiguations,
   held_shared_detailed_urls: report.scan.held_shared_detailed_urls,
   held_unsupported_provider_urls: report.scan.held_unsupported_provider_urls,
   priority_scan_complete: report.scan.priority_scan_complete,
