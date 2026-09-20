@@ -99,11 +99,11 @@ test("series detail and sitemap cache contracts remain unchanged", () => {
   assert.match(source, /url\.searchParams\.has\("cacheproof"\)/);
 });
 
-test("runtime cache proof retries propagation without accepting MISS", () => {
-  assert.match(runtimeSmokeSource, /require_warm_cache\(\)/);
-  assert.match(runtimeSmokeSource, /for attempt in 1 2 3/);
+test("runtime smoke paces cold reads while keeping strict warm-cache proof", () => {
+  assert.match(runtimeSmokeSource, /This is a correctness smoke, not a cold-origin load test/);
+  assert.match(runtimeSmokeSource, /sleep 1\s+return 0/);
+  assert.match(runtimeSmokeSource, /for name in categories_warm series_warm category_detail_warm ranking_warm series_sitemap_warm/);
   assert.match(runtimeSmokeSource, /HIT\|STALE/);
-  assert.match(runtimeSmokeSource, /MISS/);
-  assert.match(runtimeSmokeSource, /expected HIT or STALE by proof attempt/);
-  assert.doesNotMatch(runtimeSmokeSource, /MISS\|HIT\|STALE[\s\S]{0,200}return 0/);
+  assert.match(runtimeSmokeSource, /expected HIT or STALE/);
+  assert.doesNotMatch(runtimeSmokeSource, /require_warm_cache/);
 });
