@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   MAX_OBSERVER_SITEMAP_URLS,
   buildObserverSitemapXml,
+  buildSitemapIndexXml,
   collectSeriesObserverEntries,
   collectVariantObserverEntries,
   isSafeRecentOfficialSeriesOnly,
@@ -134,10 +135,27 @@ test("observer XML is absolute, escaped, deterministic, and omits invalid timest
   assert.equal((xml.match(/<lastmod>/g) || []).length, 1);
 });
 
+test("variant sitemap index is absolute, deterministic, and bounded", () => {
+  const xml = buildSitemapIndexXml(
+    ["/variant-sitemap/1", "/variant-sitemap/2", "/variant-sitemap/2"],
+    { siteUrl: "https://gachalens.com/" },
+  );
+  assert.match(xml, /^<\?xml/);
+  assert.match(xml, /<sitemapindex/);
+  assert.match(xml, /https:\/\/gachalens\.com\/variant-sitemap\/1/);
+  assert.match(xml, /https:\/\/gachalens\.com\/variant-sitemap\/2/);
+  assert.equal((xml.match(/<sitemap>/g) || []).length, 2);
+  assert.throws(
+    () => buildSitemapIndexXml(Array.from({ length: MAX_OBSERVER_SITEMAP_URLS + 1 }, (_, index) => `/sitemap/${index}`), { siteUrl: "https://gachalens.com/" }),
+    /exceeds 50000/,
+  );
+});
+
 test("root and observer sitemaps use daily cache boundaries without changing sitemap contracts", () => {
   const rootSitemap = source("app/sitemap.js");
   const seriesRoute = source("app/series-sitemap.xml/route.js");
   const variantRoute = source("app/variant-sitemap.xml/route.js");
+  const variantShardRoute = source("app/variant-sitemap/[page]/route.js");
   assert.match(rootSitemap, /unstable_cache/);
   assert.match(rootSitemap, /gacha-public-root-sitemap-v1/);
   assert.match(rootSitemap, /export const revalidate = 86400/);
@@ -151,8 +169,12 @@ test("root and observer sitemaps use daily cache boundaries without changing sit
   assert.match(seriesRoute, /gacha-public-series-observer-sitemap-v1/);
   assert.match(seriesRoute, /getDailySeriesObserverSitemapEntries/);
   assert.match(variantRoute, /unstable_cache/);
-  assert.match(variantRoute, /gacha-public-variant-observer-sitemap-v1/);
-  assert.match(variantRoute, /getDailyVariantObserverSitemapEntries/);
+  assert.match(variantRoute, /gacha-public-variant-observer-sitemap-index-v1/);
+  assert.match(variantRoute, /getDailyVariantObserverSitemapShardCount/);
+  assert.match(variantRoute, /buildSitemapIndexXml/);
+  assert.match(variantShardRoute, /gacha-public-variant-observer-sitemap-shard-v1/);
+  assert.match(variantShardRoute, /getDailyVariantObserverSitemapEntries/);
+  assert.match(variantShardRoute, /pathPrefix: "\/series\/"\s*\)/);
 
   for (const route of [seriesRoute, variantRoute]) {
     assert.match(route, /export const dynamic = "force-static"/);
@@ -177,8 +199,17 @@ test("root and series sitemaps use a bounded parent source instead of rescanning
   assert.match(series, /loadCachedPublicSitemapParents/);
   assert.match(series, /public-series-sitemap-parents/);
   assert.match(series, /buildPublicParentSitemapData/);
-  assert.match(series, /getVariantObserverSitemapEntries[\s\S]*getSeriesSlugs\(\)/);
-  assert.doesNotMatch(series, /getVariantObserverSitemapEntries[\s\S]{0,180}getPublicSitemapIdentifiers/);
+  assert.match(series, /getVariantObserverSitemapShardCount/);
+  assert.match(series, /loadCachedPublicVariantSitemapCount/);
+  assert.match(series, /loadCachedPublicVariantSitemapPage/);
+  assert.doesNotMatch(series, /getVariantObserverSitemapEntries[\s\S]{0,300}getPublicSitemapIdentifiers/);
+
+  const shardSource = source("lib/data/public-sitemap-identifiers.js");
+  assert.match(shardSource, /VARIANT_SITEMAP_SHARD_SIZE = 10000/);
+  assert.match(shardSource, /MAX_VARIANT_SITEMAP_SHARDS = 500/);
+  assert.match(shardSource, /fetchPublicVariantSitemapPage/);
+  assert.match(shardSource, /\.order\("id", \{ ascending: true \}\)/);
+  assert.match(shardSource, /\.range\(from, from \+ pageSize - 1\)/);
 });
 
 test("series-only observer reads only bounded official series columns without a mutation path", () => {
