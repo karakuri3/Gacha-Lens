@@ -90,6 +90,9 @@ test("series detail and sitemap cache contracts remain unchanged", () => {
   assert.match(source, /marker: "series-detail-1800-v1"/);
   assert.match(source, /marker: "public-sitemap-86400-v1"/);
   assert.match(source, /PUBLIC_SITEMAP_PATHS/);
+  assert.match(source, /function isPublicSitemapPath\(pathname\)/);
+  assert.match(source, /variant-sitemap\\\/\[1-9\]/);
+  assert.match(source, /isPublicSitemapPath\(url\.pathname\)/);
   assert.match(source, /url\.hostname\.endsWith\(PREVIEW_HOST_SUFFIX\)/);
   assert.match(source, /url\.searchParams\.has\("cacheproof"\)/);
 });
