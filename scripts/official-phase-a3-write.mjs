@@ -81,6 +81,7 @@ async function executeWrite() {
   let directBefore = null;
   let directAfter = null;
   let postVerify = null;
+  let connectionString = null;
 
   try {
     const report = loadAudit();
@@ -125,7 +126,7 @@ async function executeWrite() {
       throw phaseA3WriteError("phase_a3_write_main_moved_before_transaction");
     }
 
-    const connectionString = requireOfficialDatabaseUrl(process.env.SUPABASE_DB_URL);
+    connectionString = requireOfficialDatabaseUrl(process.env.SUPABASE_DB_URL);
     client = new Client({ connectionString, application_name: "gacha-phase-a3-production-write" });
     await client.connect();
 
@@ -136,11 +137,42 @@ async function executeWrite() {
     }
 
     transaction = await executeOfficialPhaseA3VariantTransaction({ client, plan });
-    directAfter = await captureDirectCounts(client);
 
-    if (transaction.state === "committed") {
+    if (transaction.state === "committed" || transaction.state === "commit_outcome_unknown") {
+      let verificationError = null;
+      let verificationClient = null;
       try {
-        postVerify = await verifyDirectPostState(client, directBefore, directAfter, plan);
+        verificationClient = new Client({
+          connectionString,
+          application_name: "gacha-phase-a3-post-verify",
+        });
+        await verificationClient.connect();
+        directAfter = await captureDirectCounts(verificationClient);
+        postVerify = await verifyDirectPostState(verificationClient, directBefore, directAfter, plan);
+      } catch (error) {
+        verificationError = error;
+        postVerify = null;
+      } finally {
+        if (verificationClient) await verificationClient.end().catch(() => {});
+      }
+
+      if (transaction.state === "commit_outcome_unknown") {
+        const result = buildOfficialPhaseA3WriteResult({
+          workflow: workflowIdentity(),
+          authorization,
+          plan,
+          transaction,
+          before: directBefore,
+          after: directAfter,
+          postVerify,
+          reasonCode: transaction.reason_code || verificationError?.reason_code || "phase_a3_commit_outcome_unknown",
+          finalVerdict: "OFFICIAL_PHASE_A3_WRITE_COMMIT_OUTCOME_UNKNOWN",
+        });
+        writeResult(result);
+        throw phaseA3WriteError("phase_a3_commit_outcome_unknown");
+      }
+
+      if (!verificationError && postVerify?.ok === true) {
         const result = buildOfficialPhaseA3WriteResult({
           workflow: workflowIdentity(),
           authorization,
@@ -154,42 +186,21 @@ async function executeWrite() {
         writeResult(result);
         writeOutput("final_verdict", result.final_verdict);
         return;
-      } catch (error) {
-        const result = buildOfficialPhaseA3WriteResult({
-          workflow: workflowIdentity(),
-          authorization,
-          plan,
-          transaction: { ...transaction, state: "committed_post_verify_failed" },
-          before: directBefore,
-          after: directAfter,
-          postVerify,
-          reasonCode: error?.reason_code || "phase_a3_write_post_verify_failed",
-          finalVerdict: "OFFICIAL_PHASE_A3_WRITE_COMMITTED_POST_VERIFY_FAILED",
-        });
-        writeResult(result);
-        throw error;
       }
-    }
 
-    if (transaction.state === "commit_outcome_unknown") {
-      try {
-        postVerify = await verifyDirectPostState(client, directBefore, directAfter, plan);
-      } catch {
-        postVerify = null;
-      }
       const result = buildOfficialPhaseA3WriteResult({
         workflow: workflowIdentity(),
         authorization,
         plan,
-        transaction,
+        transaction: { ...transaction, state: "committed_post_verify_failed" },
         before: directBefore,
         after: directAfter,
         postVerify,
-        reasonCode: transaction.reason_code || "phase_a3_commit_outcome_unknown",
-        finalVerdict: "OFFICIAL_PHASE_A3_WRITE_COMMIT_OUTCOME_UNKNOWN",
+        reasonCode: verificationError?.reason_code || "phase_a3_write_post_verify_failed",
+        finalVerdict: "OFFICIAL_PHASE_A3_WRITE_COMMITTED_POST_VERIFY_FAILED",
       });
       writeResult(result);
-      throw phaseA3WriteError("phase_a3_commit_outcome_unknown");
+      throw verificationError || phaseA3WriteError("phase_a3_write_post_verify_failed");
     }
 
     const result = buildOfficialPhaseA3WriteResult({
