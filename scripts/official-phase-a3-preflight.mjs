@@ -56,6 +56,8 @@ const expectation = {
   safe_variants: process.env.PHASE_A3_EXPECTED_SAFE_VARIANTS,
   rerelease_records: process.env.PHASE_A3_EXPECTED_RERELEASE_RECORDS,
   unresolved_records: process.env.PHASE_A3_EXPECTED_UNRESOLVED_RECORDS,
+  held_shared_detailed_urls: process.env.PHASE_A3_EXPECTED_HELD_SHARED_DETAILED_URLS,
+  held_unsupported_provider_urls: process.env.PHASE_A3_EXPECTED_HELD_UNSUPPORTED_PROVIDER_URLS,
 };
 if (Object.values(expectation).some((value) => String(value || "").trim())) {
   assertOfficialPhaseA3Expectation(report, expectation);
