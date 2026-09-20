@@ -73,7 +73,8 @@ test("root and observer sitemaps preserve discovery without duplicating product-
   assert.match(text, /getPublicRootSitemapIdentifiers/);
   assert.doesNotMatch(text, /\/series\/\$\{encodeURIComponent\(slug\)\}/);
   assert.doesNotMatch(text, /\/series\/group\/\$\{encodeURIComponent\(slug\)\}/);
-  assert.match(variantObserver, /pathPrefix: "\/series\/"/);
+  assert.match(variantObserver, /buildSitemapIndexXml/);
+  assert.match(variantShard, /pathPrefix: "\/series\/"/);
   assert.match(seriesObserver, /pathPrefix: "\/series\/group\/"/);
   assert.match(text, /MAX_SITEMAP_URLS = 50000/);
 });
