@@ -12,13 +12,16 @@ test("category detail route uses the targeted parent-series read path", () => {
   assert.doesNotMatch(route, /getPublicCategorySeriesPage/);
 });
 
-test("Production category detail uses one catalog-only relation query before the raw-value fallback", () => {
+test("Production category detail splits exact count from the bounded page read", () => {
   const helper = source("lib/targeted-category-series-page.js");
   assert.match(helper, /loadCachedSupabaseCategoryPage/);
-  assert.match(helper, /\.from\("series"\)/);
-  assert.match(helper, /variants!inner\(id,variant_type,series_id,slug,name\)/);
+  assert.ok(helper.includes('const PUBLIC_VARIANT_RELATION = "variants!inner(id)"'));
+  assert.ok(helper.includes('.select(`id,${PUBLIC_VARIANT_RELATION}`, { count: "exact", head: true })'));
+  assert.ok(helper.includes('.select(`${SERIES_SELECT},${PUBLIC_VARIANT_RELATION}`)'));
+  assert.match(helper, /applyPublicVariantRelationFilter/);
   assert.match(helper, /\.eq\("category", category\)/);
   assert.match(helper, /referencedTable: "variants"/);
+  assert.match(helper, /const page = Math\.min\(requestedPage, totalPages\)/);
   assert.match(helper, /if \(direct\.total > 0\) return buildResult\(direct, requestedName\)/);
   assert.match(helper, /findPublicCategoryFacet\(await getParentSeriesCategoryCatalog\(\), requestedName\)/);
   assert.ok(
@@ -27,7 +30,6 @@ test("Production category detail uses one catalog-only relation query before the
   );
   assert.doesNotMatch(helper, /market_listings|x_reactions|restock_events|stock_reports/);
 });
-
 test("category summary preserves card identity, release, image, price and lineup count fields", () => {
   const helper = source("lib/targeted-category-series-page.js");
   for (const contract of [
