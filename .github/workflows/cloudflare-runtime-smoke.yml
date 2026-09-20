@@ -204,7 +204,12 @@ jobs:
           request_get robots '/robots.txt' 'Sitemap: https://gachalens.com/sitemap.xml'
           request_get sitemap '/sitemap.xml' '<loc>https://gachalens.com/'
           request_get series_sitemap '/series-sitemap.xml' '<loc>https://gachalens.com/series/group/'
-          request_get variant_sitemap '/variant-sitemap.xml' '<loc>https://gachalens.com/series/'
+          request_get variant_sitemap '/variant-sitemap.xml' '<sitemapindex'
+          request_get variant_sitemap_shard '/variant-sitemap/1' '<loc>https://gachalens.com/series/'
+          grep -Fq '<loc>https://gachalens.com/variant-sitemap/1</loc>' "$tmp/variant_sitemap.body" || {
+            echo 'Variant sitemap index did not publish shard 1.' >&2
+            exit 1
+          }
 
           grep -Fq 'https://gachalens.com/series/' "$tmp/product_1.body" || {
             echo 'Product detail canonical/site metadata did not point at gachalens.com.' >&2
@@ -239,7 +244,7 @@ jobs:
             }
           done
 
-          for name in robots sitemap series_sitemap variant_sitemap; do
+          for name in robots sitemap series_sitemap variant_sitemap variant_sitemap_shard; do
             [[ "$(edge_policy "$name")" == 'public-sitemap-86400-v1' ]] || {
               echo "$name is missing public sitemap edge-cache policy" >&2
               exit 1
