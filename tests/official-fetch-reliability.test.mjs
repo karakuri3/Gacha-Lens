@@ -5,6 +5,34 @@ import { fetchOfficialRaw } from "../lib/fetchers/official-fetcher.js";
 
 const detailUrl = "https://gashapon.jp/products/detail.php?jan_code=4570000000001000";
 const detailFixture = fs.readFileSync("tests/fixtures/official/gashapon-detail.html", "utf8");
+const phaseA3Support = fs.readFileSync("scripts/official-phase-a3-support.mjs", "utf8");
+
+test("ordinary official fetch remains single-attempt unless reliability is explicitly enabled", async () => {
+  const sourceUrl = "https://example.invalid/official-source";
+  let calls = 0;
+
+  const result = await fetchOfficialRaw({
+    urls: [sourceUrl],
+    detailFetchLimit: 0,
+    sourceFetchDelayMs: 0,
+    detailFetchDelayMs: 0,
+    fetchImpl: async () => {
+      calls += 1;
+      return response("", calls === 1 ? 503 : 200);
+    },
+    sleep: async () => assert.fail("default official fetch must not retry"),
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(result.issues.some((issue) => issue.note === "HTTP 503"), true);
+});
+
+test("Phase A3 scan explicitly binds the bounded official retry and timeout policy", () => {
+  assert.match(phaseA3Support, /fetchTimeoutMs: 8000/);
+  assert.match(phaseA3Support, /fetchMaxAttempts: 2/);
+  assert.match(phaseA3Support, /fetchRetryBaseDelayMs: 250/);
+  assert.match(phaseA3Support, /fetchRetryMaxDelayMs: 1500/);
+});
 
 test("official source GET recovers from transient 503 within the bounded retry policy", async () => {
   const calls = [];
