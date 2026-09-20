@@ -21,13 +21,26 @@ export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3
     }),
   ]);
 
+  const knownDetailedSeriesIds = [...new Set(
+    knownDetailedRows.map((row) => String(row.series_id || row.series?.id || "").trim()).filter(Boolean),
+  )];
+  const detailedSeriesIdSet = new Set(knownDetailedSeriesIds);
   const knownDetailedOfficialUrls = [...new Set(
     knownDetailedRows.map((row) => canonicalOfficialUrl(row.series?.official_url)).filter(Boolean),
   )];
-  const detailedSet = new Set(knownDetailedOfficialUrls);
-  const priorityDetailUrls = knownOfficialRecords
+  const detailedUrlSet = new Set(knownDetailedOfficialUrls);
+  const knownUndetailedRecords = knownOfficialRecords.filter(
+    (row) => !detailedSeriesIdSet.has(String(row.id || "").trim()),
+  );
+  const heldSharedDetailedUrls = knownUndetailedRecords.filter(
+    (row) => detailedUrlSet.has(canonicalOfficialUrl(row.official_url)),
+  ).length;
+  const heldUnsupportedProviderUrls = knownUndetailedRecords.filter(
+    (row) => !isAllowedOfficialPhaseA3Url(row.official_url),
+  ).length;
+  const priorityDetailUrls = knownUndetailedRecords
     .map((row) => canonicalOfficialUrl(row.official_url))
-    .filter((url) => url && !detailedSet.has(url) && isAllowedOfficialPhaseA3Url(url));
+    .filter((url) => url && !detailedUrlSet.has(url) && isAllowedOfficialPhaseA3Url(url));
 
   if (priorityDetailUrls.length > 7500) throw phaseA3Error("phase_a3_residual_limit_exceeded");
   const detailFetchLimit = Math.min(8000, Math.max(1000, priorityDetailUrls.length + 500));
@@ -54,7 +67,7 @@ export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3
 
   const classification = classifyOfficialPhaseA3Residuals({
     knownOfficialRecords,
-    knownDetailedOfficialUrls,
+    knownDetailedSeriesIds,
     fetchedRecords: fetched.records,
   });
   const plan = buildOfficialPhaseA3Plan(classification, { allowEmpty: allowEmptyPlan });
@@ -68,6 +81,8 @@ export async function scanOfficialPhaseA3Residuals({ operationPrefix = "phase_a3
     plan,
     detailFetchLimit,
     knownPriorityUrls: priorityDetailUrls.length,
+    heldSharedDetailedUrls,
+    heldUnsupportedProviderUrls,
     priorityScanComplete,
   };
 }
