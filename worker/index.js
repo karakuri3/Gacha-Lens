@@ -1,7 +1,7 @@
 import handler from "vinext/server/fetch-handler";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
-// Exact-head smoke may retry cache propagation, but it still requires a final HIT/STALE.
+// Exact-head smoke keeps strict cache proof while pacing unrelated cold Preview reads.
 const NON_CACHEABLE_HTML_MARKERS = ["商品情報を取得できません"];
 
 const EDGE_CACHE_POLICIES = {
