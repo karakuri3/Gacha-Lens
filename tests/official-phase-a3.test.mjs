@@ -26,7 +26,7 @@ test("Phase A3 classifies only known undetailed database records", () => {
   ];
   const classification = classifyOfficialPhaseA3Residuals({
     knownOfficialRecords: known,
-    knownDetailedOfficialUrls: [],
+    knownDetailedSeriesIds: [],
     fetchedRecords: [
       record("safe", "https://gashapon.jp/products/detail.php?jan_code=1"),
       record("rr", "https://gashapon.jp/products/detail.php?jan_code=2", { rerelease: true }),
@@ -41,13 +41,29 @@ test("Phase A3 classifies only known undetailed database records", () => {
   assert.equal(classification.safeRecords[0].id, "safe");
 });
 
+test("Phase A3 keeps cross-series official URL collisions unresolved by series identity", () => {
+  const sharedUrl = "https://gashapon.jp/products/detail.php?jan_code=shared";
+  const classification = classifyOfficialPhaseA3Residuals({
+    knownOfficialRecords: [
+      { id: "detailed", official_url: sharedUrl },
+      { id: "undetailed", official_url: sharedUrl },
+    ],
+    knownDetailedSeriesIds: ["detailed"],
+    fetchedRecords: [],
+  });
+  assert.equal(classification.knownUndetailedRecords.length, 1);
+  assert.equal(classification.knownUndetailedRecords[0].id, "undetailed");
+  assert.equal(classification.safeRecords.length, 0);
+  assert.equal(classification.unresolvedRecords.length, 1);
+});
+
 test("Phase A3 never turns unresolved records into write candidates", () => {
   const classification = classifyOfficialPhaseA3Residuals({
     knownOfficialRecords: [
       { id: "safe", official_url: "https://gashapon.jp/products/detail.php?jan_code=1" },
       { id: "missing", official_url: "https://gashapon.jp/products/detail.php?jan_code=3" },
     ],
-    knownDetailedOfficialUrls: [],
+    knownDetailedSeriesIds: [],
     fetchedRecords: [record("safe", "https://gashapon.jp/products/detail.php?jan_code=1")],
   });
   const plan = buildOfficialPhaseA3Plan(classification);
