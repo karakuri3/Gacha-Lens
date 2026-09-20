@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - .github/ops/gacha-official-phase-a3-main-preflight-20260920.token
+      - .github/ops/gacha-official-phase-a3-main-preflight-writer-20260920.token
 
 permissions:
   contents: read
@@ -23,7 +23,7 @@ jobs:
       MARKET_BACKFILL_WRITE_DISABLED: "true"
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_CONFIRMATION: APPROVE_GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_V1_20260920
+      GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_CONFIRMATION: APPROVE_GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_WRITER_V1_20260920
 
     steps:
       - uses: actions/checkout@v6
@@ -43,8 +43,8 @@ jobs:
           test "$GITHUB_EVENT_NAME" = "push"
           test "$GITHUB_REF" = "refs/heads/main"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test -f .github/ops/gacha-official-phase-a3-main-preflight-20260920.token
-          marker="$(tr -d '\r\n' < .github/ops/gacha-official-phase-a3-main-preflight-20260920.token)"
+          test -f .github/ops/gacha-official-phase-a3-main-preflight-writer-20260920.token
+          marker="$(tr -d '\r\n' < .github/ops/gacha-official-phase-a3-main-preflight-writer-20260920.token)"
           test "$marker" = "$GACHA_OFFICIAL_PHASE_A3_MAIN_PREFLIGHT_CONFIRMATION"
           git fetch --no-tags origin main --depth=1
           test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
