@@ -132,6 +132,42 @@ test("workflow is dispatch-only, long-scan bounded, exact-main guarded, and has 
   assert.doesNotMatch(runner, /SUPABASE_DB_URL/);
 });
 
+test("validator rejects tampered plan summaries", () => {
+  const record = rereleaseRecord();
+  const report = buildOfficialRereleaseRecoveryAudit({
+    residual: residual({ rereleaseRecords: [record] }),
+    catalog: { series: [series(record.id)], restock_events: [] },
+    databaseBefore: counts,
+    databaseAfter: counts,
+    observedAt: "2026-09-20T00:00:00.000Z",
+    workflow: workflow(),
+    scan: scan(),
+  });
+  report.plan.planned_database_writes += 1;
+  assert.throws(
+    () => validateOfficialRereleaseRecoveryAudit(report),
+    /plan summary is inconsistent/,
+  );
+});
+
+test("validator recomputes database delta from before and after counts", () => {
+  const record = rereleaseRecord();
+  const report = buildOfficialRereleaseRecoveryAudit({
+    residual: residual({ rereleaseRecords: [record] }),
+    catalog: { series: [series(record.id)], restock_events: [] },
+    databaseBefore: counts,
+    databaseAfter: counts,
+    observedAt: "2026-09-20T00:00:00.000Z",
+    workflow: workflow(),
+    scan: scan(),
+  });
+  report.database.after.variants += 1;
+  assert.throws(
+    () => validateOfficialRereleaseRecoveryAudit(report),
+    /READY verdict is inconsistent/,
+  );
+});
+
 function residual({ safeRecords = [], rereleaseRecords = [], unresolvedRecords = [] } = {}) {
   return {
     knownUndetailedRecords: [...safeRecords, ...rereleaseRecords, ...unresolvedRecords],
