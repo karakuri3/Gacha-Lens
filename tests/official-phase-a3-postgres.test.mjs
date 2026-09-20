@@ -33,6 +33,19 @@ test("Phase A3 transaction rolls back before commit on identity collision", asyn
   assert.ok(!queries.some((entry) => entry.text.startsWith("INSERT INTO public.variants")));
 });
 
+test("Phase A3 transaction rolls back on existing slug collision", async () => {
+  const queries = [];
+  const plan = planFixture();
+  const client = fakeClient({ plan, queries, slugCollision: true });
+  const result = await executeOfficialPhaseA3VariantTransaction({ client, plan });
+
+  assert.equal(result.state, "rolled_back");
+  assert.equal(result.database_writes, 0);
+  assert.equal(result.reason_code, "phase_a3_variant_slug_collision");
+  assert.ok(queries.some((entry) => entry.text === "ROLLBACK"));
+  assert.ok(!queries.some((entry) => entry.text.startsWith("INSERT INTO public.variants")));
+});
+
 test("lost commit acknowledgement is explicit and never rolled back", async () => {
   const queries = [];
   const plan = planFixture();
@@ -93,7 +106,7 @@ function variant(id, name) {
   };
 }
 
-function fakeClient({ plan, queries, collision = false, commitFails = false }) {
+function fakeClient({ plan, queries, collision = false, slugCollision = false, commitFails = false }) {
   return {
     async query(text, values = []) {
       queries.push({ text, values });
@@ -112,6 +125,9 @@ function fakeClient({ plan, queries, collision = false, commitFails = false }) {
       }
       if (text.startsWith("SELECT id FROM public.variants")) {
         return collision ? { rowCount: 1, rows: [{ id: plan.variant_rows[0].id }] } : { rowCount: 0, rows: [] };
+      }
+      if (text.startsWith("SELECT id, slug FROM public.variants")) {
+        return slugCollision ? { rowCount: 1, rows: [{ id: "other", slug: plan.variant_rows[0].slug }] } : { rowCount: 0, rows: [] };
       }
       if (text.startsWith("INSERT INTO public.variants")) {
         return { rowCount: plan.variant_rows.length, rows: [] };
