@@ -41,6 +41,22 @@ test("scoped detail data source limits signal reads to relevant variants plus se
   assert.doesNotMatch(scoped, /fetchTable\(/);
 });
 
+test("scoped related reads prefilter parent series before ordering variant candidates", () => {
+  const scoped = source("lib/data/supabase-public-variant-detail.js");
+  const related = scoped.slice(
+    scoped.indexOf("export async function fetchSupabaseScopedRelatedCatalog"),
+    scoped.indexOf("async function fetchSignalsForVariantScope")
+  );
+
+  assert.match(related, /fetchRelatedSeriesIds\(supabaseClient, target\.series_id, parent\)/);
+  assert.match(related, /\.in\("series_id", candidateSeriesIds\)/);
+  assert.doesNotMatch(related, /\.eq\("parent\.(franchise|brand|category)"/);
+  assert.match(scoped, /if \(parent\.franchise\) scope = \["franchise", parent\.franchise\]/);
+  assert.match(scoped, /else if \(parent\.brand\) scope = \["brand", parent\.brand\]/);
+  assert.match(scoped, /else if \(parent\.category\) scope = \["category", parent\.category\]/);
+  assert.match(scoped, /\.from\(TABLE_MAP\.series\)[\s\S]*?\.select\("id"\)[\s\S]*?\.eq\(column, value\)/);
+});
+
 test("public scoped reads omit removable raw payload but retain verified set safety payload", () => {
   const scoped = source("lib/data/supabase-public-variant-detail.js");
   const publicSelect = scoped.match(/const MARKET_LISTING_PUBLIC_SELECT = "([^"]+)";/)?.[1] || "";
