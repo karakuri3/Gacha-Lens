@@ -183,7 +183,6 @@ test("preflight is ready only with a complete scan and zero database delta", () 
 
 test("frozen Phase A3 expectation fails closed on any cohort drift", () => {
   const snapshot = {
-    plan: { plan_digest: "sha256:" + "a".repeat(64), identity_disambiguations: 1 },
     counts: {
       known_undetailed: 10,
       safe_records: 5,
