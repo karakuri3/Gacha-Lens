@@ -217,6 +217,7 @@ test("frozen Phase A3 expectation fails closed on any cohort drift", () => {
 test("Phase A3 preflight workflow is branch-only and contains no write lane", () => {
   const workflow = fs.readFileSync(".github/workflows/gacha-official-phase-a3-preflight.yml", "utf8");
   const script = fs.readFileSync("scripts/official-phase-a3-preflight.mjs", "utf8");
+  const support = fs.readFileSync("scripts/official-phase-a3-support.mjs", "utf8");
 
   assert.match(workflow, /fix\/363-phase-a3-targeted-non-rerelease/);
   assert.match(workflow, /INGESTION_WRITE_DISABLED: "true"/);
@@ -225,6 +226,9 @@ test("Phase A3 preflight workflow is branch-only and contains no write lane", ()
   assert.doesNotMatch(workflow, /workflow_dispatch:|schedule:/);
   assert.doesNotMatch(workflow, /SUPABASE_DB_URL|db:upsert|ingest:official/);
   assert.doesNotMatch(script, /upsertRows|INSERT INTO|DELETE FROM|UPDATE public\./);
+  assert.match(support, /const detailFetchLimit = priorityDetailUrls\.length/);
+  assert.match(support, /Number\(fetched\.detailFetched\) === priorityDetailUrls\.length/);
+  assert.doesNotMatch(support, /priorityDetailUrls\.length \+ 500/);
 });
 
 function record(id, officialUrl, { rerelease = false } = {}) {
