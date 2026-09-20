@@ -15,16 +15,15 @@ test("category detail route uses the targeted parent-series read path", () => {
 test("Production category detail splits exact count from the bounded page read", () => {
   const helper = source("lib/targeted-category-series-page.js");
   assert.match(helper, /loadCachedSupabaseCategoryPage/);
-  assert.match(helper, /const PUBLIC_VARIANT_RELATION = "variants!inner\\(id\\)"/);
-  assert.match(helper, /count: "exact", head: true/);
-  assert.match(helper, /select\\(`id,\\$\\{PUBLIC_VARIANT_RELATION\\}`/);
-  assert.match(helper, /select\\(`\\$\\{SERIES_SELECT\\},\\$\\{PUBLIC_VARIANT_RELATION\\}`\\)/);
+  assert.ok(helper.includes('const PUBLIC_VARIANT_RELATION = "variants!inner(id)"'));
+  assert.ok(helper.includes('.select(`id,${PUBLIC_VARIANT_RELATION}`, { count: "exact", head: true })'));
+  assert.ok(helper.includes('.select(`${SERIES_SELECT},${PUBLIC_VARIANT_RELATION}`)'));
   assert.match(helper, /applyPublicVariantRelationFilter/);
-  assert.match(helper, /\\.eq\\("category", category\\)/);
+  assert.match(helper, /\.eq\("category", category\)/);
   assert.match(helper, /referencedTable: "variants"/);
-  assert.match(helper, /const page = Math\\.min\\(requestedPage, totalPages\\)/);
-  assert.match(helper, /if \\(direct\\.total > 0\\) return buildResult\\(direct, requestedName\\)/);
-  assert.match(helper, /findPublicCategoryFacet\\(await getParentSeriesCategoryCatalog\\(\\), requestedName\\)/);
+  assert.match(helper, /const page = Math\.min\(requestedPage, totalPages\)/);
+  assert.match(helper, /if \(direct\.total > 0\) return buildResult\(direct, requestedName\)/);
+  assert.match(helper, /findPublicCategoryFacet\(await getParentSeriesCategoryCatalog\(\), requestedName\)/);
   assert.ok(
     helper.indexOf("readCategoryPage(requestedName") < helper.indexOf("getParentSeriesCategoryCatalog()"),
     "normal category requests must use the targeted query before the broad raw-value fallback",
