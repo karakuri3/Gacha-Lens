@@ -15,7 +15,13 @@ export default async function DiagnosticIsrCategoryPage({ params }) {
   for (const name of names) {
     const result = await getTargetedPublicCategorySeriesPage(name, { page: 1, pageSize: 60 });
     if (result) {
-      return <CategoryDiscoveryLanding facet={result.facet} items={result.items} page={result} />;
+      const renderToken = String(Date.now());
+      return (
+        <>
+          <p data-isr-render-token={renderToken}>{renderToken}</p>
+          <CategoryDiscoveryLanding facet={result.facet} items={result.items} page={result} />
+        </>
+      );
     }
   }
   notFound();
