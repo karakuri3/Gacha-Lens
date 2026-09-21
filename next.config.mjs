@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Diagnostic: force blocking metadata on vinext/Workers to avoid streaming metadata path.
+  htmlLimitedBots: /.*/,
   turbopack: {
     root: import.meta.dirname,
   },
