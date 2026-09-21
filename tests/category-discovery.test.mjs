@@ -123,6 +123,17 @@ test("category pages use parent-series filtering, canonical metadata, and noinde
   assert.doesNotMatch(text, /offers|aggregateRating|review:/);
 });
 
+test("category metadata does not duplicate the category data read", () => {
+  const text = source("app/categories/[name]/page.js");
+  const metadataSource = text.slice(
+    text.indexOf("export async function generateMetadata"),
+    text.indexOf("export default async function CategoryDiscoveryPage"),
+  );
+  assert.doesNotMatch(metadataSource, /resolvePage\(/);
+  assert.match(metadataSource, /categoryDiscoveryLookupCandidates/);
+  assert.match(metadataSource, /categoryDiscoveryPageHref/);
+});
+
 test("category discovery uses a targeted parent series query without sitemap cache agreement", () => {
   const text = source("lib/series.js");
   const functionSource = text.slice(text.indexOf("export async function getPublicCategorySeriesPage"), text.indexOf("export async function getPublicDiscoveryFacetSeriesPage"));
