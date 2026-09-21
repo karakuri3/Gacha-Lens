@@ -9,16 +9,18 @@ import { getTargetedPublicCategorySeriesPage } from "@/lib/targeted-category-ser
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const getCategoryDiscoveryPage = cache((name, page) => getTargetedPublicCategorySeriesPage(name, { page, pageSize: 60 }));
+const getCategoryDiscoveryPage = cache((name, page, allowRawFallback) => getTargetedPublicCategorySeriesPage(name, { page, pageSize: 60, allowRawFallback }));
 
 async function resolvePage(params, searchParams) {
   const names = categoryDiscoveryLookupCandidates((await params).name);
   const page = normalizeDiscoveryFacetPage((await searchParams)?.page);
   for (const name of names) {
-    const result = await getCategoryDiscoveryPage(name, page);
+    const result = await getCategoryDiscoveryPage(name, page, false);
     if (result) return result;
   }
-  return null;
+
+  const fallbackName = names.at(-1);
+  return fallbackName ? getCategoryDiscoveryPage(fallbackName, page, true) : null;
 }
 
 export async function generateMetadata({ params, searchParams }) {
