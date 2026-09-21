@@ -148,6 +148,8 @@ test("categories index is parent-series-first while filtered catalog URLs stay n
   assert.match(categories, /getParentSeriesCategoryCatalog/);
   assert.match(categories, /categoryDiscoveryHref/);
   assert.match(categories, /series_count/);
+  assert.match(catalog, /getParentSeriesCategoryCatalog/);
+  assert.doesNotMatch(catalog, /getCategoryCatalog/);
   assert.match(catalog, /noIndex: Boolean\(query\.q \|\| query\.category\)/);
   assert.match(catalog, /query\.q \|\| query\.category \? \{ index: false, follow: true \}/);
 });
