@@ -6,10 +6,14 @@ import { normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
 import { buildPageMetadata } from "@/lib/site-metadata";
 import { getTargetedPublicCategorySeriesPage } from "@/lib/targeted-category-series-page";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 300;
+export const dynamicParams = true;
 
-const getCategoryDiscoveryPage = cache((name, page) => getTargetedPublicCategorySeriesPage(name, { page, pageSize: 60 }));
+export function generateStaticParams() {
+  return [];
+}
+
+const getCategoryDiscoveryPage = cache((name, page) => getTargetedPublicCategorySeriesPage(name, { page, pageSize: 60, bypassDataCache: true }));
 
 async function resolvePage(params, searchParams) {
   const names = categoryDiscoveryLookupCandidates((await params).name);
