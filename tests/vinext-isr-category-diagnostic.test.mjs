@@ -8,7 +8,10 @@ test("isolated category ISR diagnostic uses on-demand revalidation without force
   assert.match(source, /export const dynamicParams = true/);
   assert.match(source, /generateStaticParams\(\)/);
   assert.match(source, /return \[\]/);
-  assert.match(source, /getTargetedPublicCategorySeriesPage/);
+  assert.match(source, /serviceRoleSupabase/);
+  assert.match(source, /count: "exact", head: true/);
+  assert.match(source, /\.range\(0, 59\)/);
+  assert.doesNotMatch(source, /unstable_cache|getTargetedPublicCategorySeriesPage/);
   assert.doesNotMatch(source, /force-dynamic/);
   assert.doesNotMatch(source, /searchParams/);
 });
