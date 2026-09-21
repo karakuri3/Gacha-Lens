@@ -12,6 +12,19 @@ test("category detail route uses the targeted parent-series read path", () => {
   assert.doesNotMatch(route, /getPublicCategorySeriesPage/);
 });
 
+test("category detail exhausts targeted URL candidates before the broad raw-value fallback", () => {
+  const route = source("app/categories/[name]/page.js");
+  const helper = source("lib/targeted-category-series-page.js");
+  assert.match(route, /getCategoryDiscoveryPage\(name, page, false\)/);
+  assert.match(route, /const fallbackName = names\.at\(-1\)/);
+  assert.match(route, /getCategoryDiscoveryPage\(fallbackName, page, true\)/);
+  assert.match(helper, /if \(options\.allowRawFallback === false\) return null/);
+  assert.ok(
+    helper.indexOf("allowRawFallback === false") < helper.indexOf("getParentSeriesCategoryCatalog()"),
+    "broad category enumeration must stay behind the targeted candidate gate",
+  );
+});
+
 test("Production category detail splits exact count from the bounded page read", () => {
   const helper = source("lib/targeted-category-series-page.js");
   assert.match(helper, /loadCachedSupabaseCategoryPage/);
