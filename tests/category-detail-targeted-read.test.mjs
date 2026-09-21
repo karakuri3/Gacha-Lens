@@ -12,9 +12,16 @@ test("category detail route uses the targeted parent-series read path", () => {
   assert.doesNotMatch(route, /getPublicCategorySeriesPage/);
 });
 
+test("Production category detail keeps targeted reads off vinext KV data cache", () => {
+  const helper = source("lib/targeted-category-series-page.js");
+  assert.doesNotMatch(helper, /unstable_cache|loadCachedSupabaseCategoryPage|CATEGORY_CACHE_SECONDS/);
+  assert.match(helper, /fetchSupabaseCategorySeriesSummaryPage\(category, \{ page, pageSize \}\)/);
+  assert.match(helper, /public first page already has a bounded Cloudflare HTML edge-cache policy/);
+  assert.match(helper, /route-level React cache deduplicates metadata\/page reads per request/);
+});
+
 test("Production category detail splits exact count from the bounded page read", () => {
   const helper = source("lib/targeted-category-series-page.js");
-  assert.match(helper, /loadCachedSupabaseCategoryPage/);
   assert.ok(helper.includes('const PUBLIC_VARIANT_RELATION = "variants!inner(id)"'));
   assert.ok(helper.includes('.select(`id,${PUBLIC_VARIANT_RELATION}`, { count: "exact", head: true })'));
   assert.ok(helper.includes('.select(`${SERIES_SELECT},${PUBLIC_VARIANT_RELATION}`)'));
@@ -30,6 +37,7 @@ test("Production category detail splits exact count from the bounded page read",
   );
   assert.doesNotMatch(helper, /market_listings|x_reactions|restock_events|stock_reports/);
 });
+
 test("category summary preserves card identity, release, image, price and lineup count fields", () => {
   const helper = source("lib/targeted-category-series-page.js");
   for (const contract of [
