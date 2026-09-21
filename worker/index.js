@@ -173,6 +173,14 @@ async function canStoreResponse(response, policy) {
 
 export default {
   async fetch(request, env, ctx) {
+    const requestUrl = new URL(request.url);
+    if (
+      requestUrl.hostname.endsWith(PREVIEW_HOST_SUFFIX)
+      && requestUrl.pathname === "/__diag/category-wrapper"
+    ) {
+      return diagnoseCategoryWrapper(request, env, ctx);
+    }
+
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
 
@@ -192,3 +200,41 @@ export default {
     });
   },
 };
+
+async function diagnoseCategoryWrapper(request, env, ctx) {
+  const requestUrl = new URL(request.url);
+  const inspect = requestUrl.searchParams.get("inspect") !== "0";
+  const targetUrl = new URL("/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3", request.url);
+  if (!inspect) targetUrl.searchParams.set("diag_bypass", "1");
+
+  const targetRequest = new Request(targetUrl, {
+    method: "GET",
+    headers: {
+      accept: "text/html",
+      "user-agent": request.headers.get("user-agent") || "gacha-runtime-diagnostic",
+    },
+  });
+
+  const policy = getEdgeCachePolicy(targetRequest);
+  const handlerStart = performance.now();
+  const response = await handler.fetch(targetRequest, env, ctx);
+  const handlerMs = performance.now() - handlerStart;
+
+  const inspectStart = performance.now();
+  const storable = await canStoreResponse(response, policy);
+  const inspectMs = performance.now() - inspectStart;
+
+  return Response.json({
+    target: targetUrl.pathname + targetUrl.search,
+    inspect,
+    policy: policy?.marker ?? null,
+    status: response.status,
+    handler_ms: Math.round(handlerMs * 10) / 10,
+    inspect_ms: Math.round(inspectMs * 10) / 10,
+    total_ms: Math.round((handlerMs + inspectMs) * 10) / 10,
+    storable,
+  }, {
+    status: 200,
+    headers: { "Cache-Control": "no-store, max-age=0" },
+  });
+}
