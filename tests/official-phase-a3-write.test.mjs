@@ -35,9 +35,11 @@ test("Phase A3 writer authorizes only the exact successful main audit identity",
   assert.equal(authorization.expectation.write_contract_digest, CONTRACT_DIGEST);
   assert.equal(authorization.expectation.safe_records, 1828);
   assert.equal(authorization.expectation.safe_variants, 11350);
-  assert.equal(authorization.expectation.rerelease_records, 374);
-  assert.equal(authorization.expectation.unresolved_records, 815);
   assert.equal(authorization.expectation.identity_disambiguations, 25);
+  assert.equal(authorization.expectation.rerelease_records, undefined);
+  assert.equal(authorization.expectation.unresolved_records, undefined);
+  assert.equal(authorization.expectation.held_shared_detailed_urls, undefined);
+  assert.equal(authorization.expectation.held_unsupported_provider_urls, undefined);
 });
 
 test("Phase A3 writer rejects main, run, digest, approval, event, and database drift", () => {
