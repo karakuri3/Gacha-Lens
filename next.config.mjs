@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // vinext/Cloudflare Workers: keep metadata blocking until upstream streaming
+  // metadata parity is stable. Category discovery otherwise intermittently stalls
+  // during streamed metadata + SSR and can return a transient 503 on a cold route.
+  htmlLimitedBots: /.*/,
   turbopack: {
     root: import.meta.dirname,
   },
