@@ -22,14 +22,15 @@ async function resolvePage(params, searchParams) {
 }
 
 export async function generateMetadata({ params, searchParams }) {
-  const result = await resolvePage(params, searchParams);
-  if (!result) notFound();
-  const { facet, page } = result;
+  const names = categoryDiscoveryLookupCandidates((await params).name);
+  const name = names.at(-1);
+  if (!name) notFound();
+  const page = normalizeDiscoveryFacetPage((await searchParams)?.page);
   return buildPageMetadata({
-    title: `${facet.name}のガチャシリーズ一覧・発売情報 | Gacha Lens`,
-    description: `${facet.name}カテゴリのガチャシリーズを一覧。発売中・発売予定、定価、ラインナップを確認できます。`,
-    path: categoryDiscoveryPageHref(facet.name, page),
-    noIndex: page > 1 || facet.series_count < 2,
+    title: `${name}のガチャシリーズ一覧・発売情報 | Gacha Lens`,
+    description: `${name}カテゴリのガチャシリーズを一覧。発売中・発売予定、定価、ラインナップを確認できます。`,
+    path: categoryDiscoveryPageHref(name, page),
+    noIndex: page > 1,
   });
 }
 
