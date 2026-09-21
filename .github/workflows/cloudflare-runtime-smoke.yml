@@ -111,6 +111,73 @@ jobs:
           echo "Exact source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
           echo "Exact-head Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Prewarm critical shared public documents
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          warm_get() {
+            local name="$1"
+            local path="$2"
+            local needle="$3"
+            local attempt rc code delay status
+            local body="$tmp/$1.body"
+            local headers="$tmp/$1.headers"
+
+            for attempt in 1 2 3 4 5; do
+              rc=0
+              code="$(curl --silent --show-error --location --max-time 90 \
+                -H "Accept: $BROWSER_ACCEPT" \
+                --dump-header "$headers" \
+                --output "$body" \
+                --write-out '%{http_code}' \
+                "$PREVIEW_URL$path")" || rc=$?
+              code="$(printf '%s' "$code" | tr -d '\r\n')"
+              if [[ -z "$code" ]]; then code='000'; fi
+              status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$headers")"
+
+              if [[ "$rc" == "0" && "$code" == "200" ]] && grep -Fq "$needle" "$body"; then
+                case "$status" in
+                  HIT|STALE)
+                    echo "prewarm $name: HTTP 200 $status on attempt $attempt" | tee -a "$GITHUB_STEP_SUMMARY"
+                    return 0
+                    ;;
+                  MISS|BYPASS|'')
+                    echo "prewarm $name: HTTP 200 ${status:-none} on attempt $attempt; requesting again to prove reusable edge state" | tee -a "$GITHUB_STEP_SUMMARY"
+                    sleep 2
+                    continue
+                    ;;
+                esac
+              fi
+
+              if [[ "$attempt" -lt 5 ]]; then
+                case "$code" in
+                  000|429|500|502|503|504)
+                    delay=$((attempt * 2))
+                    echo "prewarm $name: transient rc=$rc HTTP $code on attempt $attempt; retrying after ${delay}s" | tee -a "$GITHUB_STEP_SUMMARY"
+                    sleep "$delay"
+                    continue
+                    ;;
+                esac
+              fi
+
+              echo "prewarm $name failed rc=$rc HTTP $code cache=${status:-none} on attempt $attempt" >&2
+              head -c 1000 "$body" >&2 || true
+              exit 1
+            done
+
+            echo "prewarm $name did not reach HIT/STALE within bounded attempts" >&2
+            exit 1
+          }
+
+          category_path='/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3'
+          warm_get series '/series' 'ガチャ一覧'
+          warm_get categories '/categories' 'カテゴリから探す'
+          warm_get category_detail "$category_path" 'ガシャポン'
+          warm_get ranking '/ranking' '相場ランキング'
+
       - name: Smoke public runtime and boundaries
         shell: bash
         run: |
