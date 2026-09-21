@@ -2,6 +2,7 @@ import handler from "vinext/server/fetch-handler";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const NON_CACHEABLE_HTML_MARKERS = ["商品情報を取得できません"];
+const HTML_INSPECTION_BUDGET_MS = 2000;
 
 const EDGE_CACHE_POLICIES = {
   seriesDetail: {
@@ -163,12 +164,77 @@ async function canStoreResponse(response, policy) {
   // Next.js error boundaries can render a branded error document while the outer
   // HTTP response remains 200. Never let that transient document become the
   // shared edge representation for an otherwise healthy public URL.
+  //
+  // vinext can return a streaming Response immediately while SSR continues for
+  // many seconds. Reading clone().text() without a bound makes the Worker wait
+  // for the entire stream before returning the original response, turning a slow
+  // but recoverable render into a transient 503. Inspect within a strict budget
+  // and fail closed: if the complete HTML cannot be verified in time, skip edge
+  // caching rather than delaying the response or caching an unverified document.
   if (contentType.includes("text/html")) {
-    const body = await response.clone().text();
-    if (NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker))) return false;
+    const inspection = await inspectHtmlResponse(response);
+    if (!inspection.complete || inspection.hasNonCacheableMarker) return false;
   }
 
   return true;
+}
+
+async function inspectHtmlResponse(response) {
+  const body = response.clone().body;
+  if (!body) return { complete: false, hasNonCacheableMarker: false };
+
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  const startedAt = Date.now();
+  let text = "";
+
+  try {
+    while (true) {
+      const remainingMs = HTML_INSPECTION_BUDGET_MS - (Date.now() - startedAt);
+      if (remainingMs <= 0) {
+        return { complete: false, hasNonCacheableMarker: false };
+      }
+
+      const result = await readWithTimeout(reader, remainingMs);
+      if (result.timedOut) {
+        return { complete: false, hasNonCacheableMarker: false };
+      }
+      if (result.done) {
+        text += decoder.decode();
+        return {
+          complete: true,
+          hasNonCacheableMarker: NON_CACHEABLE_HTML_MARKERS.some((marker) => text.includes(marker)),
+        };
+      }
+
+      text += decoder.decode(result.value, { stream: true });
+      if (NON_CACHEABLE_HTML_MARKERS.some((marker) => text.includes(marker))) {
+        return { complete: false, hasNonCacheableMarker: true };
+      }
+    }
+  } finally {
+    try {
+      await reader.cancel();
+    } catch {
+      // Best-effort cleanup only. Cacheability already fails closed on errors.
+    }
+  }
+}
+
+function readWithTimeout(reader, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve({ timedOut: true }), timeoutMs);
+    reader.read().then(
+      (result) => {
+        clearTimeout(timer);
+        resolve({ timedOut: false, ...result });
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 export default {
