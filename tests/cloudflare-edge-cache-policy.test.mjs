@@ -44,10 +44,14 @@ test("Cloudflare public cache excludes authenticated, cookie, internal, and quer
   assert.match(discoveryBlock, /isDiscoveryDocumentPath\(url\.pathname\)/);
 });
 
-test("known Next.js error documents cannot become shared edge cache entries", () => {
+test("known Next.js error documents remain fail-closed under bounded HTML inspection", () => {
   assert.match(source, /NON_CACHEABLE_HTML_MARKERS = \["商品情報を取得できません"\]/);
-  assert.match(source, /response\.clone\(\)\.text\(\)/);
-  assert.match(source, /NON_CACHEABLE_HTML_MARKERS\.some\(\(marker\) => body\.includes\(marker\)\)/);
+  assert.match(source, /HTML_INSPECTION_BUDGET_MS = 2000/);
+  assert.match(source, /inspectHtmlResponse\(response\)/);
+  assert.match(source, /readWithTimeout\(reader, remainingMs\)/);
+  assert.match(source, /!inspection\.complete \|\| inspection\.hasNonCacheableMarker/);
+  assert.match(source, /reader\.cancel\(\)/);
+  assert.doesNotMatch(source, /response\.clone\(\)\.text\(\)/);
   assert.match(source, /await canStoreResponse\(response, policy\)/);
 });
 
