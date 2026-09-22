@@ -96,3 +96,18 @@ test("series detail and sitemap cache contracts remain unchanged", () => {
   assert.match(source, /url\.hostname\.endsWith\(PREVIEW_HOST_SUFFIX\)/);
   assert.match(source, /url\.searchParams\.has\("cacheproof"\)/);
 });
+
+test("validated async cache-fill diagnostic is workers.dev category-only and fail-closed", () => {
+  assert.match(source, /PREVIEW_ASYNC_CACHE_PARAM = "asynccacheproof"/);
+  assert.match(source, /url\.hostname\.endsWith\(PREVIEW_HOST_SUFFIX\)/);
+  assert.match(source, /url\.searchParams\.size !== 1/);
+  assert.match(source, /\/\^\\\/categories\\\/\[\^\/\]\+\$\//);
+  assert.match(source, /class ValidatedPreviewCache extends WorkerEntrypoint/);
+  assert.match(source, /INTERNAL_CACHE_MODE_HEADER/);
+  assert.match(source, /"X-Gacha-Validated-Cache": "rejected"/);
+  assert.match(source, /await canStoreResponse\(response, policy\)/);
+  assert.match(source, /ctx\.waitUntil\(fillValidatedPreviewCache\(request, ctx\)\)/);
+  assert.match(source, /Cloudflare-CDN-Cache-Control", "no-store"/);
+  assert.match(source, /X-Gacha-Async-Cache", "miss-deferred"/);
+  assert.match(source, /X-Gacha-Async-Cache", "validated-hit"/);
+});
