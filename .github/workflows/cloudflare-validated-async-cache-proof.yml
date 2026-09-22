@@ -111,8 +111,14 @@ jobs:
             echo "first request async state was ${first_async:-none}, expected miss-deferred" >&2
             exit 1
           }
-          grep -qi '^cloudflare-cdn-cache-control: no-store' "$tmp/headers-1" || {
-            echo 'first response was not explicitly no-store at Workers Cache boundary' >&2
+          first_cf="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r",""); print $2; exit}' "$tmp/headers-1")"
+          first_policy="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-edge-cache-policy:/ {gsub("\r",""); print $2; exit}' "$tmp/headers-1")"
+          [[ "$first_cf" == 'BYPASS' ]] || {
+            echo "first response cache status was ${first_cf:-none}, expected BYPASS" >&2
+            exit 1
+          }
+          [[ -z "$first_policy" ]] || {
+            echo "first response unexpectedly exposed reusable edge policy: $first_policy" >&2
             exit 1
           }
           ! grep -qi '^set-cookie:' "$tmp/headers-1"
