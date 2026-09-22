@@ -1,7 +1,10 @@
+import { WorkerEntrypoint } from "cloudflare:workers";
 import handler from "vinext/server/fetch-handler";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const NON_CACHEABLE_HTML_MARKERS = ["商品情報を取得できません"];
+const PREVIEW_ASYNC_CACHE_PARAM = "asynccacheproof";
+const INTERNAL_CACHE_MODE_HEADER = "x-gacha-validated-cache-mode";
 
 const EDGE_CACHE_POLICIES = {
   seriesDetail: {
@@ -153,6 +156,145 @@ function getEdgeCachePolicy(request) {
   return null;
 }
 
+function getPreviewAsyncCachePolicy(request) {
+  if (!isPublicCacheCandidate(request)) return null;
+
+  const url = new URL(request.url);
+  const accept = (request.headers.get("accept") ?? "").toLowerCase();
+  if (!url.hostname.endsWith(PREVIEW_HOST_SUFFIX)) return null;
+  if (!accept.includes("text/html")) return null;
+  if (url.searchParams.size !== 1 || !url.searchParams.has(PREVIEW_ASYNC_CACHE_PARAM)) return null;
+  if (!/^\/categories\/[^/]+$/.test(url.pathname)) return null;
+  return EDGE_CACHE_POLICIES.discoveryDocument;
+}
+
+function responseMatchesPolicyHeaders(response, policy) {
+  if (!policy || response.status !== 200) return false;
+  if (response.headers.has("set-cookie")) return false;
+
+  const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+  return policy.contentTypes.some((expected) => contentType.includes(expected));
+}
+
+function withEdgeCacheHeaders(response, policy, extraHeaders = {}) {
+  const headers = new Headers(response.headers);
+  headers.set("Cloudflare-CDN-Cache-Control", policy.cacheControl);
+  headers.set("Cache-Tag", policy.cacheTag);
+  headers.set("X-Gacha-Edge-Cache-Policy", policy.marker);
+  for (const [name, value] of Object.entries(extraHeaders)) headers.set(name, value);
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function previewInternalRequest(request, mode) {
+  const headers = new Headers(request.headers);
+  headers.set(INTERNAL_CACHE_MODE_HEADER, mode);
+  return new Request(request.url, {
+    method: "GET",
+    headers,
+  });
+}
+
+function previewPublicRequest(request) {
+  const headers = new Headers(request.headers);
+  headers.delete(INTERNAL_CACHE_MODE_HEADER);
+  return new Request(request.url, {
+    method: "GET",
+    headers,
+  });
+}
+
+async function fillValidatedPreviewCache(request, ctx) {
+  const fill = await ctx.exports.ValidatedPreviewCache.fetch(previewInternalRequest(request, "fill"));
+  await fill.arrayBuffer();
+}
+
+async function handlePreviewAsyncCache(request, env, ctx, policy) {
+  if (!ctx.exports?.ValidatedPreviewCache) {
+    const response = await handler.fetch(request, env, ctx);
+    const headers = new Headers(response.headers);
+    headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+    headers.set("X-Gacha-Async-Cache", "ctx-exports-unavailable");
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
+
+  const lookup = await ctx.exports.ValidatedPreviewCache.fetch(previewInternalRequest(request, "lookup"));
+  if (lookup.status === 200 && lookup.headers.get("x-gacha-validated-cache") === "stored") {
+    const headers = new Headers(lookup.headers);
+    headers.set("X-Gacha-Async-Cache", "validated-hit");
+    return new Response(lookup.body, {
+      status: lookup.status,
+      statusText: lookup.statusText,
+      headers,
+    });
+  }
+
+  const response = await handler.fetch(request, env, ctx);
+  if (responseMatchesPolicyHeaders(response, policy)) {
+    ctx.waitUntil(fillValidatedPreviewCache(request, ctx));
+  }
+
+  const headers = new Headers(response.headers);
+  headers.set("Cloudflare-CDN-Cache-Control", "no-store");
+  headers.delete("Cache-Tag");
+  headers.delete("X-Gacha-Edge-Cache-Policy");
+  headers.set("X-Gacha-Async-Cache", "miss-deferred");
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+export class ValidatedPreviewCache extends WorkerEntrypoint {
+  async fetch(request) {
+    const policy = getPreviewAsyncCachePolicy(request);
+    if (!policy) {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Cache-Control": "no-store",
+          "X-Gacha-Validated-Cache": "ineligible",
+        },
+      });
+    }
+
+    if (request.headers.get(INTERNAL_CACHE_MODE_HEADER) !== "fill") {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Cache-Control": "no-store",
+          "X-Gacha-Validated-Cache": "miss",
+        },
+      });
+    }
+
+    const response = await handler.fetch(previewPublicRequest(request), this.env, this.ctx);
+    if (!(await canStoreResponse(response, policy))) {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Cache-Control": "no-store",
+          "X-Gacha-Validated-Cache": "rejected",
+        },
+      });
+    }
+
+    return withEdgeCacheHeaders(response, policy, {
+      "X-Gacha-Validated-Cache": "stored",
+    });
+  }
+}
+
 async function canStoreResponse(response, policy) {
   if (!policy || response.status !== 200) return false;
   if (response.headers.has("set-cookie")) return false;
@@ -173,6 +315,11 @@ async function canStoreResponse(response, policy) {
 
 export default {
   async fetch(request, env, ctx) {
+    const previewAsyncPolicy = getPreviewAsyncCachePolicy(request);
+    if (previewAsyncPolicy) {
+      return handlePreviewAsyncCache(request, env, ctx, previewAsyncPolicy);
+    }
+
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
 
@@ -180,15 +327,6 @@ export default {
       return response;
     }
 
-    const headers = new Headers(response.headers);
-    headers.set("Cloudflare-CDN-Cache-Control", policy.cacheControl);
-    headers.set("Cache-Tag", policy.cacheTag);
-    headers.set("X-Gacha-Edge-Cache-Policy", policy.marker);
-
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
+    return withEdgeCacheHeaders(response, policy);
   },
 };
