@@ -1,0 +1,149 @@
+name: Cloudflare validated async cache proof
+
+on:
+  pull_request:
+    paths:
+      - "worker/**"
+      - ".github/workflows/cloudflare-validated-async-cache-proof.yml"
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: cloudflare-validated-async-cache-proof-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validated-async-cache-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact pull-request head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Resolve exact-head Cloudflare Preview
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          [[ "$actual_sha" == "$TARGET_SHA" ]]
+
+          candidate=''
+          for attempt in $(seq 1 40); do
+            payload="$(curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs?per_page=100")"
+            candidate="$(jq -c --arg sha "$TARGET_SHA" '
+              [.check_runs[]
+                | select(.name == "Workers Builds: gacha-lens" and .head_sha == $sha)]
+              | sort_by(.id)
+              | last // empty
+            ' <<<"$payload")"
+            if [[ -n "$candidate" && "$(jq -r '.status' <<<"$candidate")" == 'completed' ]]; then
+              break
+            fi
+            sleep 15
+          done
+
+          [[ -n "$candidate" ]]
+          [[ "$(jq -r '.conclusion' <<<"$candidate")" == 'success' ]]
+          summary="$(jq -r '.output.summary // ""' <<<"$candidate" | tr -d '\r')"
+          preview_url="$(printf '%s\n' "$summary" | grep -Eo 'https://[A-Za-z0-9-]+-gacha-lens\.senpingxingzuo\.workers\.dev' | head -1 || true)"
+          case "$preview_url" in
+            https://*-gacha-lens.senpingxingzuo.workers.dev) ;;
+            *) echo "exact-head Preview URL missing" >&2; exit 1 ;;
+          esac
+          echo "PREVIEW_URL=$preview_url" >> "$GITHUB_ENV"
+          echo "Exact-head Preview URL: $preview_url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prove deferred validation and reusable cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          proof="validated-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          path="/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3?asynccacheproof=${proof}"
+
+          request() {
+            local n="$1"
+            local body="$tmp/body-${n}"
+            local headers="$tmp/headers-${n}"
+            local metrics code
+            metrics="$(curl --silent --show-error --location --max-time 90 \
+              -H 'Accept: text/html' \
+              --dump-header "$headers" \
+              --output "$body" \
+              --write-out '%{http_code} %{time_total} %{size_download}' \
+              "${PREVIEW_URL}${path}")"
+            code="${metrics%% *}"
+            [[ "$code" == '200' ]] || { echo "request ${n} returned ${code}" >&2; exit 1; }
+            grep -Fq 'ガシャポン' "$body" || { echo "request ${n} missing category marker" >&2; exit 1; }
+
+            async_status="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-async-cache:/ {gsub("\r",""); print $2; exit}' "$headers")"
+            validated_status="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-validated-cache:/ {gsub("\r",""); print $2; exit}' "$headers")"
+            cf_status="$(awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r",""); print $2; exit}' "$headers")"
+            edge_policy="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-edge-cache-policy:/ {gsub("\r",""); print $2; exit}' "$headers")"
+            set_cookie='none'
+            if grep -qi '^set-cookie:' "$headers"; then set_cookie='present'; fi
+            hash="$(sha256sum "$body" | awk '{print $1}')"
+
+            echo "request ${n}: ${metrics} | async=${async_status:-none} | validated=${validated_status:-none} | cf=${cf_status:-none} | policy=${edge_policy:-none} | set-cookie=${set_cookie} | sha256=${hash}" | tee -a "$GITHUB_STEP_SUMMARY"
+          }
+
+          request 1
+          first_async="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-async-cache:/ {gsub("\r",""); print $2; exit}' "$tmp/headers-1")"
+          [[ "$first_async" != 'ctx-exports-unavailable' ]] || {
+            echo 'ctx.exports loopback is unavailable in the deployed Preview runtime.' >&2
+            exit 1
+          }
+          [[ "$first_async" == 'miss-deferred' ]] || {
+            echo "first request async state was ${first_async:-none}, expected miss-deferred" >&2
+            exit 1
+          }
+          grep -qi '^cloudflare-cdn-cache-control: no-store' "$tmp/headers-1" || {
+            echo 'first response was not explicitly no-store at Workers Cache boundary' >&2
+            exit 1
+          }
+          ! grep -qi '^set-cookie:' "$tmp/headers-1"
+
+          sleep 20
+
+          success=0
+          for n in 2 3 4 5; do
+            request "$n"
+            state="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-async-cache:/ {gsub("\r",""); print $2; exit}' "$tmp/headers-${n}")"
+            if [[ "$state" == 'validated-hit' ]]; then
+              success=1
+              hit_n="$n"
+              break
+            fi
+            sleep 5
+          done
+
+          [[ "$success" == '1' ]] || {
+            echo 'validated cache was not reusable within the bounded proof window' >&2
+            exit 1
+          }
+
+          grep -qi '^x-gacha-validated-cache: stored' "$tmp/headers-${hit_n}" || {
+            echo 'validated hit did not originate from the fully inspected cache entrypoint' >&2
+            exit 1
+          }
+          grep -qi '^x-gacha-edge-cache-policy: discovery-document-1800-v1' "$tmp/headers-${hit_n}" || {
+            echo 'validated hit missing expected discovery cache policy' >&2
+            exit 1
+          }
+          ! grep -qi '^set-cookie:' "$tmp/headers-${hit_n}"
+
+          echo 'Validated asynchronous fill proof PASS.' >> "$GITHUB_STEP_SUMMARY"
