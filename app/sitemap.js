@@ -1,6 +1,4 @@
 import { getPublicRootSitemapIdentifiers } from "@/lib/series";
-import { categoryDiscoveryHref } from "@/lib/domain/category-discovery";
-import { discoveryFacetHref } from "@/lib/domain/discovery-facets";
 import { getEditorialGuideSlugs } from "@/lib/domain/editorial-guides";
 import { absoluteSiteUrl } from "@/lib/site-metadata";
 import { unstable_cache } from "next/cache";
@@ -49,17 +47,17 @@ export default async function sitemap() {
       priority: 0.6,
     })),
     ...franchises.map((facet) => ({
-      url: absoluteSiteUrl(discoveryFacetHref("franchise", facet.name)),
+      url: absoluteSiteUrl(`/franchises/${encodeURIComponent(facet.name)}`),
       changeFrequency: "weekly",
       priority: 0.7,
     })),
     ...brands.map((facet) => ({
-      url: absoluteSiteUrl(discoveryFacetHref("brand", facet.name)),
+      url: absoluteSiteUrl(`/brands/${encodeURIComponent(facet.name)}`),
       changeFrequency: "weekly",
       priority: 0.7,
     })),
     ...categories.map((facet) => ({
-      url: absoluteSiteUrl(categoryDiscoveryHref(facet.name)),
+      url: absoluteSiteUrl(`/categories/${encodeURIComponent(facet.name)}`),
       changeFrequency: "weekly",
       priority: 0.7,
     })),
