@@ -1,3 +1,4 @@
+import DocumentLink from "@/components/DocumentLink";
 import ProductImage from "@/components/ProductImage";
 import { getParentSeriesCategoryCatalog } from "@/lib/series";
 import { categoryDiscoveryHref } from "@/lib/domain/category-discovery";
@@ -27,7 +28,7 @@ export default async function CategoriesPage() {
         {categories.length ? (
           <section className="category-grid">
             {categories.map((category, index) => {
-              return <a
+              return <DocumentLink
                 key={category.name}
                 href={categoryDiscoveryHref(category.name)}
                 className="category-card"
@@ -41,14 +42,14 @@ export default async function CategoriesPage() {
                   {category.upcoming_count > 0 ? <small>発売予定 {category.upcoming_count.toLocaleString("ja-JP")}シリーズ</small> : null}
                 </div>
                 <span aria-hidden="true">→</span>
-              </a>;
+              </DocumentLink>;
             })}
           </section>
         ) : (
           <div className="card empty">
             <strong>カテゴリ情報はまだありません</strong>
             <span>カテゴリが確認できる商品は、登録後にここへ表示されます。</span>
-            <a href="/series" className="button-link">ガチャ一覧を見る</a>
+            <DocumentLink href="/series" className="button-link">ガチャ一覧を見る</DocumentLink>
           </div>
         )}
       </div>
