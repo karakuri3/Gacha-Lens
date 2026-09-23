@@ -9,6 +9,7 @@ function read(file) {
 test("consumer catalog density and image semantics stay intentional", () => {
   const productImage = read("components/ProductImage.js");
   const seriesCard = read("components/SeriesCard.js");
+  const variantDetail = read("app/series/[slug]/page.js");
   const seriesDetail = read("app/series/group/[slug]/page.js");
   const designCss = read("app/product-design.css");
   const globalCss = read("app/globals.css");
@@ -17,6 +18,9 @@ test("consumer catalog density and image semantics stay intentional", () => {
   assert.match(seriesCard, /series\.image_scope === "series_fallback" \? ""/);
   assert.match(seriesCard, /fallbackSrc=""/);
   assert.match(seriesCard, /"単品画像なし"/);
+  assert.equal(variantDetail.includes("lineup-grid__series-fallback"), false);
+  assert.match(variantDetail, /fallbackSrc=""/);
+  assert.match(variantDetail, /emptyLabel="単品画像なし"/);
   assert.equal(seriesDetail.includes("lineup-grid__series-fallback"), false);
   assert.match(seriesDetail, /fallbackSrc=""/);
   assert.match(seriesDetail, /emptyLabel="単品画像なし"/);
