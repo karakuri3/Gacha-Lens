@@ -200,15 +200,15 @@ test("a series-only fallback remains truthfully labeled and terminates at the ne
   });
 });
 
-test("ProductImage exposes a one-way client-side series fallback and neutral placeholder", () => {
+test("ProductImage keeps fallback resolution internal and renders a neutral placeholder", () => {
   const component = source("components/ProductImage.js");
   assert.match(component, /^"use client";/);
   assert.match(component, /resolvePresentationImage/);
   assert.match(component, /normalizeImageUrl\(primarySrc\)/);
   assert.match(component, /normalizeImageUrl\(safeFallbackSrc\)/);
   assert.match(component, /onError=\{\(\) =>/);
-  assert.match(component, /product-image__scope/);
-  assert.match(component, />シリーズ画像</);
+  assert.doesNotMatch(component, /product-image__scope/);
+  assert.doesNotMatch(component, />シリーズ画像</);
   assert.match(component, /画像なし/);
 });
 
