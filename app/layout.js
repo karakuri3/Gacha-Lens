@@ -4,7 +4,7 @@ import "./product-detail-design.css";
 import Header from "@/components/Header";
 import AppSidebar from "@/components/AppSidebar";
 import Footer from "@/components/Footer";
-import StructuredData from "@/components/StructuredData";
+import StructuredData from "@/components/StructuredData";\nimport IntentPrefetchBoundary from "@/components/IntentPrefetchBoundary";
 import {
   DEFAULT_OG_IMAGE,
   SITE_DESCRIPTION,
