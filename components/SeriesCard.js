@@ -1,3 +1,4 @@
+import DocumentLink from "@/components/DocumentLink";
 ﻿import ProductImage from "@/components/ProductImage";
 import { seriesHref, variantHref } from "@/lib/variant-url";
 import {
@@ -16,7 +17,7 @@ export default function SeriesCard({ series, priority = false, scope = "variant"
   const tags = customerTags(series, isReleased);
 
   return (
-    <a
+    <DocumentLink
       href={isSeries ? seriesHref(series) : variantHref(series)}
       className="card product-card"
       prefetch={false}
@@ -62,7 +63,7 @@ export default function SeriesCard({ series, priority = false, scope = "variant"
           ))}
         </div>
       ) : null}
-    </a>
+    </DocumentLink>
   );
 }
 
