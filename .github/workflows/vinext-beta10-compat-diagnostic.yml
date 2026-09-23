@@ -165,6 +165,43 @@ jobs:
           du -sb dist/server | tee -a "$GITHUB_STEP_SUMMARY"
           echo "vinext 1.0.0-beta.10 / @vinext/cloudflare 1.0.0-beta.8 compile-only diagnostic: PASS" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Generate deterministic runtime-upgrade candidate files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp /tmp/root-package.json.before package.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const path = "package.json";
+          const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+          pkg.devDependencies.vinext = "1.0.0-beta.10";
+          pkg.devDependencies["@vinext/cloudflare"] = "1.0.0-beta.8";
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
+
+          npm install --package-lock-only --ignore-scripts
+          npm ci --ignore-scripts
+
+          mkdir -p /tmp/vinext-runtime-candidate/.github/vinext-toolchain
+          cp package.json /tmp/vinext-runtime-candidate/package.json
+          cp package-lock.json /tmp/vinext-runtime-candidate/package-lock.json
+          cp "$TOOLCHAIN_DIR/package.json" /tmp/vinext-runtime-candidate/.github/vinext-toolchain/package.json
+          cp "$TOOLCHAIN_DIR/package-lock.json" /tmp/vinext-runtime-candidate/.github/vinext-toolchain/package-lock.json
+
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const app = JSON.parse(fs.readFileSync("/tmp/vinext-runtime-candidate/package.json", "utf8"));
+          const toolchain = JSON.parse(fs.readFileSync("/tmp/vinext-runtime-candidate/.github/vinext-toolchain/package.json", "utf8"));
+          if (app.devDependencies.vinext !== "1.0.0-beta.10" || app.devDependencies["@vinext/cloudflare"] !== "1.0.0-beta.8") {
+            throw new Error("root candidate versions are not pinned as intended");
+          }
+          if (toolchain.dependencies.vinext !== "1.0.0-beta.10" || toolchain.dependencies["@vinext/cloudflare"] !== "1.0.0-beta.8") {
+            throw new Error("toolchain candidate versions are not pinned as intended");
+          }
+          NODE
+
+          echo "Deterministic root/toolchain lockfile candidate generated and npm-ci validated." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload diagnostic lock and logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -172,6 +209,7 @@ jobs:
           name: vinext-beta10-compat-diagnostic
           path: |
             .tmp/vinext-beta10-toolchain/package-lock.json
+            /tmp/vinext-runtime-candidate
             /tmp/vinext-beta10-check.log
             /tmp/vinext-beta10-init.log
             /tmp/vinext-beta10-build.log
