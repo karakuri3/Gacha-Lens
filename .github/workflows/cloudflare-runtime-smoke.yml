@@ -111,6 +111,41 @@ jobs:
           echo "Exact source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
           echo "Exact-head Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Measure cold SSR render layers
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          probe() {
+            local name="$1"
+            local path="$2"
+            local needle="$3"
+            local ok=0
+            for attempt in 1 2; do
+              local body="$tmp/${name}-${attempt}.body"
+              local metrics code
+              metrics="$(curl --silent --show-error --location --max-time 90 \
+                -H "Accept: ${BROWSER_ACCEPT}" \
+                --output "$body" \
+                --write-out '%{http_code} %{time_total} %{size_download}' \
+                "${PREVIEW_URL}${path}")" || metrics="000 90 0"
+              code="${metrics%% *}"
+              echo "${name} attempt ${attempt}: ${metrics}" | tee -a "$GITHUB_STEP_SUMMARY"
+              if [[ "$code" == "200" ]] && grep -Fq "$needle" "$body"; then
+                ok=1
+              fi
+            done
+            [[ "$ok" == "1" ]] || {
+              echo "${name} did not produce a valid 200 response in two attempts" >&2
+              exit 1
+            }
+          }
+
+          probe cold_shell '/diagnostics/cold-shell' 'cold-shell-diagnostic'
+          probe cold_server_dom '/diagnostics/cold-server-dom' 'cold-server-dom-diagnostic'
+          probe cold_client_images '/diagnostics/cold-client-images' 'cold-client-images-diagnostic'
       - name: Smoke public runtime and boundaries
         shell: bash
         run: |
