@@ -23,7 +23,7 @@ This deliberately fails closed for ambiguous cases such as a one-item series whe
 npm run image:parent-conflict-audit -- --input=prepared-input.json
 ```
 
-The output contains deterministic candidate IDs, type counts, rejection counts, and a SHA-256 digest of the sorted candidate ID set.
+The output contains deterministic candidate IDs, type counts, rejection counts, and a SHA-256 digest of the candidate ID set sorted by raw UTF-8 byte order. The byte-order contract is intentional so a read-only PostgreSQL extraction using the `C` collation can reproduce the exact same digest even when IDs contain Japanese or other non-ASCII text.
 
 ## Safety
 
