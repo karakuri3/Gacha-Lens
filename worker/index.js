@@ -153,6 +153,20 @@ function getEdgeCachePolicy(request) {
   return null;
 }
 
+function attachPreviewRuntimeBoundaryDiagnostics(request, response, startedAt) {
+  const url = new URL(request.url);
+  if (!url.hostname.endsWith(PREVIEW_HOST_SUFFIX)) return response;
+
+  const headers = new Headers(response.headers);
+  headers.set("X-Gacha-Diag-Worker-Reached", "1");
+  headers.set("X-Gacha-Diag-Handler-Ms", String(Math.max(0, Date.now() - startedAt)));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 async function canStoreResponse(response, policy) {
   if (!policy || response.status !== 200) return false;
   if (response.headers.has("set-cookie")) return false;
@@ -174,7 +188,9 @@ async function canStoreResponse(response, policy) {
 export default {
   async fetch(request, env, ctx) {
     const policy = getEdgeCachePolicy(request);
-    const response = await handler.fetch(request, env, ctx);
+    const startedAt = Date.now();
+    const handlerResponse = await handler.fetch(request, env, ctx);
+    const response = attachPreviewRuntimeBoundaryDiagnostics(request, handlerResponse, startedAt);
 
     if (!(await canStoreResponse(response, policy))) {
       return response;
