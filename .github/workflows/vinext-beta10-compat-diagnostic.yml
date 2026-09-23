@@ -1,0 +1,167 @@
+name: Vinext beta10 compatibility diagnostic
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/vinext-beta10-compat-diagnostic.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vinext-beta10-compat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TOOLCHAIN_DIR: .tmp/vinext-beta10-toolchain
+
+    steps:
+      - name: Checkout diagnostic head
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked application dependencies
+        run: npm ci
+
+      - name: Create isolated newer vinext toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$TOOLCHAIN_DIR"
+          cat > "$TOOLCHAIN_DIR/package.json" <<'JSON'
+          {
+            "name": "gacha-lens-vinext-beta10-diagnostic",
+            "private": true,
+            "version": "1.0.0",
+            "type": "module",
+            "dependencies": {
+              "@cloudflare/vite-plugin": "1.54.8",
+              "@vinext/cloudflare": "1.0.0-beta.9",
+              "@vitejs/plugin-react": "6.1.1",
+              "@vitejs/plugin-rsc": "0.5.34",
+              "react-server-dom-webpack": "19.2.8",
+              "vinext": "1.0.0-beta.10",
+              "vite": "8.2.2",
+              "wrangler": "4.131.1"
+            }
+          }
+          JSON
+          npm install --ignore-scripts --prefix "$TOOLCHAIN_DIR"
+
+      - name: Verify exact diagnostic versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const root = ".tmp/vinext-beta10-toolchain/node_modules";
+          const expected = JSON.parse(fs.readFileSync(".tmp/vinext-beta10-toolchain/package.json", "utf8")).dependencies;
+          for (const [name, version] of Object.entries(expected)) {
+            const actual = JSON.parse(fs.readFileSync(`${root}/${name}/package.json`, "utf8")).version;
+            if (actual !== version) throw new Error(`${name}: expected ${version}, got ${actual}`);
+            console.log(`${name}@${actual}`);
+          }
+          NODE
+
+      - name: Expose diagnostic toolchain without changing root lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum package-lock.json > /tmp/root-package-lock.before
+          cp package.json /tmp/root-package.json.before
+
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const path = "package.json";
+          const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+          const toolchain = JSON.parse(fs.readFileSync(".tmp/vinext-beta10-toolchain/package.json", "utf8")).dependencies;
+          pkg.devDependencies = { ...pkg.devDependencies, ...toolchain };
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
+
+          link_pkg() {
+            local name="$1"
+            local src="$PWD/$TOOLCHAIN_DIR/node_modules/$name"
+            local dst="$PWD/node_modules/$name"
+            mkdir -p "$(dirname "$dst")"
+            rm -rf "$dst"
+            ln -s "$src" "$dst"
+          }
+
+          link_pkg vinext
+          link_pkg @vinext/cloudflare
+          link_pkg react-server-dom-webpack
+          link_pkg vite
+          link_pkg @vitejs/plugin-react
+          link_pkg @vitejs/plugin-rsc
+          link_pkg @cloudflare/vite-plugin
+          link_pkg wrangler
+
+      - name: Run newer vinext compatibility check
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$TOOLCHAIN_DIR/node_modules/.bin/vinext" check | tee /tmp/vinext-beta10-check.log
+
+      - name: Generate ephemeral Cloudflare config
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$TOOLCHAIN_DIR/node_modules/.bin/vinext" init --skip-check --platform=cloudflare --data-cache=kv --image-optimization=cloudflare-images | tee /tmp/vinext-beta10-init.log
+          if grep -Eq 'Installing dependencies:|Installing devDependencies:|Upgrading dependencies:' /tmp/vinext-beta10-init.log; then
+            echo 'Newer vinext attempted live root dependency resolution; diagnostic refuses to continue.' >&2
+            exit 1
+          fi
+          sha256sum -c /tmp/root-package-lock.before
+          git diff --exit-code -- package-lock.json
+
+      - name: Pin non-production placeholder bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const path = "wrangler.jsonc";
+          const config = JSON.parse(fs.readFileSync(path, "utf8"));
+          config.name = "gachalens-vinext-beta10-diagnostic";
+          config.preview_urls = true;
+          for (const namespace of config.kv_namespaces ?? []) {
+            if (namespace.binding === "VINEXT_KV_CACHE" && !namespace.id) {
+              namespace.id = "00000000000000000000000000000000";
+            }
+          }
+          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          NODE
+
+      - name: Build Worker with newer vinext
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$TOOLCHAIN_DIR/node_modules/.bin/vinext" build | tee /tmp/vinext-beta10-build.log
+          test -f dist/server/wrangler.json
+          sha256sum -c /tmp/root-package-lock.before
+          git diff --exit-code -- package-lock.json
+          echo "Worker artifact bytes:" >> "$GITHUB_STEP_SUMMARY"
+          du -sb dist/server | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "vinext 1.0.0-beta.10 / @vinext/cloudflare 1.0.0-beta.9 compile-only diagnostic: PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload diagnostic lock and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vinext-beta10-compat-diagnostic
+          path: |
+            .tmp/vinext-beta10-toolchain/package-lock.json
+            /tmp/vinext-beta10-check.log
+            /tmp/vinext-beta10-init.log
+            /tmp/vinext-beta10-build.log
+          if-no-files-found: ignore
