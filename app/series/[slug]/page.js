@@ -173,9 +173,14 @@ export default async function VariantDetailPage({ params }) {
               {(item.sibling_variants ?? []).map((entry) => (
                 <Link key={entry.id} href={variantHref(entry)} prefetch={false}>
                   <span className="lineup-grid__image">
-                    {entry.image_scope === "series_fallback"
-                      ? <span className="lineup-grid__series-fallback">シリーズ</span>
-                      : <ProductImage item={entry} alt={entry.name} emptyLabel="画像なし" />}
+                    <ProductImage
+                      item={entry}
+                      src={entry.image_scope === "series_fallback" ? "" : entry.image_url}
+                      fallbackSrc=""
+                      imageScope={entry.image_scope}
+                      alt={entry.name}
+                      emptyLabel="単品画像なし"
+                    />
                   </span>
                   <span><strong>{entry.name}</strong><small>{entry.rarity} / {entry.role}</small></span>
                 </Link>
