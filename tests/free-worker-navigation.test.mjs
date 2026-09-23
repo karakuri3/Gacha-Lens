@@ -7,6 +7,10 @@ const root = process.cwd();
 const source = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
 test("public catalog navigation uses full-document requests so edge-cached HTML can serve clicks", () => {
+  const documentLink = source("components/DocumentLink.js");
+  assert.match(documentLink, /<a href=\{href\}/);
+  assert.doesNotMatch(documentLink, /next\/link/);
+
   for (const relativePath of [
     "components/DiscoveryFacetPages.js",
     "app/categories/page.js",
@@ -14,11 +18,11 @@ test("public catalog navigation uses full-document requests so edge-cached HTML 
   ]) {
     const text = source(relativePath);
     assert.doesNotMatch(text, /from ["']next\/link["']/);
-    assert.match(text, /<a\b/);
+    assert.match(text, /DocumentLink/);
   }
 
   const discovery = source("components/DiscoveryFacetPages.js");
-  assert.match(discovery, /<a key=\{facet\.name\} href=\{discoveryFacetHref\(type, facet\.name\)\}/);
+  assert.match(discovery, /<DocumentLink key=\{facet\.name\} href=\{discoveryFacetHref\(type, facet\.name\)\}/);
   assert.match(discovery, /href=\{categoryDiscoveryPageHref\(facet\.name,/);
 
   const categories = source("app/categories/page.js");
