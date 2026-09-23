@@ -173,6 +173,14 @@ async function canStoreResponse(response, policy) {
 
 export default {
   async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (
+      url.hostname.endsWith(PREVIEW_HOST_SUFFIX) &&
+      url.pathname === "/__diag/async-verified-kv"
+    ) {
+      return handleAsyncVerifiedKvDiagnostic(request, env, ctx);
+    }
+
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
 
@@ -192,3 +200,85 @@ export default {
     });
   },
 };
+
+async function handleAsyncVerifiedKvDiagnostic(request, env, ctx) {
+  const url = new URL(request.url);
+  const target = url.searchParams.get("target") === "ranking" ? "ranking" : "category";
+  const kv = env?.VINEXT_KV_CACHE;
+  if (!kv || typeof kv.get !== "function" || typeof kv.put !== "function") {
+    return Response.json(
+      { error: "VINEXT_KV_CACHE unavailable", target },
+      { status: 503, headers: { "Cache-Control": "no-store, max-age=0" } },
+    );
+  }
+
+  const cacheKey = [
+    "gacha-diag-async-verified-html-v1",
+    url.hostname,
+    target,
+  ].join(":");
+
+  const cachedBody = await kv.get(cacheKey);
+  if (url.searchParams.get("mode") === "status") {
+    return Response.json(
+      {
+        target,
+        cached: typeof cachedBody === "string" && cachedBody.length > 0,
+        verified: typeof cachedBody === "string" && cachedBody.length > 0,
+      },
+      { headers: { "Cache-Control": "no-store, max-age=0" } },
+    );
+  }
+
+  if (typeof cachedBody === "string" && cachedBody.length > 0) {
+    return new Response(cachedBody, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store, max-age=0",
+        "X-Gacha-Diag-Async-KV": "HIT",
+        "X-Gacha-Diag-Verified": "1",
+      },
+    });
+  }
+
+  const targetPath = target === "ranking"
+    ? "/ranking?diag_async_verified_kv=1"
+    : "/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3?diag_async_verified_kv=1";
+
+  const targetRequest = new Request(new URL(targetPath, request.url), {
+    method: "GET",
+    headers: {
+      accept: "text/html",
+      "user-agent": request.headers.get("user-agent") || "gacha-async-kv-diagnostic",
+    },
+  });
+
+  const response = await handler.fetch(targetRequest, env, ctx);
+  const candidate = response.clone();
+  ctx.waitUntil(storeVerifiedHtmlInKv(kv, cacheKey, candidate));
+
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", "no-store, max-age=0");
+  headers.set("X-Gacha-Diag-Async-KV", "MISS");
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+async function storeVerifiedHtmlInKv(kv, cacheKey, response) {
+  if (response.status !== 200) return;
+  if (response.headers.has("set-cookie")) return;
+
+  const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+  if (!contentType.includes("text/html")) return;
+
+  const body = await response.text();
+  if (!body) return;
+  if (NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker))) return;
+
+  await kv.put(cacheKey, body, { expirationTtl: 300 });
+}
