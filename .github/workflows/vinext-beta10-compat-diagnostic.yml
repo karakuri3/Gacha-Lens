@@ -6,7 +6,7 @@ on:
       - ".github/workflows/vinext-beta10-compat-diagnostic.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: vinext-beta10-compat-${{ github.ref }}
@@ -201,6 +201,34 @@ jobs:
           NODE
 
           echo "Deterministic root/toolchain lockfile candidate generated and npm-ci validated." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Materialize verified candidate onto Preview-only branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          target_branch='diag/vinext-beta10-runtime-v1'
+          git fetch origin "$target_branch"
+          git switch -C "$target_branch" "origin/$target_branch"
+
+          cp /tmp/vinext-runtime-candidate/package.json package.json
+          cp /tmp/vinext-runtime-candidate/package-lock.json package-lock.json
+          cp /tmp/vinext-runtime-candidate/.github/vinext-toolchain/package.json .github/vinext-toolchain/package.json
+          cp /tmp/vinext-runtime-candidate/.github/vinext-toolchain/package-lock.json .github/vinext-toolchain/package-lock.json
+
+          npm ci --ignore-scripts
+          npm ci --ignore-scripts --prefix .github/vinext-toolchain
+
+          git add package.json package-lock.json .github/vinext-toolchain/package.json .github/vinext-toolchain/package-lock.json
+          if git diff --cached --quiet; then
+            echo "Preview candidate branch already matches the verified files." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "diag(runtime): preview newer vinext generation"
+          git push origin "HEAD:$target_branch"
+          echo "Preview-only candidate branch updated from verified lockfiles." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload diagnostic lock and logs
         if: always()
