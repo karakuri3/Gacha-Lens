@@ -153,9 +153,14 @@ export default async function ParentSeriesDetailPage({ params }) {
               {variants.map((variant) => (
                 <Link key={variant.variant_id || variant.id} href={variantHref(variant)}>
                   <span className="lineup-grid__image">
-                    {variant.image_scope === "series_fallback"
-                      ? <span className="lineup-grid__series-fallback">シリーズ</span>
-                      : <ProductImage item={variant} alt={variant.variant_name || variant.name} emptyLabel="画像なし" />}
+                    <ProductImage
+                      item={variant}
+                      src={variant.image_scope === "series_fallback" ? "" : variant.image_url}
+                      fallbackSrc=""
+                      imageScope={variant.image_scope}
+                      alt={variant.variant_name || variant.name}
+                      emptyLabel="単品画像なし"
+                    />
                   </span>
                   <span><strong>{variant.variant_name || variant.name}</strong><small>{variant.rarity || "通常"}</small></span>
                 </Link>

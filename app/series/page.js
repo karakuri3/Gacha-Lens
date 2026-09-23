@@ -71,6 +71,14 @@ export default async function SeriesPage({ searchParams }) {
   const displayEnd = startIndex + visibleItems.length;
   const entityLabel = query.scope === "series" ? "シリーズ" : "単品";
   const showGlobalCounts = query.scope === "variant" && !query.q && !query.category && !query.month && !query.legacyMode;
+  const advancedFilterActive = Boolean(
+    query.q
+      || query.scope !== "series"
+      || query.category
+      || query.month
+      || query.sort !== (query.q ? "relevance" : "newest")
+      || query.legacyMode
+  );
 
   return (
     <main className="site-main">
@@ -98,7 +106,12 @@ export default async function SeriesPage({ searchParams }) {
           </Link>
         </nav>
 
-        <form className="card form-panel catalog-filter-form" action="/series" method="get" role="search">
+        <details className="catalog-filter-shell" open={advancedFilterActive}>
+          <summary className="catalog-filter-summary">
+            <span>絞り込み・並び替え</span>
+            <small>キーワード・カテゴリ・発売月など</small>
+          </summary>
+          <form className="card form-panel catalog-filter-form" action="/series" method="get" role="search">
           <input type="hidden" name="scope" value={query.scope} />
           <div className="form-grid catalog-filter-grid">
             <div className="field catalog-keyword-field">
@@ -133,7 +146,8 @@ export default async function SeriesPage({ searchParams }) {
             <button className="button-link button-link--accent" type="submit">この条件で見る</button>
             <Link href="/series" className="button-link">条件をクリア</Link>
           </div>
-        </form>
+          </form>
+        </details>
 
         <nav className="tabs catalog-filter-tabs" aria-label="発売状態">
           {releaseOptions.map((item) => (
