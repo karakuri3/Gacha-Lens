@@ -173,6 +173,14 @@ async function canStoreResponse(response, policy) {
 
 export default {
   async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (
+      url.hostname.endsWith(PREVIEW_HOST_SUFFIX) &&
+      url.pathname === "/__diag/async-safe-cache"
+    ) {
+      return handleAsyncSafeCacheDiagnostic(request, env, ctx);
+    }
+
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
 
@@ -192,3 +200,77 @@ export default {
     });
   },
 };
+
+async function handleAsyncSafeCacheDiagnostic(request, env, ctx) {
+  const url = new URL(request.url);
+  const target = url.searchParams.get("target") === "ranking" ? "ranking" : "category";
+  const targetPath = target === "ranking"
+    ? "/ranking?diag_async_cache=1"
+    : "/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3?diag_async_cache=1";
+
+  const cacheKeyUrl = new URL(request.url);
+  cacheKeyUrl.searchParams.delete("nonce");
+  const cacheKey = new Request(cacheKeyUrl.toString(), {
+    method: "GET",
+    headers: { accept: "text/html" },
+  });
+
+  const cached = await caches.default.match(cacheKey);
+  if (cached) {
+    const headers = new Headers(cached.headers);
+    headers.set("X-Gacha-Diag-Async-Cache", "HIT");
+    return new Response(cached.body, {
+      status: cached.status,
+      statusText: cached.statusText,
+      headers,
+    });
+  }
+
+  const targetRequest = new Request(new URL(targetPath, request.url), {
+    method: "GET",
+    headers: {
+      accept: "text/html",
+      "user-agent": request.headers.get("user-agent") || "gacha-async-cache-diagnostic",
+    },
+  });
+
+  const response = await handler.fetch(targetRequest, env, ctx);
+  const candidate = response.clone();
+
+  ctx.waitUntil(fillVerifiedDiagnosticCache(cacheKey, candidate));
+
+  const headers = new Headers(response.headers);
+  headers.set("X-Gacha-Diag-Async-Cache", "MISS");
+  headers.set("Cache-Control", "no-store, max-age=0");
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+async function fillVerifiedDiagnosticCache(cacheKey, response) {
+  if (response.status !== 200) return;
+  if (response.headers.has("set-cookie")) return;
+
+  const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+  if (!contentType.includes("text/html")) return;
+
+  const body = await response.text();
+  if (NON_CACHEABLE_HTML_MARKERS.some((marker) => body.includes(marker))) return;
+
+  const headers = new Headers(response.headers);
+  headers.delete("set-cookie");
+  headers.set("Cache-Control", "public, max-age=300");
+  headers.set("X-Gacha-Diag-Verified", "1");
+
+  await caches.default.put(
+    cacheKey,
+    new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    }),
+  );
+}
