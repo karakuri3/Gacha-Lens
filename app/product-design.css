@@ -485,3 +485,72 @@
     text-align: left;
   }
 }
+
+
+/* Mobile catalog controls: keep products above the fold without removing advanced search. */
+.catalog-filter-summary {
+  display: none;
+}
+
+@media (min-width: 721px) {
+  details.catalog-filter-shell:not([open]) > .catalog-filter-form {
+    display: grid;
+  }
+}
+
+@media (max-width: 720px) {
+  .catalog-filter-shell {
+    margin: 8px 0;
+  }
+
+  .catalog-filter-summary {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid #d8dde5;
+    border-radius: 6px;
+    background: #fff;
+    padding: 8px 10px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .catalog-filter-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .catalog-filter-summary::after {
+    content: "＋";
+    flex: 0 0 auto;
+    color: #6b7280;
+    font-size: 16px;
+    font-weight: 800;
+  }
+
+  .catalog-filter-shell[open] > .catalog-filter-summary::after {
+    content: "−";
+  }
+
+  .catalog-filter-summary span {
+    color: #1f2937;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .catalog-filter-summary small {
+    min-width: 0;
+    margin-left: auto;
+    overflow: hidden;
+    color: #7b8492;
+    font-size: 9px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .catalog-filter-shell > .catalog-filter-form {
+    margin-top: 6px;
+  }
+}
