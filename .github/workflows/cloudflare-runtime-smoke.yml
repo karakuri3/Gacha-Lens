@@ -1,6 +1,7 @@
 name: Cloudflare runtime smoke
 
 # Diagnostic baseline trigger: application code is byte-identical to main.
+# Fresh Preview repetition: main baseline round 2.
 
 on:
   workflow_dispatch:
