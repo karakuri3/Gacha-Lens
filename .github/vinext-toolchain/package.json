@@ -1,15 +1,15 @@
 {
-  "name": "gacha-lens-vinext-ci-toolchain",
+  "name": "gacha-lens-vinext-beta10-diagnostic",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
     "@cloudflare/vite-plugin": "1.54.8",
-    "@vinext/cloudflare": "1.0.0-beta.6",
+    "@vinext/cloudflare": "1.0.0-beta.8",
     "@vitejs/plugin-react": "6.1.1",
     "@vitejs/plugin-rsc": "0.5.34",
     "react-server-dom-webpack": "19.2.8",
-    "vinext": "1.0.0-beta.8",
+    "vinext": "1.0.0-beta.10",
     "vite": "8.2.2",
     "wrangler": "4.131.1"
   }
