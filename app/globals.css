@@ -2995,8 +2995,12 @@ button.button-link {
 
 @media (max-width: 640px) {
   .header-menu summary {
+    width: auto;
+    min-width: 74px;
     min-height: 34px;
+    justify-content: center;
     padding: 6px 8px;
     font-size: 11px;
+    white-space: nowrap;
   }
 }
