@@ -1,0 +1,95 @@
+/* R1 polish after real 1440/390/360 preview review.
+   Keep the first viewport focused on finding real objects, not a marketing hero. */
+
+.consumer-header {
+  backdrop-filter: none;
+  background: #fff;
+}
+
+.consumer-home-hero {
+  padding: 34px 0 28px;
+}
+
+.consumer-home-hero__copy {
+  max-width: 720px;
+}
+
+.consumer-home-hero h1 {
+  max-width: none;
+  font-size: clamp(30px, 3.2vw, 42px);
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+
+.consumer-home-hero__copy > p:last-child {
+  max-width: 720px;
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.consumer-home-quick {
+  margin-top: 24px;
+}
+
+.consumer-home-quick a {
+  min-height: 72px;
+}
+
+.consumer-home-section {
+  padding-top: 38px;
+}
+
+.consumer-home-section__head {
+  margin-bottom: 18px;
+}
+
+.consumer-home-section__head h2,
+.consumer-home-explore h2 {
+  font-size: 25px;
+}
+
+.consumer-home-explore {
+  margin-top: 46px;
+}
+
+@media (max-width: 720px) {
+  .consumer-home-hero {
+    padding: 24px 0 22px;
+  }
+
+  .consumer-home-hero h1 {
+    font-size: 28px;
+  }
+
+  .consumer-home-hero__copy > p:last-child {
+    margin-top: 8px;
+    font-size: 11px;
+    line-height: 1.65;
+  }
+
+  .consumer-home-quick {
+    margin-top: 18px;
+  }
+
+  .consumer-home-quick a {
+    min-height: 64px;
+  }
+
+  .consumer-home-section {
+    padding-top: 30px;
+  }
+
+  .consumer-home-section__head {
+    margin-bottom: 14px;
+  }
+
+  .consumer-home-section__head h2,
+  .consumer-home-explore h2 {
+    font-size: 20px;
+  }
+
+  .consumer-home-explore {
+    margin-top: 36px;
+  }
+}

@@ -6,48 +6,50 @@ import { fileURLToPath } from "node:url";
 const read = async (relative) => readFile(fileURLToPath(new URL(`../${relative}`, import.meta.url)), "utf8");
 
 test("Gacha Lens design contract is wired into the app", async () => {
-  const [contract, layout, page, card, seriesDetail, variantDetail, css, detailCss] = await Promise.all([
+  const [contract, layout, page, card, discoveryCard, seriesDetail, variantDetail, css, detailCss, consumerCss, polishCss] = await Promise.all([
     read("DESIGN.md"),
     read("app/layout.js"),
     read("app/page.js"),
     read("components/SeriesCard.js"),
+    read("components/DiscoverySeriesCard.js"),
     read("app/series/group/[slug]/page.js"),
     read("app/series/[slug]/page.js"),
     read("app/product-design.css"),
     read("app/product-detail-design.css"),
+    read("app/consumer-r1.css"),
+    read("app/consumer-r1-polish.css"),
   ]);
 
   assert.match(contract, /Collector Editorial — SELECTED/);
   assert.match(contract, /Object first/);
   assert.match(layout, /import "\.\/product-design\.css";/);
   assert.match(layout, /import "\.\/product-detail-design\.css";/);
+  assert.match(layout, /import "\.\/consumer-r1\.css";/);
+  assert.match(layout, /import "\.\/consumer-r1-polish\.css";/);
+  assert.doesNotMatch(layout, /AppSidebar/);
   assert.match(css, /font-variant-numeric:\s*tabular-nums/);
   assert.match(css, /\.dashboard-panel\s*\{[\s\S]*box-shadow:\s*none;/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 
-  // The global header already owns search. Home should move immediately into
-  // collector context + real objects instead of repeating a generic hero search.
+  // R1 moves the public shell away from a dashboard: global search stays in the
+  // header, while home goes directly into real series shelves and release context.
   assert.equal(page.includes("home-catalog-search"), false);
-  assert.equal(page.includes("TODAY&apos;S PICK"), false);
-  assert.match(page, /className="home-context-nav"/);
-
-  // Do not render empty market chrome just because a dashboard template has a slot.
-  assert.match(page, /highPriceItems\.length \?/);
-  assert.match(page, /upcoming\.length \?/);
-  assert.match(page, /stockMoves\.length \?/);
-  assert.match(page, /MarketEmptyState/);
-
-  // Stock/circulation UI must use the canonical fresh-signal flags produced by
-  // buildAvailabilitySummary. A stray latest_status field would admit rows that
-  // stockStatusLabel can only render as 未取得.
-  assert.match(page, /summary\.has_stock_signal \|\| summary\.has_restock_signal/);
-  assert.equal(page.includes("summary.latest_status"), false);
-
-  // Primary market anchors should not promote missing values as if they were evidence.
-  assert.match(page, /function rankingPrimaryEvidence/);
-  assert.match(page, /schedule !== "未定"/);
-  assert.match(page, /stock !== "未取得"/);
-  assert.match(page, /sellThrough !== "データ不足"/);
+  assert.equal(page.includes("consumer-home-search"), false);
+  assert.match(page, /新作ガチャを探す/);
+  assert.match(page, /getParentSeriesCatalogPage/);
+  assert.match(page, /DiscoverySeriesCard/);
+  assert.match(page, /month: currentMonth/);
+  assert.match(page, /month: nextMonth/);
+  assert.match(page, /release: "released"/);
+  assert.doesNotMatch(page, /getRankingSeries|PriceTrendChart|dashboard-panel|dashboard-ranking|dashboard-mini-table/);
+  assert.doesNotMatch(page, /CAPSULE TOY DISCOVERY|>DISCOVER<|>BROWSE</);
+  assert.match(discoveryCard, /<ProductImage/);
+  assert.match(discoveryCard, /item=\{item\}/);
+  assert.match(discoveryCard, /相場データ収集中/);
+  assert.match(consumerCss, /\.consumer-discovery-grid/);
+  assert.match(consumerCss, /object-fit:\s*contain/);
+  assert.match(polishCss, /Keep the first viewport focused on finding real objects/);
+  assert.match(polishCss, /backdrop-filter:\s*none/);
 
   // Catalog results are object/evidence records, not nested KPI-card grids.
   // The value is normalized before filtering so placeholder numerics such as
