@@ -152,6 +152,10 @@ jobs:
                 return 0
               fi
 
+              worker_reached="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-diag-worker-reached:/ {gsub("\\r", ""); print $2; exit}' "$headers")"
+              handler_ms="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-diag-handler-ms:/ {gsub("\\r", ""); print $2; exit}' "$headers")"
+              echo "$name boundary attempt $attempt: worker=${worker_reached:-absent} handler_ms=${handler_ms:-absent} HTTP $code" >> "$GITHUB_STEP_SUMMARY"
+
               if [[ "$attempt" -lt 3 ]]; then
                 case "$code" in
                   000|429|500|502|503|504)
@@ -164,6 +168,8 @@ jobs:
               fi
 
               echo "$name failed rc=$rc HTTP $code on attempt $attempt" >&2
+              echo 'Runtime boundary response headers:' >&2
+              grep -Ei '^(x-gacha-diag-worker-reached|x-gacha-diag-handler-ms|cf-ray|cf-cache-status|server|content-type):' "$headers" >&2 || true
               head -c 1000 "$body" >&2 || true
               exit 1
             done
