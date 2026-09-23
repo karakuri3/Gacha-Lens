@@ -96,3 +96,14 @@ test("series detail and sitemap cache contracts remain unchanged", () => {
   assert.match(source, /url\.hostname\.endsWith\(PREVIEW_HOST_SUFFIX\)/);
   assert.match(source, /url\.searchParams\.has\("cacheproof"\)/);
 });
+
+test("preview-only async cache diagnostic verifies full HTML before Cache API storage", () => {
+  assert.match(source, /\/__diag\/async-safe-cache/);
+  assert.match(source, /ctx\.waitUntil\(fillVerifiedDiagnosticCache\(cacheKey, candidate\)\)/);
+  assert.match(source, /await caches\.default\.match\(cacheKey\)/);
+  assert.match(source, /await response\.text\(\)/);
+  assert.match(source, /NON_CACHEABLE_HTML_MARKERS\.some\(\(marker\) => body\.includes\(marker\)\)/);
+  assert.match(source, /await caches\.default\.put/);
+  assert.match(source, /X-Gacha-Diag-Async-Cache/);
+  assert.match(source, /url\.hostname\.endsWith\(PREVIEW_HOST_SUFFIX\)/);
+});
