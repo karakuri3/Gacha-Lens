@@ -41,6 +41,23 @@ test("scoped detail data source limits signal reads to relevant variants plus se
   assert.doesNotMatch(scoped, /fetchTable\(/);
 });
 
+test("scoped related reads prefilter bounded franchise scopes before ordering variant candidates", () => {
+  const scoped = source("lib/data/supabase-public-variant-detail.js");
+  const related = scoped.slice(
+    scoped.indexOf("export async function fetchSupabaseScopedRelatedCatalog"),
+    scoped.indexOf("async function fetchSignalsForVariantScope")
+  );
+
+  assert.match(scoped, /const RELATED_SERIES_PREFILTER_LIMIT = 250/);
+  assert.match(related, /fetchRelatedFranchiseSeriesIds\(supabaseClient, parent\.franchise\)/);
+  assert.match(related, /candidateSeriesIds === null[\s\S]*?\.eq\("parent\.franchise", parent\.franchise\)/);
+  assert.match(related, /candidateSeriesIds\.length[\s\S]*?\.in\("series_id", candidateSeriesIds\)/);
+  assert.match(related, /else if \(parent\.brand\) candidates = candidates\.eq\("parent\.brand", parent\.brand\)/);
+  assert.match(related, /else if \(parent\.category\) candidates = candidates\.eq\("parent\.category", parent\.category\)/);
+  assert.match(scoped, /\.from\(TABLE_MAP\.series\)[\s\S]*?\.select\("id"\)[\s\S]*?\.eq\("franchise", franchise\)[\s\S]*?\.limit\(RELATED_SERIES_PREFILTER_LIMIT \+ 1\)/);
+  assert.match(scoped, /return ids\.length > RELATED_SERIES_PREFILTER_LIMIT \? null : ids/);
+});
+
 test("public scoped reads omit removable raw payload but retain verified set safety payload", () => {
   const scoped = source("lib/data/supabase-public-variant-detail.js");
   const publicSelect = scoped.match(/const MARKET_LISTING_PUBLIC_SELECT = "([^"]+)";/)?.[1] || "";
