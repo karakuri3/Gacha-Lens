@@ -32,6 +32,17 @@ jobs:
       - name: Install locked application dependencies
         run: npm ci
 
+      - name: Inspect published vinext compatibility metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "vinext candidate:"
+          npm view vinext@1.0.0-beta.10 version
+          echo "@vinext/cloudflare candidate:"
+          npm view @vinext/cloudflare@1.0.0-beta.8 version
+          echo "@vinext/cloudflare peer dependencies:"
+          npm view @vinext/cloudflare@1.0.0-beta.8 peerDependencies --json
+
       - name: Create isolated newer vinext toolchain
         shell: bash
         run: |
@@ -45,7 +56,7 @@ jobs:
             "type": "module",
             "dependencies": {
               "@cloudflare/vite-plugin": "1.54.8",
-              "@vinext/cloudflare": "1.0.0-beta.9",
+              "@vinext/cloudflare": "1.0.0-beta.8",
               "@vitejs/plugin-react": "6.1.1",
               "@vitejs/plugin-rsc": "0.5.34",
               "react-server-dom-webpack": "19.2.8",
@@ -152,7 +163,7 @@ jobs:
           git diff --exit-code -- package-lock.json
           echo "Worker artifact bytes:" >> "$GITHUB_STEP_SUMMARY"
           du -sb dist/server | tee -a "$GITHUB_STEP_SUMMARY"
-          echo "vinext 1.0.0-beta.10 / @vinext/cloudflare 1.0.0-beta.9 compile-only diagnostic: PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "vinext 1.0.0-beta.10 / @vinext/cloudflare 1.0.0-beta.8 compile-only diagnostic: PASS" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload diagnostic lock and logs
         if: always()
