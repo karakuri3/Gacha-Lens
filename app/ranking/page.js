@@ -7,6 +7,7 @@ import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
   customerTags,
+  formatYen,
   hasPriceRankingEvidence,
   opportunityScore,
   releasedPriorityScore,
@@ -61,6 +62,9 @@ export default async function RankingPage({ searchParams }) {
 
   const podium = arrangePodium(ranked.slice(0, 3));
   const rest = ranked.slice(3);
+  const listingWatch = tab === "released" && ranked.length === 0
+    ? buildListingWatch(series, scope).slice(0, 30)
+    : [];
 
   return (
     <main className="site-main">
@@ -113,11 +117,29 @@ export default async function RankingPage({ searchParams }) {
           ))}
         </section>
         {ranked.length === 0 ? (
-          <div className="card empty">
+          <div className="card empty ranking-empty-state">
             {tab === "released"
-              ? `価格や在庫の動きを確認できる${scope === "variant" ? "単品" : "シリーズ"}がまだありません。観測データが入り次第更新します。`
+              ? "成約価格が3件以上確認できた商品だけを相場ランキングに掲載します。現在は条件を満たす商品がないため、順位は表示していません。"
               : `現在、発売予定として確認できる${scope === "variant" ? "単品" : "シリーズ"}がありません。`}
           </div>
+        ) : null}
+
+        {listingWatch.length ? (
+          <section className="listing-watch" aria-labelledby="listing-watch-title">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">CURRENT LISTINGS</p>
+                <h2 id="listing-watch-title" className="section-title">出品価格ウォッチ</h2>
+                <p className="section-sub">現在確認できる出品価格です。売れた価格ではないため、相場ランキングとは分けて表示しています。</p>
+              </div>
+              <span className="listing-watch__count">{listingWatch.length.toLocaleString("ja-JP")}件表示</span>
+            </div>
+            <div className="listing-watch__list">
+              {listingWatch.map((entry) => (
+                <ListingWatchRow key={entry.item.slug || entry.item.id} entry={entry} scope={scope} />
+              ))}
+            </div>
+          </section>
         ) : null}
       </div>
     </main>
@@ -152,6 +174,34 @@ function RankingRow({ item, mode, scope }) {
         <PublicTags item={item} isReleased={mode === "released"} compact />
       </div>
       <MetricGrid metrics={getMetrics(item, mode)} />
+    </Link>
+  );
+}
+
+function ListingWatchRow({ entry, scope }) {
+  const { item, prices, listingCount, observedAt } = entry;
+  const priceText = prices.length > 1 && prices[0] !== prices[prices.length - 1]
+    ? `${formatYen(prices[0])}〜${formatYen(prices[prices.length - 1])}`
+    : formatYen(prices[0]);
+
+  return (
+    <Link href={scope === "series" ? seriesHref(item) : variantHref(item)} className="card listing-watch-row">
+      <div className="product-image">
+        <ProductImage
+          item={scope === "series" ? undefined : item}
+          src={item.image_url}
+          fallbackSrc={scope === "series" ? "" : item.series_image_url}
+          imageScope={scope === "series" ? "series" : item.image_scope}
+          alt={item.name}
+          emptyLabel={scope === "series" ? "シリーズ画像なし" : "画像なし"}
+        />
+      </div>
+      <ProductTitle item={item} scope={scope} />
+      <dl className="listing-watch-row__facts">
+        <div><dt>出品価格</dt><dd>{priceText}</dd></div>
+        <div><dt>確認数</dt><dd>{listingCount}件</dd></div>
+        <div><dt>最終確認</dt><dd>{formatObservedDate(observedAt)}</dd></div>
+      </dl>
     </Link>
   );
 }
@@ -198,6 +248,34 @@ function getMetrics(item, mode) {
   return metrics
     .filter((metric) => mode !== "released" || !["未取得", "データ不足"].includes(metric.value))
     .slice(0, 6);
+}
+
+function buildListingWatch(items = [], scope = "variant") {
+  return items
+    .map((item) => {
+      const active = (item.market_listings ?? [])
+        .filter((listing) => listing?.status === "active" && Number.isFinite(Number(listing?.price)) && Number(listing.price) > 0);
+      if (!active.length) return null;
+      const prices = [...new Set(active.map((listing) => Number(listing.price)))].sort((a, b) => a - b);
+      const observedAt = active
+        .map((listing) => listing.last_observed_at || listing.listed_at || listing.updated_at || listing.created_at || "")
+        .filter(Boolean)
+        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || "";
+      return { item, prices, listingCount: active.length, observedAt, scope };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      const recency = new Date(b.observedAt || 0).getTime() - new Date(a.observedAt || 0).getTime();
+      if (recency !== 0) return recency;
+      if (b.listingCount !== a.listingCount) return b.listingCount - a.listingCount;
+      return a.item.name.localeCompare(b.item.name, "ja");
+    });
+}
+
+function formatObservedDate(value) {
+  const time = new Date(value || "").getTime();
+  if (!Number.isFinite(time)) return "日時未取得";
+  return new Intl.DateTimeFormat("ja-JP", { year: "numeric", month: "numeric", day: "numeric" }).format(new Date(time));
 }
 
 function arrangePodium(items) {
