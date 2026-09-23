@@ -209,13 +209,24 @@ async function handleAsyncSafeCacheDiagnostic(request, env, ctx) {
     : "/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3?diag_async_cache=1";
 
   const cacheKeyUrl = new URL(request.url);
-  cacheKeyUrl.searchParams.delete("nonce");
+  cacheKeyUrl.search = "";
+  cacheKeyUrl.searchParams.set("target", target);
   const cacheKey = new Request(cacheKeyUrl.toString(), {
     method: "GET",
     headers: { accept: "text/html" },
   });
 
   const cached = await caches.default.match(cacheKey);
+  if (url.searchParams.get("mode") === "status") {
+    return Response.json(
+      {
+        target,
+        cached: Boolean(cached),
+        verified: cached?.headers.get("X-Gacha-Diag-Verified") === "1",
+      },
+      { headers: { "Cache-Control": "no-store, max-age=0" } },
+    );
+  }
   if (cached) {
     const headers = new Headers(cached.headers);
     headers.set("X-Gacha-Diag-Async-Cache", "HIT");
