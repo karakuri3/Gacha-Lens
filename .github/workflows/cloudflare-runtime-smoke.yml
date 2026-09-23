@@ -1,6 +1,7 @@
 name: Cloudflare runtime smoke
 
 # Diagnostic control trigger: application code equals PR #378 head.
+# Fresh Preview repetition: #378 control round 2.
 
 on:
   workflow_dispatch:
