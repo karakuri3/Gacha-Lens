@@ -86,6 +86,21 @@ test("candidate set and digest are deterministic regardless of input order", () 
   assert.equal(second.candidate_set_sha256, expected);
 });
 
+
+test("candidate ordering is stable UTF-8 byte order for non-ASCII IDs", () => {
+  const values = [
+    record({ variant: { id: "variant-😀" } }),
+    record({ variant: { id: "variant-あ" } }),
+    record({ variant: { id: "variant-é" } }),
+  ];
+  const report = buildVariantParentImageConflictAudit({ schema_version: 1, records: values });
+  assert.deepEqual(report.candidates.map((item) => item.variant_id), [
+    "variant-é",
+    "variant-あ",
+    "variant-😀",
+  ]);
+});
+
 test("identity mismatches fail closed", () => {
   const result = classifyVariantParentImageConflict(record({
     variant: { series_id: "series-other" },
