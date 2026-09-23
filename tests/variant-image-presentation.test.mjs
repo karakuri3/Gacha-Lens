@@ -217,13 +217,15 @@ test("cards and detail routes use presentation data without changing canonical i
   const detail = source("app/series/[slug]/page.js");
   const group = source("app/series/group/[slug]/page.js");
 
-  assert.match(card, /fallbackSrc=\{isSeries \? "" : series\.series_image_url\}/);
+  assert.match(card, /series\.image_scope === "series_fallback" \? ""/);
+  assert.match(card, /fallbackSrc=""/);
   assert.match(card, /imageScope=\{isSeries \? "series" : series\.image_scope\}/);
   assert.match(detail, /image: item\.variant_image_url \? absoluteSiteUrl\(item\.variant_image_url\) : undefined/);
   assert.match(detail, /<ProductImage item=\{item\}/);
-  assert.match(detail, /entry\.image_scope === "series_fallback"/);
-  assert.match(group, /variant\.image_scope === "series_fallback"/);
-  assert.match(source("app/globals.css"), /lineup-grid__series-fallback/);
+  assert.match(detail, /entry\.image_scope === "series_fallback" \? ""/);
+  assert.match(group, /variant\.image_scope === "series_fallback" \? ""/);
+  assert.doesNotMatch(detail, /lineup-grid__series-fallback/);
+  assert.doesNotMatch(group, /lineup-grid__series-fallback/);
 });
 
 test("public listing surfaces request display presentation while category and parent-series visuals remain series scoped", () => {
