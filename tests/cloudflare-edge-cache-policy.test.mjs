@@ -96,3 +96,15 @@ test("series detail and sitemap cache contracts remain unchanged", () => {
   assert.match(source, /url\.hostname\.endsWith\(PREVIEW_HOST_SUFFIX\)/);
   assert.match(source, /url\.searchParams\.has\("cacheproof"\)/);
 });
+
+test("preview-only async verified KV cache stores only fully verified HTML", () => {
+  assert.match(source, /\/__diag\/async-verified-kv/);
+  assert.match(source, /url\.hostname\.endsWith\(PREVIEW_HOST_SUFFIX\)/);
+  assert.match(source, /env\?\.VINEXT_KV_CACHE/);
+  assert.match(source, /ctx\.waitUntil\(storeVerifiedHtmlInKv\(kv, cacheKey, candidate\)\)/);
+  assert.match(source, /await response\.text\(\)/);
+  assert.match(source, /NON_CACHEABLE_HTML_MARKERS\.some\(\(marker\) => body\.includes\(marker\)\)/);
+  assert.match(source, /await kv\.put\(cacheKey, body, \{ expirationTtl: 300 \}\)/);
+  assert.match(source, /X-Gacha-Diag-Async-KV/);
+  assert.match(source, /Cache-Control": "no-store, max-age=0"/);
+});
