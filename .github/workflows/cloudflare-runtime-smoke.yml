@@ -330,3 +330,5 @@ jobs:
           done
           [[ "$missing" == "0" ]]
           echo 'Security-header presence is equivalent to or broader than current Production for the audited header set.' >> "$GITHUB_STEP_SUMMARY"
+
+# diagnostic trigger: current-main runtime control v2
