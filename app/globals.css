@@ -2979,3 +2979,123 @@ button.button-link {
   .price-history-table td:nth-child(5)::before { content: "観測件数"; }
   .price-history-table td:nth-child(6)::before { content: "売れた数"; }
 }
+
+
+/* Ranking fallback: current asking prices are useful context, but never masquerade as sold-price ranking. */
+.ranking-empty-state {
+  margin-top: 10px;
+  border-style: dashed;
+}
+
+.listing-watch {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.listing-watch .section-head {
+  margin-bottom: 0;
+}
+
+.listing-watch__count {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.listing-watch__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.listing-watch-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  grid-template-areas:
+    "image identity"
+    "image facts";
+  align-items: start;
+  gap: 8px 12px;
+  padding: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.listing-watch-row .product-image {
+  grid-area: image;
+  width: 82px;
+}
+
+.listing-watch-row > div:nth-child(2) {
+  grid-area: identity;
+  min-width: 0;
+}
+
+.listing-watch-row .product-name {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.listing-watch-row__facts {
+  grid-area: facts;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.listing-watch-row__facts div {
+  min-width: 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.listing-watch-row__facts dt {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.listing-watch-row__facts dd {
+  overflow: hidden;
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .listing-watch {
+    margin-top: 18px;
+  }
+
+  .listing-watch__list {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .listing-watch-row {
+    grid-template-columns: 68px minmax(0, 1fr);
+    gap: 6px 9px;
+    padding: 8px;
+  }
+
+  .listing-watch-row .product-image {
+    width: 68px;
+  }
+
+  .listing-watch-row .product-name {
+    font-size: 13px;
+  }
+
+  .listing-watch-row__facts {
+    gap: 4px;
+  }
+
+  .listing-watch-row__facts dd {
+    font-size: 10px;
+  }
+}
