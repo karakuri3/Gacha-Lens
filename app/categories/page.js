@@ -10,8 +10,8 @@ export const metadata = buildPageMetadata({
   path: "/categories",
 });
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const dynamic = "force-static";
+export const revalidate = 86400;
 
 export default async function CategoriesPage() {
   const categories = await getParentSeriesCategoryCatalog();
