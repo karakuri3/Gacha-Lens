@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import {
   buildManualMarketBoundedFailureDiagnostic,
@@ -58,6 +61,34 @@ test("approval and nonce cannot be workflow inputs or CLI arguments", () => {
 
 test("secret scan receives the approval Secret", () => {
   assert.match(stepBlock("Scan sanitized manual bounded artifact"), /secrets\.AUTOMATIC_INGESTION_BOUNDED_APPROVAL/);
+});
+
+test("manual secret scan ignores public marketplace IDs but still detects manual approval values", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "manual-bounded-secret-scan-"));
+  const publicId = "public-rakuten-application-id-123456789";
+  const approval = "APPROVE_MARKET_BOUNDED_MANUAL:" + "d".repeat(64) + ":" + "a".repeat(40) + ":" + "b".repeat(32);
+  const fixture = path.join(directory, "artifact.json");
+  fs.writeFileSync(fixture, JSON.stringify({ marketplace_id: publicId }), "utf8");
+
+  const baseEnv = {
+    PATH: process.env.PATH ?? "",
+    RAKUTEN_APPLICATION_ID: publicId,
+    AUTOMATIC_INGESTION_BOUNDED_APPROVAL: approval,
+  };
+  const args = [
+    "scripts/manual-market-bounded-persistence.mjs",
+    "scan",
+    `--output-dir=${directory}`,
+    `--directories=${directory}`,
+  ];
+
+  const safe = spawnSync(process.execPath, args, { cwd: process.cwd(), env: baseEnv, encoding: "utf8" });
+  assert.equal(safe.status, 0, safe.stderr || safe.stdout);
+
+  fs.writeFileSync(fixture, JSON.stringify({ approval }), "utf8");
+  const leaked = spawnSync(process.execPath, args, { cwd: process.cwd(), env: baseEnv, encoding: "utf8" });
+  assert.notEqual(leaked.status, 0);
+  assert.match(`${leaked.stdout}\n${leaked.stderr}`, /secret scan failed/i);
 });
 
 test("all allowlisted checkpoints are accepted with stable reason codes", () => {

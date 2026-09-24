@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  collectAutomaticIngestionSecretValues,
   evaluateAutomaticIngestionThrottle,
   findAutomaticIngestionRolloutSecretLeaks,
   loadAutomaticIngestionRolloutPolicy,
@@ -270,9 +271,13 @@ function scan() {
   const directories = required(options.directories, "--directories").split(",").map((entry) => path.resolve(entry));
   const files = directories.flatMap(listFiles).map((file) => ({ name: path.basename(file), text: fs.readFileSync(file, "utf8") }));
   if (!files.length) throw new Error("Manual bounded artifact files are missing.");
-  const secretValues = Object.entries(process.env)
-    .filter(([name]) => /(?:KEY|TOKEN|SECRET|PASSWORD|APPLICATION_ID|AFFILIATE_ID|APPROVAL|NONCE)$/i.test(name))
-    .map(([, value]) => value).filter(Boolean);
+  const secretValues = [
+    ...collectAutomaticIngestionSecretValues(process.env),
+    ...Object.entries(process.env)
+      .filter(([name]) => /(?:APPROVAL|NONCE)$/i.test(name))
+      .map(([, value]) => String(value ?? ""))
+      .filter(Boolean),
+  ];
   const findings = findAutomaticIngestionRolloutSecretLeaks(files, secretValues);
   if (findings.length) throw new Error(`Manual bounded artifact secret scan failed for ${findings.length} file(s).`);
   const report = { schema_version: 1, files_scanned: files.length, secret_findings: 0 };
