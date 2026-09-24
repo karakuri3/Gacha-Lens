@@ -310,14 +310,26 @@ test("shadow report omits titles and URLs", () => {
 });
 test("shadow markdown says would-write is not approval", () => assert.match(renderAutomaticIngestionShadowReportMarkdown(buildReport()), /predictions, not approvals/));
 test("secret scan catches actual secret", () => assert.deepEqual(findAutomaticIngestionRolloutSecretLeaks([{ name: "x", text: "private-value-123" }], ["private-value-123"]), ["x"]));
-test("secret scan collects Yahoo affiliate tracking configuration", () => {
-  const value = "fake-once-encoded-valuecommerce-prefix";
+test("secret scan excludes public marketplace tracking identifiers but retains private credentials", () => {
+  const publicValues = {
+    RAKUTEN_APPLICATION_ID: "public-rakuten-application-12345",
+    RAKUTEN_AFFILIATE_ID: "public-rakuten-affiliate-12345",
+    YAHOO_SHOPPING_APP_ID: "public-yahoo-app-12345",
+    YAHOO_AFFILIATE_TRACKING_ID: "public-yahoo-tracking-12345",
+  };
+  const privateValue = "private-rakuten-access-12345";
   const values = collectAutomaticIngestionSecretValues({
-    YAHOO_AFFILIATE_TRACKING_ID: value,
+    ...publicValues,
+    RAKUTEN_ACCESS_KEY: privateValue,
     ORDINARY_SETTING: "not-sensitive",
   });
-  assert.deepEqual(values, [value]);
-  assert.deepEqual(findAutomaticIngestionRolloutSecretLeaks([{ name: "artifact.json", text: value }], values), ["artifact.json"]);
+  assert.deepEqual(values, [privateValue]);
+  assert.deepEqual(findAutomaticIngestionRolloutSecretLeaks([
+    { name: "public-artifact.json", text: Object.values(publicValues).join(" ") },
+  ], values), []);
+  assert.deepEqual(findAutomaticIngestionRolloutSecretLeaks([
+    { name: "private-artifact.json", text: privateValue },
+  ], values), ["private-artifact.json"]);
 });
 test("secret scan allows ordinary product wording", () => assert.deepEqual(findAutomaticIngestionRolloutSecretLeaks([{ name: "x", text: "Secret character" }]), []));
 
@@ -341,6 +353,9 @@ test("simulation fixes write-disabled environment", () => {
   assert.match(simulationWorkflow, /INGESTION_WRITE_DISABLED:\s*"true"/);
   assert.match(simulationWorkflow, /MARKET_BACKFILL_WRITE_DISABLED:\s*"true"/);
   assert.match(simulationWorkflow, /AUTOMATIC_INGESTION_WRITE_ENABLED:\s*"false"/);
+});
+test("simulation exposes the selected stage to bounded source budgeting", () => {
+  assert.match(simulationWorkflow, /AUTOMATIC_INGESTION_ROLLOUT_STAGE:\s*\$\{\{ inputs\.stage \}\}/);
 });
 for (const command of ["db:upsert-all", "canary-write", "db:cleanup", "cleanup-provisional", "migration"]) {
   test(`simulation excludes ${command}`, () => assert.doesNotMatch(simulationWorkflow, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))));

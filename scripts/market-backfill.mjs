@@ -18,6 +18,8 @@ import {
 } from "../lib/domain/market-canary-write.js";
 import { applyMarketCandidateSafety, summarizeFetchedMarketCandidates } from "../lib/domain/market-match-safety.js";
 import { buildSanitizedMarketRequestDiagnostics } from "../lib/domain/market-request-diagnostics.js";
+import { buildMarketBoundedFetcherOptions } from "../lib/domain/market-bounded-source-budget.js";
+import { loadAutomaticIngestionRolloutPolicy } from "../lib/domain/automatic-ingestion-rollout.js";
 import {
   buildApprovedCanaryQueryPlan,
   sanitizeCanaryQueryReplay,
@@ -97,6 +99,7 @@ async function runDryMode(options) {
     queryCount: plan.queries.length,
     queryAttemptCount,
   });
+  const boundedFetcherOptions = resolveBoundedFetcherOptions(sourcePlan);
   let sourceResult = emptySourceResult(plan.selected.length, sourcePlan);
   let auditRecords = [];
 
@@ -106,6 +109,7 @@ async function runDryMode(options) {
       catalog: data.catalog,
       queries: plan.queries,
       sourceScope: options.sourceScope,
+      ...boundedFetcherOptions,
     }));
     const assessed = assessFetchedRecords(fetched, plan, data.catalog);
     sourceResult = assessed.summary;
@@ -427,6 +431,21 @@ function emptySourceResult(selectedCount, sourcePlan) {
     duplicate_listings: 0,
     no_result_variants: selectedCount,
   };
+}
+
+function resolveBoundedFetcherOptions(sourcePlan) {
+  const stage = process.env.AUTOMATIC_INGESTION_ROLLOUT_STAGE;
+  const fixedStage = process.env.FIXED_ROLLOUT_STAGE;
+  const effectiveStage = String(fixedStage || stage || "").trim();
+  if (effectiveStage !== "market-bounded") return {};
+
+  const { policy } = loadAutomaticIngestionRolloutPolicy("config/automatic-ingestion-rollout-policy.json");
+  return buildMarketBoundedFetcherOptions({
+    stage,
+    fixedStage,
+    discoveryRequests: sourcePlan.plannedSourceRequests?.planner_api?.discovery_requests,
+    maxCandidates: policy.stages["market-bounded"].max_candidates,
+  });
 }
 
 function sourceSummary(fetched) {
