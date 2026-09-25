@@ -1,4 +1,5 @@
 import handler from "vinext/server/fetch-handler";
+import { getLegacyRankingRedirectPath } from "../lib/domain/ranking-routes.js";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const NON_CACHEABLE_HTML_MARKERS = ["商品情報を取得できません"];
@@ -49,6 +50,9 @@ const DISCOVERY_DOCUMENT_PATHS = new Set([
 const PUBLIC_DOCUMENT_PATHS = new Set([
   "/",
   "/ranking",
+  "/ranking/series",
+  "/ranking/upcoming",
+  "/ranking/upcoming/series",
   "/restocks",
   "/stock",
   "/schedule",
@@ -153,6 +157,17 @@ function getEdgeCachePolicy(request) {
   return null;
 }
 
+function getLegacyRankingRedirect(request) {
+  if (!["GET", "HEAD"].includes(request.method)) return null;
+
+  const url = new URL(request.url);
+  const redirectPath = getLegacyRankingRedirectPath(url);
+  if (!redirectPath) return null;
+
+  const target = new URL(redirectPath, url.origin);
+  return Response.redirect(target.toString(), 308);
+}
+
 async function canStoreResponse(response, policy) {
   if (!policy || response.status !== 200) return false;
   if (response.headers.has("set-cookie")) return false;
@@ -173,6 +188,9 @@ async function canStoreResponse(response, policy) {
 
 export default {
   async fetch(request, env, ctx) {
+    const legacyRankingRedirect = getLegacyRankingRedirect(request);
+    if (legacyRankingRedirect) return legacyRankingRedirect;
+
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
 

@@ -17,6 +17,9 @@ export default async function sitemap() {
   const staticPages = [
     { path: "/", frequency: "daily", priority: 1 },
     { path: "/ranking", frequency: "daily", priority: 0.9 },
+    { path: "/ranking/series", frequency: "daily", priority: 0.85 },
+    { path: "/ranking/upcoming", frequency: "daily", priority: 0.85 },
+    { path: "/ranking/upcoming/series", frequency: "daily", priority: 0.8 },
     { path: "/schedule", frequency: "daily", priority: 0.9 },
     { path: "/series", frequency: "daily", priority: 0.9 },
     { path: "/guides", frequency: "weekly", priority: 0.7 },
