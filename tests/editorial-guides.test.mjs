@@ -94,7 +94,7 @@ test("sitemap includes the guide hub and every published guide below the existin
 test("public navigation links to guides without adding an unimplemented menu item", () => {
   assert.match(source("components/Footer.js"), /href="\/guides"/);
   assert.match(source("app/series/page.js"), /href="\/guides"/);
-  assert.match(source("app/ranking/page.js"), /href="\/guides\/forecast-ranking"/);
+  assert.match(source("components/RankingPageContent.js"), /href="\/guides\/forecast-ranking"/);
   assert.match(source("app/schedule/page.js"), /href="\/guides\/forecast-ranking"/);
   assert.match(source("app/restocks/page.js"), /href="\/guides\/stock-restock"/);
 });
@@ -140,7 +140,7 @@ test("guide copy avoids guarantee language and made-up calls to action", () => {
 test("guides remain independent from ranking and forecast source code", () => {
   const guideData = source("lib/domain/editorial-guides.js");
   assert.doesNotMatch(guideData, /FORECAST_WEIGHTS|releasedPriorityScore|opportunityScore|trend_score/);
-  assert.doesNotMatch(source("app/ranking/page.js"), /editorial-guides|affiliate|commission/i);
+  assert.doesNotMatch(source("components/RankingPageContent.js"), /editorial-guides|affiliate|commission/i);
 });
 
 test("guide content stays original across the four routes", () => {

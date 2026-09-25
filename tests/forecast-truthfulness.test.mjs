@@ -227,7 +227,7 @@ test("legacy positive sample fixtures remain renderable only when no explicit ev
 });
 
 test("upcoming public ranking has a positive forecast gate, so metadata-only null scores are not ranked", async () => {
-  const source = await readFile(path.join(repositoryRoot, "app/ranking/page.js"), "utf8");
+  const source = await readFile(path.join(repositoryRoot, "components/RankingPageContent.js"), "utf8");
   const metadataForecast = calculateUpcomingVariantForecast({ variant: metadataVariant() });
 
   assert.equal(metadataForecast.total, null);
