@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { categoryDiscoveryLookupCandidates } from "@/lib/domain/category-discovery";
 import { normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
-import { getPublicDiscoveryFacetSeriesPage } from "@/lib/series";
+import { getTargetedPublicDiscoverySeriesPage } from "@/lib/targeted-discovery-series-page";
 import { getTargetedPublicCategorySeriesPage } from "@/lib/targeted-category-series-page";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export async function GET(request) {
       if (result) break;
     }
   } else {
-    result = await getPublicDiscoveryFacetSeriesPage(type, rawName, { page, pageSize: 60 });
+    result = await getTargetedPublicDiscoverySeriesPage(type, rawName, { page, pageSize: 60 });
   }
 
   if (!result) {
