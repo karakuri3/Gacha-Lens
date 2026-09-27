@@ -1,5 +1,6 @@
 import handler from "vinext/server/fetch-handler";
 import { getLegacyCategoryDiscoveryPageRedirectPath } from "../lib/domain/category-discovery.js";
+import { getLegacyDiscoveryFacetPageRedirectPath } from "../lib/domain/discovery-facets.js";
 import { getLegacyRankingRedirectPath } from "../lib/domain/ranking-routes.js";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
@@ -89,7 +90,7 @@ function isPublicCacheCandidate(request) {
 
 function isDiscoveryDocumentPath(pathname) {
   if (DISCOVERY_DOCUMENT_PATHS.has(pathname)) return true;
-  return /^\/(?:brands|franchises)\/[^/]+$/.test(pathname)
+  return /^\/(?:brands|franchises)\/[^/]+(?:\/page\/[1-9]\d*)?$/.test(pathname)
     || /^\/categories\/[^/]+(?:\/page\/[1-9]\d*)?$/.test(pathname);
 }
 
@@ -170,6 +171,17 @@ function getLegacyCategoryDiscoveryPageRedirect(request) {
   return Response.redirect(target.toString(), 308);
 }
 
+function getLegacyDiscoveryFacetPageRedirect(request) {
+  if (!["GET", "HEAD"].includes(request.method)) return null;
+
+  const url = new URL(request.url);
+  const redirectPath = getLegacyDiscoveryFacetPageRedirectPath(url);
+  if (!redirectPath) return null;
+
+  const target = new URL(redirectPath, url.origin);
+  return Response.redirect(target.toString(), 308);
+}
+
 function getLegacyRankingRedirect(request) {
   if (!["GET", "HEAD"].includes(request.method)) return null;
 
@@ -203,6 +215,9 @@ export default {
   async fetch(request, env, ctx) {
     const legacyCategoryRedirect = getLegacyCategoryDiscoveryPageRedirect(request);
     if (legacyCategoryRedirect) return legacyCategoryRedirect;
+
+    const legacyDiscoveryFacetRedirect = getLegacyDiscoveryFacetPageRedirect(request);
+    if (legacyDiscoveryFacetRedirect) return legacyDiscoveryFacetRedirect;
 
     const legacyRankingRedirect = getLegacyRankingRedirect(request);
     if (legacyRankingRedirect) return legacyRankingRedirect;

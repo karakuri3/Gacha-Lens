@@ -16,5 +16,5 @@ test("invalid discovery page values normalize to the final public page", () => {
 
 test("discovery page hrefs omit the first-page query and keep later pages canonical", () => {
   assert.equal(discoveryFacetPageHref("franchise", "Title", 1), "/franchises/Title");
-  assert.equal(discoveryFacetPageHref("brand", "Maker", 2), "/brands/Maker?page=2");
+  assert.equal(discoveryFacetPageHref("brand", "Maker", 2), "/brands/Maker/page/2");
 });
