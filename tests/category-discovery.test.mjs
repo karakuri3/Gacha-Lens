@@ -112,17 +112,19 @@ test("category route helpers preserve Japanese, literal percent signs, spaces, a
   assert.equal(discoveryFacetHref("category", "\u30df\u30cb\u30c1\u30e5\u30a2"), "/categories/%E3%83%9F%E3%83%8B%E3%83%81%E3%83%A5%E3%82%A2");
 });
 
-test("category pages use parent-series filtering, canonical metadata, and static path pagination", () => {
-  const text = source("app/categories/[name]/page.js");
-  const helper = source("lib/static-discovery-facets.js");
-  assert.match(text, /resolveDiscoveryFacetStaticPage\("category"/);
-  assert.match(helper, /getTargetedPublicCategorySeriesPage/);
-  assert.match(text, /if \(!result\) notFound\(\)/);
-  assert.match(helper, /DISCOVERY_FACET_PAGE_SIZE = 60/);
-  assert.match(text, /noIndex: page > 1/);
-  assert.match(text, /categoryDiscoveryPageHref/);
-  assert.match(text, /buildPageMetadata/);
-  assert.doesNotMatch(text, /offers|aggregateRating|review:/);
+test("category pages use a DB-free static shell with canonical path pagination", () => {
+  const first = source("app/categories/[name]/page.js");
+  const paged = source("app/categories/[name]/page/[page]/page.js");
+  const api = source("app/api/public-discovery/route.js");
+  assert.match(first, /CategoryDiscoveryClientLanding/);
+  assert.match(first, /getStaticCategoryParams/);
+  assert.doesNotMatch(first, /getTargetedPublicCategorySeriesPage|searchParams/);
+  assert.match(paged, /getStaticCategoryPaginationParams/);
+  assert.match(paged, /noIndex: true/);
+  assert.match(paged, /categoryDiscoveryPageHref/);
+  assert.match(api, /getTargetedPublicCategorySeriesPage/);
+  assert.match(api, /pageSize: 60/);
+  assert.doesNotMatch(first, /offers|aggregateRating|review:/);
 });
 
 test("category discovery uses a targeted parent series query without sitemap cache agreement", () => {
