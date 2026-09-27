@@ -1,6 +1,6 @@
 import Link from "next/link";
 import SeriesCard from "@/components/SeriesCard";
-import { getParentSeriesCategoryCatalog, getParentSeriesCatalogPage, getRankingSeries, getSeriesCatalogCounts, getSeriesCatalogPage } from "@/lib/series";
+import { getParentSeriesCategoryCatalog, getParentSeriesCatalogPage, getRankingSeries, getSeriesCatalogPage } from "@/lib/series";
 import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display-clean";
 import {
   buildCatalogHref,
@@ -47,12 +47,11 @@ export default async function SeriesPage({ searchParams }) {
   const query = parseCatalogQuery(await searchParams);
   const useSignalCatalog = Boolean(query.legacyMode);
   const signalMode = query.release === "upcoming" ? "upcoming" : "released";
-  const [signalItems, catalogPage, catalogCounts, categories] = await Promise.all([
+  const [signalItems, catalogPage, categories] = await Promise.all([
     useSignalCatalog ? getRankingSeries(signalMode, query.scope) : Promise.resolve([]),
     useSignalCatalog
       ? Promise.resolve(null)
       : (query.scope === "series" ? getParentSeriesCatalogPage : getSeriesCatalogPage)({ ...query, pageSize: PAGE_SIZE }),
-    getSeriesCatalogCounts(),
     getParentSeriesCategoryCatalog(),
   ]);
 
@@ -70,7 +69,6 @@ export default async function SeriesPage({ searchParams }) {
   const displayStart = totalCount ? startIndex + 1 : 0;
   const displayEnd = startIndex + visibleItems.length;
   const entityLabel = query.scope === "series" ? "シリーズ" : "単品";
-  const showGlobalCounts = query.scope === "variant" && !query.q && !query.category && !query.month && !query.legacyMode;
 
   return (
     <main className="site-main">
@@ -144,7 +142,6 @@ export default async function SeriesPage({ searchParams }) {
               aria-current={query.release === item.value ? "page" : undefined}
             >
               {item.label}
-              {showGlobalCounts && Number.isFinite(catalogCounts?.[item.value]) ? <span>{catalogCounts[item.value].toLocaleString("ja-JP")}</span> : null}
             </Link>
           ))}
         </nav>
