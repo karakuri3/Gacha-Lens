@@ -69,7 +69,7 @@ test("facet lookup and URL encoding are deterministic", () => {
   assert.equal(discoveryFacetHref("franchise", facets[0].name), `/franchises/${encodeURIComponent(facets[0].name)}`);
   assert.equal(decodeDiscoveryFacetParam(decodeURIComponent(encodeURIComponent(facets[0].name))), facets[0].name);
   assert.equal(discoveryFacetPageHref("franchise", facets[0].name), discoveryFacetHref("franchise", facets[0].name));
-  assert.equal(discoveryFacetPageHref("franchise", facets[0].name, 2), `${discoveryFacetHref("franchise", facets[0].name)}?page=2`);
+  assert.equal(discoveryFacetPageHref("franchise", facets[0].name, 2), `${discoveryFacetHref("franchise", facets[0].name)}/page/2`);
 });
 
 test("decoded facet params preserve literal percent signs, spaces, ampersands, plus signs, and slashes", () => {
@@ -156,12 +156,14 @@ test("targeted discovery fetch applies exact franchise and brand filters with pu
   assert.match(text, /Math\.min\(60, Number\(options\.pageSize\) \|\| 60\)/);
 });
 
-test("discovery routes publish canonical metadata and reject non-indexable facets", () => {
+test("discovery routes publish canonical metadata and retain targeted facet reads through the static helper", () => {
+  const helper = source("lib/static-discovery-facets.js");
+  assert.match(helper, /getPublicDiscoveryFacetSeriesPage/);
+  assert.match(helper, /DISCOVERY_FACET_PAGE_SIZE = 60/);
   for (const file of ["app/franchises/[name]/page.js", "app/brands/[name]/page.js"]) {
     const text = source(file);
-    assert.match(text, /getPublicDiscoveryFacetSeriesPage/);
+    assert.match(text, /resolveDiscoveryFacetStaticPage/);
     assert.match(text, /if \(!result\) notFound\(\)/);
-    assert.match(text, /pageSize: 60/);
     assert.match(text, /noIndex: page > 1/);
     assert.match(text, /discoveryFacetPageHref/);
     assert.match(text, /buildPageMetadata/);

@@ -1,24 +1,27 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 import { DiscoveryFacetLanding } from "@/components/DiscoveryFacetPages";
-import { discoveryFacetPageHref } from "@/lib/domain/discovery-facets";
+import { discoveryFacetPageHref, normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
 import { buildPageMetadata } from "@/lib/site-metadata";
 import {
-  getDiscoveryFacetStaticParams,
+  getDiscoveryFacetPaginatedStaticParams,
   resolveDiscoveryFacetStaticPage,
 } from "@/lib/static-discovery-facets";
 
 export const dynamic = "force-static";
 export const revalidate = 86400;
 
-const getPage = cache((name, page) => resolveDiscoveryFacetStaticPage("brand", name, page));
+const getPage = cache((name, page) => resolveDiscoveryFacetStaticPage("franchise", name, page));
 
 export async function generateStaticParams() {
-  return getDiscoveryFacetStaticParams("brand");
+  return getDiscoveryFacetPaginatedStaticParams("franchise");
 }
 
 async function resolvePage(params) {
-  return getPage((await params).name, 1);
+  const resolved = await params;
+  const page = normalizeDiscoveryFacetPage(resolved.page);
+  if (page <= 1) permanentRedirect(discoveryFacetPageHref("franchise", resolved.name, 1));
+  return getPage(resolved.name, page);
 }
 
 export async function generateMetadata({ params }) {
@@ -28,13 +31,13 @@ export async function generateMetadata({ params }) {
   return buildPageMetadata({
     title: `${facet.name}のガチャ一覧・発売情報 | Gacha Lens`,
     description: `${facet.name}のガチャをシリーズ単位で一覧。発売中・発売予定、定価、ラインナップ、相場・在庫情報を確認できます。`,
-    path: discoveryFacetPageHref("brand", facet.name, page),
-    noIndex: page > 1 || facet.series_count < 2,
+    path: discoveryFacetPageHref("franchise", facet.name, page),
+    noIndex: true,
   });
 }
 
-export default async function BrandPage({ params }) {
+export default async function FranchisePaginationPage({ params }) {
   const result = await resolvePage(params);
   if (!result) notFound();
-  return <DiscoveryFacetLanding type="brand" facet={result.facet} items={result.items} page={result} />;
+  return <DiscoveryFacetLanding type="franchise" facet={result.facet} items={result.items} page={result} />;
 }

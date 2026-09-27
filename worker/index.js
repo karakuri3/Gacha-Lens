@@ -1,4 +1,5 @@
 import handler from "vinext/server/fetch-handler";
+import { getLegacyDiscoveryPageRedirectPath } from "../lib/domain/discovery-facets.js";
 import { getLegacyRankingRedirectPath } from "../lib/domain/ranking-routes.js";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
@@ -88,7 +89,7 @@ function isPublicCacheCandidate(request) {
 
 function isDiscoveryDocumentPath(pathname) {
   if (DISCOVERY_DOCUMENT_PATHS.has(pathname)) return true;
-  return /^\/(?:categories|brands|franchises)\/[^/]+$/.test(pathname);
+  return /^\/(?:categories|brands|franchises)\/[^/]+(?:\/page\/[1-9]\d*)?$/.test(pathname);
 }
 
 function isSeriesDetailCachePath(pathname) {
@@ -128,9 +129,9 @@ function getEdgeCachePolicy(request) {
     return EDGE_CACHE_POLICIES.discoveryIndex;
   }
 
-  // The main series listing and first-page facet landings are non-personalized
-  // but change more often. Cache only their no-query HTML forms so pagination and
-  // search variants cannot create unbounded cache-key cardinality.
+  // The main series listing and facet documents are non-personalized but change
+  // more often. Facet pagination uses bounded path segments, so current pages can
+  // share this document cache without user-controlled query-key cardinality.
   if (
     url.searchParams.size === 0 &&
     accept.includes("text/html") &&
@@ -155,6 +156,17 @@ function getEdgeCachePolicy(request) {
   }
 
   return null;
+}
+
+function getLegacyDiscoveryPageRedirect(request) {
+  if (!["GET", "HEAD"].includes(request.method)) return null;
+
+  const url = new URL(request.url);
+  const redirectPath = getLegacyDiscoveryPageRedirectPath(url);
+  if (!redirectPath) return null;
+
+  const target = new URL(redirectPath, url.origin);
+  return Response.redirect(target.toString(), 308);
 }
 
 function getLegacyRankingRedirect(request) {
@@ -188,6 +200,9 @@ async function canStoreResponse(response, policy) {
 
 export default {
   async fetch(request, env, ctx) {
+    const legacyDiscoveryPageRedirect = getLegacyDiscoveryPageRedirect(request);
+    if (legacyDiscoveryPageRedirect) return legacyDiscoveryPageRedirect;
+
     const legacyRankingRedirect = getLegacyRankingRedirect(request);
     if (legacyRankingRedirect) return legacyRankingRedirect;
 

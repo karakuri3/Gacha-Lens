@@ -6,10 +6,12 @@ import test from "node:test";
 const root = process.cwd();
 const source = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("category detail route uses the targeted parent-series read path", () => {
+test("category detail route keeps the targeted parent-series read path through the static helper", () => {
   const route = source("app/categories/[name]/page.js");
-  assert.match(route, /getTargetedPublicCategorySeriesPage/);
-  assert.doesNotMatch(route, /getPublicCategorySeriesPage/);
+  const staticHelper = source("lib/static-discovery-facets.js");
+  assert.match(route, /resolveDiscoveryFacetStaticPage\("category"/);
+  assert.match(staticHelper, /getTargetedPublicCategorySeriesPage/);
+  assert.doesNotMatch(staticHelper, /getPublicCategorySeriesPage/);
 });
 
 test("Production category detail splits exact count from the bounded page read", () => {

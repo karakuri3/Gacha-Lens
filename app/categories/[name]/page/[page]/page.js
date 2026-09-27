@@ -1,10 +1,11 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { cache } from "react";
 import { CategoryDiscoveryLanding } from "@/components/DiscoveryFacetPages";
 import { categoryDiscoveryPageHref } from "@/lib/domain/category-discovery";
+import { normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
 import { buildPageMetadata } from "@/lib/site-metadata";
 import {
-  getDiscoveryFacetStaticParams,
+  getDiscoveryFacetPaginatedStaticParams,
   resolveDiscoveryFacetStaticPage,
 } from "@/lib/static-discovery-facets";
 
@@ -14,11 +15,14 @@ export const revalidate = 86400;
 const getPage = cache((name, page) => resolveDiscoveryFacetStaticPage("category", name, page));
 
 export async function generateStaticParams() {
-  return getDiscoveryFacetStaticParams("category");
+  return getDiscoveryFacetPaginatedStaticParams("category");
 }
 
 async function resolvePage(params) {
-  return getPage((await params).name, 1);
+  const resolved = await params;
+  const page = normalizeDiscoveryFacetPage(resolved.page);
+  if (page <= 1) permanentRedirect(categoryDiscoveryPageHref(resolved.name, 1));
+  return getPage(resolved.name, page);
 }
 
 export async function generateMetadata({ params }) {
@@ -29,11 +33,11 @@ export async function generateMetadata({ params }) {
     title: `${facet.name}のガチャシリーズ一覧・発売情報 | Gacha Lens`,
     description: `${facet.name}カテゴリのガチャシリーズを一覧。発売中・発売予定、定価、ラインナップを確認できます。`,
     path: categoryDiscoveryPageHref(facet.name, page),
-    noIndex: page > 1 || facet.series_count < 2,
+    noIndex: true,
   });
 }
 
-export default async function CategoryDiscoveryPage({ params }) {
+export default async function CategoryDiscoveryPaginationPage({ params }) {
   const result = await resolvePage(params);
   if (!result) notFound();
   return <CategoryDiscoveryLanding facet={result.facet} items={result.items} page={result} />;
