@@ -182,6 +182,7 @@ jobs:
           encoded_slug='tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
           product_path="/series/${encoded_slug}"
           category_path='/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3'
+          brand_path='/brands/%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4'
 
           request_get product_1 "$product_path" 'ディズニー マリー'
           request_get product_2 "$product_path" 'ディズニー マリー'
@@ -194,6 +195,8 @@ jobs:
           request_get franchises '/franchises'
           request_get category_detail "$category_path" 'ガシャポン'
           request_get category_api '/api/public-discovery?type=category&name=%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3&page=1' 'ガシャポン'
+          request_get brand_detail "$brand_path" 'バンダイ'
+          request_get brand_api '/api/public-discovery?type=brand&name=%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4&page=1' 'バンダイ'
           request_get catalog_search '/series?q=%E3%83%9E%E3%83%AA%E3%83%BC' 'マリー'
           request_get ranking '/ranking'
           request_get restocks '/restocks'
@@ -231,7 +234,7 @@ jobs:
             }
           done
 
-          for name in series category_detail; do
+          for name in series category_detail brand_detail; do
             [[ "$(edge_policy "$name")" == 'discovery-document-1800-v1' ]] || {
               echo "$name is missing discovery-document edge-cache policy" >&2
               exit 1
@@ -268,11 +271,12 @@ jobs:
           request_get categories_warm '/categories' 'カテゴリから探す'
           request_get series_warm '/series' 'ガチャ一覧'
           request_get category_detail_warm "$category_path" 'ガシャポン'
+          request_get brand_detail_warm "$brand_path" 'バンダイ'
           request_get ranking_warm '/ranking'
           request_get restocks_warm '/restocks'
           request_get series_sitemap_warm '/series-sitemap.xml'
 
-          for name in categories_warm series_warm category_detail_warm ranking_warm series_sitemap_warm; do
+          for name in categories_warm series_warm category_detail_warm brand_detail_warm ranking_warm series_sitemap_warm; do
             cf_status="$(cf_cache_status "$name")"
             case "$cf_status" in
               HIT|STALE)
