@@ -50,13 +50,43 @@ test("safe Qualia metadata builds one deterministic series-only insert candidate
   assert.equal(first.database.writes, 0);
 });
 
+test("GL-398: valid Qualia series image reaches readiness and the series write contract", () => {
+  const image = "https://www.qualia-45.jp/media/series/2999.jpg?version=1#ignored";
+  const record = { ...qualiaRecord(), series_image_candidate: image, image_scope_candidate: "series" };
+  const report = readiness([record]);
+  const candidate = report.plan.selected_candidate;
+  assert.equal(candidate.series_image_candidate, "https://www.qualia-45.jp/media/series/2999.jpg?version=1");
+  assert.equal(candidate.image_scope, "series_representative");
+  assert.equal(candidate.apply_contract.series.values.image_url, "https://www.qualia-45.jp/media/series/2999.jpg?version=1");
+  assert.deepEqual(candidate.apply_contract.variants, []);
+  assert.equal(candidate.variant_writes, 0);
+});
+
+for (const [label, seriesImage, imageScope] of [
+  ["missing", null, "unknown"],
+  ["invalid external URL", "https://example.invalid/not-qualia.jpg", "series"],
+  ["invalid scheme", "http://www.qualia-45.jp/media/series/2999.jpg", "series"],
+]) test(`GL-398: ${label} Qualia image never enters the canonical series write`, () => {
+  const record = { ...qualiaRecord(), series_image_candidate: seriesImage, image_scope_candidate: imageScope };
+  const report = readiness([record]);
+  assert.equal(report.plan.selected_candidate.apply_contract.series.values.image_url, null);
+  assert.equal(report.plan.selected_candidate.series_image_candidate, null);
+  assert.equal(report.plan.selected_candidate.image_scope, "unavailable");
+  assert.deepEqual(report.plan.selected_candidate.apply_contract.variants, []);
+});
+
 test("formal Qualia Lineup evidence never enters the series-only apply contract", () => {
-  const record = qualiaRecord({ formalVariants: ["A", "B", "C"] });
+  const record = {
+    ...qualiaRecord({ formalVariants: ["A", "B", "C"] }),
+    series_image_candidate: "https://www.qualia-45.jp/media/series/formal-lineup.jpg",
+    image_scope_candidate: "series",
+  };
   const report = readiness([record], {}, { records: [record], metadataRecords: [] });
   assert.equal(report.source.formal_variant_records_observed, 1);
   assert.equal(report.plan.selected_candidate.variant_count, 0);
   assert.deepEqual(report.plan.selected_candidate.variants, []);
   assert.deepEqual(report.plan.selected_candidate.apply_contract.variants, []);
+  assert.equal(report.plan.selected_candidate.apply_contract.series.values.image_url, "https://www.qualia-45.jp/media/series/formal-lineup.jpg");
   assert.equal(report.plan.variant_inserts, 0);
   assert.equal(report.plan.variant_updates, 0);
 });
