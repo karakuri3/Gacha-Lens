@@ -42,6 +42,9 @@ test("Qualia parser reads the live product/view metadata but fails closed withou
   assert.equal(parsed.metadata.series_name, "殻からの脱出。 マスコットフィギュア");
   assert.equal(parsed.metadata.price, 400);
   assert.equal(parsed.metadata.release_month, "2026-08");
+  assert.equal(parsed.metadata.series_image_candidate, "https://www.qualia-45.jp/media/1/0/5/0/2/6/105026_800x930.jpg");
+  assert.equal(parsed.metadata.image_scope_candidate, "series");
+  assert.equal(parsed.metadata.variants, undefined);
 });
 
 test("Qualia formal distinations Lineup parses bounded names without guessed product links", () => {
@@ -79,6 +82,25 @@ test("Qualia diagnostic discovers an official archive Lineup and promotes only t
   assert.equal(qualia.lineup_success, 1);
   assert.equal(qualia.lineup_archive_pages_fetched, 2);
   assert.equal(buildOfficialSourceExpansionReport({ snapshot }).providers.find((provider) => provider.source === "qualia").metrics.total_variants, 4);
+});
+
+test("GL-398: linked Qualia Lineup keeps the detail series image without inventing variant images", async () => {
+  const detail = fixture("qualia-lineup-product-detail.html").replace(
+    '<div class="product_detail_info">',
+    '<div class="gallery01"><img src="/media/series/kyoryu-head.jpg" alt="series"></div><div class="product_detail_info">',
+  );
+  const snapshot = await fetchOfficialSourceExpansionDiagnostic({
+    currentDetailLimit: 1,
+    qualiaLineupFetchLimit: 1,
+    requestDelayMs: 0,
+    fetchImpl: diagnosticFixtureFetch({ qualiaDetail: detail }),
+  });
+  const qualia = snapshot.providers.find((provider) => provider.source === "qualia");
+  assert.equal(qualia.records.length, 1);
+  assert.equal(qualia.records[0].series_image_candidate, "https://www.qualia-45.jp/media/series/kyoryu-head.jpg");
+  assert.equal(qualia.records[0].image_scope_candidate, "series");
+  assert.deepEqual(qualia.records[0].variants.map((variant) => variant.name), ["トリケラトプス", "ティラノサウルス", "ステゴサウルス", "ブラキオサウルス"]);
+  assert.ok(qualia.records[0].variants.every((variant) => variant.image_candidate === null));
 });
 
 test("Qualia CURRENT selects the newest explicit official month and prioritizes matching current formal Lineup evidence", async () => {
@@ -140,11 +162,22 @@ for (const [label, mutate] of [["name", (html) => html.replaceAll("リアル恐�
 }
 
 test("Qualia without an official archive Lineup link remains metadata-only and fetches no guessed URL", async () => {
-  const snapshot = await fetchOfficialSourceExpansionDiagnostic({ currentDetailLimit: 1, requestDelayMs: 0, fetchImpl: diagnosticFixtureFetch({ archiveBody: "<main><nav><a href=\"/distinations/page/2/\">2</a></nav></main>", archivePageBody: "<main></main>" }) });
+  const snapshot = await fetchOfficialSourceExpansionDiagnostic({
+    currentDetailLimit: 1,
+    requestDelayMs: 0,
+    fetchImpl: diagnosticFixtureFetch({
+      archiveBody: "<main><nav><a href=\"/distinations/page/2/\">2</a></nav></main>",
+      archivePageBody: "<main></main>",
+      qualiaDetail: fixture("qualia-detail.html"),
+    }),
+  });
   const kitan = snapshot.providers.find((provider) => provider.source === "kitan_club");
   const qualia = snapshot.providers.find((provider) => provider.source === "qualia");
   assert.equal(qualia.records.length, 0);
   assert.equal(qualia.metadata_records.length, 1);
+  assert.equal(qualia.metadata_records[0].series_image_candidate, "https://www.qualia-45.jp/media/1/0/5/0/2/6/105026_800x930.jpg");
+  assert.equal(qualia.metadata_records[0].image_scope_candidate, "series");
+  assert.equal(qualia.metadata_records[0].variants, undefined);
   assert.equal(qualia.lineup_attempted, 0);
   assert.equal(qualia.successful_records, 0);
   assert.equal(qualia.metadata_only_records, 1);
