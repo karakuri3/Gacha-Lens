@@ -18,7 +18,7 @@ test("category detail moves the targeted parent-series read behind the public JS
 test("Production category detail splits exact count from the bounded page read", () => {
   const helper = source("lib/targeted-category-series-page.js");
   assert.match(helper, /loadCachedSupabaseCategoryPage/);
-  assert.ok(helper.includes('const PUBLIC_VARIANT_RELATION = "variants!inner(id)"'));
+  assert.ok(helper.includes('const PUBLIC_VARIANT_RELATION = "variants!inner(count)"'));
   assert.ok(helper.includes('.select(`id,${PUBLIC_VARIANT_RELATION}`, { count: "exact", head: true })'));
   assert.ok(helper.includes('.select(`${SERIES_SELECT},${PUBLIC_VARIANT_RELATION}`)'));
   assert.match(helper, /applyPublicVariantRelationFilter/);
