@@ -46,6 +46,8 @@ test("category public API keeps the targeted 60-series read contract", () => {
   assert.match(source, /pageSize: 60/);
   assert.match(source, /type !== "category"/);
   assert.match(source, /Cloudflare-CDN-Cache-Control/);
+  assert.match(source, /result\.items\.map\(toPublicCategorySeriesCard\)/);
+  assert.doesNotMatch(source.slice(source.indexOf("function toPublicCategorySeriesCard")), /official_url|officialUrl|source_type|created_at|updated_at/);
 });
 
 test("worker redirects legacy category pagination before vinext", () => {
