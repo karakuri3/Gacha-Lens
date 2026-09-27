@@ -49,7 +49,7 @@ test("category public API keeps the targeted 60-series read contract", () => {
   const source = fs.readFileSync("app/api/public-discovery/route.js", "utf8");
   assert.match(source, /getTargetedPublicCategorySeriesPage/);
   assert.match(source, /pageSize: 60/);
-  assert.match(source, /type !== "category"/);
+  assert.match(source, /\["category", "brand", "franchise"\]\.includes\(type\)/);
   assert.match(source, /Cloudflare-CDN-Cache-Control/);
   assert.match(source, /result\.items\.map\(toPublicSeriesCard\)/);
   assert.doesNotMatch(source.slice(source.indexOf("function toPublicSeriesCard")), /official_url|officialUrl|source_type|created_at|updated_at/);
