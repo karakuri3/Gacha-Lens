@@ -6,10 +6,13 @@ import test from "node:test";
 const root = process.cwd();
 const source = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("category detail route uses the targeted parent-series read path", () => {
+test("category detail moves the targeted parent-series read behind the public JSON boundary", () => {
   const route = source("app/categories/[name]/page.js");
-  assert.match(route, /getTargetedPublicCategorySeriesPage/);
-  assert.doesNotMatch(route, /getPublicCategorySeriesPage/);
+  const api = source("app/api/public-discovery/route.js");
+  assert.match(route, /CategoryDiscoveryClientLanding/);
+  assert.doesNotMatch(route, /getTargetedPublicCategorySeriesPage/);
+  assert.match(api, /getTargetedPublicCategorySeriesPage/);
+  assert.doesNotMatch(api, /getPublicCategorySeriesPage/);
 });
 
 test("Production category detail splits exact count from the bounded page read", () => {
