@@ -47,6 +47,7 @@ test("stock summary keeps public released variant filtering and minimal public f
 test("stock client keeps query filtering in the browser", () => {
   const client = source("components/StockClientPage.js");
   assert.match(client, /window\.location\.search/);
+  assert.match(client, /window\.setTimeout\(\(\) => setFilters\(initialFilters\), 0\)/);
   assert.match(client, /fetch\("\/api\/public-stock"/);
   assert.match(client, /searchText\.includes\(q\)/);
   assert.match(client, /report\.region === filters\.region/);
