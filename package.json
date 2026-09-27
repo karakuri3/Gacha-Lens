@@ -82,7 +82,8 @@
     "market:series-complete-set-readiness": "node scripts/market-series-complete-set-readiness.mjs",
     "market:series-complete-set-canary": "node scripts/market-series-complete-set-bounded-canary.mjs",
     "test:manual-market-bounded": "node --test tests/manual-market-bounded-execution.test.mjs",
-    "official:phase-a3-write": "node scripts/official-phase-a3-write.mjs"
+    "official:phase-a3-write": "node scripts/official-phase-a3-write.mjs",
+    "image:parent-conflict-audit": "node scripts/variant-image-parent-conflict-audit.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.102.0",
