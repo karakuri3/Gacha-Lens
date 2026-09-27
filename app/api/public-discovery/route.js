@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { categoryDiscoveryLookupCandidates } from "@/lib/domain/category-discovery";
 import { normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
+import { getPublicDiscoveryFacetSeriesPage } from "@/lib/series";
 import { getTargetedPublicCategorySeriesPage } from "@/lib/targeted-category-series-page";
 
 export const dynamic = "force-dynamic";
@@ -11,14 +12,18 @@ export async function GET(request) {
   const rawName = String(url.searchParams.get("name") || "").trim();
   const page = normalizeDiscoveryFacetPage(url.searchParams.get("page"));
 
-  if (type !== "category" || !rawName || rawName.length > 120 || page > 5000) {
+  if (!["category", "brand", "franchise"].includes(type) || !rawName || rawName.length > 120 || page > 5000) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
   let result = null;
-  for (const name of categoryDiscoveryLookupCandidates(rawName)) {
-    result = await getTargetedPublicCategorySeriesPage(name, { page, pageSize: 60 });
-    if (result) break;
+  if (type === "category") {
+    for (const name of categoryDiscoveryLookupCandidates(rawName)) {
+      result = await getTargetedPublicCategorySeriesPage(name, { page, pageSize: 60 });
+      if (result) break;
+    }
+  } else {
+    result = await getPublicDiscoveryFacetSeriesPage(type, rawName, { page, pageSize: 60 });
   }
 
   if (!result) {
@@ -29,7 +34,7 @@ export async function GET(request) {
     {
       result: {
         facet: result.facet,
-        items: result.items.map(toPublicCategorySeriesCard),
+        items: result.items.map(toPublicSeriesCard),
         page: result.page,
         pageSize: result.pageSize,
         total: result.total,
@@ -46,7 +51,7 @@ export async function GET(request) {
 }
 
 
-function toPublicCategorySeriesCard(item = {}) {
+function toPublicSeriesCard(item = {}) {
   return {
     id: item.id,
     slug: item.slug,
