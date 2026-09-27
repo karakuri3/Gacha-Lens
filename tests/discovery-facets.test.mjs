@@ -156,17 +156,21 @@ test("targeted discovery fetch applies exact franchise and brand filters with pu
   assert.match(text, /Math\.min\(60, Number\(options\.pageSize\) \|\| 60\)/);
 });
 
-test("discovery routes publish canonical metadata and reject non-indexable facets", () => {
-  for (const file of ["app/franchises/[name]/page.js", "app/brands/[name]/page.js"]) {
-    const text = source(file);
-    assert.match(text, /getPublicDiscoveryFacetSeriesPage/);
-    assert.match(text, /if \(!result\) notFound\(\)/);
-    assert.match(text, /pageSize: 60/);
-    assert.match(text, /noIndex: page > 1/);
-    assert.match(text, /discoveryFacetPageHref/);
-    assert.match(text, /buildPageMetadata/);
-    assert.doesNotMatch(text, /offers|aggregateRating|review:/);
-  }
+test("franchise route retains targeted dynamic metadata while brand detail uses a static shell", () => {
+  const franchise = source("app/franchises/[name]/page.js");
+  assert.match(franchise, /getPublicDiscoveryFacetSeriesPage/);
+  assert.match(franchise, /if \(!result\) notFound\(\)/);
+  assert.match(franchise, /pageSize: 60/);
+  assert.match(franchise, /noIndex: page > 1/);
+  assert.match(franchise, /discoveryFacetPageHref/);
+  assert.match(franchise, /buildPageMetadata/);
+
+  const brand = source("app/brands/[name]/page.js");
+  assert.match(brand, /BrandDiscoveryClientLanding/);
+  assert.match(brand, /getStaticBrandParams/);
+  assert.doesNotMatch(brand, /getPublicDiscoveryFacetSeriesPage|searchParams/);
+  assert.match(brand, /buildPageMetadata/);
+  assert.doesNotMatch(brand, /offers|aggregateRating|review:/);
 });
 
 test("facet detail pages use targeted public queries instead of the sitemap population", () => {
