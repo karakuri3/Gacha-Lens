@@ -49,7 +49,7 @@ export async function runParentImageConflictAudit(argv = process.argv.slice(2)) 
     ? await readBoundedStdin()
     : readBoundedLocalFile(options.input);
   const report = buildVariantParentImageConflictAudit(parseParentImageConflictJson(source));
-  process.stdout.write(\`\${JSON.stringify(report, null, 2)}\n\`);
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 }
 
 function validateInput(input) {
@@ -114,7 +114,7 @@ if (isDirectExecution()) {
     await runParentImageConflictAudit();
   } catch (error) {
     const code = SAFE_ERROR_CODES.has(error?.code) ? error.code : "unexpected_error";
-    process.stderr.write(\`Parent image conflict audit failed: \${code}\n\`);
+    process.stderr.write(`Parent image conflict audit failed: ${code}\n`);
     process.exitCode = 2;
   }
 }
