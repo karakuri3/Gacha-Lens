@@ -22,11 +22,11 @@ test("expensive discovery indexes use a bounded daily public HTML policy", () =>
   assert.match(source, /accept\.includes\("text\/html"\)/);
 });
 
-test("series index and bounded facet documents retain the 30 minute policy", () => {
+test("series index and first-page facet landings retain the 30 minute bounded policy", () => {
   assert.match(source, /marker: "discovery-document-1800-v1"/);
   assert.match(source, /cacheControl: "public, max-age=1800, stale-while-revalidate=60"/);
   assert.match(source, /DISCOVERY_DOCUMENT_PATHS = new Set\(\[\s*"\/series"/);
-  assert.ok(source.includes('return /^\\/(?:categories|brands|franchises)\\/[^/]+(?:\\/page\\/[1-9]\\d*)?$/.test(pathname);'));
+  assert.ok(source.includes('return /^\\/(?:categories|brands|franchises)\\/[^/]+$/.test(pathname);'));
   assert.match(source, /isDiscoveryDocumentPath\(url\.pathname\)/);
 });
 
