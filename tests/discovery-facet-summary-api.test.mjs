@@ -11,12 +11,20 @@ test("public discovery API routes brand/franchise reads through aggregate summar
   assert.match(api, /pageSize: 60/);
 });
 
-test("aggregate facet summary avoids loading variant bodies and signal tables", () => {
-  const helper = source("lib/targeted-discovery-series-page.js");
-  assert.match(helper, /variants!inner\(count\)/);
-  assert.match(helper, /embeddedVariantCount/);
-  assert.match(helper, /countPublicVariantsForFacet/);
-  assert.doesNotMatch(helper, /fetchPublicVariantsBySeriesIds|fetchSignalsForCatalog|marketListings|stockReports|restockEvents|xReactions/);
+test("aggregate facet summaries avoid returning child variant ID arrays", () => {
+  for (const path of [
+    "lib/targeted-discovery-series-page.js",
+    "lib/targeted-category-series-page.js",
+  ]) {
+    const helper = source(path);
+    assert.match(helper, /variants!inner\(count\)/);
+    assert.match(helper, /embeddedVariantCount/);
+    assert.doesNotMatch(helper, /variants!inner\(id\)/);
+  }
+
+  const discovery = source("lib/targeted-discovery-series-page.js");
+  assert.match(discovery, /countPublicVariantsForFacet/);
+  assert.doesNotMatch(discovery, /fetchPublicVariantsBySeriesIds|fetchSignalsForCatalog|marketListings|stockReports|restockEvents|xReactions/);
 });
 
 test("aggregate facet summary keeps public child filters and bounded page size", () => {
