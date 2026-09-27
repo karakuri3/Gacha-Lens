@@ -1,40 +1,25 @@
-import { notFound } from "next/navigation";
-import { cache } from "react";
-import { CategoryDiscoveryLanding } from "@/components/DiscoveryFacetPages";
-import { categoryDiscoveryPageHref } from "@/lib/domain/category-discovery";
+import { normalizeDiscoveryFacetName } from "@/lib/domain/discovery-facets";
+import CategoryDiscoveryClientLanding from "@/components/CategoryDiscoveryClientLanding";
 import { buildPageMetadata } from "@/lib/site-metadata";
-import {
-  getDiscoveryFacetStaticParams,
-  resolveDiscoveryFacetStaticPage,
-} from "@/lib/static-discovery-facets";
+import { getStaticCategoryParams } from "@/lib/domain/category-static-manifest";
 
 export const dynamic = "force-static";
 export const revalidate = 86400;
 
-const getPage = cache((name, page) => resolveDiscoveryFacetStaticPage("category", name, page));
-
-export async function generateStaticParams() {
-  return getDiscoveryFacetStaticParams("category");
-}
-
-async function resolvePage(params) {
-  return getPage((await params).name, 1);
+export function generateStaticParams() {
+  return getStaticCategoryParams();
 }
 
 export async function generateMetadata({ params }) {
-  const result = await resolvePage(params);
-  if (!result) notFound();
-  const { facet, page } = result;
+  const name = normalizeDiscoveryFacetName((await params).name);
   return buildPageMetadata({
-    title: `${facet.name}のガチャシリーズ一覧・発売情報 | Gacha Lens`,
-    description: `${facet.name}カテゴリのガチャシリーズを一覧。発売中・発売予定、定価、ラインナップを確認できます。`,
-    path: categoryDiscoveryPageHref(facet.name, page),
-    noIndex: page > 1 || facet.series_count < 2,
+    title: `${name}のガチャシリーズ一覧・発売情報 | Gacha Lens`,
+    description: `${name}カテゴリのガチャシリーズを一覧。発売中・発売予定、定価、ラインナップを確認できます。`,
+    path: `/categories/${encodeURIComponent(name)}`,
   });
 }
 
 export default async function CategoryDiscoveryPage({ params }) {
-  const result = await resolvePage(params);
-  if (!result) notFound();
-  return <CategoryDiscoveryLanding facet={result.facet} items={result.items} page={result} />;
+  const name = normalizeDiscoveryFacetName((await params).name);
+  return <CategoryDiscoveryClientLanding name={name} page={1} />;
 }
