@@ -28,7 +28,7 @@ test("series index and first-page facet landings retain the 30 minute bounded po
   assert.match(source, /DISCOVERY_DOCUMENT_PATHS = new Set\(\[\s*"\/series"/);
   assert.match(source, /brands\|franchises/);
   assert.match(source, /categories/);
-  assert.match(source, /page\\\/[1-9]/);
+  assert.ok(source.includes('|| /^\\/categories\\/[^/]+(?:\\/page\\/[1-9]\\d*)?$/.test(pathname);'));
   assert.match(source, /isDiscoveryDocumentPath\(url\.pathname\)/);
 });
 
