@@ -200,15 +200,15 @@ test("a series-only fallback remains truthfully labeled and terminates at the ne
   });
 });
 
-test("ProductImage exposes a one-way client-side series fallback and neutral placeholder", () => {
+test("ProductImage keeps fallback resolution internal and renders a neutral placeholder", () => {
   const component = source("components/ProductImage.js");
   assert.match(component, /^"use client";/);
   assert.match(component, /resolvePresentationImage/);
   assert.match(component, /normalizeImageUrl\(primarySrc\)/);
   assert.match(component, /normalizeImageUrl\(safeFallbackSrc\)/);
   assert.match(component, /onError=\{\(\) =>/);
-  assert.match(component, /product-image__scope/);
-  assert.match(component, />シリーズ画像</);
+  assert.doesNotMatch(component, /product-image__scope/);
+  assert.doesNotMatch(component, />シリーズ画像</);
   assert.match(component, /画像なし/);
 });
 
@@ -217,13 +217,15 @@ test("cards and detail routes use presentation data without changing canonical i
   const detail = source("app/series/[slug]/page.js");
   const group = source("app/series/group/[slug]/page.js");
 
-  assert.match(card, /fallbackSrc=\{isSeries \? "" : series\.series_image_url\}/);
+  assert.match(card, /series\.image_scope === "series_fallback" \? ""/);
+  assert.match(card, /fallbackSrc=""/);
   assert.match(card, /imageScope=\{isSeries \? "series" : series\.image_scope\}/);
   assert.match(detail, /image: item\.variant_image_url \? absoluteSiteUrl\(item\.variant_image_url\) : undefined/);
   assert.match(detail, /<ProductImage item=\{item\}/);
-  assert.match(detail, /entry\.image_scope === "series_fallback"/);
-  assert.match(group, /variant\.image_scope === "series_fallback"/);
-  assert.match(source("app/globals.css"), /lineup-grid__series-fallback/);
+  assert.match(detail, /entry\.image_scope === "series_fallback" \? ""/);
+  assert.match(group, /variant\.image_scope === "series_fallback" \? ""/);
+  assert.doesNotMatch(detail, /lineup-grid__series-fallback/);
+  assert.doesNotMatch(group, /lineup-grid__series-fallback/);
 });
 
 test("public listing surfaces request display presentation while category and parent-series visuals remain series scoped", () => {

@@ -376,3 +376,181 @@
     animation: none;
   }
 }
+
+
+/* Consumer catalog density v1: keep product cards compact and predictable across breakpoints. */
+.catalog-results-head ~ .grid--cards {
+  gap: 12px;
+  border-top: 0;
+}
+
+.catalog-results-head ~ .grid--cards .product-card {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "image"
+    "identity"
+    "evidence"
+    "signals";
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid #e0e3e8;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.catalog-results-head ~ .grid--cards .product-image {
+  width: 100%;
+  border-radius: 5px;
+}
+
+.catalog-results-head ~ .grid--cards .product-name {
+  margin: 0 0 3px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.catalog-results-head ~ .grid--cards .product-meta {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.catalog-results-head ~ .grid--cards .product-card__status {
+  gap: 4px;
+  margin-bottom: 5px;
+}
+
+.catalog-results-head ~ .grid--cards .product-card__status .tag {
+  padding: 3px 5px;
+  font-size: 9px;
+}
+
+.catalog-results-head ~ .grid--cards .product-evidence__row {
+  gap: 2px 6px;
+  padding: 5px 0;
+}
+
+.catalog-results-head ~ .grid--cards .product-evidence dt,
+.catalog-results-head ~ .grid--cards .product-evidence small {
+  font-size: 9px;
+}
+
+.catalog-results-head ~ .grid--cards .product-evidence dd {
+  font-size: 12px;
+}
+
+@media (min-width: 1200px) {
+  .catalog-results-head ~ .grid--cards {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1199px) {
+  .catalog-results-head ~ .grid--cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .catalog-results-head ~ .grid--cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .catalog-results-head ~ .grid--cards .product-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding: 7px;
+  }
+
+  .catalog-results-head ~ .grid--cards .product-name {
+    font-size: 13px;
+    line-height: 1.32;
+  }
+
+  .catalog-results-head ~ .grid--cards .product-meta {
+    font-size: 9px;
+  }
+
+  .catalog-results-head ~ .grid--cards .product-card__signals {
+    display: none;
+  }
+
+  .catalog-results-head ~ .grid--cards .product-evidence__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px;
+    padding: 4px 0;
+  }
+
+  .catalog-results-head ~ .grid--cards .product-evidence dd {
+    text-align: left;
+  }
+}
+
+
+/* Mobile catalog controls: keep products above the fold without removing advanced search. */
+.catalog-filter-summary {
+  display: none;
+}
+
+@media (min-width: 721px) {
+  details.catalog-filter-shell:not([open]) > .catalog-filter-form {
+    display: grid;
+  }
+}
+
+@media (max-width: 720px) {
+  .catalog-filter-shell {
+    margin: 8px 0;
+  }
+
+  .catalog-filter-summary {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid #d8dde5;
+    border-radius: 6px;
+    background: #fff;
+    padding: 8px 10px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .catalog-filter-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .catalog-filter-summary::after {
+    content: "＋";
+    flex: 0 0 auto;
+    color: #6b7280;
+    font-size: 16px;
+    font-weight: 800;
+  }
+
+  .catalog-filter-shell[open] > .catalog-filter-summary::after {
+    content: "−";
+  }
+
+  .catalog-filter-summary span {
+    color: #1f2937;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .catalog-filter-summary small {
+    min-width: 0;
+    margin-left: auto;
+    overflow: hidden;
+    color: #7b8492;
+    font-size: 9px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .catalog-filter-shell > .catalog-filter-form {
+    margin-top: 6px;
+  }
+}

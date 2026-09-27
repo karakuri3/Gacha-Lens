@@ -25,12 +25,12 @@ export default function SeriesCard({ series, priority = false, scope = "variant"
       <div className="product-image">
         <ProductImage
           item={isSeries ? undefined : series}
-          src={series.image_url || series.imageUrl}
-          fallbackSrc={isSeries ? "" : series.series_image_url}
+          src={!isSeries && series.image_scope === "series_fallback" ? "" : (series.image_url || series.imageUrl)}
+          fallbackSrc=""
           imageScope={isSeries ? "series" : series.image_scope}
           alt={series.name}
           priority={priority}
-          emptyLabel="画像なし"
+          emptyLabel={isSeries ? "シリーズ画像なし" : "単品画像なし"}
         />
       </div>
       <div className="product-card__identity">

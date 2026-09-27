@@ -75,7 +75,6 @@ function ResolvedProductImage({ primarySrc, fallbackSrc, imageScope, alt, sizes,
           }
         }}
       />
-      {presentation.is_series_fallback ? <span className="product-image__scope">シリーズ画像</span> : null}
     </>
   );
 }

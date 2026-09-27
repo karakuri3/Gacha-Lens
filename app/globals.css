@@ -2979,3 +2979,28 @@ button.button-link {
   .price-history-table td:nth-child(5)::before { content: "観測件数"; }
   .price-history-table td:nth-child(6)::before { content: "売れた数"; }
 }
+
+
+/* Mobile menu label recovery v1: collapsed header buttons stay compact, opened navigation stays readable. */
+@media (max-width: 900px) {
+  .header-menu summary span,
+  .header-menu > nav a span {
+    display: inline;
+  }
+
+  .header-menu > nav {
+    width: min(260px, calc(100vw - 24px));
+  }
+}
+
+@media (max-width: 640px) {
+  .header-menu summary {
+    width: auto;
+    min-width: 74px;
+    min-height: 34px;
+    justify-content: center;
+    padding: 6px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+}
