@@ -29,7 +29,7 @@ export async function GET(request) {
     {
       result: {
         facet: result.facet,
-        items: result.items,
+        items: result.items.map(toPublicCategorySeriesCard),
         page: result.page,
         pageSize: result.pageSize,
         total: result.total,
@@ -43,4 +43,35 @@ export async function GET(request) {
       },
     },
   );
+}
+
+
+function toPublicCategorySeriesCard(item = {}) {
+  return {
+    id: item.id,
+    slug: item.slug,
+    name: item.name,
+    franchise: item.franchise,
+    brand: item.brand,
+    category: item.category,
+    release_month: item.release_month,
+    release_week: item.release_week,
+    release_date: item.release_date,
+    price: item.price,
+    image_url: item.image_url,
+    series_id: item.series_id,
+    series_slug: item.series_slug,
+    series_name: item.series_name,
+    entity_type: item.entity_type,
+    variant_type: item.variant_type,
+    variant_count: item.variant_count,
+    lineup_count: item.lineup_count,
+    imageUrl: item.imageUrl,
+    image_scope: item.image_scope,
+    schedule_month: item.schedule_month,
+    schedule_week: item.schedule_week,
+    releaseDate: item.releaseDate,
+    is_released: item.is_released,
+    isReleased: item.isReleased,
+  };
 }
