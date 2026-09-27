@@ -69,7 +69,7 @@ test("facet lookup and URL encoding are deterministic", () => {
   assert.equal(discoveryFacetHref("franchise", facets[0].name), `/franchises/${encodeURIComponent(facets[0].name)}`);
   assert.equal(decodeDiscoveryFacetParam(decodeURIComponent(encodeURIComponent(facets[0].name))), facets[0].name);
   assert.equal(discoveryFacetPageHref("franchise", facets[0].name), discoveryFacetHref("franchise", facets[0].name));
-  assert.equal(discoveryFacetPageHref("franchise", facets[0].name, 2), `${discoveryFacetHref("franchise", facets[0].name)}?page=2`);
+  assert.equal(discoveryFacetPageHref("franchise", facets[0].name, 2), `${discoveryFacetHref("franchise", facets[0].name)}/page/2`);
 });
 
 test("decoded facet params preserve literal percent signs, spaces, ampersands, plus signs, and slashes", () => {
@@ -156,16 +156,20 @@ test("targeted discovery fetch applies exact franchise and brand filters with pu
   assert.match(text, /Math\.min\(60, Number\(options\.pageSize\) \|\| 60\)/);
 });
 
-test("discovery routes publish canonical metadata and reject non-indexable facets", () => {
-  for (const file of ["app/franchises/[name]/page.js", "app/brands/[name]/page.js"]) {
-    const text = source(file);
-    assert.match(text, /getPublicDiscoveryFacetSeriesPage/);
-    assert.match(text, /if \(!result\) notFound\(\)/);
-    assert.match(text, /pageSize: 60/);
-    assert.match(text, /noIndex: page > 1/);
-    assert.match(text, /discoveryFacetPageHref/);
-    assert.match(text, /buildPageMetadata/);
-    assert.doesNotMatch(text, /offers|aggregateRating|review:/);
+test("brand and franchise routes are DB-free static shells with canonical path pagination", () => {
+  for (const [type, root] of [["brand", "brands"], ["franchise", "franchises"]]) {
+    const first = source(`app/${root}/[name]/page.js`);
+    const paged = source(`app/${root}/[name]/page/[page]/page.js`);
+    assert.match(first, /export const dynamic = "force-static"/);
+    assert.match(first, /DiscoveryFacetClientLanding/);
+    assert.match(first, /getStaticDiscoveryFacetParams/);
+    assert.doesNotMatch(first, /getPublicDiscoveryFacetSeriesPage|searchParams|notFound/);
+    assert.match(paged, /getStaticDiscoveryFacetPaginationParams/);
+    assert.match(paged, /noIndex: true/);
+    assert.match(paged, /discoveryFacetPageHref/);
+    assert.match(first, /buildPageMetadata/);
+    assert.doesNotMatch(first, /offers|aggregateRating|review:/);
+    assert.ok(first.includes(`type="${type}"`));
   }
 });
 
