@@ -1,4 +1,5 @@
 import handler from "vinext/server/fetch-handler";
+import { getLegacyBrandDiscoveryPageRedirectPath } from "../lib/domain/brand-discovery.js";
 import { getLegacyCategoryDiscoveryPageRedirectPath } from "../lib/domain/category-discovery.js";
 import { getLegacyRankingRedirectPath } from "../lib/domain/ranking-routes.js";
 
@@ -89,7 +90,8 @@ function isPublicCacheCandidate(request) {
 
 function isDiscoveryDocumentPath(pathname) {
   if (DISCOVERY_DOCUMENT_PATHS.has(pathname)) return true;
-  return /^\/(?:brands|franchises)\/[^/]+$/.test(pathname)
+  return /^\/franchises\/[^/]+$/.test(pathname)
+    || /^\/brands\/[^/]+(?:\/page\/[1-9]\d*)?$/.test(pathname)
     || /^\/categories\/[^/]+(?:\/page\/[1-9]\d*)?$/.test(pathname);
 }
 
@@ -159,6 +161,17 @@ function getEdgeCachePolicy(request) {
   return null;
 }
 
+function getLegacyBrandDiscoveryPageRedirect(request) {
+  if (!["GET", "HEAD"].includes(request.method)) return null;
+
+  const url = new URL(request.url);
+  const redirectPath = getLegacyBrandDiscoveryPageRedirectPath(url);
+  if (!redirectPath) return null;
+
+  const target = new URL(redirectPath, url.origin);
+  return Response.redirect(target.toString(), 308);
+}
+
 function getLegacyCategoryDiscoveryPageRedirect(request) {
   if (!["GET", "HEAD"].includes(request.method)) return null;
 
@@ -201,6 +214,9 @@ async function canStoreResponse(response, policy) {
 
 export default {
   async fetch(request, env, ctx) {
+    const legacyBrandRedirect = getLegacyBrandDiscoveryPageRedirect(request);
+    if (legacyBrandRedirect) return legacyBrandRedirect;
+
     const legacyCategoryRedirect = getLegacyCategoryDiscoveryPageRedirect(request);
     if (legacyCategoryRedirect) return legacyCategoryRedirect;
 
