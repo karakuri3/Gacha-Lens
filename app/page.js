@@ -19,8 +19,8 @@ import {
   watchScore,
 } from "@/lib/domain/public-display-clean";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const dynamic = "force-static";
+export const revalidate = 86400;
 export const metadata = buildPageMetadata({
   title: "Gacha Lens | ガチャの新作・価格・在庫情報",
   description: "発売中の価格動向、いま注目のガチャ、発売予定、在庫・再入荷情報をまとめて確認できます。",
