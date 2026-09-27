@@ -204,6 +204,8 @@ jobs:
           request_get ranking '/ranking'
           request_get restocks '/restocks'
           request_get stock '/stock'
+          request_get stock_query '/stock?q=%E3%83%9E%E3%83%AA%E3%83%BC' '在庫目撃情報'
+          request_get public_stock_api '/api/public-stock' '"rows"'
           request_get schedule '/schedule'
           request_get guides '/guides'
           request_get public_api "/api/public-variants?ids=${encoded_slug}" 'tarts-y901096-ディズニー-マリー'
@@ -268,6 +270,10 @@ jobs:
 
           [[ -z "$(edge_policy catalog_search)" ]] || {
             echo 'Query/search variant unexpectedly received a shared edge-cache policy.' >&2
+            exit 1
+          }
+          [[ -z "$(edge_policy stock_query)" ]] || {
+            echo 'Stock query variant unexpectedly received a shared edge-cache policy.' >&2
             exit 1
           }
 
