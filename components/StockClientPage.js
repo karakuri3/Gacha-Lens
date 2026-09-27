@@ -61,9 +61,9 @@ export default function StockClientPage() {
         </section>
 
         <form className="card stock-filter" action="/stock" method="get">
-          <label><span>商品・店舗</span><input name="q" defaultValue={filters.q} placeholder="商品名や店舗名" /></label>
-          <label><span>地域</span><select name="region" defaultValue={filters.region}><option value="">すべて</option>{regions.map((value) => <option key={value}>{value}</option>)}</select></label>
-          <label><span>在庫状況</span><select name="status" defaultValue={filters.status}><option value="">すべて</option>{statuses.map((value) => <option key={value} value={value}>{stockLabel(value)}</option>)}</select></label>
+          <label><span>商品・店舗</span><input name="q" value={filters.q} onChange={(event) => setFilters((current) => ({ ...current, q: event.target.value }))} placeholder="商品名や店舗名" /></label>
+          <label><span>地域</span><select name="region" value={filters.region} onChange={(event) => setFilters((current) => ({ ...current, region: event.target.value }))}><option value="">すべて</option>{regions.map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label><span>在庫状況</span><select name="status" value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}><option value="">すべて</option>{statuses.map((value) => <option key={value} value={value}>{stockLabel(value)}</option>)}</select></label>
           <button className="button-link button-link--accent" type="submit">絞り込む</button>
         </form>
 
