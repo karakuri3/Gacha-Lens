@@ -96,7 +96,7 @@ test("parent and variant identity mismatch is not a candidate", () => {
 test("provisional, normal, rare, secret, and other types are counted separately", () => {
   const types = ["provisional", "normal", "rare", "secret", "limited"];
   const records = types.map((variant_type, index) => record({
-    variant: { id: \`variant-\${index + 1}\`, variant_type },
+    variant: { id: `variant-${index + 1}`, variant_type },
   }));
   const report = buildVariantParentImageConflictAudit({ schema_version: 1, records });
   assert.equal(report.candidate_count, 5);
@@ -123,7 +123,7 @@ test("candidate set SHA-256 is identical regardless of input order", () => {
   const first = buildVariantParentImageConflictAudit({ schema_version: 1, records: [a, b] });
   const second = buildVariantParentImageConflictAudit({ schema_version: 1, records: [b, a] });
   const expectedIds = ["variant-a", "variant-b"];
-  const expected = \`sha256:\${createHash("sha256").update(JSON.stringify(expectedIds)).digest("hex")}\`;
+  const expected = `sha256:${createHash("sha256").update(JSON.stringify(expectedIds)).digest("hex")}`;
 
   assert.deepEqual(first.candidates.map((item) => item.variant_id), expectedIds);
   assert.equal(first.candidate_set_sha256, expected);
