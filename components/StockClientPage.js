@@ -16,7 +16,7 @@ export default function StockClientPage() {
       region: String(params.get("region") || ""),
       status: String(params.get("status") || ""),
     };
-    const filterTimer = window.setTimeout(() => setFilters(initialFilters), 0);
+    // Defer URL hydration so React does not synchronously cascade state from the mount effect.\n    const filterTimer = window.setTimeout(() => setFilters(initialFilters), 0);
 
     const controller = new AbortController();
     fetch("/api/public-stock", {
