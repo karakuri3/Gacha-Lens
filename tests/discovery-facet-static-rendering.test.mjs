@@ -103,7 +103,7 @@ test("legacy brand and franchise page queries redirect to canonical path paginat
 test("public discovery API supports category, brand, and franchise with one 60-series contract", () => {
   const source = fs.readFileSync("app/api/public-discovery/route.js", "utf8");
   assert.match(source, /\["category", "brand", "franchise"\]/);
-  assert.match(source, /getPublicDiscoveryFacetSeriesPage\(type, rawName, \{ page, pageSize: 60 \}\)/);
+  assert.match(source, /getTargetedPublicDiscoverySeriesPage\(type, rawName, \{ page, pageSize: 60 \}\)/);
   assert.match(source, /getTargetedPublicCategorySeriesPage/);
   assert.match(source, /result\.items\.map\(toPublicSeriesCard\)/);
 });
