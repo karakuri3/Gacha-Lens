@@ -1,28 +1,23 @@
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { DiscoveryFacetLanding } from "@/components/DiscoveryFacetPages";
-import { discoveryFacetPageHref } from "@/lib/domain/discovery-facets";
+import { decodeDiscoveryFacetParam, discoveryFacetPageHref, normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
+import { getPublicDiscoveryFacetSeriesPage } from "@/lib/series";
 import { buildPageMetadata } from "@/lib/site-metadata";
-import {
-  getDiscoveryFacetStaticParams,
-  resolveDiscoveryFacetStaticPage,
-} from "@/lib/static-discovery-facets";
 
-export const dynamic = "force-static";
-export const revalidate = 86400;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-const getPage = cache((name, page) => resolveDiscoveryFacetStaticPage("franchise", name, page));
+const getFranchiseDiscoveryPage = cache((name, page) => getPublicDiscoveryFacetSeriesPage("franchise", name, { page, pageSize: 60 }));
 
-export async function generateStaticParams() {
-  return getDiscoveryFacetStaticParams("franchise");
+async function resolvePage(params, searchParams) {
+  const name = decodeDiscoveryFacetParam((await params).name);
+  const page = normalizeDiscoveryFacetPage((await searchParams)?.page);
+  return getFranchiseDiscoveryPage(name, page);
 }
 
-async function resolvePage(params) {
-  return getPage((await params).name, 1);
-}
-
-export async function generateMetadata({ params }) {
-  const result = await resolvePage(params);
+export async function generateMetadata({ params, searchParams }) {
+  const result = await resolvePage(params, searchParams);
   if (!result) notFound();
   const { facet, page } = result;
   return buildPageMetadata({
@@ -33,8 +28,8 @@ export async function generateMetadata({ params }) {
   });
 }
 
-export default async function FranchisePage({ params }) {
-  const result = await resolvePage(params);
+export default async function FranchisePage({ params, searchParams }) {
+  const result = await resolvePage(params, searchParams);
   if (!result) notFound();
   return <DiscoveryFacetLanding type="franchise" facet={result.facet} items={result.items} page={result} />;
 }
