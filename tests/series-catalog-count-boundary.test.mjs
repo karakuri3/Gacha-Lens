@@ -7,7 +7,7 @@ test("public series page does not run global catalog count fanout", () => {
   assert.doesNotMatch(source, /getSeriesCatalogCounts/);
   assert.doesNotMatch(source, /catalogCounts|showGlobalCounts/);
   assert.match(source, /getSeriesCatalogPage/);
-  assert.match(source, /catalogPage\.total/);
+  assert.match(source, /catalogPage\\?\\.total/);
 });
 
 test("catalog count helper remains available outside the public series request path", () => {
