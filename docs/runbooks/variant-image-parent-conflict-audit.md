@@ -18,43 +18,43 @@ Production extraction is a separate SELECT-only step. The audit command never pe
 A row is a cleanup candidate only when all of the following are true:
 
 1. the variant ID, parent series ID, and variant-to-series relationship are valid;
-2. \`source_type = official_site\`;
+2. `source_type = official_site`;
 3. both variant and parent image values are valid absolute HTTP(S) URLs;
 4. the variant image and parent image are exact string matches;
-5. there is no explicit \`variant\` image scope;
-6. the current presentation helper reports \`series_fallback\` and no trusted variant image;
+5. there is no explicit `variant` image scope;
+6. the current presentation helper reports `series_fallback` and no trusted variant image;
 7. the series contains more than one variant.
 
-Singletons fail closed as \`singleton_ambiguous\`, including provisional singletons whose presentation path would otherwise suppress the variant image.
+Singletons fail closed as `singleton_ambiguous`, including provisional singletons whose presentation path would otherwise suppress the variant image.
 
 ## Deterministic output
 
 Candidate IDs are sorted by raw UTF-8 byte order, not locale-aware collation. The candidate-set digest is:
 
-\`\`\`text
+```text
 sha256(JSON.stringify(sortedCandidateIds))
-\`\`\`
+```
 
-A PostgreSQL extraction that needs to reproduce the ordering should use \`COLLATE "C"\`.
+A PostgreSQL extraction that needs to reproduce the ordering should use `COLLATE "C"`.
 
 The report exposes:
 
-- \`candidate_count\`
-- \`candidate_type_counts\`
-- fixed \`candidate_type_buckets\` for provisional / normal / rare / secret / other
-- \`other_variant_type_counts\`
-- \`rejection_counts\`
-- \`candidate_set_sha256\`
+- `candidate_count`
+- `candidate_type_counts`
+- fixed `candidate_type_buckets` for provisional / normal / rare / secret / other
+- `other_variant_type_counts`
+- `rejection_counts`
+- `candidate_set_sha256`
 
 ## Run
 
-\`\`\`bash
+```bash
 npm run image:parent-conflict-audit -- --input=prepared-input.json
-\`\`\`
+```
 
 Input schema:
 
-\`\`\`json
+```json
 {
   "schema_version": 1,
   "records": [
@@ -76,11 +76,11 @@ Input schema:
     }
   ]
 }
-\`\`\`
+```
 
 ## Production SELECT-only evidence — 2026-09-28
 
-Project: \`gacha-lens-tokyo\` (\`vxbrnvfhmzcxehuuzzum\`), region \`ap-northeast-1\`.
+Project: `gacha-lens-tokyo` (`vxbrnvfhmzcxehuuzzum`), region `ap-northeast-1`.
 
 The current exact-conflict census is 7,077 rows:
 
@@ -99,10 +99,10 @@ All 7,077 exact-conflict rows are the audit input. Classification result:
 - secret candidates: 5
 - other-type candidates: 0
 - rejected: 1,192
-  - \`singleton_ambiguous\`: 1,187
-  - \`invalid_or_blank_image_url\`: 5
+  - `singleton_ambiguous`: 1,187
+  - `invalid_or_blank_image_url`: 5
   - all other rejection reasons: 0
-- candidate set SHA-256: \`sha256:5f5ce212e4e8518df554b16c3342a3cea6fa154c35238e344586715f14fdf4c9\`
+- candidate set SHA-256: `sha256:5f5ce212e4e8518df554b16c3342a3cea6fa154c35238e344586715f14fdf4c9`
 
 The five invalid image rows are exact empty-string matches between variant and parent image fields, so they are not HTTP(S) URLs and are rejected. All 1,187 singleton exact-conflict rows are provisional and remain excluded from cleanup candidates.
 
