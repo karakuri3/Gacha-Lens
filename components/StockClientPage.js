@@ -11,11 +11,12 @@ export default function StockClientPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setFilters({
+    const initialFilters = {
       q: String(params.get("q") || ""),
       region: String(params.get("region") || ""),
       status: String(params.get("status") || ""),
-    });
+    };
+    const filterTimer = window.setTimeout(() => setFilters(initialFilters), 0);
 
     const controller = new AbortController();
     fetch("/api/public-stock", {
@@ -34,7 +35,10 @@ export default function StockClientPage() {
         if (error?.name !== "AbortError") setState({ status: "error", rows: [] });
       });
 
-    return () => controller.abort();
+    return () => {
+      window.clearTimeout(filterTimer);
+      controller.abort();
+    };
   }, []);
 
   const allRows = state.rows;
