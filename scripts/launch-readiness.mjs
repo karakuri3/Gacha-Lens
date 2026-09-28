@@ -119,8 +119,10 @@ export function isSitemapSourceReady(sourceText) {
     '{ path: "/",',
     '{ path: "/series",',
     '{ path: "/ranking",',
-    '{ path: "/schedule",',
     '{ path: "/guides",',
+    "getParentSeriesScheduleMonths",
+    "scheduleMonths.map",
+    "`/schedule?month=${month}`",
     "getEditorialGuideSlugs",
     "`/guides/${encodeURIComponent(slug)}`",
     "MAX_SITEMAP_URLS = 50000",
@@ -221,7 +223,7 @@ function buildStaticChecks(root) {
       "sitemap",
       isSitemapSourceReady(sitemap) ? "pass" : "fail",
       true,
-      "Sitemap must publish core public routes, guides, retain the 50,000 URL cap, and keep the daily low-egress cache boundary."
+      "Sitemap must publish core public routes, guides, real monthly Schedule archives, retain the 50,000 URL cap, and keep the daily low-egress cache boundary."
     ),
     check(
       "observer_sitemaps",
