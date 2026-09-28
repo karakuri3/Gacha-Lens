@@ -168,6 +168,11 @@ test("future provisional builder remains image null", () => {
 test("future formal legacy and Phase A3 paths do not persist parent images", () => {
   const legacy = fs.readFileSync("scripts/upsert-official-data.mjs", "utf8");
   const phaseA3 = fs.readFileSync("lib/domain/official-phase-a3.js", "utf8");
+  assert.match(legacy, /loadExistingRealVariantCatalogStrict\(fetchRows\)/);
+  assert.match(
+    legacy,
+    /resolveLegacyOfficialVariantImage\(raw,\s*existingImageById\.get\(id\)\)/,
+  );
   assert.doesNotMatch(
     legacy,
     /raw\.thumbnail\s*\|\|\s*seriesRow\.image_url/,
