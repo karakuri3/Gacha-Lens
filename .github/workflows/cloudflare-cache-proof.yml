@@ -80,6 +80,19 @@ jobs:
           echo "Cloudflare version ID: ${version_id}" >> "$GITHUB_STEP_SUMMARY"
           echo "Exact-head Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Verify Preview immutable source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          identity="$(curl --fail --silent --show-error --max-time 60 \
+            "${PREVIEW_URL}/api/runtime-diagnostics/release-integrity?proof=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}")"
+          node --input-type=module -e '
+            import { assertProductionSourceIdentity } from "./.github/scripts/cloudflare-check-resolver.mjs";
+            const [payload, target] = process.argv.slice(1);
+            assertProductionSourceIdentity(JSON.parse(payload), target);
+          ' "$identity" "$TARGET_SHA"
+          echo "Preview runtime source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Prove cold-to-warm edge cache
         shell: bash
         run: |
