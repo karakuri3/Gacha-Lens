@@ -286,7 +286,25 @@ jobs:
           done
 
 
-          invalid_variant_shard_code="$(curl --silent --show-error --max-time 60 --output "$tmp/variant-sitemap-invalid.body" --write-out '%{http_code}' "${PREVIEW_URL}/variant-sitemap/5001")"
+          invalid_variant_shard_code=''
+          for attempt in $(seq 1 6); do
+            rc=0
+            invalid_variant_shard_code="$(curl --silent --show-error --max-time 60 --output "$tmp/variant-sitemap-invalid.body" --write-out '%{http_code}' "${PREVIEW_URL}/variant-sitemap/5001")" || rc=$?
+            invalid_variant_shard_code="${invalid_variant_shard_code:-000}"
+            if [[ "$rc" == '0' && "$invalid_variant_shard_code" == '404' ]]; then break; fi
+            if [[ "$attempt" -lt 6 ]]; then
+              case "$invalid_variant_shard_code" in
+                000|429|500|502|503|504)
+                  delay=$((attempt * 3))
+                  echo "variant-sitemap-invalid transient failure rc=$rc HTTP $invalid_variant_shard_code on attempt $attempt; retrying after ${delay}s" >> "$GITHUB_STEP_SUMMARY"
+                  sleep "$delay"
+                  continue
+                  ;;
+              esac
+            fi
+            echo "Out-of-range variant sitemap shard returned rc=$rc HTTP $invalid_variant_shard_code, expected 404" >&2
+            exit 1
+          done
           [[ "$invalid_variant_shard_code" == "404" ]] || {
             echo "Out-of-range variant sitemap shard returned $invalid_variant_shard_code, expected 404" >&2
             exit 1
