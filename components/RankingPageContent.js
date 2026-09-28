@@ -375,6 +375,6 @@ function buildRankingSummary(items, mode) {
   return [
     { label: "掲載", value: `${items.length.toLocaleString("ja-JP")}件` },
     { label: "成約確認", value: `${items.reduce((sum, item) => sum + Number(item.market_evidence?.completedCount || 0), 0).toLocaleString("ja-JP")}件` },
-    { label: "掲載条件", value: "直近90日・3件以上" },
+    { label: "掲載条件", value: "3件以上" },
   ];
 }
