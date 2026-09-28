@@ -1,0 +1,194 @@
+name: Cloudflare Production release proof
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: cloudflare-production-release-proof
+  cancel-in-progress: false
+
+jobs:
+  exact-main-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TARGET_SHA: ${{ github.sha }}
+      PRODUCTION_ORIGIN: https://gachalens.com
+      BROWSER_ACCEPT: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+
+    steps:
+      - name: Checkout exact main SHA
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Wait for exact-main Cloudflare Workers build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          actual_sha="$(git rev-parse HEAD)"
+          [[ "$actual_sha" == "$TARGET_SHA" ]] || {
+            echo "Checkout SHA ${actual_sha} does not match target ${TARGET_SHA}." >&2
+            exit 1
+          }
+
+          resolved=''
+          for attempt in $(seq 1 40); do
+            payload="$(curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs?per_page=100")"
+
+            resolved="$(printf '%s' "$payload" | node .github/scripts/cloudflare-check-resolver.mjs production "$TARGET_SHA")"
+            state="$(jq -r '.state' <<<"$resolved")"
+            if [[ "$state" == 'success' ]]; then
+              break
+            fi
+
+            echo "Cloudflare exact-main build not complete yet (attempt ${attempt}/40)." >> "$GITHUB_STEP_SUMMARY"
+            sleep 15
+          done
+
+          [[ "$(jq -r '.state // ""' <<<"$resolved")" == 'success' ]] || {
+            echo 'Cloudflare Workers exact-main build did not complete successfully within the bounded wait.' >&2
+            exit 1
+          }
+
+          version_id="$(jq -r '.versionId' <<<"$resolved")"
+          check_id="$(jq -r '.checkId' <<<"$resolved")"
+          echo "EXPECTED_VERSION_ID=${version_id}" >> "$GITHUB_ENV"
+          echo "Cloudflare check run: ${check_id}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact main source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Cloudflare version ID: ${version_id}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for exact main source on Production custom domain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          identity=''
+          code='000'
+          for attempt in $(seq 1 40); do
+            body="$(mktemp)"
+            rc=0
+            code="$(curl --silent --show-error --max-time 30 \
+              --output "$body" \
+              --write-out '%{http_code}' \
+              "${PRODUCTION_ORIGIN}/api/runtime-diagnostics/release-integrity?proof=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${attempt}")" || rc=$?
+            code="${code:-000}"
+
+            if [[ "$rc" == '0' && "$code" == '200' ]]; then
+              identity="$(cat "$body")"
+              if node --input-type=module -e '
+                import { assertProductionSourceIdentity } from "./.github/scripts/cloudflare-check-resolver.mjs";
+                const [payload, target] = process.argv.slice(1);
+                assertProductionSourceIdentity(JSON.parse(payload), target);
+              ' "$identity" "$TARGET_SHA"; then
+                rm -f "$body"
+                break
+              fi
+            fi
+
+            rm -f "$body"
+            echo "Production has not exposed exact main yet: HTTP ${code}, attempt ${attempt}/40." >> "$GITHUB_STEP_SUMMARY"
+            sleep 15
+          done
+
+          [[ "$code" == '200' && -n "$identity" ]] || {
+            echo 'Production release identity endpoint never returned HTTP 200 within the bounded wait.' >&2
+            exit 1
+          }
+
+          node --input-type=module -e '
+            import { assertProductionSourceIdentity } from "./.github/scripts/cloudflare-check-resolver.mjs";
+            const [payload, target] = process.argv.slice(1);
+            assertProductionSourceIdentity(JSON.parse(payload), target);
+          ' "$identity" "$TARGET_SHA"
+
+          echo "Production deployed source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Production/main SHA identity: PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Production representative runtime smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          request_get() {
+            local name="$1"
+            local path="$2"
+            local needle="${3:-}"
+            local body="$tmp/${name}.body"
+            local headers="$tmp/${name}.headers"
+            local code rc attempt delay
+
+            for attempt in 1 2 3; do
+              rc=0
+              code="$(curl --silent --show-error --location --max-time 90 \
+                -H "Accept: ${BROWSER_ACCEPT}" \
+                --dump-header "$headers" \
+                --output "$body" \
+                --write-out '%{http_code}' \
+                "${PRODUCTION_ORIGIN}${path}")" || rc=$?
+              code="${code:-000}"
+
+              if [[ "$rc" == '0' && "$code" == '200' ]]; then
+                if [[ -n "$needle" ]] && ! grep -Fq "$needle" "$body"; then
+                  echo "$name missing required marker: $needle" >&2
+                  exit 1
+                fi
+                printf '%-24s HTTP 200 (attempt %s)\n' "$name" "$attempt" >> "$GITHUB_STEP_SUMMARY"
+                return 0
+              fi
+
+              if [[ "$attempt" -lt 3 ]]; then
+                case "$code" in
+                  000|429|500|502|503|504)
+                    delay=$((attempt * 2))
+                    sleep "$delay"
+                    continue
+                    ;;
+                esac
+              fi
+
+              echo "$name failed rc=$rc HTTP $code on attempt $attempt" >&2
+              exit 1
+            done
+          }
+
+          product_path='/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
+          category_path='/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3'
+
+          request_get home '/' 'Gacha Lens'
+          request_get series '/series' 'ガチャ一覧'
+          request_get ranking '/ranking'
+          request_get schedule '/schedule'
+          request_get product "$product_path" 'ディズニー マリー'
+          request_get discovery "$category_path" 'ガシャポン'
+          request_get robots '/robots.txt' 'Sitemap: https://gachalens.com/sitemap.xml'
+
+          missing=0
+          for header in strict-transport-security x-content-type-options x-frame-options referrer-policy content-security-policy permissions-policy; do
+            if grep -qi "^${header}:" "$tmp/home.headers"; then
+              echo "Production security header: ${header}" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "Production is missing required security header: ${header}" >&2
+              missing=1
+            fi
+          done
+          [[ "$missing" == '0' ]]
+
+          echo 'Production representative runtime QA: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "Expected Cloudflare version from exact-main check: ${EXPECTED_VERSION_ID}" >> "$GITHUB_STEP_SUMMARY"
