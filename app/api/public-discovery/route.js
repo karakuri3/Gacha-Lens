@@ -43,8 +43,8 @@ export async function GET(request) {
     },
     {
       headers: {
-        "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
-        "Cloudflare-CDN-Cache-Control": "public, max-age=1800, stale-while-revalidate=60",
+        "Cache-Control": "public, max-age=60, stale-while-revalidate=60",
+        "Cloudflare-CDN-Cache-Control": "public, max-age=300, stale-while-revalidate=60",
       },
     },
   );
