@@ -3,6 +3,8 @@ import { categoryDiscoveryLookupCandidates } from "@/lib/domain/category-discove
 import { discoveryFacetIdentifier, normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
 import { getTargetedPublicDiscoverySeriesPage } from "@/lib/targeted-discovery-series-page";
 import { getTargetedPublicCategorySeriesPage } from "@/lib/targeted-category-series-page";
+import { getStaticDiscoveryFacet } from "@/lib/domain/discovery-static-manifest";
+import { getStaticCategoryFacet } from "@/lib/domain/category-static-manifest";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,13 @@ export async function GET(request) {
 
   if (!["category", "brand", "franchise"].includes(type) || !identifier || page > 5000) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+
+  const publishedFacet = type === "category"
+    ? getStaticCategoryFacet(identifier)
+    : getStaticDiscoveryFacet(type, identifier);
+  if (!publishedFacet) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
   let result = null;
