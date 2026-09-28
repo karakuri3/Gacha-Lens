@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compareScheduleItems, normalizeExplicitReleaseWeek, releaseTiming } from "../lib/domain/release-precision.js";
+import { compareReleaseWeeks, compareScheduleItems, normalizeExplicitReleaseWeek, releaseTiming } from "../lib/domain/release-precision.js";
 
 test("explicit release weeks are trusted", () => {
   assert.equal(normalizeExplicitReleaseWeek("第1週"), "第1週");
   assert.equal(normalizeExplicitReleaseWeek("第2週"), "第2週");
   assert.equal(normalizeExplicitReleaseWeek("第5週"), "第5週");
+  assert.equal(normalizeExplicitReleaseWeek("第6週"), "第6週");
+});
+
+test("explicit provider weeks sort numerically without a fixed 1-5 ceiling", () => {
+  assert.deepEqual(["第6週", "第2週", "第10週", "第1週"].sort(compareReleaseWeeks), ["第1週", "第2週", "第6週", "第10週"]);
+});
+
+test("Bandai legacy sixth-week evidence remains explicit", () => {
+  const timing = releaseTiming({ release_date: "2021-05-01", release_month: "5月", release_week: "第6週" });
+  assert.deepEqual(timing, { precision: "week", week: "第6週", group: "第6週", label: "2021年5月 第6週" });
 });
 
 test("synthetic first-of-month never creates a week", () => {
