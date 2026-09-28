@@ -26,7 +26,7 @@ test("public catalog navigation uses full-document requests so edge-cached HTML 
   assert.match(discovery, /href=\{categoryDiscoveryPageHref\(facet\.name,/);
 
   const categories = source("app/categories/page.js");
-  assert.match(categories, /href=\{categoryDiscoveryHref\(category\.name\)\}/);
+  assert.match(categories, /href=\{categoryDiscoveryHref\(category\.filter_value \?\? category\.name\)\}/);
 
   const card = source("components/SeriesCard.js");
   assert.match(card, /href=\{isSeries \? seriesHref\(series\) : variantHref\(series\)\}/);
