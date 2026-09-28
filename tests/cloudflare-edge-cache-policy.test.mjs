@@ -6,14 +6,14 @@ const source = readFileSync(new URL("../worker/index.js", import.meta.url), "utf
 const variantDetailSource = readFileSync(new URL("../app/series/[slug]/page.js", import.meta.url), "utf8");
 const parentSeriesDetailSource = readFileSync(new URL("../app/series/group/[slug]/page.js", import.meta.url), "utf8");
 
-const DAILY_DISCOVERY_INDEXES = ["/categories", "/brands", "/franchises"];
+const RELEASE_SENSITIVE_DISCOVERY_INDEXES = ["/categories", "/brands", "/franchises"];
 
-test("expensive discovery indexes use a bounded daily public HTML policy", () => {
-  assert.match(source, /marker: "discovery-index-86400-v1"/);
+test("release-sensitive discovery indexes use a bounded five minute public HTML policy", () => {
+  assert.match(source, /marker: "discovery-index-300-v2"/);
   assert.match(source, /cacheTag: "gacha-discovery-index"/);
-  assert.match(source, /cacheControl: "public, max-age=86400, stale-while-revalidate=300"/);
+  assert.match(source, /cacheControl: "public, max-age=300, stale-while-revalidate=60"/);
 
-  for (const route of DAILY_DISCOVERY_INDEXES) {
+  for (const route of RELEASE_SENSITIVE_DISCOVERY_INDEXES) {
     assert.match(source, new RegExp(`"${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
   }
 
@@ -22,9 +22,9 @@ test("expensive discovery indexes use a bounded daily public HTML policy", () =>
   assert.match(source, /accept\.includes\("text\/html"\)/);
 });
 
-test("series index and first-page facet landings retain the 30 minute bounded policy", () => {
-  assert.match(source, /marker: "discovery-document-1800-v1"/);
-  assert.match(source, /cacheControl: "public, max-age=1800, stale-while-revalidate=60"/);
+test("series index and first-page facet landings use the five minute release-state policy", () => {
+  assert.match(source, /marker: "discovery-document-300-v2"/);
+  assert.match(source, /cacheControl: "public, max-age=300, stale-while-revalidate=60"/);
   assert.match(source, /DISCOVERY_DOCUMENT_PATHS = new Set\(\[\s*"\/series"/);
   assert.match(source, /brands\|franchises/);
   assert.ok(source.includes('return /^\\/(?:brands|franchises)\\/[^/]+(?:\\/page\\/[1-9]\\d*)?$/.test(pathname)'));
@@ -54,7 +54,7 @@ test("known Next.js error documents cannot become shared edge cache entries", ()
   assert.match(source, /await canStoreResponse\(response, policy\)/);
 });
 
-test("variant and parent-series details share only the bounded 30 minute detail cache policy", () => {
+test("variant and parent-series details share the bounded five minute release-state cache policy", () => {
   assert.match(variantDetailSource, /export const dynamic = "force-dynamic"/);
   assert.match(variantDetailSource, /export const revalidate = 0/);
   assert.match(parentSeriesDetailSource, /export const dynamic = "force-dynamic"/);
@@ -64,8 +64,8 @@ test("variant and parent-series details share only the bounded 30 minute detail 
   assert.match(source, /function isSeriesDetailCachePath\(pathname\)/);
   assert.ok(source.includes('return /^\\/series\\/(?:[^/]+|group\\/[^/]+)$/.test(pathname);'));
   assert.match(source, /isSeriesDetailCachePath\(url\.pathname\)/);
-  assert.match(source, /marker: "series-detail-1800-v1"/);
-  assert.match(source, /cacheControl: "public, max-age=1800, stale-while-revalidate=60"/);
+  assert.match(source, /marker: "series-detail-300-v2"/);
+  assert.match(source, /cacheControl: "public, max-age=300, stale-while-revalidate=60"/);
 
   const helper = source.slice(
     source.indexOf("function isSeriesDetailCachePath"),
@@ -89,8 +89,8 @@ test("series detail cache keeps production query variants ineligible and cachepr
   assert.match(detailBlock, /return null/);
 });
 
-test("series detail and sitemap cache contracts remain unchanged", () => {
-  assert.match(source, /marker: "series-detail-1800-v1"/);
+test("series detail release-state cache and sitemap cache contracts remain bounded", () => {
+  assert.match(source, /marker: "series-detail-300-v2"/);
   assert.match(source, /marker: "public-sitemap-86400-v1"/);
   assert.match(source, /PUBLIC_SITEMAP_PATHS/);
   assert.match(source, /function isPublicSitemapPath\(pathname\)/);
