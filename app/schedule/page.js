@@ -33,17 +33,24 @@ export async function generateMetadata({ searchParams }) {
   const pageRequest = parseSchedulePage(params?.page);
   const invalidMonth = Boolean(rawMonth && !requestedMonth);
   const selectedMonth = requestedMonth || currentMonth;
-  const availableMonths = invalidMonth ? [] : await getParentSeriesScheduleMonths();
-  const hasData = availableMonths.includes(selectedMonth);
   const hasUnsupportedParams = Object.keys(params ?? {}).some((key) => !SCHEDULE_PARAMS.has(key));
   const page = pageRequest.valid ? pageRequest.page : 1;
+  const metadataPage = invalidMonth || !pageRequest.valid ? null : await getParentSeriesSchedulePage({
+    month: selectedMonth,
+    page,
+    pageSize: SCHEDULE_PAGE_SIZE,
+  });
+  const hasData = Number(metadataPage?.total || 0) > 0;
+  const outOfRange = metadataPage
+    ? isSchedulePageOutOfRange(page, metadataPage.total, metadataPage.pageSize)
+    : true;
   const pageLabel = page > 1 ? `（${page}ページ目）` : "";
 
   return buildPageMetadata({
     title: `${formatCatalogMonth(selectedMonth)}のガチャ新作・発売情報${pageLabel} | Gacha Lens`,
     description: "正式公開されたガチャシリーズの発売情報を月と週から確認できます。",
     path: buildScheduleHref(selectedMonth, page),
-    noIndex: invalidMonth || !pageRequest.valid || hasUnsupportedParams || !hasData,
+    noIndex: invalidMonth || !pageRequest.valid || hasUnsupportedParams || !hasData || outOfRange,
   });
 }
 
