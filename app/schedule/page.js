@@ -19,13 +19,12 @@ import {
   SCHEDULE_PAGE_SIZE,
 } from "@/lib/domain/schedule-query";
 import { formatYen } from "@/lib/domain/public-display-clean";
-import { compareScheduleItems, releaseTiming } from "@/lib/domain/release-precision";
+import { compareReleaseWeeks, compareScheduleItems, releaseTiming } from "@/lib/domain/release-precision";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const weeks = ["第1週", "第2週", "第3週", "第4週", "第5週"];
 const allowedParams = new Set(["month", "page"]);
 
 export async function generateMetadata({ searchParams }) {
@@ -79,7 +78,8 @@ export default async function SchedulePage({ searchParams }) {
   const items = [...catalogPage.items];
   const scheduledItems = items.filter((item) => releaseTiming(item).week);
   const undatedItems = items.filter((item) => !releaseTiming(item).week);
-  const groups = weeks
+  const explicitWeeks = [...new Set(scheduledItems.map((item) => releaseTiming(item).week))].sort(compareReleaseWeeks);
+  const groups = explicitWeeks
     .map((week) => ({
       key: week,
       label: `${week}より順次`,
