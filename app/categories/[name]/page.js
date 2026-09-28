@@ -20,6 +20,6 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function CategoryDiscoveryPage({ params }) {
-  const name = normalizeDiscoveryFacetName((await params).name);
+  const name = decodeCategoryDiscoveryParam((await params).name);
   return <CategoryDiscoveryClientLanding name={name} page={1} />;
 }
