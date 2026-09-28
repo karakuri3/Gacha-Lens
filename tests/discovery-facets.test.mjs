@@ -129,12 +129,13 @@ test("public sitemap fetch remains identity-only, paged, and deterministic", () 
 test("facet indexes use bounded parent counts instead of rescanning all public variants in Supabase mode", () => {
   const identifiers = source("lib/data/public-sitemap-identifiers.js");
   const series = source("lib/series.js");
+  const facetDomain = source("lib/domain/discovery-facets.js");
   const discovery = series.slice(
     series.indexOf("export async function getPublicDiscoveryFacets"),
     series.indexOf("export async function getPublicCategoryCatalogPage"),
   );
 
-  assert.match(identifiers, /DISCOVERY_PARENT_SELECT = "id,slug,franchise,brand,category,variants!inner\(count\)"/);
+  assert.match(identifiers, /DISCOVERY_PARENT_SELECT = "id,slug,franchise,brand,category,image_url,is_released,release_date,variants!inner\(count\)"/);
   assert.match(identifiers, /fetchPublicDiscoveryParentRows/);
   assert.match(discovery, /loadCachedPublicDiscoveryParents/);
   assert.match(discovery, /buildPublicDiscoveryFacetsFromParentRows/);
@@ -142,8 +143,8 @@ test("facet indexes use bounded parent counts instead of rescanning all public v
     discovery.indexOf("loadCachedPublicDiscoveryParents") < discovery.indexOf("getPublicSitemapIdentifiers()"),
     "Supabase discovery must use the parent-count source before the non-Supabase fallback",
   );
-  assert.match(series, /function embeddedVariantCount\(value\)/);
-  assert.match(series, /variant_count: \[\.\.\.group\.seriesCounts\.values\(\)\]\.reduce/);
+  assert.match(facetDomain, /export function discoveryFacetVariantCount\(value\)/);
+  assert.match(facetDomain, /variant_count: \[\.\.\.group\.seriesCounts\.values\(\)\]\.reduce/);
 });
 
 test("targeted discovery fetch applies exact franchise and brand filters with public child rows", () => {
@@ -189,8 +190,8 @@ test("sitemap includes indexable discovery routes and preserves the global cap",
   const text = source("app/sitemap.js");
   assert.match(text, /path: "\/franchises"/);
   assert.match(text, /path: "\/brands"/);
-  assert.match(text, /\/franchises\/\$\{encodeURIComponent\(facet\.name\)\}/);
-  assert.match(text, /\/brands\/\$\{encodeURIComponent\(facet\.name\)\}/);
+  assert.match(text, /discoveryFacetHref\("franchise", facet\.name\)/);
+  assert.match(text, /discoveryFacetHref\("brand", facet\.name\)/);
   assert.match(text, /MAX_SITEMAP_URLS = 50000/);
   assert.match(text, /entries\.length > MAX_SITEMAP_URLS/);
 });
@@ -210,10 +211,7 @@ test("public detail pages avoid global facet scans and preserve local display va
 
 test("targeted facet lookup tries raw first and decodes valid percent-encoded params once", () => {
   assert.deepEqual(discoveryFacetLookupCandidates("バンダイ"), ["バンダイ"]);
-  assert.deepEqual(discoveryFacetLookupCandidates("%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4"), [
-    "%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4",
-    "バンダイ",
-  ]);
+  assert.deepEqual(discoveryFacetLookupCandidates("%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4"), ["%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4", "バンダイ"]);
   assert.deepEqual(discoveryFacetLookupCandidates("100%値"), ["100%値"]);
   assert.deepEqual(discoveryFacetLookupCandidates("100%25"), ["100%25", "100%"]);
 });
