@@ -3,7 +3,7 @@ import { getPublicDiscoveryFacets } from "@/lib/series";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-static";
-export const revalidate = 86400;
+export const revalidate = 300;
 
 export const metadata = buildPageMetadata({
   title: "メーカーからガチャを探す | Gacha Lens",

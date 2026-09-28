@@ -82,5 +82,5 @@ test("variant detail page stays framework-dynamic while Cloudflare owns shared r
   const worker = source("worker/index.js");
   assert.match(page, /export const dynamic = "force-dynamic"/);
   assert.match(page, /export const revalidate = 0/);
-  assert.match(worker, /series-detail-1800-v1/);
+  assert.match(worker, /series-detail-300-v2/);
 });

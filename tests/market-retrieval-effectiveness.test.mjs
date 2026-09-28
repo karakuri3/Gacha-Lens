@@ -48,6 +48,31 @@ test("bounded query strategy emits deterministic primary and fallback searches",
   assert.match(first[0].fallback_queries.join("\n"), /しろねこ 空色|しろねこ（空色）/);
 });
 
+test("market query planner treats aged persisted false as released", () => {
+  const stale = { ...whiteCat, released: false, release_date: "2026-09-01" };
+  const plan = buildMarketSearchQueriesForVariant(stale, { ...series, is_released: true }, {
+    now: new Date("2026-09-28T00:00:00.000Z"),
+  });
+  assert.equal(plan.length, 1);
+  assert.doesNotMatch(plan[0].query, /予約/);
+});
+
+test("market query planner keeps a genuinely future false row upcoming", () => {
+  const future = { ...whiteCat, released: false, release_date: "2026-10-01" };
+  const plan = buildMarketSearchQueriesForVariant(future, { ...series, is_released: false, release_date: "2026-10-01" }, {
+    now: new Date("2026-09-28T00:00:00.000Z"),
+  });
+  assert.match(plan[0].query, /予約/);
+});
+
+test("market query planner preserves monotonic true across a future rerelease date", () => {
+  const rerelease = { ...whiteCat, released: true, release_date: "2026-10-01" };
+  const plan = buildMarketSearchQueriesForVariant(rerelease, { ...series, is_released: true }, {
+    now: new Date("2026-09-28T00:00:00.000Z"),
+  });
+  assert.doesNotMatch(plan[0].query, /予約/);
+});
+
 test("query strategy is independent of affiliate configuration", () => {
   const baseline = buildMarketSearchQueriesForVariant(whiteCat, series);
   process.env.RAKUTEN_AFFILIATE_ID = "not-used-by-planner";

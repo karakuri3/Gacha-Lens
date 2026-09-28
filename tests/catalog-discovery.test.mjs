@@ -84,11 +84,11 @@ test("19 repository errors are thrown instead of converted to zero", () => asser
 test("20 public catalog has no sample fallback", () => assert.doesNotMatch(seriesPage, /mock-gacha|sample fixture|mockSeries/));
 
 test("21 item query uses exact total count", () => assert.match(repository, /select\(relationSelect, \{ count: "exact" \}\)/));
-test("22 released filter uses the effective JST release contract", () => {
-  assert.match(repository, /applyEffectiveReleaseFilter\(query, "released", "released", "release_date", options\.now\)/);
+test("22 released filter uses the parent-aware effective JST release contract", () => {
+  assert.match(repository, /applyEffectiveVariantReleaseFilter\(query, "released", options\.now\)/);
 });
-test("23 upcoming filter uses the effective JST release contract", () => {
-  assert.match(repository, /applyEffectiveReleaseFilter\(query, "upcoming", "released", "release_date", options\.now\)/);
+test("23 upcoming filter uses the parent-aware effective JST release contract", () => {
+  assert.match(repository, /applyEffectiveVariantReleaseFilter\(query, "upcoming", options\.now\)/);
 });
 test("24 category contract matches filtering", () => assert.equal(recordMatchesCatalogQuery(variant, { category: "フィギュア" }), true));
 test("25 month filter matches release month", () => assert.equal(recordMatchesCatalogQuery(variant, { month: "2026-08" }), true));
