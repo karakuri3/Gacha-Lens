@@ -11,15 +11,15 @@ test("public discovery API routes brand/franchise reads through aggregate summar
   assert.match(api, /pageSize: 60/);
 });
 
-test("aggregate facet summaries avoid returning child variant ID arrays", () => {
+test("bounded facet summaries use child IDs to enforce public-parent existence", () => {
   for (const path of [
     "lib/targeted-discovery-series-page.js",
     "lib/targeted-category-series-page.js",
   ]) {
     const helper = source(path);
-    assert.match(helper, /variants!inner\(count\)/);
+    assert.match(helper, /variants!inner\(id\)/);
     assert.match(helper, /embeddedVariantCount/);
-    assert.doesNotMatch(helper, /variants!inner\(id\)/);
+    assert.doesNotMatch(helper, /variants!inner\(count\)/);
   }
 
   const discovery = source("lib/targeted-discovery-series-page.js");
