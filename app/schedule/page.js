@@ -1,12 +1,21 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import ProductImage from "@/components/ProductImage";
-import { getParentSeriesCatalogPage, getUpcomingParentSeriesScheduleMonths } from "@/lib/series";
+import { getParentSeriesScheduleMonths, getParentSeriesSchedulePage } from "@/lib/series";
 import { seriesHref } from "@/lib/variant-url";
 import {
   formatCatalogMonth,
   normalizeCatalogMonth,
-  shiftCatalogMonth,
 } from "@/lib/domain/catalog-query";
+import {
+  SCHEDULE_PAGE_SIZE,
+  adjacentScheduleMonths,
+  buildScheduleHref,
+  currentJstCatalogMonth,
+  groupScheduleMonthsByYear,
+  isSchedulePageOutOfRange,
+  parseSchedulePage,
+} from "@/lib/domain/schedule-pagination";
 import { formatYen } from "@/lib/domain/public-display-clean";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
@@ -14,27 +23,56 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const weeks = ["第1週", "第2週", "第3週", "第4週", "第5週"];
+const SCHEDULE_PARAMS = new Set(["month", "page"]);
+
 export async function generateMetadata({ searchParams }) {
-  const month = normalizeCatalogMonth((await searchParams)?.month);
+  const params = await searchParams;
+  const currentMonth = currentJstCatalogMonth();
+  const rawMonth = firstParam(params?.month);
+  const requestedMonth = normalizeCatalogMonth(rawMonth);
+  const pageRequest = parseSchedulePage(params?.page);
+  const invalidMonth = Boolean(rawMonth && !requestedMonth);
+  const selectedMonth = requestedMonth || currentMonth;
+  const availableMonths = invalidMonth ? [] : await getParentSeriesScheduleMonths();
+  const hasData = availableMonths.includes(selectedMonth);
+  const hasUnsupportedParams = Object.keys(params ?? {}).some((key) => !SCHEDULE_PARAMS.has(key));
+  const page = pageRequest.valid ? pageRequest.page : 1;
+  const pageLabel = page > 1 ? `（${page}ページ目）` : "";
+
   return buildPageMetadata({
-    title: month ? `${formatCatalogMonth(month)}のガチャ新作・発売情報 | Gacha Lens` : "発売スケジュール | Gacha Lens",
+    title: `${formatCatalogMonth(selectedMonth)}のガチャ新作・発売情報${pageLabel} | Gacha Lens`,
     description: "正式公開されたガチャシリーズの発売情報を月と週から確認できます。",
-    path: month ? `/schedule?month=${month}` : "/schedule",
+    path: buildScheduleHref(selectedMonth, page),
+    noIndex: invalidMonth || !pageRequest.valid || hasUnsupportedParams || !hasData,
   });
 }
 
 export default async function SchedulePage({ searchParams }) {
   const params = await searchParams;
-  const availableMonths = await getUpcomingParentSeriesScheduleMonths();
-  const currentMonth = currentCatalogMonth();
-  const requestedMonth = normalizeCatalogMonth(params?.month);
-  const selectedMonth = requestedMonth || availableMonths.find((month) => month >= currentMonth) || availableMonths[0] || currentMonth;
-  const catalogPage = await getParentSeriesCatalogPage({
-    month: selectedMonth,
-    sort: "newest",
-    page: 1,
-    pageSize: 120,
-  });
+  const currentMonth = currentJstCatalogMonth();
+  const rawMonth = firstParam(params?.month);
+  const requestedMonth = normalizeCatalogMonth(rawMonth);
+  const pageRequest = parseSchedulePage(params?.page);
+  if ((rawMonth && !requestedMonth) || !pageRequest.valid) notFound();
+
+  const selectedMonth = requestedMonth || currentMonth;
+  const requestedPage = pageRequest.page;
+  const [availableMonths, catalogPage] = await Promise.all([
+    getParentSeriesScheduleMonths(),
+    getParentSeriesSchedulePage({
+      month: selectedMonth,
+      page: requestedPage,
+      pageSize: SCHEDULE_PAGE_SIZE,
+    }),
+  ]);
+
+  if (isSchedulePageOutOfRange(requestedPage, catalogPage.total, catalogPage.pageSize)) notFound();
+
+  const page = catalogPage.page;
+  const totalPages = catalogPage.totalPages;
+  const adjacentMonths = adjacentScheduleMonths(availableMonths, selectedMonth);
+  const recentMonths = [...availableMonths].sort().reverse().slice(0, 12);
+  const archiveYears = groupScheduleMonthsByYear(availableMonths);
   const items = [...catalogPage.items].sort(compareScheduleItems);
   const scheduledItems = items.filter((item) => normalizeWeek(seriesScheduleWeek(item)));
   const undatedItems = items.filter((item) => !normalizeWeek(seriesScheduleWeek(item)));
@@ -49,6 +87,9 @@ export default async function SchedulePage({ searchParams }) {
     groups.push({ key: "undated", label: "発売日確認中", items: undatedItems });
   }
 
+  const displayStart = catalogPage.total ? (page - 1) * catalogPage.pageSize + 1 : 0;
+  const displayEnd = Math.min(catalogPage.total, page * catalogPage.pageSize);
+
   return (
     <main className="site-main">
       <div className="site-shell">
@@ -60,26 +101,53 @@ export default async function SchedulePage({ searchParams }) {
         </section>
 
         <nav className="schedule-month-nav" aria-label="発売月を移動">
-          <Link href={`/schedule?month=${shiftCatalogMonth(selectedMonth, -1)}`} aria-label="前月を見る">← 前月</Link>
+          {adjacentMonths.previous ? (
+            <Link href={buildScheduleHref(adjacentMonths.previous)} aria-label="前のデータ月を見る">← 前の月</Link>
+          ) : <span className="schedule-month-nav__disabled">← 前の月</span>}
           <strong>{formatCatalogMonth(selectedMonth)}</strong>
-          <Link href={`/schedule?month=${shiftCatalogMonth(selectedMonth, 1)}`} aria-label="次月を見る">次月 →</Link>
-          <Link href={`/schedule?month=${currentMonth}`} className="schedule-month-nav__today">今月</Link>
+          {adjacentMonths.next ? (
+            <Link href={buildScheduleHref(adjacentMonths.next)} aria-label="次のデータ月を見る">次の月 →</Link>
+          ) : <span className="schedule-month-nav__disabled">次の月 →</span>}
+          <Link href={buildScheduleHref(currentMonth)} className="schedule-month-nav__today">今月</Link>
         </nav>
 
-        {availableMonths.length > 0 ? (
-          <nav className="tabs schedule-available-months" aria-label="データがある発売月">
-            {availableMonths.map((month) => (
-              <Link key={month} href={`/schedule?month=${month}`} className={`pill-link ${month === selectedMonth ? "is-active" : ""}`} aria-current={month === selectedMonth ? "page" : undefined}>
+        {recentMonths.length > 0 ? (
+          <nav className="tabs schedule-available-months" aria-label="最近の発売月">
+            {recentMonths.map((month) => (
+              <Link key={month} href={buildScheduleHref(month)} className={`pill-link ${month === selectedMonth ? "is-active" : ""}`} aria-current={month === selectedMonth ? "page" : undefined}>
                 {formatCatalogMonth(month)}
               </Link>
             ))}
           </nav>
         ) : null}
 
+        {archiveYears.length > 0 ? (
+          <details className="card schedule-archive">
+            <summary>月別アーカイブ</summary>
+            <div className="schedule-archive__years">
+              {archiveYears.map((group) => (
+                <section key={group.year} className="schedule-archive__year">
+                  <strong>{group.year}年</strong>
+                  <nav className="tabs schedule-archive__months" aria-label={`${group.year}年の発売月`}>
+                    {group.months.map((month) => (
+                      <Link key={month} href={buildScheduleHref(month)} className={`pill-link ${month === selectedMonth ? "is-active" : ""}`} aria-current={month === selectedMonth ? "page" : undefined}>
+                        {Number(month.slice(5, 7))}月
+                      </Link>
+                    ))}
+                  </nav>
+                </section>
+              ))}
+            </div>
+          </details>
+        ) : null}
+
         <div className="section-head schedule-results-head">
           <div>
             <h2 className="section-title">{formatCatalogMonth(selectedMonth)}</h2>
-            <p className="section-sub">発売シリーズ {catalogPage.total.toLocaleString("ja-JP")}件</p>
+            <p className="section-sub">
+              発売シリーズ {catalogPage.total.toLocaleString("ja-JP")}件
+              {catalogPage.total ? `（${displayStart.toLocaleString("ja-JP")}〜${displayEnd.toLocaleString("ja-JP")}件を表示）` : ""}
+            </p>
           </div>
           <Link href={`/series?month=${selectedMonth}&sort=newest`} className="button-link">シリーズ一覧で見る</Link>
         </div>
@@ -95,7 +163,7 @@ export default async function SchedulePage({ searchParams }) {
                   </div>
                 </div>
                 <div className="grid grid--cards">
-                  {group.items.map((item, index) => <ScheduleCard key={item.slug} item={item} priority={index < 4} />)}
+                  {group.items.map((item, index) => <ScheduleCard key={item.slug || item.series_id} item={item} priority={index < 4} />)}
                 </div>
               </section>
             ))}
@@ -103,10 +171,22 @@ export default async function SchedulePage({ searchParams }) {
         ) : (
           <div className="card empty catalog-empty">
             <strong>{formatCatalogMonth(selectedMonth)}の発売情報はまだありません</strong>
-            <span>前月・次月、またはデータがある月へ切り替えて確認できます。</span>
+            <span>データがある前後の月、今月、または月別アーカイブから確認できます。</span>
             <Link href="/series" className="button-link button-link--accent">ガチャ一覧を見る</Link>
           </div>
         )}
+
+        {totalPages > 1 ? (
+          <nav className="pagination" aria-label={`${formatCatalogMonth(selectedMonth)}の発売シリーズページ`}>
+            {page > 1 ? (
+              <Link className="pill-link" href={buildScheduleHref(selectedMonth, page - 1)}>前へ</Link>
+            ) : <span className="pill-link is-disabled" aria-disabled="true">前へ</span>}
+            <span>{page.toLocaleString("ja-JP")} / {totalPages.toLocaleString("ja-JP")}</span>
+            {page < totalPages ? (
+              <Link className="pill-link" href={buildScheduleHref(selectedMonth, page + 1)}>次へ</Link>
+            ) : <span className="pill-link is-disabled" aria-disabled="true">次へ</span>}
+          </nav>
+        ) : null}
       </div>
     </main>
   );
@@ -141,7 +221,10 @@ function compareScheduleItems(a, b) {
   const dateDiff = releaseTime(a) - releaseTime(b);
   if (dateDiff !== 0) return dateDiff;
   const weekDiff = weekIndex(seriesScheduleWeek(a)) - weekIndex(seriesScheduleWeek(b));
-  return weekDiff || String(a.name || "").localeCompare(String(b.name || ""), "ja");
+  if (weekDiff !== 0) return weekDiff;
+  const nameDiff = String(a.name || "").localeCompare(String(b.name || ""), "ja");
+  if (nameDiff !== 0) return nameDiff;
+  return String(a.series_id || a.id || "").localeCompare(String(b.series_id || b.id || ""));
 }
 
 function releaseTime(item) {
@@ -174,7 +257,7 @@ function weekIndex(value = "") {
   return index >= 0 ? index : weeks.length;
 }
 
-function currentCatalogMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+function firstParam(value) {
+  if (Array.isArray(value)) return String(value[0] ?? "").trim();
+  return String(value ?? "").trim();
 }
