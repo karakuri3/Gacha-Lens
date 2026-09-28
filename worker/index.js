@@ -142,9 +142,16 @@ function getEdgeCachePolicy(request) {
     return EDGE_CACHE_POLICIES.discoveryDocument;
   }
 
+  // Schedule has a deliberately bounded query contract. Only canonical month
+  // archives and canonical page=2..1000 variants may enter shared cache; unknown
+  // keys, duplicate keys and arbitrary search/filter values remain ineligible.
+  if (accept.includes("text/html") && isScheduleArchiveCacheUrl(url)) {
+    return EDGE_CACHE_POLICIES.publicDocument;
+  }
+
   // Other shared public document pages are cacheable only without query
-  // parameters. Search, filter and pagination variants intentionally bypass edge
-  // storage so user-controlled cache-key cardinality stays bounded.
+  // parameters. Search/filter variants intentionally bypass edge storage so
+  // user-controlled cache-key cardinality stays bounded.
   if (
     url.searchParams.size === 0 &&
     accept.includes("text/html") &&
