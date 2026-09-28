@@ -20,6 +20,7 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function FranchisePage({ params }) {
+  // Keep the App Router transport value exact; publication and DB lookup share this identity.
   const name = decodeDiscoveryFacetParam((await params).name);
   return <DiscoveryFacetClientLanding type="franchise" name={name} page={1} />;
 }
