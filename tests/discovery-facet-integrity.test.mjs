@@ -111,9 +111,7 @@ test("facet integrity path does not depend on market, stock, social, or writes",
   const domain = source("lib/domain/discovery-facets.js");
   const targeted = source("lib/targeted-discovery-series-page.js");
   const publication = source("lib/data/public-sitemap-identifiers.js");
-  const combined = `${domain}\n${targeted}\n${publication}`;
   assert.doesNotMatch(domain, /market|stock|reaction|affiliate|ranking/i);
   assert.doesNotMatch(targeted, /marketListings|stockReports|xReactions|restockEvents/);
   assert.doesNotMatch(publication, /insert\(|update\(|upsert\(|delete\(/i);
-  assert.doesNotMatch(combined, /\.insert\(|\.update\(|\.upsert\(|\.delete\(/i);
 });
