@@ -244,8 +244,8 @@ test("write executor is SERIALIZABLE, bounded, locked, and writes only variants.
   );
 
   assert.match(sql, /SET TRANSACTION ISOLATION LEVEL SERIALIZABLE/i);
-  assert.equal((sql.match(/DO \\$\\$/g) || []).length, 3);
-  assert.doesNotMatch(sql, /DO \\$\\nDECLARE/);
+  assert.equal(sql.split("DO $").length - 1, 3);
+  assert.equal(sql.includes("DO $\\nDECLARE"), false);
   assert.match(sql, /FOR UPDATE OF s/i);
   assert.match(sql, /FOR UPDATE OF v/i);
   assert.match(sql, /FOR v_batch_start IN 1\.\.5885 BY 250/i);
