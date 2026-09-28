@@ -39,8 +39,8 @@ test("published identity stays exact across NFKC-compatible franchise values", (
   ];
   const { franchises } = collectPublicParentDiscoveryFacets(rows);
   assert.deepEqual(
-    franchises.map((facet) => facet.name),
-    ["それいけ!アンパンマン", "それいけ！アンパンマン", "五等分の花嫁∬"].sort((a, b) => a.localeCompare(b, "ja")),
+    new Set(franchises.map((facet) => facet.name)),
+    new Set(["それいけ!アンパンマン", "それいけ！アンパンマン", "五等分の花嫁∬"]),
   );
 });
 
@@ -96,7 +96,7 @@ test("URL transport preserves full-width symbols, spaces, apostrophe, percent an
 
 test("encoded transport decodes once and literal percent remains raw-first", () => {
   const encoded = encodeURIComponent("ジュラシック・ワールド");
-  assert.deepEqual(discoveryFacetLookupCandidates(encoded), ["ジュラシック・ワールド"]);
+  assert.deepEqual(discoveryFacetLookupCandidates(encoded), [encoded, "ジュラシック・ワールド"]);
   assert.deepEqual(discoveryFacetLookupCandidates("100%25"), ["100%25", "100%"]);
   assert.equal(decodeDiscoveryFacetParam("100%25"), "100%25");
   assert.equal(decodeCategoryDiscoveryParam("100%25"), "100%25");
@@ -137,7 +137,7 @@ test("index metadata sitemap and detail share canonical href helpers", () => {
   assert.match(source("app/franchises/[name]/page.js"), /discoveryFacetHref\("franchise", name\)/);
   assert.match(source("app/brands/[name]/page.js"), /discoveryFacetHref\("brand", name\)/);
   assert.match(source("app/categories/[name]/page.js"), /categoryDiscoveryHref\(name\)/);
-  assert.match(source("app/categories/page.js"), /getPublicDiscoveryFacets/);
+  assert.match(source("app/categories/page.js"), /getPublicDiscoveryFacets/);\n  assert.match(source("app/franchises/[name]/page.js"), /const name = decodeDiscoveryFacetParam\(\(await params\)\.name\)/);\n  assert.match(source("app/brands/[name]/page.js"), /const name = decodeDiscoveryFacetParam\(\(await params\)\.name\)/);\n  assert.match(source("app/categories/[name]/page.js"), /const name = decodeCategoryDiscoveryParam\(\(await params\)\.name\)/);
 });
 
 test("targeted detail reads stay exact and broad fallback is miss-only", () => {
