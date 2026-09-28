@@ -366,14 +366,14 @@ jobs:
           }
 
           fetch_html kep1er_released '/series?scope=variant&release=released&q=CHAEHYUN'
-          require_text kep1er_released 'CHAEHYUN'
+          require_text kep1er_released '/series/gashapon-4582770121827000-chaehyun'
           fetch_html kep1er_upcoming '/series?scope=variant&release=upcoming&q=CHAEHYUN'
-          forbid_text kep1er_upcoming 'CHAEHYUN'
+          forbid_text kep1er_upcoming '/series/gashapon-4582770121827000-chaehyun'
 
           fetch_html kep1er_series_released '/series?scope=series&release=released&q=Kep1er'
-          require_text kep1er_series_released 'Kep1er ミニCDコレクション'
+          require_text kep1er_series_released '/series/group/gashapon-4582770121827000'
           fetch_html kep1er_series_upcoming '/series?scope=series&release=upcoming&q=Kep1er'
-          forbid_text kep1er_series_upcoming 'Kep1er ミニCDコレクション'
+          forbid_text kep1er_series_upcoming '/series/group/gashapon-4582770121827000'
 
           for spec in \
             'gashapon-4582770121827000|Kep1er ミニCDコレクション' \
