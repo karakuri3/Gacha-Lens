@@ -98,6 +98,22 @@ function isSeriesDetailCachePath(pathname) {
   return /^\/series\/(?:[^/]+|group\/[^/]+)$/.test(pathname);
 }
 
+function isScheduleArchiveCacheUrl(url) {
+  if (url.pathname !== "/schedule") return false;
+  if (url.searchParams.getAll("month").length !== 1) return false;
+  if (url.searchParams.getAll("page").length > 1) return false;
+  if (![...url.searchParams.keys()].every((key) => key === "month" || key === "page")) return false;
+
+  const month = url.searchParams.get("month") || "";
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return false;
+
+  const page = url.searchParams.get("page");
+  if (page === null) return true;
+  if (!/^[1-9]\d*$/.test(page)) return false;
+  const pageNumber = Number(page);
+  return pageNumber >= 2 && pageNumber <= 1000;
+}
+
 function getEdgeCachePolicy(request) {
   if (!isPublicCacheCandidate(request)) return null;
 
@@ -142,9 +158,16 @@ function getEdgeCachePolicy(request) {
     return EDGE_CACHE_POLICIES.discoveryDocument;
   }
 
+  // Schedule has a deliberately bounded query contract. Only canonical month
+  // archives and canonical page=2..1000 variants may enter shared cache; unknown
+  // keys, duplicate keys and arbitrary search/filter values remain ineligible.
+  if (accept.includes("text/html") && isScheduleArchiveCacheUrl(url)) {
+    return EDGE_CACHE_POLICIES.publicDocument;
+  }
+
   // Other shared public document pages are cacheable only without query
-  // parameters. Search, filter and pagination variants intentionally bypass edge
-  // storage so user-controlled cache-key cardinality stays bounded.
+  // parameters. Search/filter variants intentionally bypass edge storage so
+  // user-controlled cache-key cardinality stays bounded.
   if (
     url.searchParams.size === 0 &&
     accept.includes("text/html") &&

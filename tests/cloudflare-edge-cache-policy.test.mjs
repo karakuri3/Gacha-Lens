@@ -47,6 +47,16 @@ test("Cloudflare public cache excludes authenticated, cookie, internal, and quer
   assert.match(discoveryBlock, /isDiscoveryDocumentPath\(url\.pathname\)/);
 });
 
+test("schedule archives cache only the canonical bounded month/page contract", () => {
+  assert.match(source, /function isScheduleArchiveCacheUrl\(url\)/);
+  assert.match(source, /url\.pathname !== "\/schedule"/);
+  assert.match(source, /getAll\("month"\)\.length !== 1/);
+  assert.match(source, /getAll\("page"\)\.length > 1/);
+  assert.match(source, /key === "month" \|\| key === "page"/);
+  assert.match(source, /pageNumber >= 2 && pageNumber <= 1000/);
+  assert.match(source, /isScheduleArchiveCacheUrl\(url\)/);
+});
+
 test("known Next.js error documents cannot become shared edge cache entries", () => {
   assert.match(source, /NON_CACHEABLE_HTML_MARKERS = \["商品情報を取得できません"\]/);
   assert.match(source, /response\.clone\(\)\.text\(\)/);
