@@ -33,10 +33,10 @@ test("Production stock summary starts from recent stock reports only", () => {
 
 test("stock summary keeps effective released filtering and minimal public fields", () => {
   const helper = source("lib/public-stock-summary.js");
-  assert.match(helper, /applyEffectiveReleaseFilter\(query, "released", "released", "release_date"\)/);
+  assert.match(helper, /withEffectiveVariantReleaseRelations\(VARIANT_SELECT\)/);
+  assert.match(helper, /applyEffectiveVariantReleaseFilter\(query, "released"\)/);
   assert.match(helper, /variant_type\.is\.null,variant_type\.neq\.provisional/);
-  assert.match(helper, /applyEffectiveReleaseFilter\(query, "released", "is_released", "release_date"\)/);
-  assert.doesNotMatch(helper, /\.eq\("released", true\)|\.eq\("is_released", true\)/);
+  assert.doesNotMatch(helper, /applyEffectiveReleaseFilter|\.eq\("released", true\)|\.eq\("is_released", true\)/);
   for (const field of [
     /variant_id: variant\.id/,
     /slug: variant\.slug/,
