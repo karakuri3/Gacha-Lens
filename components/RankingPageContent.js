@@ -35,7 +35,7 @@ export default async function RankingPageContent({ tab = "released", scope = "va
 
   const ranked = (tab === "upcoming" && scope === "variant" ? diversifyUpcomingPodium(sorted) : sorted)
     .map((item, index) => ({ ...item, rank: index + 1 }));
-  const summary = buildRankingSummary(ranked, tab);
+  const summary = buildRankingSummary(ranked, tab, scope);
   const completedEvidenceCount = tab === "released"
     ? series.reduce((sum, item) => sum + Number(completedEvidenceForItem(item, scope).completedCount || 0), 0)
     : 0;
@@ -378,7 +378,7 @@ function formatObservedFreshness(value, now = new Date()) {
   return `${formatObservedDate(value)}（${freshness}）`;
 }
 
-function buildRankingSummary(items, mode) {
+function buildRankingSummary(items, mode, scope = "variant") {
   if (mode === "upcoming") {
     return [
       { label: "掲載", value: `${items.length.toLocaleString("ja-JP")}件` },
@@ -388,7 +388,7 @@ function buildRankingSummary(items, mode) {
   }
   return [
     { label: "掲載", value: `${items.length.toLocaleString("ja-JP")}件` },
-    { label: "成約確認", value: `${items.reduce((sum, item) => sum + Number(completedEvidenceForItem(item, "variant").completedCount || 0), 0).toLocaleString("ja-JP")}件` },
+    { label: "成約確認", value: `${items.reduce((sum, item) => sum + Number(completedEvidenceForItem(item, scope).completedCount || 0), 0).toLocaleString("ja-JP")}件` },
     { label: "掲載条件", value: "3件以上" },
   ];
 }
