@@ -199,7 +199,7 @@ BEGIN
   END IF;
 END $$;
 
-DO $
+DO $$
 DECLARE
   v_candidate_count int;
   v_target_null int;
