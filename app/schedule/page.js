@@ -32,11 +32,15 @@ export async function generateMetadata({ searchParams }) {
   const currentMonth = currentScheduleMonth();
   const month = normalizeCatalogMonth(params?.month) || currentMonth;
   const page = normalizeSchedulePage(params?.page);
-  const availableMonths = await getParentSeriesScheduleMonths();
+  const metadataPage = await getParentSeriesSchedulePage({
+    month,
+    page: 1,
+    pageSize: 1,
+  });
   const hasUnknownParams = Object.keys(params || {}).some((key) => !allowedParams.has(key));
   const invalidMonth = Boolean(params?.month) && !normalizeCatalogMonth(params.month);
   const invalidPage = !isCanonicalSchedulePageValue(params?.page);
-  const emptyMonth = !availableMonths.includes(month);
+  const emptyMonth = metadataPage.total === 0;
   const suffix = page > 1 ? `（${page}ページ目）` : "";
   return buildPageMetadata({
     title: `${formatCatalogMonth(month)}のガチャ新作・発売情報${suffix} | Gacha Lens`,
