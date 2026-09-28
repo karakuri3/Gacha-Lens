@@ -29,6 +29,23 @@ function row(id, seriesId, franchise, brand, overrides = {}) {
   };
 }
 
+test("facets preserve exact raw identifiers while requiring two distinct public parent series", () => {
+  const result = collectPublicDiscoveryFacets([
+    row("v1", "s1", "アイカツ！", "Disney"),
+    row("v2", "s2", "アイカツ！", "Disney"),
+    row("v3", "s3", "アイカツ!", "DISNEY"),
+    row("v4", "s4", "アイカツ!", "DISNEY"),
+  ]);
+  assert.deepEqual(result.franchises, [
+    { name: "アイカツ！", series_count: 2, variant_count: 2 },
+    { name: "アイカツ!", series_count: 2, variant_count: 2 },
+  ]);
+  assert.deepEqual(result.brands, [
+    { name: "Disney", series_count: 2, variant_count: 2 },
+    { name: "DISNEY", series_count: 2, variant_count: 2 },
+  ]);
+});
+
 test("facets require two distinct public parent series and count public variants", () => {
   const result = collectPublicDiscoveryFacets([
     row("v1", "s1", "作品A", "メーカーA"),
@@ -126,26 +143,26 @@ test("public sitemap fetch remains identity-only, paged, and deterministic", () 
   assert.doesNotMatch(text, /market|signal|stock|reaction/i);
 });
 
-test("facet indexes use bounded parent counts instead of rescanning all public variants in Supabase mode", () => {
-  const identifiers = source("lib/data/public-sitemap-identifiers.js");
+test("facet indexes and root sitemap publish from the audited static manifest in Supabase mode", () => {
   const series = source("lib/series.js");
   const discovery = series.slice(
     series.indexOf("export async function getPublicDiscoveryFacets"),
     series.indexOf("export async function getPublicCategoryCatalogPage"),
   );
-
-  assert.match(identifiers, /DISCOVERY_PARENT_SELECT = "id,slug,franchise,brand,category,variants!inner\(count\)"/);
-  assert.match(identifiers, /fetchPublicDiscoveryParentRows/);
-  assert.match(discovery, /loadCachedPublicDiscoveryParents/);
-  assert.match(discovery, /buildPublicDiscoveryFacetsFromParentRows/);
-  assert.ok(
-    discovery.indexOf("loadCachedPublicDiscoveryParents") < discovery.indexOf("getPublicSitemapIdentifiers()"),
-    "Supabase discovery must use the parent-count source before the non-Supabase fallback",
+  const rootSitemap = series.slice(
+    series.indexOf("export async function getPublicRootSitemapIdentifiers"),
+    series.indexOf("export async function getVariantObserverSitemapShardCount"),
   );
-  assert.match(series, /function embeddedVariantCount\(value\)/);
-  assert.match(series, /variant_count: \[\.\.\.group\.seriesCounts\.values\(\)\]\.reduce/);
-});
+  const component = source("components/DiscoveryFacetPages.js");
 
+  assert.match(series, /STATIC_FRANCHISE_FACETS/);
+  assert.match(series, /STATIC_BRAND_FACETS/);
+  assert.match(series, /STATIC_CATEGORY_FACETS/);
+  assert.match(discovery, /shouldUseSupabaseRecords\(\)\) return getStaticPublicDiscoveryFacets\(\)/);
+  assert.doesNotMatch(discovery, /fetchPublicDiscoveryParentRows|loadCachedPublicDiscoveryParents/);
+  assert.match(rootSitemap, /getStaticPublicDiscoveryFacets\(\)/);
+  assert.match(component, /Number\.isFinite\(facet\.variant_count\)/);
+});
 test("targeted discovery fetch applies exact franchise and brand filters with public child rows", () => {
   const text = source("lib/data/supabase-gacha-repository.js");
   assert.match(text, /fetchSupabasePublicDiscoveryFacetSeriesPage/);
@@ -163,7 +180,9 @@ test("brand and franchise routes are DB-free static shells with canonical path p
     assert.match(first, /export const dynamic = "force-static"/);
     assert.match(first, /DiscoveryFacetClientLanding/);
     assert.match(first, /getStaticDiscoveryFacetParams/);
-    assert.doesNotMatch(first, /getPublicDiscoveryFacetSeriesPage|searchParams|notFound/);
+    assert.doesNotMatch(first, /getPublicDiscoveryFacetSeriesPage|searchParams/);
+    assert.match(first, /getStaticDiscoveryFacet/);
+    assert.match(first, /notFound\(\)/);
     assert.match(paged, /getStaticDiscoveryFacetPaginationParams/);
     assert.match(paged, /noIndex: true/);
     assert.match(paged, /discoveryFacetPageHref/);
@@ -189,8 +208,8 @@ test("sitemap includes indexable discovery routes and preserves the global cap",
   const text = source("app/sitemap.js");
   assert.match(text, /path: "\/franchises"/);
   assert.match(text, /path: "\/brands"/);
-  assert.match(text, /\/franchises\/\$\{encodeURIComponent\(facet\.name\)\}/);
-  assert.match(text, /\/brands\/\$\{encodeURIComponent\(facet\.name\)\}/);
+  assert.match(text, /discoveryFacetHref\("franchise", facet\.name\)/);
+  assert.match(text, /discoveryFacetHref\("brand", facet\.name\)/);
   assert.match(text, /MAX_SITEMAP_URLS = 50000/);
   assert.match(text, /entries\.length > MAX_SITEMAP_URLS/);
 });

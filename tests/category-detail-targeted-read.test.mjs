@@ -26,9 +26,9 @@ test("Production category detail splits exact count from the bounded page read",
   assert.match(helper, /referencedTable: "variants"/);
   assert.match(helper, /const page = Math\.min\(requestedPage, totalPages\)/);
   assert.match(helper, /if \(direct\.total > 0\) return buildResult\(direct, requestedName\)/);
-  assert.match(helper, /findPublicCategoryFacet\(await getParentSeriesCategoryCatalog\(\), requestedName\)/);
+  assert.match(helper, /findPublicCategoryFacet\(\(await getPublicDiscoveryFacets\(\)\)\.categories, requestedName\)/);
   assert.ok(
-    helper.indexOf("readCategoryPage(requestedName") < helper.indexOf("getParentSeriesCategoryCatalog()"),
+    helper.indexOf("readCategoryPage(requestedName") < helper.indexOf("getPublicDiscoveryFacets()"),
     "normal category requests must use the targeted query before the broad raw-value fallback",
   );
   assert.doesNotMatch(helper, /market_listings|x_reactions|restock_events|stock_reports/);
