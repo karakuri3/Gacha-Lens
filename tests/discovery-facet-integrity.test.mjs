@@ -169,6 +169,8 @@ test("live all-published audit is bounded and write-free", () => {
   const audit = source("scripts/discovery-facet-integrity-audit.mjs");
   assert.match(audit, /MAX_ROWS = 50000/);
   assert.match(audit, /published_total/);
+  assert.match(audit, /variants!inner\(id\)/);
+  assert.match(audit, /control_detail_checks/);
   assert.doesNotMatch(audit, /\.insert\(|\.update\(|\.upsert\(|\.delete\(|\.rpc\(/);
   assert.match(audit, /production_write_count: 0/);
 });
