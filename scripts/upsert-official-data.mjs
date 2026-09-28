@@ -3,8 +3,9 @@ import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
 import {
   assertLegacyOfficialRecordsSafe,
-  loadExistingRealVariantSeriesIdsStrict,
+  loadExistingRealVariantCatalogStrict,
   partitionLegacyOfficialRecords,
+  resolveLegacyOfficialVariantImage,
   resolveLegacyOfficialRereleasePolicy,
 } from "../lib/domain/official-upsert-safety.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
@@ -23,12 +24,18 @@ if (rereleasePolicy === "block") assertLegacyOfficialRecordsSafe(officialRows);
 const legacyUpsertRows = rereleasePolicy === "skip" ? safeRecords : officialRows;
 const skippedRereleaseRecords = rereleasePolicy === "skip" ? blockedRecords.length : 0;
 const seriesRows = dedupeRowsById(legacyUpsertRows.map(toSeriesRow));
-const existingRealVariantSeriesIds = await loadExistingRealVariantSeriesIdsStrict(fetchRows);
+const existingRealVariantCatalog = await loadExistingRealVariantCatalogStrict(fetchRows);
 const variantRows = dedupeRowsById(legacyUpsertRows.flatMap((series) => {
   const variants = asArray(series.variants || series.items || series.lineup || series.line_up);
-  if (variants.length) return variants.map((variant) => toVariantRow(variant, series));
+  if (variants.length) {
+    return variants.map((variant) => toVariantRow(
+      variant,
+      series,
+      existingRealVariantCatalog.imageById,
+    ));
+  }
   const seriesId = toSeriesRow(series).id;
-  return existingRealVariantSeriesIds.has(seriesId) ? [] : [toProvisionalVariantRow(series)];
+  return existingRealVariantCatalog.seriesIds.has(seriesId) ? [] : [toProvisionalVariantRow(series)];
 }));
 
 const issueRows = generatedOfficial.issues.map((issue) => ({
@@ -93,18 +100,19 @@ function toSeriesRow(raw) {
   };
 }
 
-function toVariantRow(raw, series) {
+function toVariantRow(raw, series, existingImageById = new Map()) {
   const seriesRow = toSeriesRow(series);
   const name = text(raw.name || raw.title || raw.variant_name);
+  const id = text(raw.id || raw.variant_id || `${seriesRow.id}-${slugify(name || "variant")}`);
   return {
-    id: text(raw.id || raw.variant_id || `${seriesRow.id}-${slugify(name || "variant")}`),
+    id,
     slug: text(raw.slug || `${seriesRow.slug}-${slugify(name || "variant")}`),
     series_id: seriesRow.id,
     name,
     variant_type: text(raw.variant_type || raw.type) || "normal",
     rarity: text(raw.rarity) || "通常",
     role: text(raw.role) || "単品",
-    image: nullableText(raw.image || raw.image_url || raw.imageUrl || raw.product_image || raw.thumbnail),
+    image: resolveLegacyOfficialVariantImage(raw, existingImageById.get(id)),
     released: resolveReleased(raw.release_date || seriesRow.release_date, raw.released ?? seriesRow.is_released),
     price: number(raw.price || raw.price_yen || raw.priceYen) ?? seriesRow.price,
     brand: text(raw.brand || seriesRow.brand),
