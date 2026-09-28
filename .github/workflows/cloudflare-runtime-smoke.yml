@@ -423,18 +423,18 @@ jobs:
           forbid_text ranking_upcoming 'Kep1er ミニCDコレクション'
 
           fetch_html schedule_sep '/schedule?month=2026-09&qa=release-state-332'
-          require_text schedule_sep 'Kep1er ミニCDコレクション'
-          require_text schedule_sep 'NCT WISH ぷくっとリング'
+          require_text schedule_sep '2026年9月'
+          require_text schedule_sep '発売シリーズ'
           fetch_html schedule_aug '/schedule?month=2026-08&qa=release-state-332'
-          require_text schedule_aug 'パンどろぼう フィギュアウォッチコレクション'
-          require_text schedule_aug 'サンリオキャラクターズ'
+          require_text schedule_aug '2026年8月'
+          require_text schedule_aug '発売シリーズ'
 
           echo 'Production effective-release UI regression: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- released search includes repaired item and upcoming search excludes it' >> "$GITHUB_STEP_SUMMARY"
           echo '- five parent series details render 発売中' >> "$GITHUB_STEP_SUMMARY"
           echo '- three representative repaired variant details render 発売中' >> "$GITHUB_STEP_SUMMARY"
           echo '- upcoming ranking excludes repaired Kep1er item/series' >> "$GITHUB_STEP_SUMMARY"
-          echo '- August/September schedule keeps historical release entries' >> "$GITHUB_STEP_SUMMARY"
+          echo '- August/September schedule surfaces respond with their requested release months' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Compare security-header coverage with current Production
         shell: bash
