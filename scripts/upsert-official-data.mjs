@@ -104,7 +104,7 @@ function toVariantRow(raw, series) {
     variant_type: text(raw.variant_type || raw.type) || "normal",
     rarity: text(raw.rarity) || "通常",
     role: text(raw.role) || "単品",
-    image: text(raw.image || raw.image_url || raw.imageUrl || raw.product_image || raw.thumbnail || seriesRow.image_url),
+    image: nullableText(raw.image || raw.image_url || raw.imageUrl || raw.product_image || raw.thumbnail),
     released: resolveReleased(raw.release_date || seriesRow.release_date, raw.released ?? seriesRow.is_released),
     price: number(raw.price || raw.price_yen || raw.priceYen) ?? seriesRow.price,
     brand: text(raw.brand || seriesRow.brand),
