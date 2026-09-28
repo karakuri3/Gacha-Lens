@@ -19,6 +19,7 @@ import {
   SCHEDULE_PAGE_SIZE,
 } from "@/lib/domain/schedule-query";
 import { formatYen } from "@/lib/domain/public-display-clean";
+import { compareScheduleItems, releaseTiming } from "@/lib/domain/release-precision";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
@@ -76,16 +77,16 @@ export default async function SchedulePage({ searchParams }) {
   const displayStart = catalogPage.total ? (catalogPage.page - 1) * catalogPage.pageSize + 1 : 0;
   const displayEnd = (catalogPage.page - 1) * catalogPage.pageSize + catalogPage.items.length;
   const items = [...catalogPage.items];
-  const scheduledItems = items.filter((item) => normalizeWeek(seriesScheduleWeek(item)));
-  const undatedItems = items.filter((item) => !normalizeWeek(seriesScheduleWeek(item)));
+  const scheduledItems = items.filter((item) => releaseTiming(item).week);
+  const undatedItems = items.filter((item) => !releaseTiming(item).week);
   const groups = weeks
     .map((week) => ({
       key: week,
       label: `${week}より順次`,
-      items: scheduledItems.filter((item) => normalizeWeek(seriesScheduleWeek(item)) === week),
+      items: scheduledItems.filter((item) => releaseTiming(item).week === week).sort(compareScheduleItems),
     }))
     .filter((group) => group.items.length > 0);
-  if (undatedItems.length) groups.push({ key: "undated", label: "発売日確認中", items: undatedItems });
+  if (undatedItems.length) groups.push({ key: "undated", label: "発売時期未定", items: undatedItems.sort(compareScheduleItems) });
 
   const archiveGroups = groupScheduleArchiveMonths(availableMonths);
   const hasSelectedMonthData = availableMonths.includes(requestedMonth);
@@ -199,20 +200,21 @@ function SchedulePagination({ month, page, totalPages }) {
 }
 
 function ScheduleCard({ item, priority = false }) {
-  const week = normalizeWeek(seriesScheduleWeek(item));
+  const timing = releaseTiming(item);
+  const week = timing.week;
   return (
     <Link href={seriesHref(item)} className="card product-card">
       <div className="product-image"><ProductImage item={undefined} src={item.image_url || item.imageUrl} imageScope="series" alt={item.name} priority={priority} emptyLabel="画像なし" /></div>
       <div>
         <div className="tag-row" style={{ marginBottom: 10 }}>
-          <span className="tag">{week ? `${week}より順次` : "発売日確認中"}</span>
+          <span className="tag">{week ? `${week}より順次` : "発売時期未定"}</span>
           <span className="tag">シリーズ</span>
         </div>
         <h2 className="product-name">{item.name}</h2>
         <div className="product-meta">{item.brand || "公式商品"} / {item.variant_count ? `${item.variant_count}種` : "ラインナップ確認中"}</div>
       </div>
       <div className="metric-grid">
-        <Metric label="発売" value={releaseLabel(item)} />
+        <Metric label="発売" value={timing.label} />
         <Metric label="定価" value={formatYen(item.price)} />
       </div>
     </Link>
@@ -221,24 +223,4 @@ function ScheduleCard({ item, priority = false }) {
 
 function Metric({ label, value, tone = "" }) {
   return <div className="metric"><div className="metric__label">{label}</div><div className={`metric__value ${tone ? `is-${tone}` : ""}`}>{value}</div></div>;
-}
-
-function seriesScheduleWeek(item) {
-  const explicitWeek = item.release_week || item.schedule_week || "";
-  if (explicitWeek) return explicitWeek;
-  const date = String(item.release_date || item.releaseDate || "");
-  const match = date.match(/^\d{4}-\d{2}-(\d{2})$/);
-  if (!match) return "";
-  return `第${Math.min(5, Math.ceil(Number(match[1]) / 7))}週`;
-}
-
-function releaseLabel(item) {
-  const date = String(item.release_date || item.releaseDate || "");
-  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date.replace(/-/g, "/");
-  return formatCatalogMonth(String(item.release_month || item.schedule_month || "")) || "発売日確認中";
-}
-
-function normalizeWeek(value = "") {
-  const match = String(value).match(/([1-5])/);
-  return match ? `第${match[1]}週` : "";
 }

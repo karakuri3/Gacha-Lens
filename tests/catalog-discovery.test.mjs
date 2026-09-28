@@ -115,8 +115,8 @@ test("32 schedule uses parent series data and series links", () => {
 });
 test("33 undated series are kept out of week groups without deriving a variant date", () => {
   assert.match(schedulePage, /const undatedItems = items\.filter/);
-  assert.match(schedulePage, /item\.release_week \|\| item\.schedule_week/);
-  assert.match(schedulePage, /item\.release_date \|\| item\.releaseDate/);
+  assert.match(schedulePage, /releaseTiming\(item\)/);
+  assert.doesNotMatch(schedulePage, /Math\.ceil\(Number\(match\[1\]\) \/ 7\)/);
   assert.doesNotMatch(schedulePage, /item\.variant_type/);
 });
 test("33a schedule month list is derived from all parent release data", () => {
