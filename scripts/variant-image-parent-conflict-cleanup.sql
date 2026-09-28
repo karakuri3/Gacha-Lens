@@ -199,8 +199,9 @@ BEGIN
   END IF;
 END $$;
 
-DO $$
+DO $
 DECLARE
+  v_candidate_count int;
   v_target_null int;
   v_parent_drift int;
   v_exact_after int;
@@ -211,6 +212,8 @@ DECLARE
   v_rare_after int;
   v_secret_after int;
 BEGIN
+  SELECT COUNT(*)::int INTO v_candidate_count FROM _gl_cleanup_candidates;
+
   SELECT COUNT(*)::int INTO v_target_null
   FROM public.variants v
   JOIN _gl_cleanup_candidates c ON c.variant_id = v.id
@@ -271,7 +274,24 @@ BEGIN
     v_secret_after
   FROM classified_after;
 
-  IF v_target_null <> 5885
+  IF v_candidate_count = 0 THEN
+    IF v_target_null <> 0
+      OR v_parent_drift <> 0
+      OR v_exact_after <> 1187
+      OR v_safe_after <> 0
+      OR v_singleton_after <> 1187
+      OR v_provisional_after <> 0
+      OR v_normal_after <> 0
+      OR v_rare_after <> 0
+      OR v_secret_after <> 0
+    THEN
+      RAISE EXCEPTION 'variant_parent_image_cleanup_idempotent_postcondition_mismatch';
+    END IF;
+    RETURN;
+  END IF;
+
+  IF v_candidate_count <> 5885
+    OR v_target_null <> 5885
     OR v_parent_drift <> 0
     OR v_exact_after <> 1187
     OR v_safe_after <> 0
