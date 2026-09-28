@@ -54,7 +54,7 @@ test("Gashapon detail fixture yields an exact formal lineup and variant images",
 });
 
 test("Gashapon detail preserves explicit sixth-week evidence", () => {
-  const body = fixture("gashapon-detail.html").replace(/2026年8月\\s*第2週/g, "2021年5月 第6週");
+  const body = fixture("gashapon-detail.html").replace(/2026年8月\s*第2週/g, "2021年5月 第6週");
   const parsed = parseOfficialDetailDocument(body, gashaponDetailUrl);
   assert.equal(parsed.record.release_month, "5月");
   assert.equal(parsed.record.release_week, "第6週");
