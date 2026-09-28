@@ -125,8 +125,11 @@ test("release proof workflow is push-to-main only and does not treat Vercel as C
 
 test("release identity endpoint is immutable-build sourced and non-secret", () => {
   const route = fs.readFileSync("app/api/runtime-diagnostics/release-integrity/route.js", "utf8");
-  assert.match(route, /WORKERS_CI_COMMIT_SHA/);
+  assert.match(route, /GACHA_RELEASE_SOURCE_SHA/);
   assert.match(route, /dynamic = "force-static"/);
+  const nextConfig = fs.readFileSync("next.config.mjs", "utf8");
+  assert.match(nextConfig, /WORKERS_CI_COMMIT_SHA/);
+  assert.match(nextConfig, /GACHA_RELEASE_SOURCE_SHA/);
   assert.match(route, /source_sha/);
   assert.match(route, /no-store/);
   assert.doesNotMatch(route, /TOKEN|SECRET|ACCOUNT_ID/);
