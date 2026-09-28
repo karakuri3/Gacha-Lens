@@ -224,4 +224,3 @@ function ScheduleCard({ item, priority = false }) {
 function Metric({ label, value, tone = "" }) {
   return <div className="metric"><div className="metric__label">{label}</div><div className={`metric__value ${tone ? `is-${tone}` : ""}`}>{value}</div></div>;
 }
-
