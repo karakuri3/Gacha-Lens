@@ -29,6 +29,23 @@ function row(id, seriesId, franchise, brand, overrides = {}) {
   };
 }
 
+test("facets preserve exact raw identifiers while requiring two distinct public parent series", () => {
+  const result = collectPublicDiscoveryFacets([
+    row("v1", "s1", "アイカツ！", "Disney"),
+    row("v2", "s2", "アイカツ！", "Disney"),
+    row("v3", "s3", "アイカツ!", "DISNEY"),
+    row("v4", "s4", "アイカツ!", "DISNEY"),
+  ]);
+  assert.deepEqual(result.franchises, [
+    { name: "アイカツ!", series_count: 2, variant_count: 2 },
+    { name: "アイカツ！", series_count: 2, variant_count: 2 },
+  ]);
+  assert.deepEqual(result.brands, [
+    { name: "DISNEY", series_count: 2, variant_count: 2 },
+    { name: "Disney", series_count: 2, variant_count: 2 },
+  ]);
+});
+
 test("facets require two distinct public parent series and count public variants", () => {
   const result = collectPublicDiscoveryFacets([
     row("v1", "s1", "作品A", "メーカーA"),
@@ -189,8 +206,8 @@ test("sitemap includes indexable discovery routes and preserves the global cap",
   const text = source("app/sitemap.js");
   assert.match(text, /path: "\/franchises"/);
   assert.match(text, /path: "\/brands"/);
-  assert.match(text, /\/franchises\/\$\{encodeURIComponent\(facet\.name\)\}/);
-  assert.match(text, /\/brands\/\$\{encodeURIComponent\(facet\.name\)\}/);
+  assert.match(text, /discoveryFacetHref\("franchise", facet\.name\)/);
+  assert.match(text, /discoveryFacetHref\("brand", facet\.name\)/);
   assert.match(text, /MAX_SITEMAP_URLS = 50000/);
   assert.match(text, /entries\.length > MAX_SITEMAP_URLS/);
 });
