@@ -6,6 +6,12 @@ test("explicit release weeks are trusted", () => {
   assert.equal(normalizeExplicitReleaseWeek("第1週"), "第1週");
   assert.equal(normalizeExplicitReleaseWeek("第2週"), "第2週");
   assert.equal(normalizeExplicitReleaseWeek("第5週"), "第5週");
+  assert.equal(normalizeExplicitReleaseWeek("第6週"), "第6週");
+});
+
+test("official sixth-week evidence remains a real week group", () => {
+  const timing = releaseTiming({ release_date: "2022-10-01", release_month: "10月", release_week: "第6週" });
+  assert.deepEqual(timing, { precision: "week", week: "第6週", group: "第6週", label: "2022年10月 第6週" });
 });
 
 test("synthetic first-of-month never creates a week", () => {
