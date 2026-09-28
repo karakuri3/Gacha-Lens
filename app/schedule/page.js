@@ -9,6 +9,7 @@ import {
   shiftCatalogMonth,
 } from "@/lib/domain/catalog-query";
 import {
+  currentScheduleMonth,
   groupScheduleArchiveMonths,
   isCanonicalSchedulePageValue,
   normalizeSchedulePage,
@@ -27,7 +28,7 @@ const allowedParams = new Set(["month", "page"]);
 
 export async function generateMetadata({ searchParams }) {
   const params = await searchParams;
-  const currentMonth = currentCatalogMonth();
+  const currentMonth = currentScheduleMonth();
   const month = normalizeCatalogMonth(params?.month) || currentMonth;
   const page = normalizeSchedulePage(params?.page);
   const availableMonths = await getParentSeriesScheduleMonths();
@@ -46,7 +47,7 @@ export async function generateMetadata({ searchParams }) {
 
 export default async function SchedulePage({ searchParams }) {
   const params = await searchParams;
-  const currentMonth = currentCatalogMonth();
+  const currentMonth = currentScheduleMonth();
   const requestedMonth = normalizeCatalogMonth(params?.month);
   const requestedPage = normalizeSchedulePage(params?.page);
   const hasUnknownParams = Object.keys(params || {}).some((key) => !allowedParams.has(key));
@@ -233,7 +234,7 @@ function normalizeWeek(value = "") {
   return match ? `第${match[1]}週` : "";
 }
 
-function currentCatalogMonth() {
+function currentScheduleMonth() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
