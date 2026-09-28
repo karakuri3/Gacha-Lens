@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-test("home dashboard is daily static-rendered", () => {
+test("home dashboard refreshes release state within five minutes", () => {
   const source = fs.readFileSync("app/page.js", "utf8");
   assert.match(source, /export const dynamic = "force-static";/);
-  assert.match(source, /export const revalidate = 86400;/);
+  assert.match(source, /export const revalidate = 300;/);
   assert.doesNotMatch(source, /force-dynamic|revalidate = 0|searchParams/);
 });
 
