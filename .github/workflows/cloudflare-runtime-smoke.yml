@@ -435,6 +435,7 @@ jobs:
           require_text schedule_aug '2026年8月'
           require_text schedule_aug '発売シリーズ'
 
+          # Issue #350: verify canonical facet documents and the JSON read contract on Production.
           fetch_html facet_franchises '/franchises?qa=facet-integrity-350'
           require_text facet_franchises '作品から探す'
           fetch_html facet_brands '/brands?qa=facet-integrity-350'
