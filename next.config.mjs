@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    GACHA_RELEASE_SOURCE_SHA:
+      process.env.WORKERS_CI_COMMIT_SHA ?? process.env.GITHUB_SHA ?? "",
+  },
   turbopack: {
     root: import.meta.dirname,
   },
