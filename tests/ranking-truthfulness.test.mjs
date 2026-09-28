@@ -37,6 +37,16 @@ test("ranking truthfulness: completed-sale ranking keeps the existing three-sale
   assert.equal(classifyMarketEvidence({ subject: variant, listings: [sold("a"), sold("b"), sold("c")], now: NOW }).eligibleForPriceRanking, true);
 });
 
+test("ranking truthfulness: sold status without explicit sold_at is not completed-sale evidence", () => {
+  const evidence = classifyMarketEvidence({
+    subject: variant,
+    listings: [listing({ id: "sold-without-proof", status: "sold", sold_at: null })],
+    now: NOW,
+  });
+  assert.equal(evidence.completedCount, 0);
+  assert.equal(evidence.eligibleForPriceRanking, false);
+});
+
 test("ranking truthfulness: one active listing is a single observation, never a fake range", () => {
   const entry = buildActiveListingWatchEntry({ ...variant, market_listings: [listing()] }, { now: NOW });
   assert.equal(entry.listingCount, 1);
