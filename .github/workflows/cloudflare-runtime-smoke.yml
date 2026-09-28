@@ -50,65 +50,38 @@ jobs:
             exit 1
           }
 
-          candidate=''
-          status=''
-          conclusion=''
+          resolved=''
 
           for attempt in $(seq 1 40); do
-            payload="$(curl --fail --silent --show-error \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H 'Accept: application/vnd.github+json' \
-              -H 'X-GitHub-Api-Version: 2022-11-28' \
+            payload="$(curl --fail --silent --show-error \\
+              -H "Authorization: Bearer ${GH_TOKEN}" \\
+              -H 'Accept: application/vnd.github+json' \\
+              -H 'X-GitHub-Api-Version: 2022-11-28' \\
               "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs?per_page=100")"
 
-            candidate="$(jq -c --arg sha "$TARGET_SHA" '
-              [.check_runs[]
-                | select(.name == "Workers Builds: gacha-lens" and .head_sha == $sha)]
-              | sort_by(.id)
-              | last // empty
-            ' <<<"$payload")"
-
-            if [[ -n "$candidate" ]]; then
-              status="$(jq -r '.status // ""' <<<"$candidate")"
-              conclusion="$(jq -r '.conclusion // ""' <<<"$candidate")"
-              if [[ "$status" == 'completed' ]]; then
-                break
-              fi
+            resolved="$(printf '%s' "$payload" | node .github/scripts/cloudflare-check-resolver.mjs preview "$TARGET_SHA")"
+            state="$(jq -r '.state' <<<"$resolved")"
+            if [[ "$state" == 'success' ]]; then
+              break
             fi
 
             echo "Cloudflare exact-head build not complete yet (attempt ${attempt}/40)." >> "$GITHUB_STEP_SUMMARY"
             sleep 15
           done
 
-          [[ -n "$candidate" ]] || {
-            echo "No Cloudflare Workers check run found for exact head ${TARGET_SHA}." >&2
-            exit 1
-          }
-          [[ "$status" == 'completed' ]] || {
-            echo "Cloudflare Workers check did not complete within the bounded wait." >&2
-            exit 1
-          }
-          [[ "$conclusion" == 'success' ]] || {
-            echo "Cloudflare Workers exact-head build concluded ${conclusion:-unknown}." >&2
+          [[ "$(jq -r '.state // ""' <<<"$resolved")" == 'success' ]] || {
+            echo "Cloudflare Workers exact-head build did not complete successfully within the bounded wait." >&2
             exit 1
           }
 
-          summary="$(jq -r '.output.summary // ""' <<<"$candidate" | tr -d '\r')"
-          preview_url="$(printf '%s\n' "$summary" | grep -Eo 'https://[A-Za-z0-9-]+-gacha-lens\.senpingxingzuo\.workers\.dev' | head -1 || true)"
-          check_id="$(jq -r '.id' <<<"$candidate")"
-
-          case "$preview_url" in
-            https://*-gacha-lens.senpingxingzuo.workers.dev) ;;
-            *)
-              echo 'Cloudflare check succeeded but did not expose an approved exact-head Preview URL.' >&2
-              printf '%s\n' "$summary" >&2
-              exit 1
-              ;;
-          esac
+          preview_url="$(jq -r '.previewUrl' <<<"$resolved")"
+          version_id="$(jq -r '.versionId' <<<"$resolved")"
+          check_id="$(jq -r '.checkId' <<<"$resolved")"
 
           echo "PREVIEW_URL=${preview_url}" >> "$GITHUB_ENV"
           echo "Cloudflare check run: ${check_id}" >> "$GITHUB_STEP_SUMMARY"
           echo "Exact source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Cloudflare version ID: ${version_id}" >> "$GITHUB_STEP_SUMMARY"
           echo "Exact-head Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Smoke public runtime and boundaries
