@@ -4,12 +4,17 @@ import { normalizeRecordShape, normalizeStoredRecordShape } from "../lib/data/ga
 import { recordMatchesCatalogQuery } from "../lib/domain/catalog-query.js";
 import {
   buildEffectiveReleaseQueryPlan,
+  buildEffectiveVariantReleaseQueryPlan,
   effectiveReleaseState,
   jstCalendarDate,
   releaseCalendarDate,
   releaseDateAtJstStart,
 } from "../lib/domain/release-state.js";
-import { applyEffectiveReleaseFilter } from "../lib/data/supabase-gacha-repository.js";
+import {
+  applyEffectiveReleaseFilter,
+  applyEffectiveVariantReleaseFilter,
+  withEffectiveVariantReleaseRelations,
+} from "../lib/data/supabase-gacha-repository.js";
 
 const BEFORE_JST_RELEASE_DAY = new Date("2026-09-14T14:59:59.999Z");
 const AT_JST_RELEASE_DAY = new Date("2026-09-14T15:00:00.000Z");
@@ -169,19 +174,89 @@ test("pure effective state and server released/upcoming semantics agree includin
   }
 });
 
-test("applyEffectiveReleaseFilter emits the same plan for variants and series", () => {
-  const variant = queryRecorder();
+test("series PostgREST filter emits the row-level effective plan", () => {
   const series = queryRecorder();
-  applyEffectiveReleaseFilter(variant, "released", "released", "release_date", AT_JST_RELEASE_DAY);
   applyEffectiveReleaseFilter(series, "upcoming", "is_released", "release_date", AT_JST_RELEASE_DAY);
-  assert.deepEqual(variant.calls, [[
-    "or",
-    "released.eq.true,and(released.eq.false,release_date.lte.2026-09-15),and(released.is.null,release_date.lte.2026-09-15)",
-  ]]);
   assert.deepEqual(series.calls, [[
     "or",
     "and(is_released.eq.false,release_date.gt.2026-09-15),and(is_released.eq.false,release_date.is.null),and(is_released.is.null,release_date.gt.2026-09-15),and(is_released.is.null,release_date.is.null)",
   ]]);
+});
+
+test("variant query plan preserves own-date authority and parent fallback", () => {
+  const released = buildEffectiveVariantReleaseQueryPlan({ state: "released", now: AT_JST_RELEASE_DAY });
+  const upcoming = buildEffectiveVariantReleaseQueryPlan({ state: "upcoming", now: AT_JST_RELEASE_DAY });
+
+  assert.equal(released.today, "2026-09-15");
+  assert.equal(released.parentFilters.length, 4);
+  assert.equal(
+    released.or,
+    [
+      "released.eq.true",
+      "and(released.eq.false,release_date.lte.2026-09-15)",
+      "and(released.eq.false,release_date.is.null,release_parent_past.not.is.null)",
+      "and(released.is.null,release_parent_true.not.is.null)",
+      "and(released.is.null,release_parent_not_true.not.is.null,release_date.lte.2026-09-15)",
+      "and(released.is.null,release_parent_not_true.not.is.null,release_date.is.null,release_parent_past.not.is.null)",
+    ].join(","),
+  );
+  assert.equal(
+    upcoming.or,
+    [
+      "and(released.eq.false,release_date.gt.2026-09-15)",
+      "and(released.eq.false,release_date.is.null,release_parent_future_or_null.not.is.null)",
+      "and(released.is.null,release_parent_not_true.not.is.null,release_date.gt.2026-09-15)",
+      "and(released.is.null,release_parent_not_true.not.is.null,release_date.is.null,release_parent_future_or_null.not.is.null)",
+    ].join(","),
+  );
+});
+
+test("variant pure state and parent-aware server semantics agree", () => {
+  const cases = [
+    [{ released: true, release_date: "2026-10-01" }, { is_released: false, release_date: "2026-10-01" }],
+    [{ released: false, release_date: "2026-09-14" }, { is_released: false, release_date: "2026-10-01" }],
+    [{ released: false, release_date: "2026-09-16" }, { is_released: true, release_date: "2026-09-01" }],
+    [{ released: false, release_date: null }, { is_released: false, release_date: "2026-09-14" }],
+    [{ released: false, release_date: null }, { is_released: true, release_date: "2026-09-16" }],
+    [{ released: false, release_date: null }, { is_released: false, release_date: null }],
+    [{ released: null, release_date: "2026-10-01" }, { is_released: true, release_date: "2026-10-01" }],
+    [{ released: null, release_date: "2026-09-14" }, { is_released: false, release_date: "2026-10-01" }],
+    [{ released: null, release_date: null }, { is_released: false, release_date: "2026-09-14" }],
+    [{ released: null, release_date: null }, { is_released: false, release_date: "2026-09-16" }],
+    [{ released: null, release_date: null }, { is_released: null, release_date: null }],
+  ];
+
+  for (const [variant, parent] of cases) {
+    const pure = effectiveReleaseState(variant, { parent, now: AT_JST_RELEASE_DAY });
+    assert.equal(serverVariantReleased(variant, parent, "2026-09-15"), pure, JSON.stringify({ variant, parent }));
+    assert.equal(serverVariantUpcoming(variant, parent, "2026-09-15"), !pure, JSON.stringify({ variant, parent }));
+  }
+});
+
+test("variant Supabase filter emits empty-embed parent aliases plus one top-level OR", () => {
+  const query = queryRecorder();
+  applyEffectiveVariantReleaseFilter(query, "released", AT_JST_RELEASE_DAY);
+  assert.deepEqual(query.calls, [
+    ["eq", "release_parent_true.is_released", true],
+    ["or", "is_released.eq.false,is_released.is.null", { referencedTable: "release_parent_not_true" }],
+    ["lte", "release_parent_past.release_date", "2026-09-15"],
+    ["or", "release_date.gt.2026-09-15,release_date.is.null", { referencedTable: "release_parent_future_or_null" }],
+    ["or", [
+      "released.eq.true",
+      "and(released.eq.false,release_date.lte.2026-09-15)",
+      "and(released.eq.false,release_date.is.null,release_parent_past.not.is.null)",
+      "and(released.is.null,release_parent_true.not.is.null)",
+      "and(released.is.null,release_parent_not_true.not.is.null,release_date.lte.2026-09-15)",
+      "and(released.is.null,release_parent_not_true.not.is.null,release_date.is.null,release_parent_past.not.is.null)",
+    ].join(",")],
+  ]);
+  const select = withEffectiveVariantReleaseRelations("id,release_date");
+  for (const alias of [
+    "release_parent_true:series()",
+    "release_parent_not_true:series()",
+    "release_parent_past:series()",
+    "release_parent_future_or_null:series()",
+  ]) assert.ok(select.includes(alias));
 });
 
 test("the 2026-09-28 Production stale-variant fixture ages all 23 rows to released", () => {
@@ -215,6 +290,21 @@ function serverUpcoming(row, today) {
     && (row.release_date == null || row.release_date > today);
 }
 
+function serverVariantReleased(variant, parent, today) {
+  if (variant.released === true) return true;
+  if (variant.released === false) {
+    if (variant.release_date != null) return variant.release_date <= today;
+    return parent?.release_date != null && parent.release_date <= today;
+  }
+  if (parent?.is_released === true) return true;
+  if (variant.release_date != null) return variant.release_date <= today;
+  return parent?.release_date != null && parent.release_date <= today;
+}
+
+function serverVariantUpcoming(variant, parent, today) {
+  return !serverVariantReleased(variant, parent, today);
+}
+
 function queryRecorder() {
   return {
     calls: [],
@@ -224,6 +314,10 @@ function queryRecorder() {
     },
     or(...args) {
       this.calls.push(["or", ...args]);
+      return this;
+    },
+    lte(...args) {
+      this.calls.push(["lte", ...args]);
       return this;
     },
   };
