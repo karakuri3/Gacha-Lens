@@ -49,5 +49,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run focused facet contract tests
+        run: >-
+          node --test
+          tests/discovery-facet-integrity.test.mjs
+          tests/discovery-facets.test.mjs
+          tests/category-discovery.test.mjs
+          tests/category-detail-targeted-read.test.mjs
+          tests/discovery-facet-static-rendering.test.mjs
+
       - name: Prove all currently published facet identifiers
         run: npm run discovery:audit-live
