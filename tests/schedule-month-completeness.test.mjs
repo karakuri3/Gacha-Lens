@@ -22,6 +22,24 @@ test("current month landing follows JST at the UTC month boundary", () => {
   assert.equal(currentScheduleMonth(new Date("2026-09-30T14:59:59.999Z")), "2026-09");
   assert.equal(currentScheduleMonth(new Date("2026-09-30T15:00:00.000Z")), "2026-10");
 });
+function syntheticSchedulePages(total) {
+  const ids = Array.from({ length: total }, (_, index) => `series-${String(index + 1).padStart(4, "0")}`);
+  return Array.from({ length: Math.ceil(total / SCHEDULE_PAGE_SIZE) }, (_, index) =>
+    ids.slice(index * SCHEDULE_PAGE_SIZE, (index + 1) * SCHEDULE_PAGE_SIZE)
+  );
+}
+
+for (const total of [59, 120, 121, 217]) {
+  test(`bounded schedule pagination reaches all ${total} series exactly once`, () => {
+    const pages = syntheticSchedulePages(total);
+    const reached = pages.flat();
+    assert.equal(reached.length, total);
+    assert.equal(new Set(reached).size, total);
+    assert.deepEqual(reached, [...reached].sort());
+    assert.equal(pages.every((page) => page.length <= SCHEDULE_PAGE_SIZE), true);
+  });
+}
+
 test("first page canonical omits page", () => assert.equal(scheduleHref("2026-09", 1), "/schedule?month=2026-09"));
 test("middle page canonical preserves page", () => assert.equal(scheduleHref("2026-09", 2), "/schedule?month=2026-09&page=2"));
 test("page zero and malformed values normalize to one", () => {
