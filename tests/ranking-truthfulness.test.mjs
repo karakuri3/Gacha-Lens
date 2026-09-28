@@ -5,7 +5,7 @@ import { classifyMarketEvidence } from "../lib/domain/market-evidence.js";
 import { buildActiveListingWatchEntry, formatAskingPrice } from "../lib/domain/ranking-market-watch.js";
 
 const NOW = new Date("2026-09-29T00:00:00.000Z");
-const variant = { id: "v1", variant_id: "v1", name: "通常単品", variant_type: "single", released: true, is_released: true };
+const variant = { id: "v1", variant_id: "v1", series_id: "s1", slug: "truthful-single", name: "通常単品", variant_type: "single", released: true, is_released: true };
 
 function listing(overrides = {}) {
   return {
