@@ -361,7 +361,7 @@ jobs:
             local path="$2"
             local body="$tmp/$name.html"
             local code rc attempt delay
-            for attempt in 1 2 3; do
+            for attempt in $(seq 1 6); do
               rc=0
               code="$(curl --silent --show-error --location --max-time 90 \
                 -H "Accept: ${BROWSER_ACCEPT}" \
@@ -372,10 +372,10 @@ jobs:
               if [[ "$rc" == "0" && "$code" == "200" ]]; then
                 return 0
               fi
-              if [[ "$attempt" -lt 3 ]]; then
+              if [[ "$attempt" -lt 6 ]]; then
                 case "$code" in
                   000|429|500|502|503|504)
-                    delay=$((attempt * 2))
+                    delay=$((attempt * 3))
                     echo "$name transient failure rc=$rc HTTP $code on attempt $attempt; retrying after ${delay}s" >> "$GITHUB_STEP_SUMMARY"
                     sleep "$delay"
                     continue
