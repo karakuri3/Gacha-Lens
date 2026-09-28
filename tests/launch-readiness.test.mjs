@@ -113,7 +113,7 @@ test("observer sitemap readiness requires root, series, variant index, shard, an
   assert.equal(isObserverSitemapSourceReady({ ...input, publicationText: input.publicationText.replace("MAX_OBSERVER_SITEMAP_URLS = 50000", "") }), false);
 });
 
-test("sitemap readiness requires all core routes, guide mapping, and cap", () => {
+test("sitemap readiness requires core routes, durable schedule archives, guide mapping, and cap", () => {
   const source = fs.readFileSync(path.join(ROOT, "app/sitemap.js"), "utf8");
   assert.equal(isSitemapSourceReady(source), true);
 
@@ -121,7 +121,9 @@ test("sitemap readiness requires all core routes, guide mapping, and cap", () =>
     '{ path: "/",',
     '{ path: "/series",',
     '{ path: "/ranking",',
-    '{ path: "/schedule",',
+    "getParentSeriesScheduleMonths",
+    "scheduleMonths.map",
+    "scheduleHref(month)",
     '{ path: "/guides",',
     "getEditorialGuideSlugs",
     "`/guides/${encodeURIComponent(slug)}`",
