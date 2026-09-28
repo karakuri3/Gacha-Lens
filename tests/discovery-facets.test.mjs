@@ -134,7 +134,7 @@ test("facet indexes use bounded parent counts instead of rescanning all public v
     series.indexOf("export async function getPublicCategoryCatalogPage"),
   );
 
-  assert.match(identifiers, /DISCOVERY_PARENT_SELECT = "id,slug,franchise,brand,category,variants!inner\(count\)"/);
+  assert.match(identifiers, /DISCOVERY_PARENT_SELECT = "id,slug,franchise,brand,category,image_url,is_released,release_date,variants!inner\(count\)"/);
   assert.match(identifiers, /fetchPublicDiscoveryParentRows/);
   assert.match(discovery, /loadCachedPublicDiscoveryParents/);
   assert.match(discovery, /buildPublicDiscoveryFacetsFromParentRows/);
@@ -189,8 +189,8 @@ test("sitemap includes indexable discovery routes and preserves the global cap",
   const text = source("app/sitemap.js");
   assert.match(text, /path: "\/franchises"/);
   assert.match(text, /path: "\/brands"/);
-  assert.match(text, /\/franchises\/\$\{encodeURIComponent\(facet\.name\)\}/);
-  assert.match(text, /\/brands\/\$\{encodeURIComponent\(facet\.name\)\}/);
+  assert.match(text, /discoveryFacetHref\("franchise", facet\.name\)/);
+  assert.match(text, /discoveryFacetHref\("brand", facet\.name\)/);
   assert.match(text, /MAX_SITEMAP_URLS = 50000/);
   assert.match(text, /entries\.length > MAX_SITEMAP_URLS/);
 });
@@ -210,10 +210,7 @@ test("public detail pages avoid global facet scans and preserve local display va
 
 test("targeted facet lookup tries raw first and decodes valid percent-encoded params once", () => {
   assert.deepEqual(discoveryFacetLookupCandidates("バンダイ"), ["バンダイ"]);
-  assert.deepEqual(discoveryFacetLookupCandidates("%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4"), [
-    "%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4",
-    "バンダイ",
-  ]);
+  assert.deepEqual(discoveryFacetLookupCandidates("%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4"), ["バンダイ"]);
   assert.deepEqual(discoveryFacetLookupCandidates("100%値"), ["100%値"]);
   assert.deepEqual(discoveryFacetLookupCandidates("100%25"), ["100%25", "100%"]);
 });
