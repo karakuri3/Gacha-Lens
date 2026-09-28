@@ -6,6 +6,9 @@ on:
     paths:
       - ".github/workflows/cloudflare-cache-proof.yml"
       - ".github/workflows/cloudflare-runtime-smoke.yml"
+      - ".github/workflows/cloudflare-production-release-proof.yml"
+      - "scripts/cloudflare-release-integrity.mjs"
+      - "tests/cloudflare-release-integrity.test.mjs"
       - "jsconfig.json"
       - "worker/**"
 
@@ -46,9 +49,11 @@ jobs:
             exit 1
           }
 
-          candidate=''
+          found='false'
           status=''
           conclusion=''
+          check_id=''
+          preview_url=''
 
           for attempt in $(seq 1 40); do
             payload="$(curl --fail --silent --show-error \
@@ -57,16 +62,13 @@ jobs:
               -H 'X-GitHub-Api-Version: 2022-11-28' \
               "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs?per_page=100")"
 
-            candidate="$(jq -c --arg sha "$TARGET_SHA" '
-              [.check_runs[]
-                | select(.name == "Workers Builds: gacha-lens" and .head_sha == $sha)]
-              | sort_by(.id)
-              | last // empty
-            ' <<<"$payload")"
-
-            if [[ -n "$candidate" ]]; then
-              status="$(jq -r '.status // ""' <<<"$candidate")"
-              conclusion="$(jq -r '.conclusion // ""' <<<"$candidate")"
+            inspection="$(node scripts/cloudflare-release-integrity.mjs inspect-check "$TARGET_SHA" --require-preview <<<"$payload")"
+            found="$(jq -r '.found' <<<"$inspection")"
+            if [[ "$found" == 'true' ]]; then
+              status="$(jq -r '.status // ""' <<<"$inspection")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$inspection")"
+              check_id="$(jq -r '.check_id // ""' <<<"$inspection")"
+              preview_url="$(jq -r '.preview_url // ""' <<<"$inspection")"
               if [[ "$status" == 'completed' ]]; then
                 break
               fi
@@ -76,36 +78,60 @@ jobs:
             sleep 15
           done
 
-          [[ -n "$candidate" ]] || {
+          [[ "$found" == 'true' ]] || {
             echo "No Cloudflare Workers check run found for exact head ${TARGET_SHA}." >&2
             exit 1
           }
           [[ "$status" == 'completed' ]] || {
-            echo "Cloudflare Workers check did not complete within the bounded wait." >&2
+            echo 'Cloudflare Workers check did not complete within the bounded wait.' >&2
             exit 1
           }
           [[ "$conclusion" == 'success' ]] || {
             echo "Cloudflare Workers exact-head build concluded ${conclusion:-unknown}." >&2
             exit 1
           }
-
-          summary="$(jq -r '.output.summary // ""' <<<"$candidate" | tr -d '\r')"
-          preview_url="$(printf '%s\n' "$summary" | grep -Eo 'https://[A-Za-z0-9-]+-gacha-lens\.senpingxingzuo\.workers\.dev' | head -1 || true)"
-          check_id="$(jq -r '.id' <<<"$candidate")"
-
-          case "$preview_url" in
-            https://*-gacha-lens.senpingxingzuo.workers.dev) ;;
-            *)
-              echo 'Cloudflare check succeeded but did not expose an approved exact-head Preview URL.' >&2
-              printf '%s\n' "$summary" >&2
-              exit 1
-              ;;
-          esac
+          [[ -n "$preview_url" ]] || {
+            echo 'Cloudflare check succeeded but did not expose one approved immutable exact-head deployment URL.' >&2
+            exit 1
+          }
 
           echo "PREVIEW_URL=${preview_url}" >> "$GITHUB_ENV"
           echo "Cloudflare check run: ${check_id}" >> "$GITHUB_STEP_SUMMARY"
           echo "Exact source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Exact-head Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Immutable exact-head Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prove Preview runtime source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          headers="$(mktemp)"
+          trap 'rm -f "$body" "$headers"' EXIT
+          rc=0
+          code="$(curl --silent --show-error --max-time 60 \
+            -H 'Accept: application/json' \
+            -H 'Cache-Control: no-cache' \
+            --dump-header "$headers" \
+            --output "$body" \
+            --write-out '%{http_code}' \
+            "${PREVIEW_URL}/api/runtime-diagnostics/release-source")" || rc=$?
+          code="${code:-000}"
+          [[ "$rc" == '0' && "$code" == '200' ]] || {
+            echo "Preview source identity failed rc=${rc} HTTP ${code}." >&2
+            cat "$body" >&2 || true
+            exit 1
+          }
+          deployed_sha="$(node scripts/cloudflare-release-integrity.mjs read-source-sha < "$body")"
+          [[ "$deployed_sha" == "$TARGET_SHA" ]] || {
+            echo "Preview runtime SHA ${deployed_sha} does not match target ${TARGET_SHA}." >&2
+            exit 1
+          }
+          cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cache-control:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+          [[ "$cache_control" == *'no-store'* ]] || {
+            echo "Preview release identity endpoint is missing no-store: ${cache_control:-none}." >&2
+            exit 1
+          }
+          echo "Preview runtime source identity: ${deployed_sha}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Prove cold-to-warm edge cache
         shell: bash
