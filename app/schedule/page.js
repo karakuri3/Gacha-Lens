@@ -13,6 +13,7 @@ import {
   groupScheduleArchiveMonths,
   isCanonicalSchedulePageValue,
   normalizeSchedulePage,
+  scheduleArchiveNeighbors,
   scheduleHref,
   schedulePageWindow,
   SCHEDULE_PAGE_SIZE,
@@ -83,6 +84,10 @@ export default async function SchedulePage({ searchParams }) {
   if (undatedItems.length) groups.push({ key: "undated", label: "発売日確認中", items: undatedItems });
 
   const archiveGroups = groupScheduleArchiveMonths(availableMonths);
+  const hasSelectedMonthData = availableMonths.includes(requestedMonth);
+  const archiveNeighbors = scheduleArchiveNeighbors(requestedMonth, availableMonths);
+  const previousMonth = hasSelectedMonthData ? shiftCatalogMonth(requestedMonth, -1) : archiveNeighbors.previous;
+  const nextMonth = hasSelectedMonthData ? shiftCatalogMonth(requestedMonth, 1) : archiveNeighbors.next;
   const selectedIndex = availableMonths.indexOf(requestedMonth);
   const recentStart = Math.max(0, selectedIndex >= 0 ? selectedIndex - 3 : availableMonths.length - 6);
   const recentMonths = availableMonths.slice(recentStart, recentStart + 7);
@@ -98,9 +103,9 @@ export default async function SchedulePage({ searchParams }) {
         </section>
 
         <nav className="schedule-month-nav" aria-label="発売月を移動">
-          <Link href={scheduleHref(shiftCatalogMonth(requestedMonth, -1))} aria-label="前月を見る">← 前月</Link>
+          {previousMonth ? <Link href={scheduleHref(previousMonth)} aria-label={hasSelectedMonthData ? "前月を見る" : "前の発売月を見る"}>← {hasSelectedMonthData ? "前月" : "前の発売月"}</Link> : <span />}
           <strong>{formatCatalogMonth(requestedMonth)}</strong>
-          <Link href={scheduleHref(shiftCatalogMonth(requestedMonth, 1))} aria-label="次月を見る">次月 →</Link>
+          {nextMonth ? <Link href={scheduleHref(nextMonth)} aria-label={hasSelectedMonthData ? "次月を見る" : "次の発売月を見る"}>{hasSelectedMonthData ? "次月" : "次の発売月"} →</Link> : <span />}
           <Link href={scheduleHref(currentMonth)} className="schedule-month-nav__today">今月</Link>
         </nav>
 
