@@ -127,14 +127,17 @@ test("facet integrity path does not depend on market, stock, social, or writes",
 });
 
 
-test("parent discovery facet aggregation initializes upcoming and image metadata before use", () => {
+test("runtime publication uses the same audited static facet manifest as root sitemap", () => {
   const series = source("lib/series.js");
-  const start = series.indexOf("function collectParentDiscoveryFacets");
-  const end = series.indexOf("function collectParentCategoryDiscoveryFacets", start);
-  const helper = series.slice(start, end);
-  assert.match(helper, /upcomingSeries: new Set\(\)/);
-  assert.match(helper, /image_url: ""/);
-  assert.match(helper, /if \(!effectiveReleaseState\(row, \{ now \}\)\) group\.upcomingSeries\.add\(seriesId\)/);
-  assert.match(helper, /if \(!group\.image_url && row\?\.image_url\) group\.image_url = row\.image_url/);
-  assert.ok(helper.indexOf("upcomingSeries: new Set()") < helper.indexOf("group.upcomingSeries.size"));
+  const discovery = series.slice(
+    series.indexOf("export async function getPublicDiscoveryFacets"),
+    series.indexOf("export async function getPublicCategoryCatalogPage"),
+  );
+  const rootSitemap = series.slice(
+    series.indexOf("export async function getPublicRootSitemapIdentifiers"),
+    series.indexOf("export async function getVariantObserverSitemapShardCount"),
+  );
+  assert.match(discovery, /getStaticPublicDiscoveryFacets\(\)/);
+  assert.match(rootSitemap, /getStaticPublicDiscoveryFacets\(\)/);
+  assert.doesNotMatch(discovery, /loadCachedPublicDiscoveryParents|fetchPublicDiscoveryParentRows/);
 });
