@@ -76,7 +76,7 @@ test("category facets exclude provisional, incomplete, unknown, and generic cate
     row("generic-a", "s6", "all"),
     row("generic-b", "s7", "all"),
   ]);
-  assert.deepEqual(facets, []);
+  assert.deepEqual(facets, [{ name: "Figures", filter_value: "Figures", series_count: 1, variant_count: 1 }]);
 });
 
 test("category-only generic exclusions do not change franchise or brand facet rules", async () => {
@@ -146,8 +146,8 @@ test("category database filtering and canonical URL identity remain exact", () =
   const repository = source("lib/data/supabase-gacha-repository.js");
   const categorySource = source("lib/domain/category-discovery.js");
   assert.match(repository, /query\.eq\("category", options\.category\)/);
-  assert.match(categorySource, /filter_value: \[\.\.\.group\.rawValues\]\[0\]/);
-  assert.match(categorySource, /rawValues\.size === 1/);
+  assert.match(categorySource, /filter_value: group\.name/);
+  assert.doesNotMatch(categorySource, /rawValues/);
 });
 
 test("categories index is parent-series-first while filtered catalog URLs stay noindex", () => {
