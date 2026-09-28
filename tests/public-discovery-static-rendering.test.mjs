@@ -9,10 +9,10 @@ const routes = [
 ];
 
 for (const route of routes) {
-  test(`${route} is daily static-rendered`, () => {
+  test(`${route} refreshes release state within five minutes`, () => {
     const source = fs.readFileSync(route, "utf8");
     assert.match(source, /export const dynamic = "force-static";/);
-    assert.match(source, /export const revalidate = 86400;/);
+    assert.match(source, /export const revalidate = 300;/);
     assert.doesNotMatch(source, /force-dynamic/);
     assert.doesNotMatch(source, /revalidate = 0/);
   });
