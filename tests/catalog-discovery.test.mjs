@@ -107,7 +107,7 @@ test("29 previous and next month calculation works", () => assert.equal(shiftCat
 test("30 December advances to next January", () => assert.equal(shiftCatalogMonth("2026-12", 1), "2027-01"));
 test("31 January returns to previous December", () => assert.equal(shiftCatalogMonth("2026-01", -1), "2025-12"));
 test("32 schedule uses parent series data and series links", () => {
-  assert.match(schedulePage, /getParentSeriesCatalogPage/);
+  assert.match(schedulePage, /getParentSeriesSchedulePage/);
   assert.match(schedulePage, /getParentSeriesScheduleMonths/);
   assert.match(schedulePage, /seriesHref\(item\)/);
   assert.doesNotMatch(schedulePage, /getSeriesCatalogPage/);
