@@ -8,21 +8,21 @@ const NON_CACHEABLE_HTML_MARKERS = ["商品情報を取得できません"];
 
 const EDGE_CACHE_POLICIES = {
   seriesDetail: {
-    cacheControl: "public, max-age=1800, stale-while-revalidate=60",
+    cacheControl: "public, max-age=300, stale-while-revalidate=60",
     cacheTag: "gacha-series-detail",
-    marker: "series-detail-1800-v1",
+    marker: "series-detail-300-v2",
     contentTypes: ["text/html"],
   },
   discoveryIndex: {
-    cacheControl: "public, max-age=86400, stale-while-revalidate=300",
+    cacheControl: "public, max-age=300, stale-while-revalidate=60",
     cacheTag: "gacha-discovery-index",
-    marker: "discovery-index-86400-v1",
+    marker: "discovery-index-300-v2",
     contentTypes: ["text/html"],
   },
   discoveryDocument: {
-    cacheControl: "public, max-age=1800, stale-while-revalidate=60",
+    cacheControl: "public, max-age=300, stale-while-revalidate=60",
     cacheTag: "gacha-discovery-document",
-    marker: "discovery-document-1800-v1",
+    marker: "discovery-document-300-v2",
     contentTypes: ["text/html"],
   },
   publicDocument: {
