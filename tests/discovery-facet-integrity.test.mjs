@@ -86,7 +86,9 @@ test("publication, detail, route, API, and sitemap all share exact-match helpers
   const franchiseRoute = source("app/franchises/[name]/page.js");
   const brandRoute = source("app/brands/[name]/page.js");
 
-  assert.match(series, /discoveryFacetIdentifier\(row\?\.\[field\]\)/);
+  assert.match(series, /STATIC_FRANCHISE_FACETS/);
+  assert.match(series, /STATIC_BRAND_FACETS/);
+  assert.match(series, /STATIC_CATEGORY_FACETS/);
   assert.match(series, /discoveryFacetIdentifier\(item\[facetType\]\) === facetName/);
   assert.match(series, /exactIdentifier: true/);
   assert.match(targeted, /\.eq\(type, value\)/);
