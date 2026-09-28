@@ -95,6 +95,8 @@ test("publication, detail, route, API, and sitemap all share exact-match helpers
   assert.match(brandRoute, /decodeDiscoveryFacetParam/);
   assert.doesNotMatch(franchiseRoute, /normalizeDiscoveryFacetName/);
   assert.doesNotMatch(brandRoute, /normalizeDiscoveryFacetName/);
+  assert.match(api, /const identifier = discoveryFacetIdentifier\(rawName\)/);
+  assert.doesNotMatch(api, /rawName.*\.trim\(\)/);
   assert.match(api, /getTargetedPublicDiscoverySeriesPage/);
   assert.match(sitemap, /discoveryFacetHref\("franchise", facet\.name\)/);
   assert.match(sitemap, /discoveryFacetHref\("brand", facet\.name\)/);
