@@ -180,7 +180,9 @@ test("brand and franchise routes are DB-free static shells with canonical path p
     assert.match(first, /export const dynamic = "force-static"/);
     assert.match(first, /DiscoveryFacetClientLanding/);
     assert.match(first, /getStaticDiscoveryFacetParams/);
-    assert.doesNotMatch(first, /getPublicDiscoveryFacetSeriesPage|searchParams|notFound/);
+    assert.doesNotMatch(first, /getPublicDiscoveryFacetSeriesPage|searchParams/);
+    assert.match(first, /getStaticDiscoveryFacet/);
+    assert.match(first, /notFound\(\)/);
     assert.match(paged, /getStaticDiscoveryFacetPaginationParams/);
     assert.match(paged, /noIndex: true/);
     assert.match(paged, /discoveryFacetPageHref/);
