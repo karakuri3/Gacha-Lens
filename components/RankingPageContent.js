@@ -3,6 +3,7 @@ import ProductImage from "@/components/ProductImage";
 import { getRankingSeries } from "@/lib/series";
 import { seriesHref, variantHref } from "@/lib/variant-url";
 import { rankingPath } from "@/lib/domain/ranking-routes";
+import { buildActiveListingWatch, formatAskingPrice } from "@/lib/domain/ranking-market-watch";
 import {
   buildReleasedCustomerMetrics,
   buildUpcomingCustomerMetrics,
@@ -13,7 +14,7 @@ import {
 } from "@/lib/domain/public-display-clean";
 
 const tabs = [
-  { value: "released", label: "発売中", caption: "成約データ" },
+  { value: "released", label: "成約価格", caption: "確認済み成約" },
   { value: "upcoming", label: "発売予定", caption: "先行注目" },
 ];
 
@@ -34,17 +35,22 @@ export default async function RankingPageContent({ tab = "released", scope = "va
   const ranked = (tab === "upcoming" && scope === "variant" ? diversifyUpcomingPodium(sorted) : sorted)
     .map((item, index) => ({ ...item, rank: index + 1 }));
   const summary = buildRankingSummary(ranked, tab);
-
-  const podium = arrangePodium(ranked.slice(0, 3));
-  const rest = ranked.slice(3);
+  const listingWatch = tab === "released" ? buildActiveListingWatch(series, { scope }).slice(0, 30) : [];
+  const showPodium = ranked.length >= 3;
+  const podium = showPodium ? arrangePodium(ranked.slice(0, 3)) : [];
+  const rest = showPodium ? ranked.slice(3) : ranked;
 
   return (
     <main className="site-main">
       <div className="site-shell">
         <section className="page-hero">
           <p className="eyebrow">RANKING</p>
-          <h1 className="page-title">相場ランキング</h1>
-          <p className="page-lead">{scope === "variant" ? "キャラクターやレア種ごとの動きを順位で確認できます。" : "親シリーズ全体の流通、コンプ需要、発売前の注目度を順位で確認できます。"}</p>
+          <h1 className="page-title">{tab === "released" ? "成約価格ランキング" : "発売予定ランキング"}</h1>
+          <p className="page-lead">{tab === "released"
+            ? (scope === "variant"
+              ? "確認できた成約価格が3件以上ある単品だけを比較します。出品中の価格は別のウォッチ欄に分けています。"
+              : "確認できたコンプセットの成約価格が3件以上あるシリーズだけを比較します。単品価格は混ぜません。")
+            : (scope === "variant" ? "発売前の単品を先行注目度で確認できます。" : "発売前のシリーズを先行注目度で確認できます。")}</p>
           <DocumentLink className="context-guide-link" href="/guides/forecast-ranking">ランキングの見方</DocumentLink>
         </section>
 
@@ -91,9 +97,33 @@ export default async function RankingPageContent({ tab = "released", scope = "va
         {ranked.length === 0 ? (
           <div className="card empty">
             {tab === "released"
-              ? `価格や在庫の動きを確認できる${scope === "variant" ? "単品" : "シリーズ"}がまだありません。観測データが入り次第更新します。`
+              ? `現在、成約価格として確認できるデータが基準を満たしていません。成約3件以上を確認できる${scope === "variant" ? "単品" : "コンプセット"}がないため、順位は表示していません。`
               : `現在、発売予定として確認できる${scope === "variant" ? "単品" : "シリーズ"}がありません。`}
           </div>
+        ) : null}
+
+        {tab === "released" && ranked.length > 0 && ranked.length < 3 ? (
+          <div className="card empty">
+            成約基準を満たす比較対象が3件未満のため、表彰台表示はしていません。
+          </div>
+        ) : null}
+
+        {listingWatch.length ? (
+          <section aria-labelledby="listing-watch-title" style={{ marginTop: 28 }}>
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">ACTIVE ASKING PRICES</p>
+                <h2 id="listing-watch-title" className="section-title">{scope === "series" ? "コンプセット出品価格ウォッチ" : "出品価格ウォッチ"}</h2>
+                <p className="section-sub">直近30日以内に確認できた販売中の出品価格です。売れた価格・成約相場ではありません。</p>
+              </div>
+              <span>{listingWatch.length.toLocaleString("ja-JP")}件表示</span>
+            </div>
+            <div className="grid grid--3">
+              {listingWatch.map((entry) => (
+                <ListingWatchCard key={entry.item.slug || entry.item.id} entry={entry} scope={scope} />
+              ))}
+            </div>
+          </section>
         ) : null}
       </div>
     </main>
@@ -128,6 +158,28 @@ function RankingRow({ item, mode, scope }) {
         <PublicTags item={item} isReleased={mode === "released"} compact />
       </div>
       <MetricGrid metrics={getMetrics(item, mode)} />
+    </DocumentLink>
+  );
+}
+
+function ListingWatchCard({ entry, scope }) {
+  const { item, listingCount, providerCount, observedAt } = entry;
+  const metrics = [
+    { label: "出品価格", value: formatAskingPrice(entry), meta: listingCount === 1 ? "1件の観測値" : `${listingCount}件の最小〜最大` },
+    { label: "確認数", value: `${listingCount.toLocaleString("ja-JP")}件` },
+    { label: "掲載元", value: providerCount ? `${providerCount.toLocaleString("ja-JP")}社` : "未取得" },
+    { label: "最終確認", value: formatObservedAt(observedAt) },
+  ];
+
+  return (
+    <DocumentLink href={scope === "series" ? seriesHref(item) : variantHref(item)} className="card product-card">
+      <div className="product-image">
+        <ProductImage item={scope === "series" ? undefined : item} src={item.image_url} fallbackSrc={scope === "series" ? "" : item.series_image_url} imageScope={scope === "series" ? "series" : item.image_scope} alt={item.name} emptyLabel={scope === "series" ? "シリーズ画像なし" : "画像なし"} />
+      </div>
+      <div className="ranking-card__info">
+        <ProductTitle item={item} scope={scope} />
+        <MetricGrid metrics={metrics} />
+      </div>
     </DocumentLink>
   );
 }
@@ -229,8 +281,21 @@ function releasedSeriesPriority(item) {
 
 function isReleasedRankingCandidate(item, scope = "variant") {
   if (!item?.is_released) return false;
-  if (scope === "series") return hasPriceRankingEvidence(item);
+  if (scope === "series") return item.market_summary?.type_stats?.complete_set?.eligible_for_price_ranking === true;
   return item.variant_type !== "provisional" && hasPriceRankingEvidence(item);
+}
+
+function formatObservedAt(value) {
+  const time = new Date(value || "").getTime();
+  if (!Number.isFinite(time)) return "日時未取得";
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(time));
 }
 
 function upcomingPriority(item) {
