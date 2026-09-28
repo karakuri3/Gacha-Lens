@@ -181,9 +181,9 @@ function normalizeWeek(value) {
   const raw = text(value);
   if (!raw) return "";
   if (raw.includes("未定")) return "未定";
-  const matched = raw.match(/([1-5１２３４５])/);
+  const matched = raw.match(/([1-6１２３４５６])/);
   if (!matched) return raw;
-  const numberMap = { "１": "1", "２": "2", "３": "3", "４": "4", "５": "5" };
+  const numberMap = { "１": "1", "２": "2", "３": "3", "４": "4", "５": "5", "６": "6" };
   return `第${numberMap[matched[1]] || matched[1]}週`;
 }
 
