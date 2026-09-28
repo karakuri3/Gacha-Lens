@@ -30,6 +30,8 @@ test("current Production categories are pinned for build-time prerender", () => 
     "フラット",
     "プレミアム",
     "めじるしアクセサリー",
+    "カプキャラ",
+    "フィギュア",
   ]);
 });
 
