@@ -159,7 +159,9 @@ test("future provisional builder remains image null", () => {
   const start = source.indexOf("function toProvisionalVariantRow");
   const end = source.indexOf("function loadEnvFile", start);
   const provisionalBuilder = source.slice(start, end);
-  assert.match(provisionalBuilder, /image:\s*null/);
+  assert.match(provisionalBuilder, /^\s*image:\s*null,\s*$/m);
+  assert.doesNotMatch(provisionalBuilder, /\\n\s*image:\s*null/);
+  assert.doesNotMatch(provisionalBuilder, /\/\/[^\n]*image:\s*null/);
   assert.doesNotMatch(provisionalBuilder, /seriesRow\.image_url/);
 });
 
