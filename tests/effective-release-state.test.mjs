@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeRecordShape, normalizeStoredRecordShape } from "../lib/data/gacha-repository.js";
+import { recordMatchesCatalogQuery } from "../lib/domain/catalog-query.js";
 import {
   buildEffectiveReleaseQueryPlan,
   effectiveReleaseState,
@@ -8,36 +9,82 @@ import {
   releaseCalendarDate,
   releaseDateAtJstStart,
 } from "../lib/domain/release-state.js";
+import { applyEffectiveReleaseFilter } from "../lib/data/supabase-gacha-repository.js";
 
 const BEFORE_JST_RELEASE_DAY = new Date("2026-09-14T14:59:59.999Z");
 const AT_JST_RELEASE_DAY = new Date("2026-09-14T15:00:00.000Z");
+const DURING_JST_RELEASE_DAY = new Date("2026-09-15T00:30:00.000Z");
 const AFTER_JST_RELEASE_DAY = new Date("2026-09-15T03:00:00.000Z");
+const PRODUCTION_AUDIT_NOW = new Date("2026-09-28T00:00:00.000Z");
+
+const STALE_PRODUCTION_VARIANTS = Object.freeze([
+  ["gashapon-4570118233042000-パンどろぼう-すりすり", "gashapon-4570118233042000", "2026-08-01"],
+  ["gashapon-4570118233042000-パンどろぼうa", "gashapon-4570118233042000", "2026-08-01"],
+  ["gashapon-4570118233042000-パンどろぼうb", "gashapon-4570118233042000", "2026-08-01"],
+  ["gashapon-4582769776601000-jaehee", "gashapon-4582769776601000", "2026-09-01"],
+  ["gashapon-4582769776601000-riku", "gashapon-4582769776601000", "2026-09-01"],
+  ["gashapon-4582769776601000-ryo", "gashapon-4582769776601000", "2026-09-01"],
+  ["gashapon-4582769776601000-sakuya", "gashapon-4582769776601000", "2026-09-01"],
+  ["gashapon-4582769776601000-sion", "gashapon-4582769776601000", "2026-09-01"],
+  ["gashapon-4582769776601000-yushi", "gashapon-4582769776601000", "2026-09-01"],
+  ["gashapon-4582769979477000-provisional", "gashapon-4582769979477000", "2026-09-01"],
+  ["gashapon-4582770068344000-no-207", "gashapon-4582770068344000", "2026-08-01"],
+  ["gashapon-4582770068344000-no-253", "gashapon-4582770068344000", "2026-08-01"],
+  ["gashapon-4582770068344000-no-295", "gashapon-4582770068344000", "2026-08-01"],
+  ["gashapon-4582770068344000-no-314", "gashapon-4582770068344000", "2026-08-01"],
+  ["gashapon-4582770068344000-no-316", "gashapon-4582770068344000", "2026-08-01"],
+  ["gashapon-4582770068344000-no-673", "gashapon-4582770068344000", "2026-08-01"],
+  ["gashapon-4582770121827000-all", "gashapon-4582770121827000", "2026-09-01"],
+  ["gashapon-4582770121827000-chaehyun", "gashapon-4582770121827000", "2026-09-01"],
+  ["gashapon-4582770121827000-dayeon", "gashapon-4582770121827000", "2026-09-01"],
+  ["gashapon-4582770121827000-hikaru", "gashapon-4582770121827000", "2026-09-01"],
+  ["gashapon-4582770121827000-huening-bahiyyih", "gashapon-4582770121827000", "2026-09-01"],
+  ["gashapon-4582770121827000-xiaoting", "gashapon-4582770121827000", "2026-09-01"],
+  ["gashapon-4582770121827000-yujin", "gashapon-4582770121827000", "2026-09-01"],
+]);
 
 test("JST calendar date changes at 00:00 Asia/Tokyo instead of UTC midnight", () => {
   assert.equal(jstCalendarDate(BEFORE_JST_RELEASE_DAY), "2026-09-14");
   assert.equal(jstCalendarDate(AT_JST_RELEASE_DAY), "2026-09-15");
+  assert.equal(jstCalendarDate(new Date("2026-09-14T23:59:59.999Z")), "2026-09-15");
 });
 
-test("persisted false ages monotonically to released at the JST release day", () => {
+test("persisted false + yesterday is released", () => {
+  assert.equal(effectiveReleaseState({ released: false, release_date: "2026-09-14" }, { now: AT_JST_RELEASE_DAY }), true);
+});
+
+test("persisted false + today flips exactly at 00:00 JST and stays released during the day", () => {
   const row = { released: false, release_date: "2026-09-15" };
   assert.equal(effectiveReleaseState(row, { now: BEFORE_JST_RELEASE_DAY }), false);
   assert.equal(effectiveReleaseState(row, { now: AT_JST_RELEASE_DAY }), true);
+  assert.equal(effectiveReleaseState(row, { now: DURING_JST_RELEASE_DAY }), true);
   assert.equal(effectiveReleaseState(row, { now: AFTER_JST_RELEASE_DAY }), true);
 });
 
-test("persisted true remains released even when the canonical date is future-dated", () => {
+test("persisted false + tomorrow remains upcoming", () => {
+  assert.equal(effectiveReleaseState({ released: false, release_date: "2026-09-16" }, { now: AT_JST_RELEASE_DAY }), false);
+});
+
+test("persisted true remains released even when the canonical date is a future rerelease date", () => {
   assert.equal(effectiveReleaseState({ released: true, release_date: "2027-01-01" }, { now: AT_JST_RELEASE_DAY }), true);
 });
 
-test("null or ambiguous release dates keep the explicit persisted state", () => {
+test("null or invalid release dates preserve explicit persisted state", () => {
   assert.equal(effectiveReleaseState({ released: false, release_date: null }, { now: AT_JST_RELEASE_DAY }), false);
+  assert.equal(effectiveReleaseState({ released: true, release_date: null }, { now: AT_JST_RELEASE_DAY }), true);
+  assert.equal(effectiveReleaseState({ released: false, release_date: "not-a-date" }, { now: AT_JST_RELEASE_DAY }), false);
   assert.equal(effectiveReleaseState({ released: true, release_date: "not-a-date" }, { now: AT_JST_RELEASE_DAY }), true);
 });
 
-test("variant state falls back to parent release metadata only when the variant does not supply it", () => {
-  const parent = { is_released: false, release_date: "2026-09-15" };
-  assert.equal(effectiveReleaseState({}, { parent, now: AT_JST_RELEASE_DAY }), true);
-  assert.equal(effectiveReleaseState({ released: false, release_date: "2026-10-01" }, { parent: { ...parent, is_released: true }, now: AT_JST_RELEASE_DAY }), false);
+test("variant own authoritative future date beats a released parent", () => {
+  const parent = { is_released: true, release_date: "2026-09-01" };
+  const variant = { released: false, release_date: "2026-10-01" };
+  assert.equal(effectiveReleaseState(variant, { parent, now: AT_JST_RELEASE_DAY }), false);
+});
+
+test("variant without release date falls back to parent date", () => {
+  const parent = { is_released: false, release_date: "2026-09-01" };
+  assert.equal(effectiveReleaseState({ released: false }, { parent, now: AT_JST_RELEASE_DAY }), true);
 });
 
 test("date-only values remain calendar dates and map to JST start-of-day", () => {
@@ -71,7 +118,16 @@ test("stored record normalization preserves persisted booleans for ingestion and
   assert.equal(stored.variants[0].released, false);
 });
 
-test("released PostgREST plan includes persisted true plus aged false rows", () => {
+test("catalog released/upcoming matching uses the same effective semantics", () => {
+  const stale = { released: false, release_date: "2026-09-01", variant_type: "normal" };
+  const future = { released: false, release_date: "2026-10-01", variant_type: "normal" };
+  assert.equal(recordMatchesCatalogQuery(stale, { release: "released" }, "variant", PRODUCTION_AUDIT_NOW), true);
+  assert.equal(recordMatchesCatalogQuery(stale, { release: "upcoming" }, "variant", PRODUCTION_AUDIT_NOW), false);
+  assert.equal(recordMatchesCatalogQuery(future, { release: "released" }, "variant", PRODUCTION_AUDIT_NOW), false);
+  assert.equal(recordMatchesCatalogQuery(future, { release: "upcoming" }, "variant", PRODUCTION_AUDIT_NOW), true);
+});
+
+test("released PostgREST plan includes persisted true, aged false, and aged null boolean rows", () => {
   assert.deepEqual(buildEffectiveReleaseQueryPlan({
     state: "released",
     booleanColumn: "released",
@@ -79,23 +135,96 @@ test("released PostgREST plan includes persisted true plus aged false rows", () 
   }), {
     today: "2026-09-15",
     eq: null,
-    or: "released.eq.true,and(released.eq.false,release_date.lte.2026-09-15)",
+    or: "released.eq.true,and(released.eq.false,release_date.lte.2026-09-15),and(released.is.null,release_date.lte.2026-09-15)",
   });
 });
 
-test("upcoming PostgREST plan keeps only explicit false rows whose date is future or absent", () => {
+test("upcoming PostgREST plan matches false/null booleans with future or absent dates", () => {
   assert.deepEqual(buildEffectiveReleaseQueryPlan({
     state: "upcoming",
     booleanColumn: "is_released",
     now: AT_JST_RELEASE_DAY,
   }), {
     today: "2026-09-15",
-    eq: ["is_released", false],
-    or: "release_date.gt.2026-09-15,release_date.is.null",
+    eq: null,
+    or: "and(is_released.eq.false,release_date.gt.2026-09-15),and(is_released.eq.false,release_date.is.null),and(is_released.is.null,release_date.gt.2026-09-15),and(is_released.is.null,release_date.is.null)",
   });
+});
+
+test("pure effective state and server released/upcoming semantics agree including nullable booleans", () => {
+  const rows = [
+    { released: true, release_date: "2026-10-01" },
+    { released: false, release_date: "2026-09-14" },
+    { released: false, release_date: "2026-09-15" },
+    { released: false, release_date: "2026-09-16" },
+    { released: false, release_date: null },
+    { released: null, release_date: "2026-09-14" },
+    { released: null, release_date: "2026-09-16" },
+    { released: null, release_date: null },
+  ];
+  for (const row of rows) {
+    const pure = effectiveReleaseState(row, { now: AT_JST_RELEASE_DAY });
+    assert.equal(serverReleased(row, "2026-09-15"), pure, JSON.stringify(row));
+    assert.equal(serverUpcoming(row, "2026-09-15"), !pure, JSON.stringify(row));
+  }
+});
+
+test("applyEffectiveReleaseFilter emits the same plan for variants and series", () => {
+  const variant = queryRecorder();
+  const series = queryRecorder();
+  applyEffectiveReleaseFilter(variant, "released", "released", "release_date", AT_JST_RELEASE_DAY);
+  applyEffectiveReleaseFilter(series, "upcoming", "is_released", "release_date", AT_JST_RELEASE_DAY);
+  assert.deepEqual(variant.calls, [[
+    "or",
+    "released.eq.true,and(released.eq.false,release_date.lte.2026-09-15),and(released.is.null,release_date.lte.2026-09-15)",
+  ]]);
+  assert.deepEqual(series.calls, [[
+    "or",
+    "and(is_released.eq.false,release_date.gt.2026-09-15),and(is_released.eq.false,release_date.is.null),and(is_released.is.null,release_date.gt.2026-09-15),and(is_released.is.null,release_date.is.null)",
+  ]]);
+});
+
+test("the 2026-09-28 Production stale-variant fixture ages all 23 rows to released", () => {
+  assert.equal(STALE_PRODUCTION_VARIANTS.length, 23);
+  const counts = new Map();
+  for (const [id, seriesId, releaseDate] of STALE_PRODUCTION_VARIANTS) {
+    assert.equal(effectiveReleaseState({ id, series_id: seriesId, released: false, release_date: releaseDate }, { now: PRODUCTION_AUDIT_NOW }), true, id);
+    counts.set(seriesId, (counts.get(seriesId) ?? 0) + 1);
+  }
+  assert.deepEqual([...counts.entries()], [
+    ["gashapon-4570118233042000", 3],
+    ["gashapon-4582769776601000", 6],
+    ["gashapon-4582769979477000", 1],
+    ["gashapon-4582770068344000", 6],
+    ["gashapon-4582770121827000", 7],
+  ]);
 });
 
 test("query-plan helper rejects unsafe column identifiers and ignores all-state requests", () => {
   assert.throws(() => buildEffectiveReleaseQueryPlan({ state: "released", booleanColumn: "released)" }), /safe identifiers/);
   assert.equal(buildEffectiveReleaseQueryPlan({ state: "all" }), null);
 });
+
+function serverReleased(row, today) {
+  return row.released === true
+    || ((row.released === false || row.released == null) && typeof row.release_date === "string" && row.release_date <= today);
+}
+
+function serverUpcoming(row, today) {
+  return (row.released === false || row.released == null)
+    && (row.release_date == null || row.release_date > today);
+}
+
+function queryRecorder() {
+  return {
+    calls: [],
+    eq(...args) {
+      this.calls.push(["eq", ...args]);
+      return this;
+    },
+    or(...args) {
+      this.calls.push(["or", ...args]);
+      return this;
+    },
+  };
+}
