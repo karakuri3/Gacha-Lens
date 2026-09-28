@@ -121,8 +121,10 @@ test("sitemap readiness requires all core routes, guide mapping, and cap", () =>
     '{ path: "/",',
     '{ path: "/series",',
     '{ path: "/ranking",',
-    '{ path: "/schedule",',
     '{ path: "/guides",',
+    "getParentSeriesScheduleMonths",
+    "scheduleMonths.map",
+    "`/schedule?month=${month}`",
     "getEditorialGuideSlugs",
     "`/guides/${encodeURIComponent(slug)}`",
     "MAX_SITEMAP_URLS = 50000",
@@ -130,6 +132,7 @@ test("sitemap readiness requires all core routes, guide mapping, and cap", () =>
   ]) {
     assert.equal(isSitemapSourceReady(source.replaceAll(fragment, "")), false, fragment);
   }
+  assert.doesNotMatch(source, /\{ path: "\/schedule",/);
 });
 
 test("affiliate and ranking safety check passes", () => {
