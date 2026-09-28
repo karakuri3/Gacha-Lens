@@ -34,7 +34,11 @@ export default async function sitemap() {
     { path: "/operator", frequency: "yearly", priority: 0.3 },
     { path: "/contact", frequency: "yearly", priority: 0.3 },
   ];
-  const [{ franchises, brands, categories }, scheduleMonths] = await Promise.all([\n    getDailyPublicSitemapIdentifiers(),\n    getParentSeriesScheduleMonths(),\n  ]);\n  const guideSlugs = getEditorialGuideSlugs();
+  const [{ franchises, brands, categories }, scheduleMonths] = await Promise.all([
+    getDailyPublicSitemapIdentifiers(),
+    getParentSeriesScheduleMonths(),
+  ]);
+  const guideSlugs = getEditorialGuideSlugs();
 
   const entries = [
     ...staticPages.map((page) => ({
