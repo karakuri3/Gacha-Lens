@@ -2800,12 +2800,22 @@ button.button-link {
   padding: 8px;
 }
 .schedule-month-nav strong { text-align: center; font-size: 16px; }
-.schedule-month-nav a { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 5px; padding: 6px 10px; color: var(--ink); font-size: 11px; font-weight: 800; text-decoration: none; }
+.schedule-month-nav a,
+.schedule-month-nav__disabled { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 5px; padding: 6px 10px; color: var(--ink); font-size: 11px; font-weight: 800; text-decoration: none; }
 .schedule-month-nav a:hover { border-color: #cfd3da; background: #f7f8fa; color: var(--accent); }
+.schedule-month-nav__disabled { color: var(--muted); background: #f7f8fa; }
 .schedule-month-nav__today { color: var(--accent) !important; }
 .schedule-available-months { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .schedule-available-months::-webkit-scrollbar { display: none; }
 .schedule-available-months .pill-link { flex: 0 0 auto; }
+.schedule-archive { margin-top: 10px; padding: 0; overflow: hidden; }
+.schedule-archive > summary { cursor: pointer; padding: 11px 13px; font-size: 12px; font-weight: 850; }
+.schedule-archive[open] > summary { border-bottom: 1px solid var(--line); }
+.schedule-archive__years { display: grid; gap: 10px; max-height: 420px; overflow-y: auto; padding: 12px; }
+.schedule-archive__year { display: grid; grid-template-columns: 62px minmax(0, 1fr); align-items: start; gap: 10px; }
+.schedule-archive__year > strong { padding-top: 7px; font-size: 11px; }
+.schedule-archive__months { margin: 0; flex-wrap: wrap; }
+.schedule-archive__months .pill-link { flex: 0 0 auto; }
 .schedule-results-head { margin-top: 12px; }
 
 .signal-list { display: grid; gap: 8px; }
