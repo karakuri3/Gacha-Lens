@@ -98,6 +98,22 @@ function isSeriesDetailCachePath(pathname) {
   return /^\/series\/(?:[^/]+|group\/[^/]+)$/.test(pathname);
 }
 
+function isScheduleArchiveCacheUrl(url) {
+  if (url.pathname !== "/schedule") return false;
+  if (url.searchParams.getAll("month").length !== 1) return false;
+  if (url.searchParams.getAll("page").length > 1) return false;
+  if (![...url.searchParams.keys()].every((key) => key === "month" || key === "page")) return false;
+
+  const month = url.searchParams.get("month") || "";
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return false;
+
+  const page = url.searchParams.get("page");
+  if (page === null) return true;
+  if (!/^[1-9]\d*$/.test(page)) return false;
+  const pageNumber = Number(page);
+  return pageNumber >= 2 && pageNumber <= 1000;
+}
+
 function getEdgeCachePolicy(request) {
   if (!isPublicCacheCandidate(request)) return null;
 
