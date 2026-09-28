@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compareScheduleItems, normalizeExplicitReleaseWeek, releaseTiming } from "../lib/domain/release-precision.js";
 import { formatSchedule } from "../lib/domain/public-display-clean.js";
+import { normalizeOfficialProduct } from "../lib/domain/source-normalizers.js";
 
 test("explicit release weeks are trusted", () => {
   assert.equal(normalizeExplicitReleaseWeek("第1週"), "第1週");
@@ -13,6 +14,11 @@ test("explicit release weeks are trusted", () => {
 test("official sixth-week evidence remains a real week group", () => {
   const timing = releaseTiming({ release_date: "2022-10-01", release_month: "10月", release_week: "第6週" });
   assert.deepEqual(timing, { precision: "week", week: "第6週", group: "第6週", label: "2022年10月 第6週" });
+});
+
+test("official source normalizer preserves sixth-week evidence", () => {
+  assert.equal(normalizeOfficialProduct({ id: "x", release_week: "第６週" }).release_week, "第6週");
+  assert.equal(normalizeOfficialProduct({ id: "x", release_week: "第六週" }).release_week, "第6週");
 });
 
 test("synthetic first-of-month never creates a week", () => {
