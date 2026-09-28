@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { categoryDiscoveryLookupCandidates } from "@/lib/domain/category-discovery";
-import { normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
+import { isValidDiscoveryFacetRouteInput, normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
 import { getTargetedPublicDiscoverySeriesPage } from "@/lib/targeted-discovery-series-page";
 import { getTargetedPublicCategorySeriesPage } from "@/lib/targeted-category-series-page";
 
@@ -9,10 +9,10 @@ export const dynamic = "force-dynamic";
 export async function GET(request) {
   const url = new URL(request.url);
   const type = String(url.searchParams.get("type") || "");
-  const rawName = String(url.searchParams.get("name") || "").trim();
+  const rawName = String(url.searchParams.get("name") ?? "");
   const page = normalizeDiscoveryFacetPage(url.searchParams.get("page"));
 
-  if (!["category", "brand", "franchise"].includes(type) || !rawName || rawName.length > 120 || page > 5000) {
+  if (!["category", "brand", "franchise"].includes(type) || !isValidDiscoveryFacetRouteInput(rawName) || page > 5000) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
