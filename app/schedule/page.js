@@ -78,8 +78,8 @@ export default async function SchedulePage({ searchParams }) {
   const items = [...catalogPage.items];
   const scheduledItems = items.filter((item) => releaseTiming(item).week);
   const undatedItems = items.filter((item) => !releaseTiming(item).week);
-  const weeks = [...new Set(scheduledItems.map((item) => releaseTiming(item).week))].sort(compareReleaseWeeks);
-  const groups = weeks
+  const explicitWeeks = [...new Set(scheduledItems.map((item) => releaseTiming(item).week))].sort(compareReleaseWeeks);
+  const groups = explicitWeeks
     .map((week) => ({
       key: week,
       label: `${week}より順次`,
