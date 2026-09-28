@@ -206,7 +206,12 @@ jobs:
           request_get stock '/stock'
           request_get stock_query '/stock?q=%E3%83%9E%E3%83%AA%E3%83%BC' '在庫目撃情報'
           request_get public_stock_api '/api/public-stock' '"rows"'
-          request_get schedule '/schedule' '2026年9月'
+          current_ym="$(TZ=Asia/Tokyo date +%Y-%m)"
+          current_year="${current_ym%-*}"
+          current_month="${current_ym#*-}"
+          current_month="$((10#${current_month}))"
+          current_label="${current_year}年${current_month}月"
+          request_get schedule '/schedule' "$current_label"
           request_get schedule_sep_1 '/schedule?month=2026-09' '2026年9月'
           request_get schedule_sep_2 '/schedule?month=2026-09&page=2' '2026年9月'
           request_get schedule_sep_3 '/schedule?month=2026-09&page=3' '2026年9月'
@@ -219,7 +224,7 @@ jobs:
           request_get schedule_future '/schedule?month=2026-10' '2026年10月'
           request_get schedule_empty '/schedule?month=2099-01' '発売情報はまだありません'
 
-          grep -Fq 'https://gachalens.com/schedule?month=2026-09' "$tmp/schedule.body" || {
+          grep -Fq "https://gachalens.com/schedule?month=${current_ym}" "$tmp/schedule.body" || {
             echo 'Schedule landing canonical did not resolve to the current JST month.' >&2
             exit 1
           }
