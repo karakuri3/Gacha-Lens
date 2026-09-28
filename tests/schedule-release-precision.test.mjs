@@ -9,6 +9,7 @@ import {
   scheduleReleaseWeek,
   SCHEDULE_RELEASE_WEEKS,
 } from "../lib/domain/release-precision.js";
+import { formatSchedule } from "../lib/domain/public-display-clean.js";
 import { parseOfficialDetailDocument } from "../lib/fetchers/official-fetcher.js";
 
 const schedulePage = fs.readFileSync(new URL("../app/schedule/page.js", import.meta.url), "utf8");
@@ -61,6 +62,11 @@ test("explicit unknown stays in the unknown group", () => {
   assert.equal(scheduleReleaseWeek(item), "");
   assert.equal(resolveReleasePrecision(item), "month");
   assert.equal(releaseScheduleLabel(item), "2026年9月・週未定");
+});
+
+test("public detail schedule renders explicit unknown without saying unknown is a sequential week", () => {
+  assert.equal(formatSchedule({ schedule_month: "9月", schedule_week: "未定" }), "9月・週未定");
+  assert.equal(formatSchedule({ schedule_month: "9月", schedule_week: "第2週" }), "9月 第2週より順次");
 });
 
 test("month-only provider remains month precision without inventing a week", () => {
