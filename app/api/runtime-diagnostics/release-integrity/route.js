@@ -1,4 +1,4 @@
-const SOURCE_SHA = process.env.WORKERS_CI_COMMIT_SHA ?? "";
+const SOURCE_SHA = process.env.GACHA_RELEASE_SOURCE_SHA ?? "";
 
 export const dynamic = "force-static";
 export const revalidate = false;
