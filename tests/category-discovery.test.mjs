@@ -142,7 +142,7 @@ test("category discovery uses a targeted parent series query without sitemap cac
   assert.doesNotMatch(source("lib/domain/category-discovery.js"), /affiliate|commission|ranking|forecast|market|stock|reaction/i);
 });
 
-test("category database filtering remains exact while URL names remain normalized", () => {
+test("category database filtering and canonical URL identity remain exact", () => {
   const repository = source("lib/data/supabase-gacha-repository.js");
   const categorySource = source("lib/domain/category-discovery.js");
   assert.match(repository, /query\.eq\("category", options\.category\)/);
