@@ -1,5 +1,5 @@
 import DiscoveryFacetClientLanding from "@/components/DiscoveryFacetClientLanding";
-import { normalizeDiscoveryFacetName } from "@/lib/domain/discovery-facets";
+import { decodeDiscoveryFacetParam } from "@/lib/domain/discovery-facets";
 import { getStaticDiscoveryFacetParams } from "@/lib/domain/discovery-static-manifest";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
@@ -11,7 +11,7 @@ export function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }) {
-  const name = normalizeDiscoveryFacetName((await params).name);
+  const name = decodeDiscoveryFacetParam((await params).name);
   return buildPageMetadata({
     title: `${name}のガチャ一覧・発売情報 | Gacha Lens`,
     description: `${name}のガチャをシリーズ単位で一覧。発売中・発売予定、定価、ラインナップ、相場・在庫情報を確認できます。`,
@@ -20,6 +20,6 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function FranchisePage({ params }) {
-  const name = normalizeDiscoveryFacetName((await params).name);
+  const name = decodeDiscoveryFacetParam((await params).name);
   return <DiscoveryFacetClientLanding type="franchise" name={name} page={1} />;
 }
