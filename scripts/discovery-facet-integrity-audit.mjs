@@ -7,6 +7,7 @@ import {
 } from "../lib/domain/discovery-facets.js";
 import {
   categoryDiscoveryHref,
+  decodeCategoryDiscoveryParam,
   isMeaningfulCategoryFacetName,
 } from "../lib/domain/category-discovery.js";
 import {
@@ -132,14 +133,9 @@ function auditFacetSet(type, facets, manifest, rows) {
       ? categoryDiscoveryHref(facet.name)
       : discoveryFacetHref(type, facet.name);
     const segment = href.split("/").at(-1);
-    let decoded = "";
-    try {
-      decoded = decodeURIComponent(segment);
-    } catch {
-      failures.push({ identifier: facet.name, reason: "href_decode_failed", href });
-      continue;
-    }
-    const roundTrip = type === "category" ? decoded : decodeDiscoveryFacetParam(decoded);
+    const roundTrip = type === "category"
+      ? decodeCategoryDiscoveryParam(segment)
+      : decodeDiscoveryFacetParam(segment);
     if (roundTrip !== facet.name) {
       failures.push({ identifier: facet.name, reason: "identifier_round_trip_mismatch", href, roundTrip });
     }
