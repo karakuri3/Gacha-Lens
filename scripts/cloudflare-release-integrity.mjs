@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 export const CLOUDFLARE_WORKERS_CHECK_NAME = "Workers Builds: gacha-lens";
+export const CLOUDFLARE_CHECK_APP_SLUG = "cloudflare-workers-and-pages";
 export const APPROVED_PREVIEW_HOST_SUFFIX = "-gacha-lens.senpingxingzuo.workers.dev";
 const SHA_RE = /^[0-9a-f]{40}$/i;
 const IMMUTABLE_PREVIEW_RE = /^https:\/\/[0-9a-f]{8,64}-gacha-lens\.senpingxingzuo\.workers\.dev$/i;
@@ -24,7 +25,9 @@ export function inspectCloudflareCheckRuns(payload, targetSha) {
   if (!sha) throw new Error("invalid_target_sha");
   const checkRuns = Array.isArray(payload?.check_runs) ? payload.check_runs : [];
   const candidates = checkRuns
-    .filter((run) => run?.name === CLOUDFLARE_WORKERS_CHECK_NAME && normalizeSourceSha(run?.head_sha) === sha)
+    .filter((run) => run?.name === CLOUDFLARE_WORKERS_CHECK_NAME
+      && run?.app?.slug === CLOUDFLARE_CHECK_APP_SLUG
+      && normalizeSourceSha(run?.head_sha) === sha)
     .sort((left, right) => Number(left?.id ?? 0) - Number(right?.id ?? 0));
   const candidate = candidates.at(-1);
   if (!candidate) {
