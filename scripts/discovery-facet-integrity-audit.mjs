@@ -35,9 +35,9 @@ const brands = collectExactFacetRows(publicParents, "brand", isMeaningfulDiscove
 const categories = collectCategoryRows(publicParents);
 
 const results = [
-  auditFacetSet("franchise", franchises, STATIC_FRANCHISE_FACETS),
-  auditFacetSet("brand", brands, STATIC_BRAND_FACETS),
-  auditFacetSet("category", categories, STATIC_CATEGORY_FACETS),
+  auditFacetSet("franchise", franchises, STATIC_FRANCHISE_FACETS, publicParents),
+  auditFacetSet("brand", brands, STATIC_BRAND_FACETS, publicParents),
+  auditFacetSet("category", categories, STATIC_CATEGORY_FACETS, publicParents),
 ];
 
 const failures = results.flatMap((result) => result.failures.map((failure) => ({
@@ -96,6 +96,7 @@ function collectExactFacetRows(rows, field, meaningful) {
   return [...groups.values()]
     .map((group) => ({
       name: group.name,
+      filter_value: group.name,
       series_count: group.seriesIds.size,
       variant_count: group.variant_count,
     }))
@@ -117,11 +118,11 @@ function collectCategoryRows(rows) {
   }
   return [...groups.values()]
     .filter((group) => group.rawValues.size === 1 && group.seriesIds.size >= 2)
-    .map((group) => ({ name: group.name, series_count: group.seriesIds.size }))
+    .map((group) => ({ name: group.name, filter_value: [...group.rawValues][0], series_count: group.seriesIds.size }))
     .sort((a, b) => a.name.localeCompare(b.name, "ja"));
 }
 
-function auditFacetSet(type, facets, manifest) {
+function auditFacetSet(type, facets, manifest, rows) {
   const failures = [];
   const manifestMap = new Map(manifest.map((facet) => [facet.name, Number(facet.series_count)]));
   const liveMap = new Map(facets.map((facet) => [facet.name, Number(facet.series_count)]));
@@ -142,6 +143,19 @@ function auditFacetSet(type, facets, manifest) {
     if (roundTrip !== facet.name) {
       failures.push({ identifier: facet.name, reason: "identifier_round_trip_mismatch", href, roundTrip });
     }
+
+    const dbValue = facet.filter_value ?? facet.name;
+    const detailSeriesCount = countExactPublicParentMatches(rows, type, dbValue);
+    if (detailSeriesCount !== Number(facet.series_count)) {
+      failures.push({
+        identifier: facet.name,
+        db_value: dbValue,
+        reason: "exact_detail_series_count_mismatch",
+        published: Number(facet.series_count),
+        detail: detailSeriesCount,
+      });
+    }
+
     if (!manifestMap.has(facet.name)) {
       failures.push({ identifier: facet.name, reason: "missing_static_route" });
     } else if (manifestMap.get(facet.name) !== Number(facet.series_count)) {
@@ -159,6 +173,17 @@ function auditFacetSet(type, facets, manifest) {
   }
 
   return { type, published: facets.length, failures };
+}
+
+function countExactPublicParentMatches(rows, type, value) {
+  const field = type === "category" ? "category" : type === "brand" ? "brand" : "franchise";
+  return new Set(
+    rows
+      .filter((row) => String(row?.[field] ?? "") === String(value))
+      .filter((row) => embeddedVariantCount(row?.variants) > 0)
+      .map((row) => String(row?.id || ""))
+      .filter(Boolean),
+  ).size;
 }
 
 function embeddedVariantCount(value) {
