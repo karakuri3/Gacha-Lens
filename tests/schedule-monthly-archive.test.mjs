@@ -195,7 +195,7 @@ test("sitemap contains only real month URLs and not the non-canonical schedule a
 });
 
 test("empty or unsupported query states are noindex while keeping valid month navigation", () => {
-  assert.match(schedulePage, /noIndex:\s*invalidMonth \|\| !pageRequest\.valid \|\| hasUnsupportedParams \|\| !hasData/);
+  assert.match(schedulePage, /noIndex:\s*invalidMonth \|\| !pageRequest\.valid \|\| hasUnsupportedParams \|\| !hasData \|\| outOfRange/);
   assert.match(schedulePage, /発売情報はまだありません/);
   assert.match(schedulePage, /データがある前後の月/);
 });
