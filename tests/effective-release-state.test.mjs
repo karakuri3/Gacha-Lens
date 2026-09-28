@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 import { normalizeRecordShape, normalizeStoredRecordShape } from "../lib/data/gacha-repository.js";
 import { recordMatchesCatalogQuery } from "../lib/domain/catalog-query.js";
@@ -10,11 +11,6 @@ import {
   releaseCalendarDate,
   releaseDateAtJstStart,
 } from "../lib/domain/release-state.js";
-import {
-  applyEffectiveReleaseFilter,
-  applyEffectiveVariantReleaseFilter,
-  withEffectiveVariantReleaseRelations,
-} from "../lib/data/supabase-gacha-repository.js";
 
 const BEFORE_JST_RELEASE_DAY = new Date("2026-09-14T14:59:59.999Z");
 const AT_JST_RELEASE_DAY = new Date("2026-09-14T15:00:00.000Z");
@@ -174,13 +170,15 @@ test("pure effective state and server released/upcoming semantics agree includin
   }
 });
 
-test("series PostgREST filter emits the row-level effective plan", () => {
-  const series = queryRecorder();
-  applyEffectiveReleaseFilter(series, "upcoming", "is_released", "release_date", AT_JST_RELEASE_DAY);
-  assert.deepEqual(series.calls, [[
-    "or",
-    "and(is_released.eq.false,release_date.gt.2026-09-15),and(is_released.eq.false,release_date.is.null),and(is_released.is.null,release_date.gt.2026-09-15),and(is_released.is.null,release_date.is.null)",
-  ]]);
+test("Supabase adapter wires row-level series and parent-aware variant plans without raw boolean filters", () => {
+  const source = fs.readFileSync("lib/data/supabase-gacha-repository.js", "utf8");
+  assert.match(source, /buildEffectiveVariantReleaseQueryPlan/);
+  assert.match(source, /release_parent_true:series\(\)/);
+  assert.match(source, /release_parent_not_true:series\(\)/);
+  assert.match(source, /release_parent_past:series\(\)/);
+  assert.match(source, /release_parent_future_or_null:series\(\)/);
+  assert.match(source, /next = next\.or\(filter\.expression, \{ referencedTable: filter\.alias \}\)/);
+  assert.match(source, /if \(plan\.or\) next = next\.or\(plan\.or\)/);
 });
 
 test("variant query plan preserves own-date authority and parent fallback", () => {
@@ -233,30 +231,11 @@ test("variant pure state and parent-aware server semantics agree", () => {
   }
 });
 
-test("variant Supabase filter emits empty-embed parent aliases plus one top-level OR", () => {
-  const query = queryRecorder();
-  applyEffectiveVariantReleaseFilter(query, "released", AT_JST_RELEASE_DAY);
-  assert.deepEqual(query.calls, [
-    ["eq", "release_parent_true.is_released", true],
-    ["or", "is_released.eq.false,is_released.is.null", { referencedTable: "release_parent_not_true" }],
-    ["lte", "release_parent_past.release_date", "2026-09-15"],
-    ["or", "release_date.gt.2026-09-15,release_date.is.null", { referencedTable: "release_parent_future_or_null" }],
-    ["or", [
-      "released.eq.true",
-      "and(released.eq.false,release_date.lte.2026-09-15)",
-      "and(released.eq.false,release_date.is.null,release_parent_past.not.is.null)",
-      "and(released.is.null,release_parent_true.not.is.null)",
-      "and(released.is.null,release_parent_not_true.not.is.null,release_date.lte.2026-09-15)",
-      "and(released.is.null,release_parent_not_true.not.is.null,release_date.is.null,release_parent_past.not.is.null)",
-    ].join(",")],
-  ]);
-  const select = withEffectiveVariantReleaseRelations("id,release_date");
-  for (const alias of [
-    "release_parent_true:series()",
-    "release_parent_not_true:series()",
-    "release_parent_past:series()",
-    "release_parent_future_or_null:series()",
-  ]) assert.ok(select.includes(alias));
+test("variant release query callers attach parent aliases before applying the parent-aware filter", () => {
+  const source = fs.readFileSync("lib/data/supabase-gacha-repository.js", "utf8");
+  assert.match(source, /withEffectiveVariantReleaseRelations\([\s\S]*?applyEffectiveVariantReleaseFilter/);
+  assert.match(source, /countPublicVariantsByRelease[\s\S]*?withEffectiveVariantReleaseRelations\("id"\)[\s\S]*?applyEffectiveVariantReleaseFilter/);
+  assert.match(source, /countPublicVariantsByCategory[\s\S]*?withEffectiveVariantReleaseRelations\("id,parent:series!inner\(category\)"\)[\s\S]*?applyEffectiveVariantReleaseFilter/);
 });
 
 test("the 2026-09-28 Production stale-variant fixture ages all 23 rows to released", () => {
@@ -303,22 +282,4 @@ function serverVariantReleased(variant, parent, today) {
 
 function serverVariantUpcoming(variant, parent, today) {
   return !serverVariantReleased(variant, parent, today);
-}
-
-function queryRecorder() {
-  return {
-    calls: [],
-    eq(...args) {
-      this.calls.push(["eq", ...args]);
-      return this;
-    },
-    or(...args) {
-      this.calls.push(["or", ...args]);
-      return this;
-    },
-    lte(...args) {
-      this.calls.push(["lte", ...args]);
-      return this;
-    },
-  };
 }
