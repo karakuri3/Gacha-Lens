@@ -137,7 +137,10 @@ test("index metadata sitemap and detail share canonical href helpers", () => {
   assert.match(source("app/franchises/[name]/page.js"), /discoveryFacetHref\("franchise", name\)/);
   assert.match(source("app/brands/[name]/page.js"), /discoveryFacetHref\("brand", name\)/);
   assert.match(source("app/categories/[name]/page.js"), /categoryDiscoveryHref\(name\)/);
-  assert.match(source("app/categories/page.js"), /getPublicDiscoveryFacets/);\n  assert.match(source("app/franchises/[name]/page.js"), /const name = decodeDiscoveryFacetParam\(\(await params\)\.name\)/);\n  assert.match(source("app/brands/[name]/page.js"), /const name = decodeDiscoveryFacetParam\(\(await params\)\.name\)/);\n  assert.match(source("app/categories/[name]/page.js"), /const name = decodeCategoryDiscoveryParam\(\(await params\)\.name\)/);
+  assert.match(source("app/categories/page.js"), /getPublicDiscoveryFacets/);
+  assert.match(source("app/franchises/[name]/page.js"), /const name = decodeDiscoveryFacetParam\(\(await params\)\.name\)/);
+  assert.match(source("app/brands/[name]/page.js"), /const name = decodeDiscoveryFacetParam\(\(await params\)\.name\)/);
+  assert.match(source("app/categories/[name]/page.js"), /const name = decodeCategoryDiscoveryParam\(\(await params\)\.name\)/);
 });
 
 test("targeted detail reads stay exact and broad fallback is miss-only", () => {
