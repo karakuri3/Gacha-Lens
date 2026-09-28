@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compareScheduleItems, normalizeExplicitReleaseWeek, releaseTiming } from "../lib/domain/release-precision.js";
+import { formatSchedule } from "../lib/domain/public-display-clean.js";
 
 test("explicit release weeks are trusted", () => {
   assert.equal(normalizeExplicitReleaseWeek("第1週"), "第1週");
@@ -26,6 +27,10 @@ test("explicit unknown week remains unknown", () => {
   assert.equal(timing.precision, "month");
   assert.equal(timing.group, "undated");
   assert.equal(timing.label, "2026年9月・週未定");
+});
+
+test("public detail formatter never says unknown week is sequential", () => {
+  assert.equal(formatSchedule({ schedule_month: "9月", schedule_week: "未定" }), "9月・週未定");
 });
 
 test("official week is shown without pretending the synthetic day is exact", () => {
