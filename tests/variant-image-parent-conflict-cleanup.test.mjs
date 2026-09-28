@@ -220,6 +220,7 @@ test("production workflow runs only on the one-shot main push and performs dry-r
 
   assert.match(workflow, /push:/);
   assert.match(workflow, /branches:\s*\[main\]/);
+  assert.match(workflow, /actions\\/checkout@v6[\\s\\S]*fetch-depth:\\s*2/);
   assert.doesNotMatch(workflow, /workflow_dispatch:|schedule:|pull_request:/);
   assert.match(workflow, /github\.event\.before == '3be94fa2c7636d49da57623796c4751d459496a0'/);
   assert.ok(dryRunIndex >= 0 && executeIndex > dryRunIndex);
