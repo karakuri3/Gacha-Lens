@@ -227,7 +227,6 @@ jobs:
           request_get franchise_detail "$franchise_path" 'サンリオキャラクターズ'
           request_get franchise_api '/api/public-discovery?type=franchise&name=%E3%82%B5%E3%83%B3%E3%83%AA%E3%82%AA%E3%82%AD%E3%83%A3%E3%83%A9%E3%82%AF%E3%82%BF%E3%83%BC%E3%82%BA&page=1' 'サンリオキャラクターズ'
           request_get catalog_search '/series?q=%E3%83%9E%E3%83%AA%E3%83%BC' 'マリー'
-          request_get ranking '/ranking'
           request_get restocks '/restocks'
           request_get stock '/stock'
           request_get stock_query '/stock?q=%E3%83%9E%E3%83%AA%E3%83%BC' '在庫目撃情報'
@@ -272,7 +271,7 @@ jobs:
             }
           done
 
-          for name in home ranking restocks stock schedule guides; do
+          for name in home restocks stock schedule guides; do
             [[ "$(edge_policy "$name")" == 'public-document-120-v1' ]] || {
               echo "$name is missing public document edge-cache policy" >&2
               exit 1
@@ -308,11 +307,10 @@ jobs:
           request_get category_detail_warm "$category_path" 'ガシャポン'
           request_get brand_detail_warm "$brand_path" 'バンダイ'
           request_get franchise_detail_warm "$franchise_path" 'サンリオキャラクターズ'
-          request_get ranking_warm '/ranking'
           request_get restocks_warm '/restocks'
           request_get series_sitemap_warm '/series-sitemap.xml'
 
-          for name in categories_warm series_warm category_detail_warm brand_detail_warm franchise_detail_warm ranking_warm series_sitemap_warm; do
+          for name in categories_warm series_warm category_detail_warm brand_detail_warm franchise_detail_warm series_sitemap_warm; do
             cf_status="$(cf_cache_status "$name")"
             case "$cf_status" in
               HIT|STALE)
