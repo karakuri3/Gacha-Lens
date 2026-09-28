@@ -150,6 +150,14 @@ test("targeted detail reads stay exact and broad fallback is miss-only", () => {
   assert.doesNotMatch(targeted, /\.ilike\(|\.like\(/);
 });
 
+test("facet detail requires at least one public child before a parent contributes to exact totals", () => {
+  for (const path of ["lib/targeted-discovery-series-page.js", "lib/targeted-category-series-page.js"]) {
+    const text = source(path);
+    assert.match(text, /variants!inner\(id\)/);
+    assert.doesNotMatch(text, /variants!inner\(count\)/);
+  }
+});
+
 test("facet detail does not depend on market stock social fanout", () => {
   for (const path of ["lib/targeted-discovery-series-page.js", "lib/targeted-category-series-page.js"]) {
     const text = source(path);
