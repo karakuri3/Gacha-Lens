@@ -16,6 +16,7 @@ test("public stock API uses the bounded stock summary path", () => {
   const api = source("app/api/public-stock/route.js");
   assert.match(api, /getPublicStockSummaryRows/);
   assert.match(api, /Cloudflare-CDN-Cache-Control/);
+  assert.match(api, /max-age=300, stale-while-revalidate=60/);
   assert.doesNotMatch(api.slice(0, api.indexOf("async function getFallbackRows")), /market_listings|restock_events|x_reactions/);
 });
 
@@ -30,11 +31,12 @@ test("Production stock summary starts from recent stock reports only", () => {
   assert.doesNotMatch(helper, /market_listings|restock_events|x_reactions|fetchSignalsForCatalog|getRankingSeries/);
 });
 
-test("stock summary keeps public released variant filtering and minimal public fields", () => {
+test("stock summary keeps effective released filtering and minimal public fields", () => {
   const helper = source("lib/public-stock-summary.js");
-  assert.match(helper, /eq\("released", true\)/);
+  assert.match(helper, /applyEffectiveReleaseFilter\(query, "released", "released", "release_date"\)/);
   assert.match(helper, /variant_type\.is\.null,variant_type\.neq\.provisional/);
-  assert.match(helper, /eq\("is_released", true\)/);
+  assert.match(helper, /applyEffectiveReleaseFilter\(query, "released", "is_released", "release_date"\)/);
+  assert.doesNotMatch(helper, /\.eq\("released", true\)|\.eq\("is_released", true\)/);
   for (const field of [
     /variant_id: variant\.id/,
     /slug: variant\.slug/,
