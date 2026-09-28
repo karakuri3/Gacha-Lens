@@ -29,11 +29,10 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
 });
 
 const publicParents = await fetchPublicParentRows();
-const categoryRows = await fetchCategoryRows();
 
 const franchises = collectExactFacetRows(publicParents, "franchise", isMeaningfulDiscoveryFacetName);
 const brands = collectExactFacetRows(publicParents, "brand", isMeaningfulDiscoveryFacetName);
-const categories = collectCategoryRows(categoryRows);
+const categories = collectCategoryRows(publicParents);
 
 const results = [
   auditFacetSet("franchise", franchises, STATIC_FRANCHISE_FACETS),
@@ -62,7 +61,7 @@ async function fetchPublicParentRows() {
   for (let from = 0; ; from += PAGE_SIZE) {
     const result = await supabase
       .from("series")
-      .select("id,slug,franchise,brand,variants!inner(count)")
+      .select("id,slug,franchise,brand,category,variants!inner(count)")
       .not("slug", "is", null)
       .neq("slug", "")
       .or("variant_type.is.null,variant_type.neq.provisional", { referencedTable: "variants" })
@@ -77,24 +76,6 @@ async function fetchPublicParentRows() {
     const page = result.data ?? [];
     rows.push(...page);
     if (rows.length > MAX_ROWS) throw new Error(`Discovery integrity parent rows exceed ${MAX_ROWS}`);
-    if (page.length < PAGE_SIZE) return rows;
-  }
-}
-
-async function fetchCategoryRows() {
-  const rows = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const result = await supabase
-      .from("series")
-      .select("id,category")
-      .not("category", "is", null)
-      .neq("category", "")
-      .order("id", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-    if (result.error) throw new Error(`Discovery integrity category read failed: ${result.error.message}`);
-    const page = result.data ?? [];
-    rows.push(...page);
-    if (rows.length > MAX_ROWS) throw new Error(`Discovery integrity category rows exceed ${MAX_ROWS}`);
     if (page.length < PAGE_SIZE) return rows;
   }
 }
