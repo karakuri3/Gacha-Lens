@@ -10,7 +10,7 @@ import {
   discoveryFacetPageHref,
   findPublicDiscoveryFacet,
 } from "../lib/domain/discovery-facets.js";
-import { categoryDiscoveryHref } from "../lib/domain/category-discovery.js";
+import { categoryDiscoveryHref, decodeCategoryDiscoveryParam } from "../lib/domain/category-discovery.js";
 
 const ROOT = process.cwd();
 const source = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
@@ -34,7 +34,7 @@ test("published facet identifier preserves exact database identity", () => {
     assert.equal(discoveryFacetIdentifier(value), value);
     const href = discoveryFacetHref("franchise", value);
     const segment = href.split("/").at(-1);
-    assert.equal(decodeDiscoveryFacetParam(decodeURIComponent(segment)), value);
+    assert.equal(decodeDiscoveryFacetParam(segment), value);
   }
 });
 
@@ -61,6 +61,9 @@ test("literal percent wins before one legacy decode and href never double-encode
   assert.equal(discoveryFacetHref("brand", "バンダイ"), "/brands/%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4");
   assert.doesNotMatch(discoveryFacetHref("brand", "バンダイ"), /%25E3/i);
   assert.equal(discoveryFacetHref("franchise", "100%25"), "/franchises/100%2525");
+  assert.equal(decodeDiscoveryFacetParam("100%2525"), "100%25");
+  assert.equal(decodeDiscoveryFacetParam("%E3%82%B8%E3%83%A5%E3%83%A9%E3%82%B7%E3%83%83%E3%82%AF%E3%83%BB%E3%83%AF%E3%83%BC%E3%83%AB%E3%83%89"), "ジュラシック・ワールド");
+  assert.equal(decodeCategoryDiscoveryParam("%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3"), "ガシャポン");
 });
 
 test("malformed identifiers fail closed before lookup", () => {
