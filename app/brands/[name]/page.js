@@ -20,6 +20,6 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function BrandPage({ params }) {
-  const name = normalizeDiscoveryFacetName((await params).name);
+  const name = decodeDiscoveryFacetParam((await params).name);
   return <DiscoveryFacetClientLanding type="brand" name={name} page={1} />;
 }
