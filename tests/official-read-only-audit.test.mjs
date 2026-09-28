@@ -61,6 +61,14 @@ test("Gashapon detail preserves explicit week-unknown evidence", () => {
   assert.equal(parsed.record.release_date, "2026-09-01");
 });
 
+test("Gashapon detail preserves explicit sixth-week evidence", () => {
+  const body = fixture("gashapon-detail.html").replace(/2026年8月\s*第2週/g, "2022年10月 第6週");
+  const parsed = parseOfficialDetailDocument(body, gashaponDetailUrl);
+  assert.equal(parsed.record.release_month, "10月");
+  assert.equal(parsed.record.release_week, "第6週");
+  assert.equal(parsed.record.release_date, "2022-10-01");
+});
+
 test("Gashapon variant-count drift discards a partial formal lineup", () => {
   const body = fixture("gashapon-detail.html").replace("全2種", "全3種");
   const parsed = parseOfficialDetailDocument(body, gashaponDetailUrl);
