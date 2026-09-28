@@ -238,4 +238,3 @@ function normalizeWeek(value = "") {
   const match = String(value).match(/([1-5])/);
   return match ? `第${match[1]}週` : "";
 }
-
