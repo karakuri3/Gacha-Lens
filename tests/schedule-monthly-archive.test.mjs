@@ -49,6 +49,12 @@ test("200-plus month stays bounded and complete", () => {
   assert.deepEqual(schedulePageRange(4), { from: 180, to: 239 });
 });
 
+test("current Production fixture totals map to finite bounded pages", () => {
+  assert.equal(scheduleTotalPages(161), 3);
+  assert.equal(scheduleTotalPages(182), 4);
+  assert.equal(scheduleTotalPages(217), 4);
+});
+
 test("page ranges have no duplicate or missing positions", () => {
   const total = 217;
   const seen = [];
