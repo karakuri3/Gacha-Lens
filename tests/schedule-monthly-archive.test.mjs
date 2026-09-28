@@ -5,8 +5,8 @@ import test from "node:test";
 const schedulePage = fs.readFileSync(new URL("../app/schedule/page.js", import.meta.url), "utf8");
 
 function catalogRequestBlock() {
-  const start = schedulePage.indexOf("const catalogPage = await getParentSeriesCatalogPage({");
-  const end = schedulePage.indexOf("const scheduledItems =", start);
+  const start = schedulePage.indexOf("getParentSeriesSchedulePage({");
+  const end = schedulePage.indexOf("]);", start);
   assert.ok(start >= 0 && end > start, "schedule catalog request block must exist");
   return schedulePage.slice(start, end);
 }
