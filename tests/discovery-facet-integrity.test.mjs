@@ -11,6 +11,8 @@ import {
   findPublicDiscoveryFacet,
 } from "../lib/domain/discovery-facets.js";
 import { categoryDiscoveryHref, decodeCategoryDiscoveryParam } from "../lib/domain/category-discovery.js";
+import { getStaticDiscoveryFacet } from "../lib/domain/discovery-static-manifest.js";
+import { getStaticCategoryFacet } from "../lib/domain/category-static-manifest.js";
 
 const ROOT = process.cwd();
 const source = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
@@ -66,6 +68,15 @@ test("literal percent wins before one legacy decode and href never double-encode
   assert.equal(decodeCategoryDiscoveryParam("%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3"), "ガシャポン");
 });
 
+test("published membership distinguishes valid, unpublished, and nonexistent facets", () => {
+  assert.ok(getStaticDiscoveryFacet("franchise", "ジュラシック・ワールド"));
+  assert.ok(getStaticDiscoveryFacet("brand", "バンダイ"));
+  assert.ok(getStaticCategoryFacet("ガシャポン"));
+  assert.equal(getStaticDiscoveryFacet("franchise", "definitely-not-a-published-facet"), null);
+  assert.equal(getStaticDiscoveryFacet("brand", "キタンクラブ"), null);
+  assert.equal(getStaticCategoryFacet("カプキャラ"), null);
+});
+
 test("malformed identifiers fail closed before lookup", () => {
   for (const value of ["", " leading", "trailing ", "line\nbreak", "x".repeat(121)]) {
     assert.equal(discoveryFacetIdentifier(value), "");
@@ -101,8 +112,13 @@ test("publication, detail, route, API, and sitemap all share exact-match helpers
   assert.match(brandRoute, /decodeDiscoveryFacetParam/);
   assert.doesNotMatch(franchiseRoute, /normalizeDiscoveryFacetName/);
   assert.doesNotMatch(brandRoute, /normalizeDiscoveryFacetName/);
+  assert.match(franchiseRoute, /if \(!getStaticDiscoveryFacet\("franchise", name\)\) notFound\(\)/);
+  assert.match(brandRoute, /if \(!getStaticDiscoveryFacet\("brand", name\)\) notFound\(\)/);
   assert.match(api, /const identifier = discoveryFacetIdentifier\(rawName\)/);
   assert.doesNotMatch(api, /rawName.*\.trim\(\)/);
+  assert.match(api, /getStaticDiscoveryFacet/);
+  assert.match(api, /getStaticCategoryFacet/);
+  assert.match(api, /return NextResponse\.json\(\{ error: "not_found" \}, \{ status: 404 \}\)/);
   assert.match(api, /getTargetedPublicDiscoverySeriesPage/);
   assert.match(sitemap, /discoveryFacetHref\("franchise", facet\.name\)/);
   assert.match(sitemap, /discoveryFacetHref\("brand", facet\.name\)/);
@@ -120,6 +136,8 @@ test("category canonical URL remains shared and encoded once", () => {
   assert.match(detailRoute, /path: categoryDiscoveryHref\(name\)/);
   assert.match(paginationRoute, /decodeCategoryDiscoveryParam/);
   assert.match(paginationRoute, /categoryDiscoveryPageHref\(name, page\)/);
+  assert.match(detailRoute, /if \(!getStaticCategoryFacet\(name\)\) notFound\(\)/);
+  assert.match(paginationRoute, /if \(page > totalPages\) permanentRedirect\(categoryDiscoveryPageHref\(name, totalPages\)\)/);
 });
 
 test("facet integrity path does not depend on market, stock, social, or writes", () => {
@@ -145,4 +163,15 @@ test("runtime publication uses the same audited static facet manifest as root si
   assert.match(discovery, /getStaticPublicDiscoveryFacets\(\)/);
   assert.match(rootSitemap, /getStaticPublicDiscoveryFacets\(\)/);
   assert.doesNotMatch(discovery, /loadCachedPublicDiscoveryParents|fetchPublicDiscoveryParentRows/);
+});
+
+test("franchise and brand out-of-range pages redirect to the exact final canonical identity", () => {
+  for (const [type, file] of [
+    ["franchise", "app/franchises/[name]/page/[page]/page.js"],
+    ["brand", "app/brands/[name]/page/[page]/page.js"],
+  ]) {
+    const route = source(file);
+    assert.match(route, new RegExp(`getStaticDiscoveryFacet\\("${type}", name\\)`));
+    assert.match(route, new RegExp(`page > totalPages\\) permanentRedirect\\(discoveryFacetPageHref\\("${type}", name, totalPages\\)\\)`));
+  }
 });
