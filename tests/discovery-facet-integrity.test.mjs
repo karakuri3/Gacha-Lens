@@ -117,3 +117,16 @@ test("facet integrity path does not depend on market, stock, social, or writes",
   assert.doesNotMatch(targeted, /marketListings|stockReports|xReactions|restockEvents/);
   assert.doesNotMatch(publication, /insert\(|update\(|upsert\(|delete\(/i);
 });
+
+
+test("parent discovery facet aggregation initializes upcoming and image metadata before use", () => {
+  const series = source("lib/series.js");
+  const start = series.indexOf("function collectParentDiscoveryFacets");
+  const end = series.indexOf("function collectParentCategoryDiscoveryFacets", start);
+  const helper = series.slice(start, end);
+  assert.match(helper, /upcomingSeries: new Set\(\)/);
+  assert.match(helper, /image_url: ""/);
+  assert.match(helper, /if \(!effectiveReleaseState\(row, \{ now \}\)\) group\.upcomingSeries\.add\(seriesId\)/);
+  assert.match(helper, /if \(!group\.image_url && row\?\.image_url\) group\.image_url = row\.image_url/);
+  assert.ok(helper.indexOf("upcomingSeries: new Set()") < helper.indexOf("group.upcomingSeries.size"));
+});
