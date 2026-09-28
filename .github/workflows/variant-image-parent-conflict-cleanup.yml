@@ -1,0 +1,99 @@
+name: Variant Image Parent Conflict Cleanup
+
+permissions:
+  contents: read
+  actions: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/variant-image-parent-conflict-cleanup.yml"
+      - "lib/domain/variant-image-parent-conflict-cleanup.js"
+      - "scripts/variant-image-parent-conflict-cleanup.mjs"
+      - "tests/variant-image-parent-conflict-cleanup.test.mjs"
+      - "package.json"
+
+jobs:
+  cleanup:
+    if: github.event.before == '3be94fa2c7636d49da57623796c4751d459496a0'
+    concurrency:
+      group: variant-image-parent-conflict-cleanup
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Verify one-shot exact main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "push"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD^)" = "3be94fa2c7636d49da57623796c4751d459496a0"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+
+      - name: Focused cleanup and image-presentation tests
+        run: >-
+          node --test
+          tests/variant-image-parent-conflict-audit.test.mjs
+          tests/variant-image-parent-conflict-cleanup.test.mjs
+          tests/variant-image-presentation.test.mjs
+
+      - name: Prepare evidence directory
+        run: mkdir -p "$RUNNER_TEMP/variant-parent-image-cleanup"
+
+      - name: Dry run exact cleanup cohort
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/variant-image-parent-conflict-cleanup.mjs dry-run             > "$RUNNER_TEMP/variant-parent-image-cleanup/dry-run.json"
+          node -e 'const r=require(process.argv[1]); console.log(JSON.stringify({mode:r.mode,state:r.state,audit_input_count:r.audit_input_count,safe_candidate_count:r.safe_candidate_count,candidate_set_sha256:r.candidate_set_sha256,candidate_type_buckets:r.candidate_type_buckets,singleton_ambiguous:r.singleton_ambiguous,expected_update_count:r.expected_update_count,batch_count:r.batch_count,database_writes:r.database_writes}))'             "$RUNNER_TEMP/variant-parent-image-cleanup/dry-run.json"
+
+      - name: Reconfirm exact main before write
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+
+      - name: Execute bounded cleanup
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/variant-image-parent-conflict-cleanup.mjs execute             > "$RUNNER_TEMP/variant-parent-image-cleanup/execute.json"
+          node -e 'const r=require(process.argv[1]); console.log(JSON.stringify({mode:r.mode,state:r.state,database_writes:r.database_writes,batch_count:r.batch_count,candidate_count_before:r.candidate_count_before,candidate_set_sha256:r.candidate_set_sha256,singleton_ambiguous_before:r.singleton_ambiguous_before,post_commit_verification:r.post_commit_verification}))'             "$RUNNER_TEMP/variant-parent-image-cleanup/execute.json"
+
+      - name: Verify committed post-state
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/variant-image-parent-conflict-cleanup.mjs verify             > "$RUNNER_TEMP/variant-parent-image-cleanup/verify.json"
+          cat "$RUNNER_TEMP/variant-parent-image-cleanup/verify.json"
+
+      - name: Upload cleanup evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: variant-parent-image-cleanup-${{ github.run_id }}
+          path: ${{ runner.temp }}/variant-parent-image-cleanup
+          if-no-files-found: warn
+          retention-days: 30
