@@ -78,3 +78,10 @@ test("series released ranking is complete-set completed-sale only", async () => 
   assert.match(source, /completedEvidenceForItem/);
   assert.doesNotMatch(source.slice(source.indexOf("function compareCompletedSaleEvidence"), source.indexOf("function isReleasedRankingCandidate")), /active_listing|stockMoves|trend_score/);
 });
+
+test("ranking summary uses the current scope evidence contract", async () => {
+  const source = await read("components/RankingPageContent.js");
+  assert.match(source, /buildRankingSummary\(ranked, tab, scope\)/);
+  assert.match(source, /function buildRankingSummary\(items, mode, scope = "variant"\)/);
+  assert.match(source, /completedEvidenceForItem\(item, scope\)\.completedCount/);
+});
