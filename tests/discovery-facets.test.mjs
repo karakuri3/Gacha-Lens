@@ -210,7 +210,7 @@ test("public detail pages avoid global facet scans and preserve local display va
 
 test("targeted facet lookup tries raw first and decodes valid percent-encoded params once", () => {
   assert.deepEqual(discoveryFacetLookupCandidates("バンダイ"), ["バンダイ"]);
-  assert.deepEqual(discoveryFacetLookupCandidates("%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4"), ["バンダイ"]);
+  assert.deepEqual(discoveryFacetLookupCandidates("%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4"), ["%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4", "バンダイ"]);
   assert.deepEqual(discoveryFacetLookupCandidates("100%値"), ["100%値"]);
   assert.deepEqual(discoveryFacetLookupCandidates("100%25"), ["100%25", "100%"]);
 });
