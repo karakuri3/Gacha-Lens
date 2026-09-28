@@ -146,19 +146,31 @@ jobs:
             local needle="${3:-}"
             local body="$tmp/${name}.body"
             local headers="$tmp/${name}.headers"
-            local rc=0 code
-            code="$(curl --silent --show-error --location --max-time 90 \
-              -H "Accept: ${BROWSER_ACCEPT}" \
-              --dump-header "$headers" \
-              --output "$body" \
-              --write-out '%{http_code}' \
-              "${PRODUCTION_URL}${path}")" || rc=$?
-            code="${code:-000}"
-            [[ "$rc" == '0' && "$code" == '200' ]] || {
-              echo "$name failed rc=$rc HTTP $code" >&2
+            local attempt rc code delay
+            for attempt in $(seq 1 6); do
+              rc=0
+              code="$(curl --silent --show-error --location --max-time 90 \
+                -H "Accept: ${BROWSER_ACCEPT}" \
+                --dump-header "$headers" \
+                --output "$body" \
+                --write-out '%{http_code}' \
+                "${PRODUCTION_URL}${path}")" || rc=$?
+              code="${code:-000}"
+              if [[ "$rc" == '0' && "$code" == '200' ]]; then break; fi
+              if [[ "$attempt" -lt 6 ]]; then
+                case "$code" in
+                  000|429|500|502|503|504)
+                    delay=$((attempt * 3))
+                    echo "$name transient failure rc=$rc HTTP $code on attempt $attempt; retrying after ${delay}s" >> "$GITHUB_STEP_SUMMARY"
+                    sleep "$delay"
+                    continue
+                    ;;
+                esac
+              fi
+              echo "$name failed rc=$rc HTTP $code on attempt $attempt" >&2
               head -c 1200 "$body" >&2 || true
               exit 1
-            }
+            done
             if [[ -n "$needle" ]] && ! grep -Fq "$needle" "$body"; then
               echo "$name did not contain required marker: $needle" >&2
               exit 1
