@@ -137,7 +137,7 @@ function toProvisionalVariantRow(series) {
     variant_type: "provisional",
     rarity: "未確認",
     role: "ラインナップ確認中",
-    image: seriesRow.image_url,
+    // Synthetic placeholder: the series artwork remains on series.image_url and is not variant provenance.\n    image: null,
     released: seriesRow.is_released,
     price: seriesRow.price,
     brand: seriesRow.brand,
