@@ -151,7 +151,7 @@ test("facet indexes use bounded parent counts instead of rescanning all public v
     series.indexOf("export async function getPublicCategoryCatalogPage"),
   );
 
-  assert.match(identifiers, /DISCOVERY_PARENT_SELECT = "id,slug,franchise,brand,category,variants!inner\(count\)"/);
+  assert.match(identifiers, /DISCOVERY_PARENT_SELECT = "id,slug,franchise,brand,category,image_url,is_released,release_date,variants!inner\(count\)"/);
   assert.match(identifiers, /fetchPublicDiscoveryParentRows/);
   assert.match(discovery, /loadCachedPublicDiscoveryParents/);
   assert.match(discovery, /buildPublicDiscoveryFacetsFromParentRows/);
