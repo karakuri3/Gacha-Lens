@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   MARKET_EVIDENCE_TIERS,
+  buildActiveListingWatchEvidence,
   classifyMarketEvidence,
   dedupeMarketListings,
   median,
@@ -27,7 +28,7 @@ function listing(id, overrides = {}) {
     listed_at: overrides.listed_at ?? "2026-07-20T00:00:00Z",
     last_observed_at: overrides.last_observed_at,
     review_required: overrides.review_required ?? false,
-    source: "feed",
+    source: overrides.source ?? "feed",
     source_url: overrides.source_url,
     matched_variant_id: overrides.matched_variant_id,
   };
@@ -126,3 +127,73 @@ test("URL aliases deduplicate the same listing", () => {
   assert.equal(dedupeMarketListings(rows).length, 1);
 });
 test("percentile helper is deterministic", () => assert.equal(percentile([100, 200, 300, 400], 0.25), 175));
+
+
+test("active listing watch keeps one asking price as one observation, not a fake range", () => {
+  const result = buildActiveListingWatchEvidence({
+    subject: variant,
+    listings: [listing("active-one", { status: "active", sold_at: "", price: 980 })],
+    now: NOW,
+  });
+  assert.equal(result.listingCount, 1);
+  assert.equal(result.minimumPrice, 980);
+  assert.equal(result.maximumPrice, 980);
+  assert.equal(result.providerCount, 1);
+});
+
+test("active listing watch returns a bounded asking range for multiple valid listings", () => {
+  const result = buildActiveListingWatchEvidence({
+    subject: variant,
+    listings: [
+      listing("active-a", { status: "active", sold_at: "", price: 900, source: "rakuten" }),
+      listing("active-b", { status: "active", sold_at: "", price: 1300, source: "yahoo_shopping" }),
+    ],
+    now: NOW,
+  });
+  assert.equal(result.listingCount, 2);
+  assert.equal(result.minimumPrice, 900);
+  assert.equal(result.maximumPrice, 1300);
+  assert.equal(result.providerCount, 2);
+});
+
+test("active listing watch excludes sold, review-required, invalid-price, wrong-identity and stale rows", () => {
+  const result = buildActiveListingWatchEvidence({
+    subject: variant,
+    listings: [
+      listing("valid", { status: "active", sold_at: "", price: 1000 }),
+      listing("sold", { status: "sold", price: 1100 }),
+      listing("review", { status: "active", sold_at: "", price: 1200, review_required: true }),
+      listing("invalid", { status: "active", sold_at: "", price: 0 }),
+      listing("wrong", { status: "active", sold_at: "", price: 1300, variant_id: "other" }),
+      listing("stale", { status: "active", sold_at: "", price: 1400, listed_at: "2026-06-22T11:59:59Z" }),
+    ],
+    now: NOW,
+  });
+  assert.equal(result.listingCount, 1);
+  assert.deepEqual(result.evidence.map((entry) => entry.id), ["valid"]);
+});
+
+test("completed and active recency are kept separate", () => {
+  const result = classify([
+    listing("sold-recent", { sold_at: "2026-07-20T00:00:00Z" }),
+    listing("active-newer", { status: "active", sold_at: "", listed_at: "2026-07-22T00:00:00Z" }),
+  ]);
+  assert.equal(result.lastCompletedObservedAt, "2026-07-20T00:00:00.000Z");
+  assert.equal(result.lastActiveObservedAt, "2026-07-22T00:00:00.000Z");
+});
+
+test("series listing watch uses set evidence and never folds variant asking prices into series price", () => {
+  const subject = { id: "s1", series_id: "s1", released: true };
+  const result = buildActiveListingWatchEvidence({
+    subject,
+    scope: "series",
+    listings: [
+      listing("variant-active", { status: "active", sold_at: "", price: 700 }),
+      listing("set-active", { status: "active", sold_at: "", price: 3200, listing_type: "complete_set", market_review_type: "full_set", variant_id: "" }),
+    ],
+    now: NOW,
+  });
+  assert.equal(result.listingCount, 1);
+  assert.equal(result.minimumPrice, 3200);
+  assert.equal(result.maximumPrice, 3200);
+});
