@@ -1,6 +1,6 @@
 import DocumentLink from "@/components/DocumentLink";
 import ProductImage from "@/components/ProductImage";
-import { getParentSeriesCategoryCatalog } from "@/lib/series";
+import { getPublicDiscoveryFacets } from "@/lib/series";
 import { categoryDiscoveryHref } from "@/lib/domain/category-discovery";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
@@ -14,7 +14,7 @@ export const dynamic = "force-static";
 export const revalidate = 300;
 
 export default async function CategoriesPage() {
-  const categories = await getParentSeriesCategoryCatalog();
+  const { categories } = await getPublicDiscoveryFacets();
 
   return (
     <main className="site-main">

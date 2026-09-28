@@ -1,29 +1,39 @@
 import { NextResponse } from "next/server";
 import { categoryDiscoveryLookupCandidates } from "@/lib/domain/category-discovery";
-import { normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
+import { discoveryFacetIdentifier, normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
 import { getTargetedPublicDiscoverySeriesPage } from "@/lib/targeted-discovery-series-page";
 import { getTargetedPublicCategorySeriesPage } from "@/lib/targeted-category-series-page";
+import { getStaticDiscoveryFacet } from "@/lib/domain/discovery-static-manifest";
+import { getStaticCategoryFacet } from "@/lib/domain/category-static-manifest";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
   const url = new URL(request.url);
   const type = String(url.searchParams.get("type") || "");
-  const rawName = String(url.searchParams.get("name") || "").trim();
+  const rawName = String(url.searchParams.get("name") || "");
+  const identifier = discoveryFacetIdentifier(rawName);
   const page = normalizeDiscoveryFacetPage(url.searchParams.get("page"));
 
-  if (!["category", "brand", "franchise"].includes(type) || !rawName || rawName.length > 120 || page > 5000) {
+  if (!["category", "brand", "franchise"].includes(type) || !identifier || page > 5000) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+
+  const publishedFacet = type === "category"
+    ? getStaticCategoryFacet(identifier)
+    : getStaticDiscoveryFacet(type, identifier);
+  if (!publishedFacet) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
   let result = null;
   if (type === "category") {
-    for (const name of categoryDiscoveryLookupCandidates(rawName)) {
+    for (const name of categoryDiscoveryLookupCandidates(identifier)) {
       result = await getTargetedPublicCategorySeriesPage(name, { page, pageSize: 60 });
       if (result) break;
     }
   } else {
-    result = await getTargetedPublicDiscoverySeriesPage(type, rawName, { page, pageSize: 60 });
+    result = await getTargetedPublicDiscoverySeriesPage(type, identifier, { page, pageSize: 60 });
   }
 
   if (!result) {
