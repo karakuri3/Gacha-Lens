@@ -25,7 +25,7 @@ import { buildPageMetadata } from "@/lib/site-metadata";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const weeks = ["第1週", "第2週", "第3週", "第4週", "第5週"];
+const weeks = ["第1週", "第2週", "第3週", "第4週", "第5週", "第6週"];
 const allowedParams = new Set(["month", "page"]);
 
 export async function generateMetadata({ searchParams }) {
