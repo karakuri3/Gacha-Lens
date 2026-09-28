@@ -18,6 +18,9 @@ const categoriesPage = read("app/categories/page.js");
 const homePage = read("app/page.js");
 const header = read("components/Header.js");
 const repository = read("lib/data/supabase-gacha-repository.js");
+const sourceNormalizers = read("lib/domain/source-normalizers.js");
+const officialPhaseA3 = read("lib/domain/official-phase-a3.js");
+const officialUpsert = read("scripts/upsert-official-data.mjs");
 const css = read("app/globals.css");
 const beforeVariantRelease = new Date("2026-08-11T14:59:59.999Z");
 const atVariantRelease = new Date("2026-08-11T15:00:00.000Z");
@@ -118,6 +121,11 @@ test("33 undated series are kept out of week groups without deriving a variant d
   assert.match(schedulePage, /releaseTiming\(item\)/);
   assert.doesNotMatch(schedulePage, /Math\.ceil\(Number\(match\[1\]\) \/ 7\)/);
   assert.doesNotMatch(schedulePage, /item\.variant_type/);
+});
+test("33b official normalization path preserves sixth-week evidence", () => {
+  assert.match(sourceNormalizers, /1-6１２３４５６一二三四五六/);
+  assert.match(officialPhaseA3, /1-6１２３４５６/);
+  assert.match(officialUpsert, /1-6１２３４５６/);
 });
 test("33a schedule month list is derived from all parent release data", () => {
   const monthsSource = repository.slice(repository.indexOf("export async function fetchSupabaseParentSeriesScheduleMonths"), repository.indexOf("export async function fetchSupabaseUpcomingParentSeriesMonths"));
