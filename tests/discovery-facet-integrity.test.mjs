@@ -107,6 +107,13 @@ test("category canonical URL remains shared and encoded once", () => {
   const name = "ガシャポン";
   assert.equal(categoryDiscoveryHref(name), "/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3");
   assert.doesNotMatch(categoryDiscoveryHref(name), /%25E3/i);
+
+  const detailRoute = source("app/categories/[name]/page.js");
+  const paginationRoute = source("app/categories/[name]/page/[page]/page.js");
+  assert.match(detailRoute, /decodeCategoryDiscoveryParam/);
+  assert.match(detailRoute, /path: categoryDiscoveryHref\(name\)/);
+  assert.match(paginationRoute, /decodeCategoryDiscoveryParam/);
+  assert.match(paginationRoute, /categoryDiscoveryPageHref\(name, page\)/);
 });
 
 test("facet integrity path does not depend on market, stock, social, or writes", () => {
