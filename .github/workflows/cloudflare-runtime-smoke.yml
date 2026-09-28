@@ -322,6 +322,105 @@ jobs:
           echo 'Review/admin unauthenticated mutation boundary: HTTP 401' >> "$GITHUB_STEP_SUMMARY"
           echo 'Ingest unauthenticated boundary: HTTP 401; authorized path is code-pinned to HTTP 410/GitHub Actions.' >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Verify Production effective-release regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          production='https://gachalens.com'
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          fetch_html() {
+            local name="$1"
+            local path="$2"
+            local body="$tmp/$name.html"
+            local code
+            code="$(curl --silent --show-error --location --max-time 90 \
+              -H "Accept: ${BROWSER_ACCEPT}" \
+              --output "$body" \
+              --write-out '%{http_code}' \
+              "${production}${path}")"
+            [[ "$code" == "200" ]] || {
+              echo "$name returned HTTP $code" >&2
+              head -c 2000 "$body" >&2 || true
+              exit 1
+            }
+          }
+
+          require_text() {
+            local name="$1"
+            local needle="$2"
+            grep -Fq "$needle" "$tmp/$name.html" || {
+              echo "$name did not contain required text: $needle" >&2
+              exit 1
+            }
+          }
+
+          forbid_text() {
+            local name="$1"
+            local needle="$2"
+            if grep -Fq "$needle" "$tmp/$name.html"; then
+              echo "$name unexpectedly contained: $needle" >&2
+              exit 1
+            fi
+          }
+
+          fetch_html kep1er_released '/series?scope=variant&release=released&q=CHAEHYUN'
+          require_text kep1er_released 'CHAEHYUN'
+          fetch_html kep1er_upcoming '/series?scope=variant&release=upcoming&q=CHAEHYUN'
+          forbid_text kep1er_upcoming 'CHAEHYUN'
+
+          fetch_html kep1er_series_released '/series?scope=series&release=released&q=Kep1er'
+          require_text kep1er_series_released 'Kep1er ミニCDコレクション'
+          fetch_html kep1er_series_upcoming '/series?scope=series&release=upcoming&q=Kep1er'
+          forbid_text kep1er_series_upcoming 'Kep1er ミニCDコレクション'
+
+          for spec in \
+            'gashapon-4582770121827000|Kep1er ミニCDコレクション' \
+            'gashapon-4582769776601000|NCT WISH ぷくっとリング' \
+            'gashapon-4582770068344000|【フラットガシャポン】サンリオキャラクターズ いちご新聞クリアラバーコースター' \
+            'gashapon-4570118233042000|パンどろぼう フィギュアウォッチコレクション' \
+            'gashapon-4582769979477000|TVアニメ『逃げ上手の若君』 まちぼうけ'
+          do
+            slug="${spec%%|*}"
+            name="${spec#*|}"
+            key="${slug//[^A-Za-z0-9]/_}"
+            fetch_html "series_${key}" "/series/group/${slug}?qa=release-state-332"
+            require_text "series_${key}" "$name"
+            require_text "series_${key}" '発売中'
+          done
+
+          for spec in \
+            'gashapon-4582770121827000-chaehyun|CHAEHYUN' \
+            'gashapon-4582769776601000-riku|RIKU' \
+            'gashapon-4582770068344000-no-207|No.207'
+          do
+            slug="${spec%%|*}"
+            name="${spec#*|}"
+            key="${slug//[^A-Za-z0-9]/_}"
+            fetch_html "variant_${key}" "/series/${slug}?qa=release-state-332"
+            require_text "variant_${key}" "$name"
+            require_text "variant_${key}" '発売中'
+          done
+
+          fetch_html ranking_upcoming '/ranking/upcoming?qa=release-state-332'
+          forbid_text ranking_upcoming 'CHAEHYUN'
+          forbid_text ranking_upcoming 'Kep1er ミニCDコレクション'
+
+          fetch_html schedule_sep '/schedule?month=2026-09&qa=release-state-332'
+          require_text schedule_sep 'Kep1er ミニCDコレクション'
+          require_text schedule_sep 'NCT WISH ぷくっとリング'
+          fetch_html schedule_aug '/schedule?month=2026-08&qa=release-state-332'
+          require_text schedule_aug 'パンどろぼう フィギュアウォッチコレクション'
+          require_text schedule_aug 'サンリオキャラクターズ'
+
+          echo 'Production effective-release UI regression: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- released search includes repaired item and upcoming search excludes it' >> "$GITHUB_STEP_SUMMARY"
+          echo '- five parent series details render 発売中' >> "$GITHUB_STEP_SUMMARY"
+          echo '- three representative repaired variant details render 発売中' >> "$GITHUB_STEP_SUMMARY"
+          echo '- upcoming ranking excludes repaired Kep1er item/series' >> "$GITHUB_STEP_SUMMARY"
+          echo '- August/September schedule keeps historical release entries' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Compare security-header coverage with current Production
         shell: bash
         run: |
