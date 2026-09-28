@@ -60,7 +60,7 @@ const published = {
 let failures = 0;
 for (const [type, facets] of Object.entries(published)) {
   for (const facet of facets) {
-    const exactRows = rows.filter((row) => String(row?.[type] ?? "") === facet.name);
+    const exactRows = rows.filter((row) => String(row?.[type] ?? "") === facet.name && discoveryFacetVariantCount(row?.variants) > 0);
     const seriesCount = new Set(exactRows.map((row) => String(row.id))).size;
     const variantCount = exactRows.reduce((sum, row) => sum + discoveryFacetVariantCount(row.variants), 0);
     const href = type === "category" ? categoryDiscoveryHref(facet.name) : discoveryFacetHref(type, facet.name);
