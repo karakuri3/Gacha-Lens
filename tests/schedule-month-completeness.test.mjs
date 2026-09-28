@@ -111,3 +111,13 @@ test("metadata is self-canonical and noindexes invalid or empty month requests",
   assert.match(schedulePage, /path: scheduleHref\(month, page\)/);
   assert.match(schedulePage, /noIndex: hasUnknownParams \|\| invalidMonth \|\| invalidPage \|\| emptyMonth/);
 });
+
+test("metadata empty-month check stays bounded and does not rescan the full archive", () => {
+  const start = schedulePage.indexOf("export async function generateMetadata");
+  const end = schedulePage.indexOf("export default async function SchedulePage", start);
+  const source = schedulePage.slice(start, end);
+  assert.match(source, /getParentSeriesSchedulePage/);
+  assert.match(source, /pageSize: 1/);
+  assert.match(source, /metadataPage\.total === 0/);
+  assert.doesNotMatch(source, /getParentSeriesScheduleMonths/);
+});
