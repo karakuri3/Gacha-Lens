@@ -419,8 +419,8 @@ jobs:
           done
 
           fetch_html ranking_upcoming '/ranking/upcoming?qa=release-state-332'
-          forbid_text ranking_upcoming 'CHAEHYUN'
-          forbid_text ranking_upcoming 'Kep1er ミニCDコレクション'
+          forbid_text ranking_upcoming "$kep1er_variant_href"
+          forbid_text ranking_upcoming "$kep1er_series_href"
 
           fetch_html schedule_sep '/schedule?month=2026-09&qa=release-state-332'
           require_text schedule_sep '2026年9月'
