@@ -2,6 +2,22 @@ name: Cloudflare runtime smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "app/brands/**"
+      - "app/categories/**"
+      - "app/franchises/**"
+      - "app/api/public-discovery/**"
+      - "app/sitemap.js"
+      - "lib/domain/discovery-facets.js"
+      - "lib/domain/category-discovery.js"
+      - "lib/domain/*static-manifest.js"
+      - "lib/targeted-*-series-page.js"
+      - "lib/series.js"
+      - "lib/data/public-sitemap-identifiers.js"
+      - ".github/workflows/cloudflare-runtime-smoke.yml"
   pull_request:
     paths:
       - "app/**"
