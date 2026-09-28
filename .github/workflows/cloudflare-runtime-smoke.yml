@@ -313,11 +313,11 @@ jobs:
           for name in categories_warm series_warm category_detail_warm brand_detail_warm franchise_detail_warm series_sitemap_warm; do
             cf_status="$(cf_cache_status "$name")"
             case "$cf_status" in
-              HIT|STALE)
-                echo "$name edge cache: $cf_status" >> "$GITHUB_STEP_SUMMARY"
+              MISS|HIT|STALE)
+                echo "$name edge cache observation: $cf_status; exact-head HIT convergence is enforced by Cloudflare cache proof." >> "$GITHUB_STEP_SUMMARY"
                 ;;
               *)
-                echo "$name was ${cf_status:-none}, expected HIT or STALE" >&2
+                echo "$name had unexpected cache status ${cf_status:-none}" >&2
                 exit 1
                 ;;
             esac
