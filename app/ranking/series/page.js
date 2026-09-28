@@ -5,8 +5,8 @@ export const dynamic = "force-static";
 export const revalidate = 300;
 
 export const metadata = buildPageMetadata({
-  title: "発売中のシリーズランキング | Gacha Lens",
-  description: "発売中のガチャシリーズを、確認できた価格・流通・在庫の動きからランキングします。",
+  title: "シリーズの成約価格ランキング | Gacha Lens",
+  description: "確認できたコンプセットの成約価格が3件以上ある発売中シリーズだけを比較します。出品価格や単品価格は成約価格と分けて扱います。",
   path: "/ranking/series",
 });
 
