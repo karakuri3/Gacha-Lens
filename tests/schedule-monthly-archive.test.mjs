@@ -13,13 +13,13 @@ function catalogRequestBlock() {
 
 test("monthly schedule queries the selected month without an upcoming-only filter", () => {
   const block = catalogRequestBlock();
-  assert.match(block, /month:\s*selectedMonth/);
+  assert.match(block, /month:\s*requestedMonth/);
   assert.doesNotMatch(block, /release:\s*["']upcoming["']/);
   assert.doesNotMatch(block, /filter\([^\n]*!item\.is_released/);
 });
 
 test("monthly schedule links to the same complete month in the series catalog", () => {
-  assert.match(schedulePage, /href=\{`\/series\?month=\$\{selectedMonth\}&sort=newest`\}/);
+  assert.match(schedulePage, /href=\{`\/series\?month=\$\{requestedMonth\}&sort=newest`\}/);
   assert.doesNotMatch(schedulePage, /\/series\?release=upcoming&month=/);
 });
 
