@@ -108,7 +108,7 @@ test("30 December advances to next January", () => assert.equal(shiftCatalogMont
 test("31 January returns to previous December", () => assert.equal(shiftCatalogMonth("2026-01", -1), "2025-12"));
 test("32 schedule uses parent series data and series links", () => {
   assert.match(schedulePage, /getParentSeriesCatalogPage/);
-  assert.match(schedulePage, /getUpcomingParentSeriesScheduleMonths/);
+  assert.match(schedulePage, /getParentSeriesScheduleMonths/);
   assert.match(schedulePage, /seriesHref\(item\)/);
   assert.doesNotMatch(schedulePage, /getSeriesCatalogPage/);
   assert.doesNotMatch(schedulePage, /variantHref\(item\)/);
@@ -119,10 +119,10 @@ test("33 undated series are kept out of week groups without deriving a variant d
   assert.match(schedulePage, /item\.release_date \|\| item\.releaseDate/);
   assert.doesNotMatch(schedulePage, /item\.variant_type/);
 });
-test("33a upcoming parent month list includes series-only records", () => {
-  const monthsSource = repository.slice(repository.indexOf("export async function fetchSupabaseUpcomingParentSeriesMonths"), repository.indexOf("export async function fetchSupabasePublicVariantIdentifiers"));
-  assert.match(monthsSource, /select\("release_date,release_month"\)/);
-  assert.match(monthsSource, /collectUpcomingParentSeriesMonths/);
+test("33a schedule month list is derived from all parent release data", () => {
+  const monthsSource = repository.slice(repository.indexOf("export async function fetchSupabaseParentSeriesScheduleMonths"), repository.indexOf("export async function fetchSupabaseUpcomingParentSeriesMonths"));
+  assert.match(monthsSource, /select\("id,release_date,release_month"\)/);
+  assert.match(monthsSource, /collectParentSeriesScheduleMonths/);
   assert.doesNotMatch(monthsSource, /variants!inner|applyPublicVariantRelationFilter/);
 });
 test("34 schedule metrics do not include market or profit labels", () => {
