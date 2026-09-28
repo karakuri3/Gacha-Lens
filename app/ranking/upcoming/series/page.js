@@ -2,7 +2,7 @@ import RankingPageContent from "@/components/RankingPageContent";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-static";
-export const revalidate = 86400;
+export const revalidate = 300;
 
 export const metadata = buildPageMetadata({
   title: "発売予定のシリーズランキング | Gacha Lens",
