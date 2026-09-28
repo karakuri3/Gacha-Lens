@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   MAX_SCHEDULE_PAGE,
   SCHEDULE_PAGE_SIZE,
+  currentScheduleMonth,
   groupScheduleArchiveMonths,
   isCanonicalSchedulePageValue,
   normalizeSchedulePage,
@@ -16,6 +17,10 @@ const schedulePage = fs.readFileSync(new URL("../app/schedule/page.js", import.m
 const sitemap = fs.readFileSync(new URL("../app/sitemap.js", import.meta.url), "utf8");
 
 test("schedule page size is bounded at 60", () => assert.equal(SCHEDULE_PAGE_SIZE, 60));
+test("current month landing follows JST at the UTC month boundary", () => {
+  assert.equal(currentScheduleMonth(new Date("2026-09-30T14:59:59.999Z")), "2026-09");
+  assert.equal(currentScheduleMonth(new Date("2026-09-30T15:00:00.000Z")), "2026-10");
+});
 test("first page canonical omits page", () => assert.equal(scheduleHref("2026-09", 1), "/schedule?month=2026-09"));
 test("middle page canonical preserves page", () => assert.equal(scheduleHref("2026-09", 2), "/schedule?month=2026-09&page=2"));
 test("page zero and malformed values normalize to one", () => {
