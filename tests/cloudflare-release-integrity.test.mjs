@@ -20,6 +20,7 @@ function check({ id = 100, sha = SHA, status = "completed", conclusion = "succes
     head_sha: sha,
     status,
     conclusion,
+    app: { slug: "cloudflare-workers-and-pages" },
     output: {
       summary: summary ?? `Commit Preview URL: ${COMMIT_PREVIEW}\nBranch Preview URL: ${BRANCH_PREVIEW}`,
     },
@@ -31,6 +32,15 @@ test("correct PR head resolves its immutable exact deployment URL", () => {
   assert.equal(result.found, true);
   assert.equal(result.preview_url, COMMIT_PREVIEW);
   assert.equal(result.conclusion, "success");
+});
+
+
+
+test("same-name exact-SHA check from a non-Cloudflare app is rejected", () => {
+  const spoofed = check();
+  spoofed.app = { slug: "github-actions" };
+  const result = inspectCloudflareCheckRuns({ check_runs: [spoofed] }, SHA);
+  assert.equal(result.found, false);
 });
 
 test("wrong SHA is rejected even when the Cloudflare check name matches", () => {
