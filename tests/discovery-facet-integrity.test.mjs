@@ -44,6 +44,20 @@ test("published identity stays exact across NFKC-compatible franchise values", (
   );
 });
 
+test("case-distinct published franchise identifiers remain separate", () => {
+  const rows = [
+    parent("d1", { franchise: "Disney" }),
+    parent("d2", { franchise: "Disney" }),
+    parent("u1", { franchise: "DISNEY" }),
+    parent("u2", { franchise: "DISNEY" }),
+  ];
+  const { franchises } = collectPublicParentDiscoveryFacets(rows);
+  assert.deepEqual(
+    franchises.map((facet) => [facet.name, facet.series_count]),
+    [["Disney", 2], ["DISNEY", 2]].sort((a, b) => a[0].localeCompare(b[0], "ja")),
+  );
+});
+
 test("published franchise, brand, and category counts equal exact detail rows", () => {
   const rows = [parent("1"), parent("2", { variants: [{ count: 3 }] })];
   const discovery = collectPublicParentDiscoveryFacets(rows);
