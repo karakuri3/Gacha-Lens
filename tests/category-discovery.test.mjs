@@ -27,39 +27,43 @@ function row(id, seriesId, category, overrides = {}) {
   };
 }
 
-test("category facets require two distinct public parent series and retain exact variant counts", () => {
+test("category facets include one-series public identities and retain exact variant counts", () => {
   const facets = collectPublicCategoryFacets([
     row("v1", "s1", "Figures"),
     row("v2", "s1", "Figures"),
     row("v3", "s2", "Figures"),
     row("v4", "s3", "Plush"),
   ]);
-  assert.deepEqual(facets, [{ name: "Figures", filter_value: "Figures", series_count: 2, variant_count: 3 }]);
+  assert.deepEqual(facets, [
+    { name: "Figures", filter_value: "Figures", series_count: 2, variant_count: 3 },
+    { name: "Plush", filter_value: "Plush", series_count: 1, variant_count: 1 },
+  ]);
   assert.deepEqual(findPublicCategoryFacet(facets, " figures "), facets[0]);
 });
 
-test("category facets keep one raw database value while publishing its normalized display name", () => {
+test("category facets keep the raw database value as their canonical identity", () => {
   const facets = collectPublicCategoryFacets([
     row("v1", "s1", " Figures "),
     row("v2", "s2", " Figures "),
   ]);
-  assert.deepEqual(facets, [{ name: "Figures", filter_value: " Figures ", series_count: 2, variant_count: 2 }]);
+  assert.deepEqual(facets, [{ name: " Figures ", filter_value: " Figures ", series_count: 2, variant_count: 2 }]);
 });
 
-test("NFKC display normalization never changes the exact category filter value", () => {
+test("NFKC-compatible category text remains an exact canonical identifier", () => {
   const raw = "\uFF26\uFF49\uFF47\uFF55\uFF52\uFF45\uFF53";
   const facets = collectPublicCategoryFacets([row("v1", "s1", raw), row("v2", "s2", raw)]);
-  assert.equal(facets[0].name, "Figures");
+  assert.equal(facets[0].name, raw);
   assert.equal(facets[0].filter_value, raw);
 });
 
-test("normalized category collisions fail closed instead of choosing one raw filter value", () => {
+test("case-distinct category identifiers remain separate exact facets", () => {
   const facets = collectPublicCategoryFacets([
     row("v1", "s1", "Figures"),
     row("v2", "s2", "Figures"),
     row("v3", "s3", "figures"),
   ]);
-  assert.deepEqual(facets, []);
+  assert.equal(facets.length, 2);
+  assert.deepEqual(facets.map((facet) => facet.name).sort(), ["Figures", "figures"]);
 });
 
 test("category facets exclude provisional, incomplete, unknown, and generic category rows", () => {
@@ -149,7 +153,7 @@ test("category database filtering remains exact while URL names remain normalize
 test("categories index is parent-series-first while filtered catalog URLs stay noindex", () => {
   const categories = source("app/categories/page.js");
   const catalog = source("app/series/page.js");
-  assert.match(categories, /getParentSeriesCategoryCatalog/);
+  assert.match(categories, /getPublicDiscoveryFacets/);
   assert.match(categories, /categoryDiscoveryHref/);
   assert.match(categories, /series_count/);
   assert.match(catalog, /getParentSeriesCategoryCatalog/);
@@ -184,7 +188,7 @@ test("category detail pages keep local text while sitemap retains only canonical
   }
   const sitemap = source("app/sitemap.js");
   assert.match(sitemap, /categories\.map\(\(facet\)/);
-  assert.match(sitemap, /\/categories\/\$\{encodeURIComponent\(facet\.name\)\}/);
+  assert.match(sitemap, /categoryDiscoveryHref\(facet\.filter_value \?\? facet\.name\)/);
   assert.doesNotMatch(sitemap, /categoryDiscoveryPageHref/);
   assert.match(sitemap, /MAX_SITEMAP_URLS = 50000/);
 });
