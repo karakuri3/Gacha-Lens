@@ -180,14 +180,23 @@ BEGIN
   WHERE v.image IS NOT NULL AND s.image_url IS NOT NULL AND v.image = s.image_url;
 
   SELECT COUNT(*)::int INTO v_formal_near
-  FROM public.variants v
-  JOIN public.series s ON s.id = v.series_id
-  CROSS JOIN LATERAL REGEXP_MATCH(v.image, '^https://bandai-a[.]akamaihd[.]net/bc/img/model/(b|xl)/([0-9]+)_([0-9]+)[.]jpg$') vb
-  CROSS JOIN LATERAL REGEXP_MATCH(s.image_url, '^https://bandai-a[.]akamaihd[.]net/bc/img/model/(b|xl)/([0-9]+)_([0-9]+)[.]jpg$') pb
-  WHERE v.variant_type <> 'provisional'
+  FROM (
+    SELECT
+      v.image AS variant_image,
+      s.image_url AS parent_image,
+      REGEXP_MATCH(v.image, '^https://bandai-a[.]akamaihd[.]net/bc/img/model/(b|xl)/([0-9]+)_([0-9]+)[.]jpg$') AS vb,
+      REGEXP_MATCH(s.image_url, '^https://bandai-a[.]akamaihd[.]net/bc/img/model/(b|xl)/([0-9]+)_([0-9]+)[.]jpg$') AS pb
+    FROM public.variants v
+    JOIN public.series s ON s.id = v.series_id
+    WHERE v.variant_type <> 'provisional'
+      AND v.image IS NOT NULL
+      AND s.image_url IS NOT NULL
+      AND v.image <> s.image_url
+  ) formal
+  WHERE vb IS NOT NULL
+    AND pb IS NOT NULL
     AND vb[2] = pb[2]
-    AND vb[3] = pb[3]
-    AND v.image <> s.image_url;
+    AND vb[3] = pb[3];
 
   SELECT COUNT(*)::int INTO v_user_triggers
   FROM pg_trigger t
@@ -419,14 +428,23 @@ BEGIN
   WHERE v.image IS NOT NULL AND s.image_url IS NOT NULL AND v.image = s.image_url;
 
   SELECT COUNT(*)::int INTO v_formal_near
-  FROM public.variants v
-  JOIN public.series s ON s.id = v.series_id
-  CROSS JOIN LATERAL REGEXP_MATCH(v.image, '^https://bandai-a[.]akamaihd[.]net/bc/img/model/(b|xl)/([0-9]+)_([0-9]+)[.]jpg$') vb
-  CROSS JOIN LATERAL REGEXP_MATCH(s.image_url, '^https://bandai-a[.]akamaihd[.]net/bc/img/model/(b|xl)/([0-9]+)_([0-9]+)[.]jpg$') pb
-  WHERE v.variant_type <> 'provisional'
+  FROM (
+    SELECT
+      v.image AS variant_image,
+      s.image_url AS parent_image,
+      REGEXP_MATCH(v.image, '^https://bandai-a[.]akamaihd[.]net/bc/img/model/(b|xl)/([0-9]+)_([0-9]+)[.]jpg$') AS vb,
+      REGEXP_MATCH(s.image_url, '^https://bandai-a[.]akamaihd[.]net/bc/img/model/(b|xl)/([0-9]+)_([0-9]+)[.]jpg$') AS pb
+    FROM public.variants v
+    JOIN public.series s ON s.id = v.series_id
+    WHERE v.variant_type <> 'provisional'
+      AND v.image IS NOT NULL
+      AND s.image_url IS NOT NULL
+      AND v.image <> s.image_url
+  ) formal
+  WHERE vb IS NOT NULL
+    AND pb IS NOT NULL
     AND vb[2] = pb[2]
-    AND vb[3] = pb[3]
-    AND v.image <> s.image_url;
+    AND vb[3] = pb[3];
 
   SELECT COUNT(*)::int INTO v_raw_missing FROM public.variants WHERE image IS NULL;
   SELECT COUNT(*)::int INTO v_series_missing FROM public.series WHERE image_url IS NULL;
