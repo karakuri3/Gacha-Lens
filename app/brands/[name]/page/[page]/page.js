@@ -1,6 +1,6 @@
 import { permanentRedirect } from "next/navigation";
 import DiscoveryFacetClientLanding from "@/components/DiscoveryFacetClientLanding";
-import { discoveryFacetPageHref, normalizeDiscoveryFacetName, normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
+import { discoveryFacetPageHref, decodeDiscoveryFacetParam, normalizeDiscoveryFacetPage } from "@/lib/domain/discovery-facets";
 import { getStaticDiscoveryFacetPaginationParams } from "@/lib/domain/discovery-static-manifest";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
@@ -13,7 +13,7 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }) {
   const resolved = await params;
-  const name = normalizeDiscoveryFacetName(resolved.name);
+  const name = decodeDiscoveryFacetParam(resolved.name);
   const page = normalizeDiscoveryFacetPage(resolved.page);
   if (page <= 1) permanentRedirect(discoveryFacetPageHref("brand", name, 1));
   return buildPageMetadata({
@@ -26,7 +26,7 @@ export async function generateMetadata({ params }) {
 
 export default async function BrandPaginationPage({ params }) {
   const resolved = await params;
-  const name = normalizeDiscoveryFacetName(resolved.name);
+  const name = decodeDiscoveryFacetParam(resolved.name);
   const page = normalizeDiscoveryFacetPage(resolved.page);
   if (page <= 1) permanentRedirect(discoveryFacetPageHref("brand", name, 1));
   return <DiscoveryFacetClientLanding type="brand" name={name} page={page} />;
