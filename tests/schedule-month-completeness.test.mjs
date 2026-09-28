@@ -8,6 +8,7 @@ import {
   groupScheduleArchiveMonths,
   isCanonicalSchedulePageValue,
   normalizeSchedulePage,
+  scheduleArchiveNeighbors,
   scheduleHref,
   schedulePageWindow,
 } from "../lib/domain/schedule-query.js";
@@ -35,6 +36,12 @@ test("page window is bounded around the selected page", () => {
   assert.deepEqual(schedulePageWindow(1, 4), [1, 2, 3, 4]);
   assert.deepEqual(schedulePageWindow(3, 10), [1, 2, 3, 4, 5]);
   assert.deepEqual(schedulePageWindow(10, 10), [6, 7, 8, 9, 10]);
+});
+test("empty-month neighbors point only to real archive months", () => {
+  assert.deepEqual(scheduleArchiveNeighbors("2026-05", ["2026-03", "2026-04", "2026-08"]), {
+    previous: "2026-04",
+    next: "2026-08",
+  });
 });
 test("archive grouping exposes only normalized real months", () => {
   assert.deepEqual(groupScheduleArchiveMonths(["2026-09", "bad", "2026-08", "2025-12"]), [
@@ -77,8 +84,9 @@ test("sitemap publishes only discovered schedule months", () => {
 });
 test("empty month copy remains truthful and navigable", () => {
   assert.match(schedulePage, /発売情報はまだありません/);
-  assert.match(schedulePage, /前月/);
-  assert.match(schedulePage, /次月/);
+  assert.match(schedulePage, /前の発売月/);
+  assert.match(schedulePage, /次の発売月/);
+  assert.match(schedulePage, /scheduleArchiveNeighbors/);
   assert.match(schedulePage, /発売月アーカイブ/);
 });
 test("metadata is self-canonical and noindexes invalid or empty month requests", () => {
