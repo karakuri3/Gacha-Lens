@@ -33,6 +33,14 @@ test("public detail formatter never says unknown week is sequential", () => {
   assert.equal(formatSchedule({ schedule_month: "9月", schedule_week: "未定" }), "9月・週未定");
 });
 
+test("public detail formatter preserves genuine exact-date evidence", () => {
+  assert.equal(formatSchedule({ release_date: "2026-09-17", release_month: "9月", release_week: "" }), "2026/09/17");
+});
+
+test("public detail formatter never exposes synthetic first-of-month as exact", () => {
+  assert.equal(formatSchedule({ release_date: "2026-09-01", release_month: "9月", release_week: "" }), "2026年9月・週未定");
+});
+
 test("official week is shown without pretending the synthetic day is exact", () => {
   const timing = releaseTiming({ release_date: "2026-09-01", release_month: "9月", release_week: "第2週" });
   assert.deepEqual(timing, { precision: "week", week: "第2週", group: "第2週", label: "2026年9月 第2週" });
