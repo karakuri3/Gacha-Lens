@@ -184,7 +184,7 @@ test("category detail pages keep local text while sitemap retains only canonical
   }
   const sitemap = source("app/sitemap.js");
   assert.match(sitemap, /categories\.map\(\(facet\)/);
-  assert.match(sitemap, /\/categories\/\$\{encodeURIComponent\(facet\.name\)\}/);
+  assert.match(sitemap, /categoryDiscoveryHref\(facet\.name\)/);
   assert.doesNotMatch(sitemap, /categoryDiscoveryPageHref/);
   assert.match(sitemap, /MAX_SITEMAP_URLS = 50000/);
 });
