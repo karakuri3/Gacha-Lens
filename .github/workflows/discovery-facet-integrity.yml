@@ -57,6 +57,7 @@ jobs:
           tests/category-discovery.test.mjs
           tests/category-detail-targeted-read.test.mjs
           tests/discovery-facet-static-rendering.test.mjs
+          tests/discovery-facet-summary-api.test.mjs
 
       - name: Prove all currently published facet identifiers
         run: npm run discovery:audit-live
