@@ -200,6 +200,12 @@ jobs:
           request_get brand_api '/api/public-discovery?type=brand&name=%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4&page=1' 'バンダイ'
           request_get franchise_detail "$franchise_path" 'サンリオキャラクターズ'
           request_get franchise_api '/api/public-discovery?type=franchise&name=%E3%82%B5%E3%83%B3%E3%83%AA%E3%82%AA%E3%82%AD%E3%83%A3%E3%83%A9%E3%82%AF%E3%82%BF%E3%83%BC%E3%82%BA&page=1' 'サンリオキャラクターズ'
+          request_get jurassic_detail '/franchises/%E3%82%B8%E3%83%A5%E3%83%A9%E3%82%B7%E3%83%83%E3%82%AF%E3%83%BB%E3%83%AF%E3%83%BC%E3%83%AB%E3%83%89' 'ジュラシック・ワールド'
+          request_get jurassic_api '/api/public-discovery?type=franchise&name=%E3%82%B8%E3%83%A5%E3%83%A9%E3%82%B7%E3%83%83%E3%82%AF%E3%83%BB%E3%83%AF%E3%83%BC%E3%83%AB%E3%83%89&page=1' 'ジュラシック・ワールド'
+          request_get disney_detail '/franchises/Disney' 'Disney'
+          request_get disney_api '/api/public-discovery?type=franchise&name=Disney&page=1' 'Disney'
+          request_get brand_page_2 '/brands/%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4/page/2' 'バンダイ'
+          request_get brand_page_2_api '/api/public-discovery?type=brand&name=%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4&page=2' '"page":2'
           request_get catalog_search '/series?q=%E3%83%9E%E3%83%AA%E3%83%BC' 'マリー'
           request_get ranking '/ranking'
           request_get restocks '/restocks'
@@ -239,7 +245,7 @@ jobs:
             }
           done
 
-          for name in series category_detail brand_detail franchise_detail; do
+          for name in series category_detail brand_detail franchise_detail jurassic_detail disney_detail brand_page_2; do
             [[ "$(edge_policy "$name")" == 'discovery-document-300-v2' ]] || {
               echo "$name is missing discovery-document edge-cache policy" >&2
               exit 1
@@ -428,6 +434,47 @@ jobs:
           fetch_html schedule_aug '/schedule?month=2026-08&qa=release-state-332'
           require_text schedule_aug '2026年8月'
           require_text schedule_aug '発売シリーズ'
+
+          fetch_html facet_franchises '/franchises?qa=facet-integrity-350'
+          require_text facet_franchises '作品から探す'
+          fetch_html facet_brands '/brands?qa=facet-integrity-350'
+          require_text facet_brands 'メーカーから探す'
+          fetch_html facet_categories '/categories?qa=facet-integrity-350'
+          require_text facet_categories 'カテゴリから探す'
+
+          fetch_html facet_jurassic '/franchises/%E3%82%B8%E3%83%A5%E3%83%A9%E3%82%B7%E3%83%83%E3%82%AF%E3%83%BB%E3%83%AF%E3%83%BC%E3%83%AB%E3%83%89?qa=facet-integrity-350'
+          require_text facet_jurassic 'ジュラシック・ワールド'
+          fetch_html facet_disney '/franchises/Disney?qa=facet-integrity-350'
+          require_text facet_disney 'Disney'
+          fetch_html facet_brand '/brands/%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4?qa=facet-integrity-350'
+          require_text facet_brand 'バンダイ'
+          fetch_html facet_category '/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3?qa=facet-integrity-350'
+          require_text facet_category 'ガシャポン'
+          fetch_html facet_brand_page_2 '/brands/%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4/page/2?qa=facet-integrity-350'
+          require_text facet_brand_page_2 'バンダイ'
+
+          fetch_html facet_jurassic_api '/api/public-discovery?type=franchise&name=%E3%82%B8%E3%83%A5%E3%83%A9%E3%82%B7%E3%83%83%E3%82%AF%E3%83%BB%E3%83%AF%E3%83%BC%E3%83%AB%E3%83%89&page=1'
+          require_text facet_jurassic_api '"name":"ジュラシック・ワールド"'
+          fetch_html facet_disney_api '/api/public-discovery?type=franchise&name=Disney&page=1'
+          require_text facet_disney_api '"name":"Disney"'
+          fetch_html facet_brand_api '/api/public-discovery?type=brand&name=%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4&page=1'
+          require_text facet_brand_api '"name":"バンダイ"'
+          fetch_html facet_category_api '/api/public-discovery?type=category&name=%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3&page=1'
+          require_text facet_category_api '"name":"ガシャポン"'
+          fetch_html facet_brand_page_2_api '/api/public-discovery?type=brand&name=%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4&page=2'
+          require_text facet_brand_page_2_api '"page":2'
+
+          fetch_html facet_sitemap '/sitemap.xml?qa=facet-integrity-350'
+          require_text facet_sitemap 'https://gachalens.com/franchises/Disney'
+          require_text facet_sitemap 'https://gachalens.com/franchises/%E3%82%B8%E3%83%A5%E3%83%A9%E3%82%B7%E3%83%83%E3%82%AF%E3%83%BB%E3%83%AF%E3%83%BC%E3%83%AB%E3%83%89'
+          require_text facet_sitemap 'https://gachalens.com/brands/%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4'
+          require_text facet_sitemap 'https://gachalens.com/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3'
+
+          echo 'Production Discovery Facet Integrity UI/API/sitemap QA: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- indexes: franchises / brands / categories' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Japanese franchise: ジュラシック・ワールド' >> "$GITHUB_STEP_SUMMARY"
+          echo '- ASCII franchise: Disney' >> "$GITHUB_STEP_SUMMARY"
+          echo '- brand: バンダイ; category: ガシャポン; pagination: バンダイ page 2' >> "$GITHUB_STEP_SUMMARY"
 
           echo 'Production effective-release UI regression: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- released search includes repaired item and upcoming search excludes it' >> "$GITHUB_STEP_SUMMARY"
