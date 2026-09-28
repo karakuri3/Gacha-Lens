@@ -156,10 +156,9 @@ test("formal near-equivalent without provenance proof fails closed as ambiguous"
 
 test("future provisional builder remains image null", () => {
   const source = fs.readFileSync("scripts/upsert-official-data.mjs", "utf8");
-  const provisionalBuilder = source.slice(
-    source.indexOf("function toProvisionalVariantRow"),
-    source.indexOf("function toVariantRow"),
-  );
+  const start = source.indexOf("function toProvisionalVariantRow");
+  const end = source.indexOf("function loadEnvFile", start);
+  const provisionalBuilder = source.slice(start, end);
   assert.match(provisionalBuilder, /image:\s*null/);
   assert.doesNotMatch(provisionalBuilder, /seriesRow\.image_url/);
 });
