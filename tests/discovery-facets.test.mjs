@@ -41,8 +41,8 @@ test("facets preserve exact raw identifiers while requiring two distinct public 
     { name: "アイカツ!", series_count: 2, variant_count: 2 },
   ]);
   assert.deepEqual(result.brands, [
-    { name: "DISNEY", series_count: 2, variant_count: 2 },
     { name: "Disney", series_count: 2, variant_count: 2 },
+    { name: "DISNEY", series_count: 2, variant_count: 2 },
   ]);
 });
 
