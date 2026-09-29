@@ -149,7 +149,8 @@ test("category database filtering remains exact while URL names remain normalize
 test("categories index is parent-series-first while filtered catalog URLs stay noindex", () => {
   const categories = source("app/categories/page.js");
   const catalog = source("app/series/page.js");
-  assert.match(categories, /getParentSeriesCategoryCatalog/);
+  assert.match(categories, /getPublicDiscoveryFacets/);
+  assert.doesNotMatch(categories, /getParentSeriesCategoryCatalog/);
   assert.match(categories, /categoryDiscoveryHref/);
   assert.match(categories, /series_count/);
   assert.match(catalog, /getParentSeriesCategoryCatalog/);
@@ -184,7 +185,7 @@ test("category detail pages keep local text while sitemap retains only canonical
   }
   const sitemap = source("app/sitemap.js");
   assert.match(sitemap, /categories\.map\(\(facet\)/);
-  assert.match(sitemap, /\/categories\/\$\{encodeURIComponent\(facet\.name\)\}/);
+  assert.match(sitemap, /categoryDiscoveryHref\(facet\.name\)/);
   assert.doesNotMatch(sitemap, /categoryDiscoveryPageHref/);
   assert.match(sitemap, /MAX_SITEMAP_URLS = 50000/);
 });
