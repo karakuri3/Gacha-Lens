@@ -109,3 +109,30 @@ test("series detail release-state cache and sitemap cache contracts remain bound
   assert.match(source, /url\.hostname\.endsWith\(PREVIEW_HOST_SUFFIX\)/);
   assert.match(source, /url\.searchParams\.has\("cacheproof"\)/);
 });
+
+test("bounded public Worker cache short-circuits vinext and is release-versioned", () => {
+  assert.match(source, /globalThis\.caches\?\.default/);
+  assert.match(source, /url\.searchParams\.set\("__gacha_release", RELEASE_SOURCE_SHA\)/);
+  assert.match(source, /const cached = await workerCache\.match\(workerCacheKey\)/);
+  assert.match(source, /if \(cached\) return restoreWorkerCacheResponse\(cached\)/);
+  assert.match(source, /const response = await handler\.fetch\(request, env, ctx\)/);
+
+  const hitIndex = source.indexOf("const cached = await workerCache.match(workerCacheKey)");
+  const handlerIndex = source.indexOf("const response = await handler.fetch(request, env, ctx)");
+  assert.ok(hitIndex >= 0 && handlerIndex > hitIndex, "Worker cache lookup must happen before vinext render");
+});
+
+test("Worker cache keeps auth, cookies, RSC and unversioned requests fail-closed", () => {
+  assert.match(source, /request\.headers\.has\("authorization"\)/);
+  assert.match(source, /request\.headers\.has\("cookie"\)/);
+  assert.match(source, /isNextInternalRequest\(request\)/);
+  assert.match(source, /if \(!policy \|\| !RELEASE_SOURCE_SHA_RE\.test\(RELEASE_SOURCE_SHA\)\) return null/);
+});
+
+test("Worker cache storage is asynchronous, bounded and preserves origin browser cache semantics", () => {
+  assert.match(source, /ctx\.waitUntil\(workerCache\.put\(workerCacheKey, storageResponse\)\)/);
+  assert.match(source, /headers\.set\("Cache-Control", policy\.cacheControl\)/);
+  assert.match(source, /WORKER_CACHE_ORIGIN_CONTROL_HEADER/);
+  assert.match(source, /headers\.set\(WORKER_CACHE_STATUS_HEADER, "HIT"\)/);
+  assert.match(source, /headers\.set\(WORKER_CACHE_STATUS_HEADER, workerCacheKey \? "MISS" : "BYPASS"\)/);
+});

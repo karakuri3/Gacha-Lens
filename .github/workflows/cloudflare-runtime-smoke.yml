@@ -150,49 +150,36 @@ jobs:
             local needle="${3:-}"
             local body="$tmp/${name}.body"
             local headers="$tmp/${name}.headers"
-            local attempt rc code delay
+            local rc=0
+            local code
 
-            for attempt in $(seq 1 6); do
-              rc=0
-              code="$(curl --silent --show-error --location --max-time 90 \
-                -H "Accept: ${BROWSER_ACCEPT}" \
-                --dump-header "$headers" \
-                --output "$body" \
-                --write-out '%{http_code}' \
-                "${PREVIEW_URL}${path}")" || rc=$?
-              code="${code:-000}"
+            code="$(curl --silent --show-error --location --max-time 90 \
+              -H "Accept: ${BROWSER_ACCEPT}" \
+              --dump-header "$headers" \
+              --output "$body" \
+              --write-out '%{http_code}' \
+              "${PREVIEW_URL}${path}")" || rc=$?
+            code="${code:-000}"
 
-              if [[ "$rc" == "0" && "$code" == "200" ]]; then
-                if [[ -n "$needle" ]] && ! grep -Fq "$needle" "$body"; then
-                  echo "$name did not contain required marker: $needle" >&2
-                  echo 'Bounded public HTML diagnostic (first 2000 bytes):' >&2
-                  head -c 2000 "$body" >&2 || true
-                  echo >&2
-                  echo 'Bounded public HTML error signatures:' >&2
-                  grep -Eo '商品情報を取得できません|一時的な通信エラー[^<]{0,160}|Data source[^<]{0,160}|Product data[^<]{0,160}|digest.{0,160}' "$body" | head -20 >&2 || true
-                  echo 'Bounded public HTML diagnostic (last 6000 bytes):' >&2
-                  tail -c 6000 "$body" >&2 || true
-                  exit 1
-                fi
-                printf '%-24s HTTP 200 (attempt %s)\n' "$name" "$attempt" >> "$GITHUB_STEP_SUMMARY"
-                return 0
-              fi
-
-              if [[ "$attempt" -lt 6 ]]; then
-                case "$code" in
-                  000|429|500|502|503|504)
-                    delay=$((attempt * 3))
-                    echo "$name transient failure rc=$rc HTTP $code on attempt $attempt; retrying after ${delay}s" | tee -a "$GITHUB_STEP_SUMMARY"
-                    sleep "$delay"
-                    continue
-                    ;;
-                esac
-              fi
-
-              echo "$name failed rc=$rc HTTP $code on attempt $attempt" >&2
+            if [[ "$rc" != "0" || "$code" != "200" ]]; then
+              echo "$name failed rc=$rc HTTP $code; #430 forbids retry masking" >&2
               head -c 1000 "$body" >&2 || true
               exit 1
-            done
+            fi
+
+            if [[ -n "$needle" ]] && ! grep -Fq "$needle" "$body"; then
+              echo "$name did not contain required marker: $needle" >&2
+              echo 'Bounded public HTML diagnostic (first 2000 bytes):' >&2
+              head -c 2000 "$body" >&2 || true
+              echo >&2
+              echo 'Bounded public HTML error signatures:' >&2
+              grep -Eo '商品情報を取得できません|一時的な通信エラー[^<]{0,160}|Data source[^<]{0,160}|Product data[^<]{0,160}|digest.{0,160}' "$body" | head -20 >&2 || true
+              echo 'Bounded public HTML diagnostic (last 6000 bytes):' >&2
+              tail -c 6000 "$body" >&2 || true
+              exit 1
+            fi
+
+            printf '%-24s HTTP 200 (single attempt)\n' "$name" >> "$GITHUB_STEP_SUMMARY"
           }
 
           edge_policy() {
@@ -203,6 +190,11 @@ jobs:
           cf_cache_status() {
             local name="$1"
             awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$tmp/${name}.headers"
+          }
+
+          worker_cache_status() {
+            local name="$1"
+            awk 'BEGIN{IGNORECASE=1} /^x-gacha-worker-cache:/ {gsub("\r", ""); print $2; exit}' "$tmp/${name}.headers"
           }
 
           encoded_slug='tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
@@ -286,30 +278,14 @@ jobs:
           done
 
 
-          invalid_variant_shard_code=''
-          for attempt in $(seq 1 6); do
-            rc=0
-            invalid_variant_shard_code="$(curl --silent --show-error --max-time 60 --output "$tmp/variant-sitemap-invalid.body" --write-out '%{http_code}' "${PREVIEW_URL}/variant-sitemap/5001")" || rc=$?
-            invalid_variant_shard_code="${invalid_variant_shard_code:-000}"
-            if [[ "$rc" == '0' && "$invalid_variant_shard_code" == '404' ]]; then break; fi
-            if [[ "$attempt" -lt 6 ]]; then
-              case "$invalid_variant_shard_code" in
-                000|429|500|502|503|504)
-                  delay=$((attempt * 3))
-                  echo "variant-sitemap-invalid transient failure rc=$rc HTTP $invalid_variant_shard_code on attempt $attempt; retrying after ${delay}s" >> "$GITHUB_STEP_SUMMARY"
-                  sleep "$delay"
-                  continue
-                  ;;
-              esac
-            fi
-            echo "Out-of-range variant sitemap shard returned rc=$rc HTTP $invalid_variant_shard_code, expected 404" >&2
-            exit 1
-          done
-          [[ "$invalid_variant_shard_code" == "404" ]] || {
-            echo "Out-of-range variant sitemap shard returned $invalid_variant_shard_code, expected 404" >&2
+          rc=0
+          invalid_variant_shard_code="$(curl --silent --show-error --max-time 60 --output "$tmp/variant-sitemap-invalid.body" --write-out '%{http_code}' "${PREVIEW_URL}/variant-sitemap/5001")" || rc=$?
+          invalid_variant_shard_code="${invalid_variant_shard_code:-000}"
+          [[ "$rc" == "0" && "$invalid_variant_shard_code" == "404" ]] || {
+            echo "Out-of-range variant sitemap shard returned rc=$rc HTTP $invalid_variant_shard_code, expected 404; #430 forbids retry masking" >&2
             exit 1
           }
-          echo 'Out-of-range variant sitemap shard boundary: HTTP 404' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Out-of-range variant sitemap shard boundary: HTTP 404 (single attempt)' >> "$GITHUB_STEP_SUMMARY"
 
           [[ -z "$(edge_policy catalog_search)" ]] || {
             echo 'Query/search variant unexpectedly received a shared edge-cache policy.' >&2
@@ -328,29 +304,23 @@ jobs:
           request_get restocks_warm '/restocks'
           request_get series_sitemap_warm '/series-sitemap.xml'
 
-          for name in categories_warm series_warm category_detail_warm brand_detail_warm franchise_detail_warm series_sitemap_warm; do
+          for name in categories_warm series_warm category_detail_warm brand_detail_warm franchise_detail_warm series_sitemap_warm restocks_warm; do
+            worker_status="$(worker_cache_status "$name")"
             cf_status="$(cf_cache_status "$name")"
+            if [[ "$worker_status" == "HIT" ]]; then
+              echo "$name pre-vinext Worker cache observation: HIT." >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
             case "$cf_status" in
-              MISS|HIT|STALE)
-                echo "$name edge cache observation: $cf_status; exact-head HIT convergence is enforced by Cloudflare cache proof." >> "$GITHUB_STEP_SUMMARY"
+              HIT|STALE)
+                echo "$name Cloudflare CDN cache observation: $cf_status." >> "$GITHUB_STEP_SUMMARY"
                 ;;
               *)
-                echo "$name had unexpected cache status ${cf_status:-none}" >&2
+                echo "$name did not prove a warm upstream cache hit (worker=${worker_status:-none}, cf=${cf_status:-none})." >&2
                 exit 1
                 ;;
             esac
           done
-
-          restocks_status="$(cf_cache_status restocks_warm)"
-          case "$restocks_status" in
-            MISS|HIT|STALE)
-              echo "restocks_warm edge cache observation: $restocks_status; bounded origin path already verified HTTP 200." >> "$GITHUB_STEP_SUMMARY"
-              ;;
-            *)
-              echo "restocks_warm had unexpected cache status ${restocks_status:-none}" >&2
-              exit 1
-              ;;
-          esac
 
           review_code="$(curl --silent --show-error --max-time 60 --output "$tmp/review-post.body" --write-out '%{http_code}' -X POST -H "Origin: ${PREVIEW_URL}" -H 'Content-Type: application/x-www-form-urlencoded' --data 'decision=approved' "${PREVIEW_URL}/api/review/community-reports/runtime-smoke-nonexistent")"
           [[ "$review_code" == "401" ]] || { echo "Unauthenticated review mutation returned $review_code, expected 401" >&2; exit 1; }
