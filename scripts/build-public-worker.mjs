@@ -19,6 +19,7 @@ export function resolveBuildSourceSha(env = process.env) {
 export function buildPublicWorker({
   sourceSha = resolveBuildSourceSha(),
   sourcePath = path.resolve("workers/public/src/index.js"),
+  routeContractPath = path.resolve("workers/public/src/route-contract.js"),
   outputPath = path.resolve("workers/public/dist/index.js"),
 } = {}) {
   const normalizedSha = String(sourceSha || "").trim().toLowerCase();
@@ -27,9 +28,11 @@ export function buildPublicWorker({
   const occurrences = source.split(PLACEHOLDER).length - 1;
   if (occurrences !== 1) throw new Error(`expected_one_source_sha_placeholder_found_${occurrences}`);
   const built = source.replace(PLACEHOLDER, normalizedSha);
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  const outputDir = path.dirname(outputPath);
+  fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(outputPath, built);
-  return { sourceSha: normalizedSha, sourcePath, outputPath };
+  fs.copyFileSync(routeContractPath, path.join(outputDir, "route-contract.js"));
+  return { sourceSha: normalizedSha, sourcePath, routeContractPath, outputPath };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === fileURLToPath(new URL(`file://${process.argv[1]}`))) {
