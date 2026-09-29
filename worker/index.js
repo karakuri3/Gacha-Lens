@@ -8,6 +8,7 @@ const RELEASE_SOURCE_SHA = String(process.env.GACHA_RELEASE_SOURCE_SHA ?? "").tr
 const RELEASE_SOURCE_SHA_RE = /^[0-9a-f]{40}$/;
 const RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
 // Release proof returns only this immutable Git SHA; runtime bindings and secrets are never returned.
+// Keeping the marker in the Worker entrypoint makes Preview and custom-domain identity fail closed.
 
 function getReleaseSourceIdentityResponse(request) {
   const url = new URL(request.url);
