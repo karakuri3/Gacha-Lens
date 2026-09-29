@@ -7,6 +7,7 @@ import { deleteRowsByIds, fetchRowCount, fetchRows, upsertRows } from "./supabas
 import { assertMarketFetchComplete, fetchMarketListingsRaw, MARKET_SOURCE_SCOPES } from "../lib/fetchers/market-fetcher.js";
 import { planPriorityThreeSeedSearchQueries, PRIORITY_THREE_SEED_QUERY_PROFILE } from "../lib/fetchers/market-seed-query-planner.js";
 import { loadMarketManualCanarySelectionProfile, manualCanarySelectionOptions } from "../lib/domain/market-manual-canary-selection.js";
+import { bindApprovedP3TargetPlan, parseApprovedP3TargetVariantIds } from "../lib/domain/market-p3-phase0-targets.js";
 import { applyMarketCandidateSafety } from "../lib/domain/market-match-safety.js";
 import { buildSanitizedMarketCandidateAudit, renderMarketCandidateAuditMarkdown } from "../lib/domain/market-candidate-audit.js";
 import {
@@ -29,6 +30,7 @@ export async function executeP3BoundedSeedV2({
   stage = "p3-bounded-seed-v2",
   additional_excluded_variant_ids = [],
   target_variant_ids = null,
+  approved_target_variant_ids_json = process.env.P3_BOUNDED_SEED_V2_APPROVED_TARGET_VARIANT_IDS_JSON ?? null,
   rotation_key = null,
   validate_invocation = () => validateP3BoundedSeedV2Invocation({ event_name: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF, confirmation: process.env.P3_BOUNDED_SEED_V2_CONFIRMATION, expected_main_sha: options["expected-main-sha"], head_sha: process.env.GITHUB_SHA, origin_main_sha: options["origin-main-sha"] }),
 } = {}) {
@@ -58,18 +60,34 @@ export async function executeP3BoundedSeedV2({
     const profileExcluded = manualCanarySelectionOptions(profile).excludedVariantIds;
     const additionalExcluded = normalizeIdSet(additional_excluded_variant_ids);
     const excludedVariantIds = new Set([...profileExcluded, ...additionalExcluded]);
-    const targetVariantIds = target_variant_ids == null ? null : normalizeIdSet(target_variant_ids);
+    const approvedTargetVariantIds = String(approved_target_variant_ids_json ?? "").trim()
+      ? parseApprovedP3TargetVariantIds(approved_target_variant_ids_json, { limit })
+      : null;
+    if (approvedTargetVariantIds && target_variant_ids != null) {
+      throw new Error("P3 bounded seed v2 cannot combine approved exact targets with a broader target pool.");
+    }
+    const targetVariantIds = approvedTargetVariantIds
+      ? new Set(approvedTargetVariantIds)
+      : target_variant_ids == null ? null : normalizeIdSet(target_variant_ids);
     const coverageRows = targetVariantIds == null
       ? data.coverageRows
       : data.coverageRows.filter((row) => targetVariantIds.has(String(row.variantId ?? "")));
     resolvedRotationKey = normalizeRotationKey(rotation_key) || `priority-3-bounded-seed-v2:${runId}`;
 
-    const plan = planPriorityThreeSeedSearchQueries(data.catalog, coverageRows, {
+    let plan = planPriorityThreeSeedSearchQueries(data.catalog, coverageRows, {
       excludedVariantIds,
       maxVariantsPerSeries: 1,
       limit,
       rotationKey: resolvedRotationKey,
     });
+    if (approvedTargetVariantIds) {
+      plan = bindApprovedP3TargetPlan({
+        approvedTargetVariantIds,
+        limit,
+        plan,
+        catalog: data.catalog,
+      });
+    }
     attemptedVariantIds = plan.selected.map((entry) => String(entry.variantId ?? "").trim()).filter(Boolean);
     const selectedSeriesIds = plan.selected.map((entry) => String(entry.seriesId ?? "").trim());
     if (plan.selected.length > limit || plan.queries.length !== plan.selected.length || selectedSeriesIds.some((id) => !id) || new Set(selectedSeriesIds).size !== selectedSeriesIds.length || plan.queries.some((query) => query.query_profile !== PRIORITY_THREE_SEED_QUERY_PROFILE)) {
