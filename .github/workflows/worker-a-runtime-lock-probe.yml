@@ -1,0 +1,49 @@
+name: Worker A runtime lock probe
+
+on:
+  pull_request:
+    paths:
+      - "package.json"
+      - "vite.config.mjs"
+      - ".github/workflows/worker-a-runtime-lock-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generate-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Generate npm lock without install scripts
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Install exact runtime build graph
+        run: npm ci --ignore-scripts
+
+      - name: Verify Static Assets adapter
+        run: |
+          node --input-type=module <<'NODE'
+          const module = await import("@vinext/cloudflare/cache/static-assets-adapter");
+          if (typeof module.staticAssetsAdapter !== "function") {
+            throw new Error("staticAssetsAdapter is unavailable");
+          }
+          console.log("staticAssetsAdapter export: PASS");
+          NODE
+
+      - name: Upload npm-generated lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-a-runtime-lock
+          path: |
+            package.json
+            package-lock.json
+          if-no-files-found: error
