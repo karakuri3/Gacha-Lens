@@ -1,6 +1,7 @@
 export const PUBLIC_BOOTSTRAP_OWNED_PATHS = Object.freeze([
   "/api/runtime-diagnostics/release-source",
   "/api/runtime-diagnostics/public-plane",
+  "/api/runtime-diagnostics/public-variant-read",
   "/api/runtime-diagnostics/app-delegation",
 ]);
 
