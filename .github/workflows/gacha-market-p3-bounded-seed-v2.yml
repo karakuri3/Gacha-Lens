@@ -15,6 +15,10 @@ on:
         options:
           - "10"
           - "25"
+      approved_target_variant_ids_json:
+        description: Exact approved variant IDs as a JSON array matching limit
+        required: true
+        type: string
       confirmation:
         description: Type APPROVE_P3_BOUNDED_SEED_V2
         required: true
@@ -41,6 +45,7 @@ jobs:
       YAHOO_SHOPPING_APP_ID: ${{ secrets.YAHOO_SHOPPING_APP_ID }}
       YAHOO_SHOPPING_FETCH_ENABLED: ${{ secrets.YAHOO_SHOPPING_FETCH_ENABLED }}
       P3_BOUNDED_SEED_V2_CONFIRMATION: ${{ inputs.confirmation }}
+      P3_BOUNDED_SEED_V2_APPROVED_TARGET_VARIANT_IDS_JSON: ${{ inputs.approved_target_variant_ids_json }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
