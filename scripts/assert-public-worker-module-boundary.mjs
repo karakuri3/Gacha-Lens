@@ -8,6 +8,7 @@ const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
 if (!config.main) throw new Error("Generated Cloudflare config is missing main");
 
 const serverRoot = path.dirname(configPath);
+const buildRoot = path.resolve("dist");
 const mainPath = path.resolve(serverRoot, config.main);
 if (!fs.existsSync(mainPath)) throw new Error("Generated Worker main does not exist: " + mainPath);
 
@@ -20,7 +21,7 @@ function walk(dir) {
     else if (/\\.(?:m?js)$/.test(entry.name)) jsFiles.push(full);
   }
 }
-walk(serverRoot);
+walk(buildRoot);
 
 function moduleSpecifiers(source) {
   const staticSpecs = new Set();
@@ -65,7 +66,7 @@ const fallbackCandidates = jsFiles.filter((file) => /vinext-fallback/i.test(path
 if (fallbackCandidates.length !== 1) {
   throw new Error(
     "Expected exactly one emitted vinext-fallback chunk, found " + fallbackCandidates.length +
-    ". JS files: " + jsFiles.map((file) => normalize(path.relative(serverRoot, file))).join(", ") +
+    ". JS files: " + jsFiles.map((file) => normalize(path.relative(buildRoot, file))).join(", ") +
     "; main dynamic imports: " + (mainImports.dynamicSpecs.join(", ") || "none")
   );
 }
@@ -103,7 +104,7 @@ const staticallyLoadedVinext = [...mainStatic].filter((file) => {
 if (staticallyLoadedVinext.length) {
   throw new Error(
     "vinext/RSC markers remain in the public Worker static module closure: " +
-    staticallyLoadedVinext.map((file) => normalize(path.relative(serverRoot, file))).join(", ")
+    staticallyLoadedVinext.map((file) => normalize(path.relative(buildRoot, file))).join(", ")
   );
 }
 
@@ -116,9 +117,9 @@ if (!fallbackHasVinext) {
 }
 
 console.log(JSON.stringify({
-  main: normalize(path.relative(serverRoot, mainPath)),
+  main: normalize(path.relative(buildRoot, mainPath)),
   main_static_module_count: mainStatic.size,
-  dynamic_fallback: normalize(path.relative(serverRoot, fallbackPath)),
+  dynamic_fallback: normalize(path.relative(buildRoot, fallbackPath)),
   fallback_static_module_count: fallbackStatic.size,
   assets: config.assets ?? null,
   public_entry_contains_vinext_markers: false
