@@ -8,7 +8,7 @@ on:
       - ".github/workflows/worker-a-runtime-lock-probe.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate-lock:
@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout exact PR head
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -37,6 +39,21 @@ jobs:
           cat node_modules/@vinext/cloudflare/package.json
           echo '--- cache-related files ---'
           find node_modules/@vinext/cloudflare -maxdepth 4 -type f | sort | grep -E 'cache|asset|adapter|index' || true
+
+      - name: Commit npm-generated lock
+        if: ${{ success() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "build(runtime): refresh npm lock for vinext runtime"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
 
       - name: Upload npm-generated lock
         if: ${{ always() }}
