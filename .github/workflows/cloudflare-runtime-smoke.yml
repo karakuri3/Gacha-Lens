@@ -16,6 +16,7 @@ on:
       - "package-lock.json"
       - "scripts/cloudflare-release-integrity.mjs"
       - "tests/cloudflare-release-integrity.test.mjs"
+      - "tests/cloudflare-public-data-read.test.mjs"
       - ".github/workflows/cloudflare-runtime-smoke.yml"
       - ".github/workflows/cloudflare-cache-proof.yml"
       - ".github/workflows/cloudflare-production-release-proof.yml"
@@ -511,6 +512,50 @@ jobs:
 
           echo "Public Preview runtime source identity: ${deployed_sha}" >> "$GITHUB_STEP_SUMMARY"
           echo "Public Preview plane: ${plane}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prove fixed Public Supabase read on exact-head Version URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          headers="$(mktemp)"
+          trap 'rm -f "$body" "$headers"' EXIT
+
+          rc=0
+          code="$(curl --silent --show-error --max-time 60 \
+            -H 'Accept: application/json' \
+            -H 'Cache-Control: no-cache' \
+            --dump-header "$headers" \
+            --output "$body" \
+            --write-out '%{http_code}' \
+            "${PUBLIC_PREVIEW_URL}/api/runtime-diagnostics/public-variant-read")" || rc=$?
+          code="${code:-000}"
+
+          [[ "$rc" == '0' && "$code" == '200' ]] || {
+            echo "Public fixed Supabase read failed rc=${rc} HTTP ${code}." >&2
+            cat "$body" >&2 || true
+            exit 1
+          }
+
+          plane="$(jq -r '.plane // ""' < "$body")"
+          source_sha="$(jq -r '.source_sha // ""' < "$body")"
+          route_contract="$(jq -r '.route_contract // ""' < "$body")"
+          representative_slug="$(jq -r '.representative.slug // ""' < "$body")"
+          representative_name="$(jq -r '.representative.name // ""' < "$body")"
+          route_header="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-route:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+          subrequests="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-external-subrequests:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+          cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cache-control:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+
+          [[ "$plane" == 'public' ]] || { echo "Fixed read plane is ${plane:-missing}, expected public." >&2; exit 1; }
+          [[ "$source_sha" == "$TARGET_SHA" ]] || { echo "Fixed read source SHA ${source_sha:-missing} does not match ${TARGET_SHA}." >&2; exit 1; }
+          [[ "$route_contract" == 'public-variant-read-fixed-v1' ]] || { echo "Fixed read contract is ${route_contract:-missing}." >&2; exit 1; }
+          [[ "$representative_slug" == 'tarts-y901096-ディズニー-マリー' ]] || { echo "Unexpected representative slug: ${representative_slug:-missing}." >&2; exit 1; }
+          [[ -n "$representative_name" ]] || { echo 'Representative name is missing.' >&2; exit 1; }
+          [[ "$route_header" == 'public-variant-read-fixed-v1' ]] || { echo "Fixed read route header is ${route_header:-missing}." >&2; exit 1; }
+          [[ "$subrequests" == '1' ]] || { echo "Fixed read external subrequest count is ${subrequests:-missing}, expected 1." >&2; exit 1; }
+          [[ "$cache_control" == *'no-store'* ]] || { echo "Fixed read diagnostic is missing no-store." >&2; exit 1; }
+
+          echo "Public fixed Supabase read: HTTP 200 / exact SHA / 1 external subrequest / ${representative_slug}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Prove review cold path and bootstrap route boundary
         shell: bash
