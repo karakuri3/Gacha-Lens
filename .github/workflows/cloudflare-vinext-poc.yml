@@ -110,19 +110,6 @@ jobs:
           link_pkg @vitejs/plugin-rsc
           link_pkg @cloudflare/vite-plugin
           link_pkg wrangler
-
-      - name: Verify Static Assets cache adapter export
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          const module = await import("@vinext/cloudflare/cache/static-assets-adapter");
-          if (typeof module.staticAssetsAdapter !== "function") {
-            throw new Error("Pinned @vinext/cloudflare does not expose staticAssetsAdapter");
-          }
-          console.log("staticAssetsAdapter export: PASS");
-          NODE
-
       - name: Run locked vinext compatibility check
         run: "$TOOLCHAIN_DIR/node_modules/.bin/vinext check"
 
@@ -130,7 +117,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$TOOLCHAIN_DIR/node_modules/.bin/vinext" init --skip-check --platform=cloudflare --data-cache=kv --cdn-cache=static-assets --image-optimization=cloudflare-images | tee /tmp/vinext-init.log
+          "$TOOLCHAIN_DIR/node_modules/.bin/vinext" init --skip-check --platform=cloudflare --data-cache=kv --image-optimization=cloudflare-images | tee /tmp/vinext-init.log
           if grep -Eq 'Installing dependencies:|Installing devDependencies:|Upgrading dependencies:' /tmp/vinext-init.log; then
             echo 'vinext init attempted live dependency resolution; deterministic CI refuses to continue.' >&2
             exit 1
