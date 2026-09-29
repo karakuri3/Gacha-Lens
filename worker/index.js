@@ -7,6 +7,8 @@ const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const RELEASE_SOURCE_SHA = String(process.env.GACHA_RELEASE_SOURCE_SHA ?? "").trim().toLowerCase();
 const RELEASE_SOURCE_SHA_RE = /^[0-9a-f]{40}$/;
 const RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
+const WORKER_CACHE_STATUS_HEADER = "X-Gacha-Worker-Cache";
+const WORKER_CACHE_ORIGIN_CONTROL_HEADER = "X-Gacha-Origin-Cache-Control";
 // Release proof returns only this immutable Git SHA; runtime bindings and secrets are never returned.
 // Keeping the marker in the Worker entrypoint makes Preview and custom-domain identity fail closed at runtime.
 
@@ -211,6 +213,52 @@ function getEdgeCachePolicy(request) {
   return null;
 }
 
+function getVersionedWorkerCacheKey(request, policy) {
+  if (!policy || !RELEASE_SOURCE_SHA_RE.test(RELEASE_SOURCE_SHA)) return null;
+
+  const url = new URL(request.url);
+  url.searchParams.set("__gacha_release", RELEASE_SOURCE_SHA);
+  return new Request(url.toString(), { method: "GET" });
+}
+
+function getWorkerCache() {
+  return globalThis.caches?.default ?? null;
+}
+
+function restoreWorkerCacheResponse(response) {
+  const headers = new Headers(response.headers);
+  const originCacheControl = headers.get(WORKER_CACHE_ORIGIN_CONTROL_HEADER);
+  if (originCacheControl === "__none__") {
+    headers.delete("Cache-Control");
+  } else if (originCacheControl) {
+    headers.set("Cache-Control", originCacheControl);
+  }
+  headers.delete(WORKER_CACHE_ORIGIN_CONTROL_HEADER);
+  headers.set(WORKER_CACHE_STATUS_HEADER, "HIT");
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function createWorkerCacheStorageResponse(response, policy) {
+  const headers = new Headers(response.headers);
+  headers.set(
+    WORKER_CACHE_ORIGIN_CONTROL_HEADER,
+    headers.get("Cache-Control") ?? "__none__"
+  );
+  headers.set("Cache-Control", policy.cacheControl);
+  headers.set(WORKER_CACHE_STATUS_HEADER, "HIT");
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 function getLegacyCategoryDiscoveryPageRedirect(request) {
   if (!["GET", "HEAD"].includes(request.method)) return null;
 
@@ -277,6 +325,14 @@ export default {
     if (legacyRankingRedirect) return legacyRankingRedirect;
 
     const policy = getEdgeCachePolicy(request);
+    const workerCache = getWorkerCache();
+    const workerCacheKey = getVersionedWorkerCacheKey(request, policy);
+
+    if (workerCache && workerCacheKey) {
+      const cached = await workerCache.match(workerCacheKey);
+      if (cached) return restoreWorkerCacheResponse(cached);
+    }
+
     const response = await handler.fetch(request, env, ctx);
 
     if (!(await canStoreResponse(response, policy))) {
@@ -287,11 +343,19 @@ export default {
     headers.set("Cloudflare-CDN-Cache-Control", policy.cacheControl);
     headers.set("Cache-Tag", policy.cacheTag);
     headers.set("X-Gacha-Edge-Cache-Policy", policy.marker);
+    headers.set(WORKER_CACHE_STATUS_HEADER, workerCacheKey ? "MISS" : "BYPASS");
 
-    return new Response(response.body, {
+    const clientResponse = new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers,
     });
+
+    if (workerCache && workerCacheKey) {
+      const storageResponse = createWorkerCacheStorageResponse(clientResponse.clone(), policy);
+      ctx.waitUntil(workerCache.put(workerCacheKey, storageResponse));
+    }
+
+    return clientResponse;
   },
 };
