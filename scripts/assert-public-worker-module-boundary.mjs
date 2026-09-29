@@ -61,12 +61,25 @@ function staticClosure(entry) {
 
 const mainSource = fs.readFileSync(mainPath, "utf8");
 const mainImports = moduleSpecifiers(mainSource);
+const vinextMarkers = [
+  "virtual:vinext",
+  "[vinext]",
+  "vinext/server/",
+  "__vite_rsc",
+  "react-server-dom",
+];
+const mainVinextMarkers = vinextMarkers.filter((marker) => mainSource.includes(marker));
 const fallbackCandidates = jsFiles.filter((file) => /vinext-fallback/i.test(path.basename(file)));
 
 if (fallbackCandidates.length !== 1) {
   throw new Error(
     "Expected exactly one emitted vinext-fallback chunk, found " + fallbackCandidates.length +
-    ". JS files: " + jsFiles.map((file) => normalize(path.relative(buildRoot, file))).join(", ") +
+    ". generated main=" + config.main +
+    "; main bytes=" + Buffer.byteLength(mainSource) +
+    "; main vinext/RSC markers=" + (mainVinextMarkers.join(",") || "none") +
+    "; main contains getVinextHandler=" + mainSource.includes("getVinextHandler") +
+    "; main contains vinext-fallback=" + mainSource.includes("vinext-fallback") +
+    "; JS files: " + jsFiles.map((file) => normalize(path.relative(buildRoot, file))).join(", ") +
     "; main dynamic imports: " + (mainImports.dynamicSpecs.join(", ") || "none")
   );
 }
@@ -89,13 +102,6 @@ if (!dynamicTargets.includes(fallbackPath)) {
   );
 }
 
-const vinextMarkers = [
-  "virtual:vinext",
-  "[vinext]",
-  "vinext/server/",
-  "__vite_rsc",
-  "react-server-dom",
-];
 const staticallyLoadedVinext = [...mainStatic].filter((file) => {
   const source = fs.readFileSync(file, "utf8");
   return vinextMarkers.some((marker) => source.includes(marker));
