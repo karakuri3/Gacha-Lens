@@ -198,6 +198,9 @@ jobs:
             exit 1
           fi
 
+      - name: Verify public cold-path artifact isolation
+        run: node scripts/verify-public-cold-artifact.mjs
+
       - name: Verify worker artifact and lockfile invariants
         shell: bash
         run: |
