@@ -67,6 +67,37 @@ PR gates are split deliberately:
 
 This preserves #426 exact-head Preview capability instead of weakening it around a platform limitation.
 
+
+## Public Worker Workers Builds settings
+
+The Public Worker must be created as `gacha-lens-public`; the dashboard Worker name must match `workers/public/wrangler.jsonc`.
+
+Use the existing GitHub integration and no new repository secret.
+
+Production and preview may share this build command because the release gate skips non-`main` branches:
+
+```sh
+npm ci --ignore-scripts --prefix .github/vinext-toolchain &&
+node scripts/cloudflare-public-build-gate.mjs &&
+node scripts/build-public-worker.mjs
+```
+
+Production deploy command:
+
+```sh
+.github/vinext-toolchain/node_modules/.bin/wrangler deploy --config workers/public/wrangler.jsonc
+```
+
+Until the locked Wrangler toolchain is intentionally reviewed again, PR validation should use a version upload instead of the newer Worker Preview command:
+
+```sh
+.github/vinext-toolchain/node_modules/.bin/wrangler versions upload --config workers/public/wrangler.jsonc
+```
+
+This keeps the locked `wrangler@4.131.1`; no root dependency or #480 toolchain change is required.
+
+The Public production build command enforces App-before-Public ordering by polling the existing App production source identity for the exact `WORKERS_CI_COMMIT_SHA`. Bounded deploy waiting is release orchestration, not a runtime/cold-request retry.
+
 ## Production release order
 
 Production may be called green only in this order:
