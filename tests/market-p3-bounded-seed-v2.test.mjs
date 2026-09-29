@@ -44,8 +44,9 @@ test("P3 v2 workflow is dispatch-only with exact bounded inputs", () => {
   assert.match(workflow, /^on:\s*\r?\n\s+workflow_dispatch:/m);
   assert.doesNotMatch(workflow, /^\s+(schedule|push|pull_request|workflow_run|repository_dispatch):/m);
   const inputs = workflow.match(/inputs:([\s\S]*?)\r?\n\r?\njobs:/)?.[1] ?? "";
-  assert.match(inputs, /expected_main_sha/); assert.match(inputs, /limit/); assert.match(inputs, /confirmation/);
-  assert.doesNotMatch(inputs, /(variant_id|series_id|candidate_key|provider|listing_id|public_url|priority|release|source_scope)/);
+  assert.match(inputs, /expected_main_sha/); assert.match(inputs, /limit/); assert.match(inputs, /approved_target_variant_ids_json/); assert.match(inputs, /confirmation/);
+  assert.doesNotMatch(inputs, /(series_id|candidate_key|provider|listing_id|public_url|priority|release|source_scope)/);
+  assert.match(workflow, /P3_BOUNDED_SEED_V2_APPROVED_TARGET_VARIANT_IDS_JSON/);
   assert.match(workflow, /10\|25/); assert.match(workflow, /gacha-market-bounded-v2/); assert.match(workflow, /cancel-in-progress:\s*false/);
   assert.match(workflow, /node-version:\s*24/); assert.match(workflow, /timeout-minutes:\s*40/); assert.match(workflow, /steps\.scan\.outcome == 'success'/);
 });
@@ -65,6 +66,8 @@ test("P3 v2 runner retains fixed strict Priority 3 collection", () => {
   assert.match(runner, /planPriorityThreeSeedSearchQueries/); assert.doesNotMatch(runner, /buildMarketSearchQueriesForVariant|planMarketSearchQueries/);
   assert.match(runner, /MARKET_SOURCE_SCOPES\.PLANNER_APIS/); assert.match(runner, /maxVariantsPerSeries:\s*1/);
   assert.match(runner, /priority-3-bounded-seed-v2:\$\{runId\}/); assert.match(runner, /query_profile !== PRIORITY_THREE_SEED_QUERY_PROFILE/);
+  assert.match(runner, /parseApprovedP3TargetVariantIds/); assert.match(runner, /bindApprovedP3TargetPlan/);
+  assert.ok(runner.indexOf("bindApprovedP3TargetPlan") < runner.indexOf("fetchMarketListingsRaw"));
   assert.match(runner, /fetchRowsByMatchedVariantIds/); assert.match(runner, /fetchRowsBySourceUrls/);
 });
 
