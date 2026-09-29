@@ -137,6 +137,26 @@ jobs:
           }
           echo "Preview runtime source identity: ${deployed_sha}" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Probe direct Static Assets coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          code="$(curl --silent --show-error --max-time 60 \
+            -H 'Accept: application/json' \
+            -H 'Cache-Control: no-cache' \
+            --output "$body" \
+            --write-out '%{http_code}' \
+            "${PREVIEW_URL}/api/runtime-diagnostics/static-assets")"
+          [[ "$code" == "200" ]] || {
+            echo "Static Assets probe returned HTTP $code" >&2
+            cat "$body" >&2 || true
+            exit 1
+          }
+          echo 'Static Assets direct-binding probe:' >> "$GITHUB_STEP_SUMMARY"
+          jq -c '.results[]' "$body" | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Smoke public runtime and boundaries
         shell: bash
         run: |
