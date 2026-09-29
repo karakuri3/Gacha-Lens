@@ -195,6 +195,8 @@ jobs:
 
       - name: Build vinext worker artifact without live React upgrade
         shell: bash
+        env:
+          WORKERS_CI_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           "$TOOLCHAIN_DIR/node_modules/.bin/vinext" build | tee /tmp/vinext-build.log
