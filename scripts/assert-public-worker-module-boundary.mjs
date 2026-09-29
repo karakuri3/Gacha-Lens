@@ -13,26 +13,31 @@ const mainPath = path.resolve(serverRoot, config.main);
 if (!fs.existsSync(mainPath)) throw new Error("Generated Worker main does not exist: " + mainPath);
 
 const normalize = (value) => value.replaceAll("\\", "/");
-const jsFiles = [];
-function walk(dir) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(full);
-    else if (/\.(?:m?js)$/.test(entry.name)) jsFiles.push(full);
-  }
-}
-walk(buildRoot);
 
-function moduleSpecifiers(source) {
-  const staticSpecs = new Set();
-  const dynamicSpecs = new Set();
-  for (const match of source.matchAll(/(?:^|[;\\n])\\s*(?:import|export)\\s+(?:[^"'()]*?\\s+from\\s+)?["']([^"']+)["']/g)) {
-    staticSpecs.add(match[1]);
+function dynamicImportSpecifiers(source) {
+  const output = [];
+  let cursor = 0;
+  while (cursor < source.length) {
+    const start = source.indexOf("import(", cursor);
+    if (start < 0) break;
+    const quoteIndex = start + "import(".length;
+    const quote = source[quoteIndex];
+    if (quote === "`" || quote === "'" || quote === '"') {
+      const end = source.indexOf(quote + ")", quoteIndex + 1);
+      if (end >= 0) output.push(source.slice(quoteIndex + 1, end));
+    }
+    cursor = quoteIndex + 1;
   }
-  for (const match of source.matchAll(/import\\(\\s*["']([^"']+)["']\\s*\\)/g)) {
-    dynamicSpecs.add(match[1]);
-  }
-  return { staticSpecs: [...staticSpecs], dynamicSpecs: [...dynamicSpecs] };
+  return output;
+}
+
+function staticImportSpecifiers(source) {
+  const specs = new Set();
+  const fromPattern = /\bfrom\s*["'`]([^"'`]+)["'`]/g;
+  const barePattern = /\bimport\s*["'`]([^"'`]+)["'`]/g;
+  for (const match of source.matchAll(fromPattern)) specs.add(match[1]);
+  for (const match of source.matchAll(barePattern)) specs.add(match[1]);
+  return [...specs];
 }
 
 function resolveLocal(importer, specifier) {
@@ -50,8 +55,7 @@ function staticClosure(entry) {
     if (!current || seen.has(current)) continue;
     seen.add(current);
     const source = fs.readFileSync(current, "utf8");
-    const { staticSpecs } = moduleSpecifiers(source);
-    for (const specifier of staticSpecs) {
+    for (const specifier of staticImportSpecifiers(source)) {
       const resolved = resolveLocal(current, specifier);
       if (resolved) queue.push(resolved);
     }
@@ -59,8 +63,6 @@ function staticClosure(entry) {
   return seen;
 }
 
-const mainSource = fs.readFileSync(mainPath, "utf8");
-const mainImports = moduleSpecifiers(mainSource);
 const vinextMarkers = [
   "virtual:vinext",
   "[vinext]",
@@ -68,24 +70,22 @@ const vinextMarkers = [
   "__vite_rsc",
   "react-server-dom",
 ];
-const mainVinextMarkers = vinextMarkers.filter((marker) => mainSource.includes(marker));
-const fallbackCandidates = jsFiles.filter((file) => /vinext-fallback/i.test(path.basename(file)));
 
-if (fallbackCandidates.length !== 1) {
+const mainSource = fs.readFileSync(mainPath, "utf8");
+const dynamicSpecs = dynamicImportSpecifiers(mainSource);
+const fallbackSpec = dynamicSpecs.find((specifier) => /\/vinext-fallback-[^/]+\.js$/.test(specifier));
+if (!fallbackSpec) {
   throw new Error(
-    "Expected exactly one emitted vinext-fallback chunk, found " + fallbackCandidates.length +
-    ". generated main=" + config.main +
-    "; main bytes=" + Buffer.byteLength(mainSource) +
-    "; main vinext/RSC markers=" + (mainVinextMarkers.join(",") || "none") +
-    "; main contains getVinextHandler=" + mainSource.includes("getVinextHandler") +
-    "; main contains vinext-fallback=" + mainSource.includes("vinext-fallback") +
-    "; vinext-fallback snippet=" + (() => { const i = mainSource.indexOf("vinext-fallback"); return i >= 0 ? mainSource.slice(Math.max(0, i - 220), i + 420).replace(/\s+/g, " ") : "none"; })() +
-    "; JS files: " + jsFiles.map((file) => normalize(path.relative(buildRoot, file))).join(", ") +
-    "; main dynamic imports: " + (mainImports.dynamicSpecs.join(", ") || "none")
+    "Generated Worker entrypoint has no emitted vinext fallback dynamic import. main=" +
+    config.main + "; dynamic imports=" + (dynamicSpecs.join(", ") || "none")
   );
 }
 
-const fallbackPath = fallbackCandidates[0];
+const fallbackPath = resolveLocal(mainPath, fallbackSpec);
+if (!fallbackPath) {
+  throw new Error("Generated vinext fallback module does not exist: " + fallbackSpec);
+}
+
 const mainStatic = staticClosure(mainPath);
 const fallbackStatic = staticClosure(fallbackPath);
 
@@ -93,21 +93,10 @@ if (mainStatic.has(fallbackPath)) {
   throw new Error("vinext fallback chunk is statically reachable from the Worker entrypoint");
 }
 
-const dynamicTargets = mainImports.dynamicSpecs
-  .map((specifier) => resolveLocal(mainPath, specifier))
-  .filter(Boolean);
-if (!dynamicTargets.includes(fallbackPath)) {
-  throw new Error(
-    "Worker entrypoint does not dynamically import emitted vinext fallback chunk. dynamic imports: " +
-    (mainImports.dynamicSpecs.join(", ") || "none")
-  );
-}
-
 const staticallyLoadedVinext = [...mainStatic].filter((file) => {
   const source = fs.readFileSync(file, "utf8");
   return vinextMarkers.some((marker) => source.includes(marker));
 });
-
 if (staticallyLoadedVinext.length) {
   throw new Error(
     "vinext/RSC markers remain in the public Worker static module closure: " +
@@ -125,9 +114,10 @@ if (!fallbackHasVinext) {
 
 console.log(JSON.stringify({
   main: normalize(path.relative(buildRoot, mainPath)),
+  main_bytes: Buffer.byteLength(mainSource),
   main_static_module_count: mainStatic.size,
   dynamic_fallback: normalize(path.relative(buildRoot, fallbackPath)),
   fallback_static_module_count: fallbackStatic.size,
-  assets: config.assets ?? null,
-  public_entry_contains_vinext_markers: false
+  public_entry_contains_vinext_markers: false,
+  assets: config.assets ?? null
 }, null, 2));
