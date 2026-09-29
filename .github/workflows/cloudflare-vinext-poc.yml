@@ -78,6 +78,48 @@ jobs:
           }
           NODE
 
+      - name: Verify patched undici lock resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const toolchain = JSON.parse(fs.readFileSync(".github/vinext-toolchain/package.json", "utf8"));
+          const lock = JSON.parse(fs.readFileSync(".github/vinext-toolchain/package-lock.json", "utf8"));
+          const override = toolchain.overrides?.undici;
+          const resolved = lock.packages?.["node_modules/undici"]?.version;
+          const miniflare = lock.packages?.["node_modules/miniflare"];
+
+          if (!override) throw new Error("Missing fail-closed undici override in locked vinext toolchain.");
+          if (!resolved) throw new Error("Locked vinext toolchain does not resolve undici.");
+          if (resolved !== override) {
+            throw new Error(`undici override/lock mismatch: override=${override}, lock=${resolved}. Regenerate package-lock.json with npm instead of hand-editing it.`);
+          }
+
+          const parseVersion = (version) => {
+            const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+            if (!match) throw new Error(`Unexpected undici version format: ${version}`);
+            return match.slice(1).map(Number);
+          };
+          const compare = (left, right) => {
+            for (let index = 0; index < 3; index += 1) {
+              if (left[index] !== right[index]) return left[index] - right[index];
+            }
+            return 0;
+          };
+
+          const actual = parseVersion(resolved);
+          const affectedFloor = [7, 28, 0];
+          const patchedFloor = [7, 29, 1];
+          if (actual[0] === 7 && compare(actual, affectedFloor) >= 0 && compare(actual, patchedFloor) < 0) {
+            throw new Error(`GHSA-3wwx-pv8p-q78v vulnerable undici remains locked: ${resolved}`);
+          }
+
+          const requested = miniflare?.dependencies?.undici ?? "not-present";
+          console.log(`Patched undici lock verified: miniflare requests ${requested}; override/resolved=${resolved}.`);
+          NODE
+
       - name: Expose locked toolchain without mutating root lockfile
         shell: bash
         run: |
