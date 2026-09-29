@@ -12,13 +12,13 @@ const buildRoot = path.resolve("dist");
 const mainPath = path.resolve(serverRoot, config.main);
 if (!fs.existsSync(mainPath)) throw new Error("Generated Worker main does not exist: " + mainPath);
 
-const normalize = (value) => value.replaceAll("\\\\", "/");
+const normalize = (value) => value.replaceAll("\\", "/");
 const jsFiles = [];
 function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full);
-    else if (/\\.(?:m?js)$/.test(entry.name)) jsFiles.push(full);
+    else if (/\.(?:m?js)$/.test(entry.name)) jsFiles.push(full);
   }
 }
 walk(buildRoot);
@@ -79,7 +79,7 @@ if (fallbackCandidates.length !== 1) {
     "; main vinext/RSC markers=" + (mainVinextMarkers.join(",") || "none") +
     "; main contains getVinextHandler=" + mainSource.includes("getVinextHandler") +
     "; main contains vinext-fallback=" + mainSource.includes("vinext-fallback") +
-    "; vinext-fallback snippet=" + (() => { const i = mainSource.indexOf("vinext-fallback"); return i >= 0 ? mainSource.slice(Math.max(0, i - 220), i + 420).replace(/\\s+/g, " ") : "none"; })() +
+    "; vinext-fallback snippet=" + (() => { const i = mainSource.indexOf("vinext-fallback"); return i >= 0 ? mainSource.slice(Math.max(0, i - 220), i + 420).replace(/\s+/g, " ") : "none"; })() +
     "; JS files: " + jsFiles.map((file) => normalize(path.relative(buildRoot, file))).join(", ") +
     "; main dynamic imports: " + (mainImports.dynamicSpecs.join(", ") || "none")
   );
