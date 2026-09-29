@@ -24,7 +24,7 @@ export function DiscoveryFacetIndex({ type, eyebrow, title, lead, facets }) {
                 <strong>{facet.name}</strong>
                 <small>{facet.series_count.toLocaleString("ja-JP")}シリーズ</small>
               </span>
-              <b>{facet.variant_count.toLocaleString("ja-JP")}種</b>
+              {Number.isFinite(facet.variant_count) ? <b>{facet.variant_count.toLocaleString("ja-JP")}種</b> : null}
               <span className="facet-card__arrow" aria-hidden="true">›</span>
             </DocumentLink>
           ))}
