@@ -5,7 +5,7 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 export default defineConfig({
   plugins: [
     vinext({
-      prerender: true,
+      prerender: { routes: "*" },
     }),
     cloudflare({
       viteEnvironment: {
