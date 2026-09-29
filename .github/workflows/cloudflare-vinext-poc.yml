@@ -6,6 +6,8 @@ on:
     paths:
       - "app/**"
       - "lib/**"
+      - "worker/**"
+      - "scripts/assert-public-worker-module-boundary.mjs"
       - "next.config.mjs"
       - "package.json"
       - "package-lock.json"
@@ -197,6 +199,9 @@ jobs:
             echo 'vinext attempted to live-upgrade React; deterministic CI refuses this build.' >&2
             exit 1
           fi
+
+      - name: Prove public entrypoint does not statically load vinext
+        run: node scripts/assert-public-worker-module-boundary.mjs
 
       - name: Verify worker artifact and lockfile invariants
         shell: bash
