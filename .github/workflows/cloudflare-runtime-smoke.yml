@@ -23,7 +23,7 @@ permissions:
   checks: read
 
 concurrency:
-  group: cloudflare-live-preview-proof-${{ github.event.pull_request.number || github.ref }}
+  group: cloudflare-runtime-smoke-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
