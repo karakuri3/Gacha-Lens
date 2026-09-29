@@ -18,8 +18,8 @@ async function builtWorker(sourceSha = SHA) {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "gacha-public-worker-"));
   const outputPath = path.join(temp, "index.js");
   buildPublicWorker({ sourceSha, outputPath });
-  const module = await import(`${pathToFileURL(outputPath).href}?t=${Date.now()}-${Math.random()}`);
-  return { worker: module.default, temp };
+  const loaded = await import(`${pathToFileURL(outputPath).href}?t=${Date.now()}-${Math.random()}`);
+  return { worker: loaded.default, temp };
 }
 
 function appBinding({ sourceSha = SHA, reviewStatus = 200, reviewBody = "Review access" } = {}) {
