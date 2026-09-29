@@ -20,7 +20,7 @@ permissions:
 # Serialize them so CI does not manufacture origin pressure that normal smoke
 # traffic is not intended to test.
 concurrency:
-  group: cloudflare-live-preview-proof-${{ github.event.pull_request.number || github.ref }}
+  group: cloudflare-cache-proof-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
