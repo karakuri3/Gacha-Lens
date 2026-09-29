@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const marker = "__GACHA_VINEXT_FALLBACK_MODULE__";
+const marker = "gacha-lens.vinext-fallback-loaded";
 const serverDir = path.resolve("dist/server");
 const wranglerPath = path.join(serverDir, "wrangler.json");
 
