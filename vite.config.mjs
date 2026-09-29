@@ -8,7 +8,7 @@ import { imagesOptimizer } from "@vinext/cloudflare/images/images-optimizer";
 export default defineConfig({
   plugins: [
     vinext({
-      prerender: true,
+      prerender: { routes: "*" },
       cache: {
         cdn: staticAssetsAdapter(),
         data: kvDataAdapter(),
