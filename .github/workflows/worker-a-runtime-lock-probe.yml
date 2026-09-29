@@ -3,8 +3,7 @@ name: Worker A runtime lock probe
 on:
   pull_request:
     paths:
-      - "package.json"
-      - "vite.config.mjs"
+      - ".github/vinext-toolchain/package.json"
       - ".github/workflows/worker-a-runtime-lock-probe.yml"
 
 permissions:
@@ -25,42 +24,29 @@ jobs:
         with:
           node-version: 24
 
-      - name: Generate npm lock without install scripts
-        run: npm install --package-lock-only --ignore-scripts
+      - name: Generate locked CI toolchain
+        run: npm install --package-lock-only --ignore-scripts --prefix .github/vinext-toolchain
 
-      - name: Install exact runtime build graph
-        run: npm ci --ignore-scripts
+      - name: Verify patched undici remains locked
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const lock = JSON.parse(fs.readFileSync(".github/vinext-toolchain/package-lock.json", "utf8"));
+          const version = lock.packages?.["node_modules/undici"]?.version;
+          if (version !== "7.29.1") throw new Error(`expected undici 7.29.1, got ${version}`);
+          console.log("undici lock preserved:", version);
+          NODE
 
-      - name: Inspect Cloudflare adapter package
+      - name: Commit npm-generated toolchain lock
         shell: bash
         run: |
           set -euo pipefail
-          echo '--- package.json ---'
-          cat node_modules/@vinext/cloudflare/package.json
-          echo '--- cache-related files ---'
-          find node_modules/@vinext/cloudflare -maxdepth 4 -type f | sort | grep -E 'cache|asset|adapter|index' || true
-
-      - name: Commit npm-generated lock
-        if: ${{ success() }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- package-lock.json; then
-            echo "package-lock.json already current"
+          if git diff --quiet -- .github/vinext-toolchain/package-lock.json; then
+            echo "toolchain lock already current"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "build(runtime): refresh npm lock for vinext runtime"
+          git add .github/vinext-toolchain/package-lock.json
+          git commit -m "build(runtime): refresh locked vinext static-assets graph"
           git push origin "HEAD:${GITHUB_HEAD_REF}"
-
-      - name: Upload npm-generated lock
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: worker-a-runtime-lock
-          path: |
-            package.json
-            package-lock.json
-          if-no-files-found: error
