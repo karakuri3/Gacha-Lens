@@ -268,20 +268,35 @@ test("route ownership matrix distinguishes public, conditional, app-owned, plann
   assert.equal(classifyPhaseA2Route("/api/arbitrary-proxy"), "explicitly-rejected");
 });
 
-test("public Worker source is dependency-free from vinext React Next and Supabase clients", () => {
+test("public Worker stays dependency-free and permits only the fixed runtime Supabase secret binding", () => {
   const source = fs.readFileSync(path.join(root, "workers/public/src/index.js"), "utf8");
   for (const forbidden of [
     "vinext",
     "react",
     "next/",
     "@supabase/supabase-js",
-    "SUPABASE_SERVICE_ROLE_KEY",
     "REVIEW_ADMIN_TOKEN",
     "ADMIN_REVIEW_TOKEN",
     "select=*",
+    "sb_secret_",
+    "eyJhbGciOi",
+    "service-role-secret",
   ]) {
-    assert.equal(source.includes(forbidden), false, `forbidden public bootstrap dependency/token: ${forbidden}`);
+    assert.equal(source.includes(forbidden), false, `forbidden public runtime dependency/credential material: ${forbidden}`);
   }
+
+  const serviceRoleReferences = source.match(/SUPABASE_SERVICE_ROLE_KEY/g) ?? [];
+  assert.equal(serviceRoleReferences.length, 1, "service-role binding name must appear exactly once");
+  assert.match(
+    source,
+    /env\?\.SUPABASE_SERVICE_ROLE_KEY/,
+    "service-role credential must be read only from the Worker runtime env binding",
+  );
+  assert.doesNotMatch(
+    source,
+    /process\.env\.SUPABASE_SERVICE_ROLE_KEY/,
+    "Public Worker must not depend on a build-time/process environment secret",
+  );
 });
 
 test("public Wrangler config binds only to existing gacha-lens App Worker and declares no custom domain yet", () => {
