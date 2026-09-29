@@ -1,0 +1,216 @@
+name: Cloudflare dual Worker bootstrap
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "workers/public/**"
+      - "worker/**"
+      - "app/**"
+      - "lib/**"
+      - "scripts/build-public-worker.mjs"
+      - "scripts/cloudflare-release-integrity.mjs"
+      - "tests/cloudflare-dual-worker-bootstrap.test.mjs"
+      - "tests/cloudflare-release-integrity.test.mjs"
+      - ".github/workflows/cloudflare-dual-worker-bootstrap.yml"
+      - ".github/vinext-toolchain/**"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-dual-worker-bootstrap-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-head-dual-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TOOLCHAIN_DIR: .github/vinext-toolchain
+      TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$TARGET_SHA" ]]
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Install locked Cloudflare toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --prefix "$TOOLCHAIN_DIR"
+
+          link_pkg() {
+            local name="$1"
+            local src="$PWD/$TOOLCHAIN_DIR/node_modules/$name"
+            local dst="$PWD/node_modules/$name"
+            mkdir -p "$(dirname "$dst")"
+            rm -rf "$dst"
+            ln -s "$src" "$dst"
+          }
+
+          link_pkg vinext
+          link_pkg @vinext/cloudflare
+          link_pkg react-server-dom-webpack
+          link_pkg vite
+          link_pkg @vitejs/plugin-react
+          link_pkg @vitejs/plugin-rsc
+          link_pkg @cloudflare/vite-plugin
+          link_pkg wrangler
+
+      - name: Verify locked versions and dependency invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const app = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const toolchain = JSON.parse(fs.readFileSync(".github/vinext-toolchain/package.json", "utf8"));
+          const expected = {
+            vinext: "1.0.0-beta.8",
+            "@vinext/cloudflare": "1.0.0-beta.6",
+            react: "19.2.8",
+            "react-dom": "19.2.8",
+            "react-server-dom-webpack": "19.2.8",
+          };
+          for (const [name, version] of Object.entries(expected)) {
+            const actual = name === "react-server-dom-webpack"
+              ? toolchain.dependencies?.[name]
+              : app.dependencies?.[name] ?? app.devDependencies?.[name];
+            if (actual !== version) throw new Error(`${name}: expected ${version}, got ${actual}`);
+          }
+          NODE
+
+      - name: Build exact-head Public Worker
+        env:
+          WORKERS_CI_COMMIT_SHA: ${{ env.TARGET_SHA }}
+        run: node scripts/build-public-worker.mjs
+
+      - name: Test Public Worker security and dual release contracts
+        run: node --test tests/cloudflare-dual-worker-bootstrap.test.mjs tests/cloudflare-release-integrity.test.mjs
+
+      - name: Dry-run Public Worker bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$TOOLCHAIN_DIR/node_modules/.bin/wrangler" deploy             --dry-run             --config workers/public/wrangler.jsonc             --outdir /tmp/gacha-public-bundle | tee /tmp/public-dry-run.log
+          grep -Fq 'gacha-lens' workers/public/wrangler.jsonc
+          ! grep -Eiq 'vinext|react|@supabase/supabase-js' /tmp/gacha-public-bundle/* 2>/dev/null || {
+            echo 'Public Worker bundle unexpectedly contains App runtime dependencies.' >&2
+            exit 1
+          }
+
+      - name: Generate exact-head App Worker configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$TOOLCHAIN_DIR/node_modules/.bin/vinext" init             --skip-check             --platform=cloudflare             --data-cache=kv             --image-optimization=cloudflare-images >/tmp/vinext-init.log
+
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const path = "wrangler.jsonc";
+          const config = JSON.parse(fs.readFileSync(path, "utf8"));
+          config.name = "gacha-lens";
+          config.workers_dev = true;
+          config.preview_urls = true;
+          for (const namespace of config.kv_namespaces ?? []) {
+            if (namespace.binding === "VINEXT_KV_CACHE" && !namespace.id) {
+              namespace.id = "00000000000000000000000000000000";
+            }
+          }
+          fs.writeFileSync(path, JSON.stringify(config, null, 2) + "\n");
+          NODE
+
+      - name: Build exact-head App Worker
+        env:
+          GITHUB_SHA: ${{ env.TARGET_SHA }}
+        run: "$TOOLCHAIN_DIR/node_modules/.bin/vinext" build
+
+      - name: Verify App artifact source and config
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/server/wrangler.json
+          grep -R -F "$TARGET_SHA" dist/server >/dev/null
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const config = JSON.parse(fs.readFileSync("dist/server/wrangler.json", "utf8"));
+          if (config.name !== "gacha-lens") throw new Error(`unexpected App Worker name: ${config.name}`);
+          NODE
+
+      - name: Dry-run App Worker bundle
+        run: |
+          "$TOOLCHAIN_DIR/node_modules/.bin/wrangler" deploy             --dry-run             --config dist/server/wrangler.json             --outdir /tmp/gacha-app-bundle
+
+      - name: Prove exact-head Service Binding locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          log=/tmp/gacha-dual-worker.log
+          "$TOOLCHAIN_DIR/node_modules/.bin/wrangler" dev             --config workers/public/wrangler.jsonc             --config dist/server/wrangler.json             --ip 127.0.0.1             --port 8787 >"$log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; cat "$log" >&2 || true' EXIT
+
+          ready='false'
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail --max-time 2               http://127.0.0.1:8787/api/runtime-diagnostics/release-source >/tmp/public-source.json; then
+              ready='true'
+              break
+            fi
+            sleep 1
+          done
+          [[ "$ready" == 'true' ]] || {
+            echo 'Dual Worker local runtime did not become ready.' >&2
+            exit 1
+          }
+
+          public_sha="$(node scripts/cloudflare-release-integrity.mjs read-source-sha < /tmp/public-source.json)"
+          [[ "$public_sha" == "$TARGET_SHA" ]] || {
+            echo "Local Public SHA mismatch: ${public_sha}" >&2
+            exit 1
+          }
+
+          code="$(curl --silent --show-error --max-time 30             --output /tmp/delegation.json             --write-out '%{http_code}'             http://127.0.0.1:8787/api/runtime-diagnostics/app-delegation)"
+          [[ "$code" == '200' ]] || {
+            echo "Local Service Binding diagnostic returned HTTP ${code}." >&2
+            cat /tmp/delegation.json >&2 || true
+            exit 1
+          }
+
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const expected = process.env.TARGET_SHA;
+          const payload = JSON.parse(fs.readFileSync("/tmp/delegation.json", "utf8"));
+          if (payload.public_source_sha !== expected) throw new Error("public SHA mismatch");
+          if (payload.app_source_sha !== expected) throw new Error("app SHA mismatch");
+          if (payload.representative?.path !== "/review" || payload.representative?.status !== 200 || payload.representative?.marker !== true) {
+            throw new Error("representative App route delegation failed");
+          }
+          NODE
+
+          echo "Public exact SHA: $TARGET_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "App exact SHA via Service Binding: $TARGET_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Representative delegated route /review: HTTP 200" >> "$GITHUB_STEP_SUMMARY"
+          echo "Dependency upgrades: 0" >> "$GITHUB_STEP_SUMMARY"
+          kill "$pid"
+          wait "$pid" || true
+          trap - EXIT
