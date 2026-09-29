@@ -67,7 +67,7 @@ test("P3 v2 runner retains fixed strict Priority 3 collection", () => {
   assert.match(runner, /MARKET_SOURCE_SCOPES\.PLANNER_APIS/); assert.match(runner, /maxVariantsPerSeries:\s*1/);
   assert.match(runner, /priority-3-bounded-seed-v2:\$\{runId\}/); assert.match(runner, /query_profile !== PRIORITY_THREE_SEED_QUERY_PROFILE/);
   assert.match(runner, /parseApprovedP3TargetVariantIds/); assert.match(runner, /bindApprovedP3TargetPlan/);
-  assert.ok(runner.indexOf("bindApprovedP3TargetPlan") < runner.indexOf("fetchMarketListingsRaw"));
+  assert.ok(runner.indexOf("plan = bindApprovedP3TargetPlan") < runner.indexOf("const fetched = assertMarketFetchComplete"));
   assert.match(runner, /fetchRowsByMatchedVariantIds/); assert.match(runner, /fetchRowsBySourceUrls/);
 });
 
