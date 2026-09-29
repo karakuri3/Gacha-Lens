@@ -1,4 +1,3 @@
-import handler from "vinext/server/fetch-handler";
 import { getLegacyCategoryDiscoveryPageRedirectPath } from "../lib/domain/category-discovery.js";
 import { getLegacyDiscoveryFacetPageRedirectPath } from "../lib/domain/discovery-facets.js";
 import { getLegacyRankingRedirectPath } from "../lib/domain/ranking-routes.js";
@@ -7,6 +6,74 @@ const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const RELEASE_SOURCE_SHA = String(process.env.GACHA_RELEASE_SOURCE_SHA ?? "").trim().toLowerCase();
 const RELEASE_SOURCE_SHA_RE = /^[0-9a-f]{40}$/;
 const RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
+const STATIC_ASSET_PROBE_PATH = "/api/runtime-diagnostics/static-assets";
+const STATIC_ASSET_PROBE_TARGETS = [
+  "/",
+  "/ranking",
+  "/ranking/series",
+  "/stock",
+  "/categories",
+  "/brands",
+  "/franchises",
+  "/series",
+  "/schedule",
+  "/sitemap.xml",
+  "/review",
+  "/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC",
+  "/series/group/gashapon-4582770121827000",
+];
+
+let vinextHandlerPromise;
+
+function loadVinextHandler() {
+  vinextHandlerPromise ??= import("vinext/server/fetch-handler").then((module) => module.default);
+  return vinextHandlerPromise;
+}
+
+async function getStaticAssetProbeResponse(request, env) {
+  const url = new URL(request.url);
+  if (url.pathname !== STATIC_ASSET_PROBE_PATH) return null;
+  if (!url.hostname.endsWith(PREVIEW_HOST_SUFFIX)) {
+    return new Response(null, { status: 404 });
+  }
+
+  const headers = new Headers({
+    "Cache-Control": "no-store, max-age=0",
+    "Content-Type": "application/json; charset=utf-8",
+  });
+  if (!["GET", "HEAD"].includes(request.method)) {
+    headers.set("Allow", "GET, HEAD");
+    return new Response(request.method === "HEAD" ? null : JSON.stringify({ error: "method_not_allowed" }), {
+      status: 405,
+      headers,
+    });
+  }
+  if (!env?.ASSETS || typeof env.ASSETS.fetch !== "function") {
+    return new Response(request.method === "HEAD" ? null : JSON.stringify({ error: "assets_binding_unavailable" }), {
+      status: 503,
+      headers,
+    });
+  }
+
+  const results = await Promise.all(STATIC_ASSET_PROBE_TARGETS.map(async (pathname) => {
+    const target = new URL(pathname, url.origin);
+    const response = await env.ASSETS.fetch(new Request(target, {
+      method: "GET",
+      headers: { Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+    }));
+    return {
+      pathname,
+      status: response.status,
+      content_type: response.headers.get("content-type"),
+      content_length: response.headers.get("content-length"),
+    };
+  }));
+
+  return new Response(request.method === "HEAD" ? null : JSON.stringify({ results }), {
+    status: 200,
+    headers,
+  });
+}
 // Release proof returns only this immutable Git SHA; runtime bindings and secrets are never returned.
 // Keeping the marker in the Worker entrypoint makes Preview and custom-domain identity fail closed at runtime.
 
@@ -267,6 +334,9 @@ export default {
     const releaseSourceIdentity = getReleaseSourceIdentityResponse(request);
     if (releaseSourceIdentity) return releaseSourceIdentity;
 
+    const staticAssetProbe = await getStaticAssetProbeResponse(request, env);
+    if (staticAssetProbe) return staticAssetProbe;
+
     const legacyCategoryRedirect = getLegacyCategoryDiscoveryPageRedirect(request);
     if (legacyCategoryRedirect) return legacyCategoryRedirect;
 
@@ -277,6 +347,7 @@ export default {
     if (legacyRankingRedirect) return legacyRankingRedirect;
 
     const policy = getEdgeCachePolicy(request);
+    const handler = await loadVinextHandler();
     const response = await handler.fetch(request, env, ctx);
 
     if (!(await canStoreResponse(response, policy))) {
