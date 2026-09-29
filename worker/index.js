@@ -1,9 +1,14 @@
-import handler from "vinext/server/fetch-handler";
 import { getLegacyCategoryDiscoveryPageRedirectPath } from "../lib/domain/category-discovery.js";
 import { getLegacyDiscoveryFacetPageRedirectPath } from "../lib/domain/discovery-facets.js";
 import { getLegacyRankingRedirectPath } from "../lib/domain/ranking-routes.js";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
+let vinextAppPromise;
+
+function loadVinextApp() {
+  vinextAppPromise ??= import("./vinext-app.js").then((module) => module.default);
+  return vinextAppPromise;
+}
 const RELEASE_SOURCE_SHA = String(process.env.GACHA_RELEASE_SOURCE_SHA ?? "").trim().toLowerCase();
 const RELEASE_SOURCE_SHA_RE = /^[0-9a-f]{40}$/;
 const RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
@@ -277,6 +282,7 @@ export default {
     if (legacyRankingRedirect) return legacyRankingRedirect;
 
     const policy = getEdgeCachePolicy(request);
+    const handler = await loadVinextApp();
     const response = await handler.fetch(request, env, ctx);
 
     if (!(await canStoreResponse(response, policy))) {
