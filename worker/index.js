@@ -1,4 +1,3 @@
-import handler from "vinext/server/fetch-handler";
 import { getLegacyCategoryDiscoveryPageRedirectPath } from "../lib/domain/category-discovery.js";
 import { getLegacyDiscoveryFacetPageRedirectPath } from "../lib/domain/discovery-facets.js";
 import { getLegacyRankingRedirectPath } from "../lib/domain/ranking-routes.js";
@@ -7,6 +6,13 @@ const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const RELEASE_SOURCE_SHA = String(process.env.GACHA_RELEASE_SOURCE_SHA ?? "").trim().toLowerCase();
 const RELEASE_SOURCE_SHA_RE = /^[0-9a-f]{40}$/;
 const RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
+
+let vinextHandlerPromise;
+
+function loadVinextHandler() {
+  vinextHandlerPromise ??= import("./vinext-fallback.js").then((module) => module.getVinextHandler());
+  return vinextHandlerPromise;
+}
 // Release proof returns only this immutable Git SHA; runtime bindings and secrets are never returned.
 // Keeping the marker in the Worker entrypoint makes Preview and custom-domain identity fail closed at runtime.
 
@@ -277,6 +283,7 @@ export default {
     if (legacyRankingRedirect) return legacyRankingRedirect;
 
     const policy = getEdgeCachePolicy(request);
+    const handler = await loadVinextHandler();
     const response = await handler.fetch(request, env, ctx);
 
     if (!(await canStoreResponse(response, policy))) {
