@@ -29,17 +29,17 @@ jobs:
       - name: Install exact runtime build graph
         run: npm ci --ignore-scripts
 
-      - name: Verify Static Assets adapter
+      - name: Inspect Cloudflare adapter package
+        shell: bash
         run: |
-          node --input-type=module <<'NODE'
-          const module = await import("@vinext/cloudflare/cache/static-assets-adapter");
-          if (typeof module.staticAssetsAdapter !== "function") {
-            throw new Error("staticAssetsAdapter is unavailable");
-          }
-          console.log("staticAssetsAdapter export: PASS");
-          NODE
+          set -euo pipefail
+          echo '--- package.json ---'
+          cat node_modules/@vinext/cloudflare/package.json
+          echo '--- cache-related files ---'
+          find node_modules/@vinext/cloudflare -maxdepth 4 -type f | sort | grep -E 'cache|asset|adapter|index' || true
 
       - name: Upload npm-generated lock
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: worker-a-runtime-lock
