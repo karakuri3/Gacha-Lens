@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 import { buildPublicWorker } from "../scripts/build-public-worker.mjs";
+import { waitForAppExactSha } from "../scripts/cloudflare-public-build-gate.mjs";
 import {
   classifyPhaseA2Route,
   PUBLIC_BOOTSTRAP_OWNED_PATHS,
@@ -172,4 +173,59 @@ test("public Wrangler config binds only to existing gacha-lens App Worker and de
   assert.equal("routes" in config, false);
   assert.equal("route" in config, false);
   assert.equal("custom_domains" in config, false);
+});
+
+
+test("Public production build gate skips non-main previews", async () => {
+  let calls = 0;
+  const result = await waitForAppExactSha({
+    targetSha: SHA,
+    branch: "fix/430-phase-a2-bootstrap",
+    fetchImpl: async () => {
+      calls += 1;
+      throw new Error("must not fetch");
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, true);
+  assert.equal(calls, 0);
+});
+
+test("Public production build gate waits for exact App SHA and then passes", async () => {
+  const observed = [OTHER_SHA, SHA];
+  let calls = 0;
+  const result = await waitForAppExactSha({
+    targetSha: SHA,
+    branch: "main",
+    attempts: 2,
+    delayMs: 0,
+    sleep: async () => {},
+    fetchImpl: async () => {
+      const sourceSha = observed[calls++];
+      return new Response(JSON.stringify({ source_sha: sourceSha }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, "app_exact_sha_ready");
+  assert.equal(result.attempt, 2);
+});
+
+test("Public production build gate fails closed when App never reaches target SHA", async () => {
+  await assert.rejects(
+    waitForAppExactSha({
+      targetSha: SHA,
+      branch: "main",
+      attempts: 2,
+      delayMs: 0,
+      sleep: async () => {},
+      fetchImpl: async () => new Response(JSON.stringify({ source_sha: OTHER_SHA }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    }),
+    /app_exact_sha_not_ready/,
+  );
 });
