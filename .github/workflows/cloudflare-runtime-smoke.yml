@@ -8,6 +8,8 @@ on:
       - "components/**"
       - "lib/**"
       - "worker/**"
+      - "workers/public/**"
+      - "scripts/build-public-worker.mjs"
       - "jsconfig.json"
       - "next.config.mjs"
       - "package.json"
@@ -387,3 +389,153 @@ jobs:
           done
           [[ "$missing" == "0" ]]
           echo 'Security-header presence is equivalent to or broader than current Production for the audited header set.' >> "$GITHUB_STEP_SUMMARY"
+
+
+  exact-head-public-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact pull-request head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Resolve exact-head Cloudflare Public Preview
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          actual_sha="$(git rev-parse HEAD)"
+          [[ "$actual_sha" == "$TARGET_SHA" ]] || {
+            echo "Checkout SHA ${actual_sha} does not match target ${TARGET_SHA}." >&2
+            exit 1
+          }
+
+          found='false'
+          status=''
+          conclusion=''
+          check_id=''
+          preview_url=''
+
+          for attempt in $(seq 1 40); do
+            payload="$(curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs?per_page=100")"
+
+            inspection="$(node scripts/cloudflare-release-integrity.mjs inspect-check "$TARGET_SHA" --public <<<"$payload")"
+            found="$(jq -r '.found' <<<"$inspection")"
+            if [[ "$found" == 'true' ]]; then
+              status="$(jq -r '.status // ""' <<<"$inspection")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$inspection")"
+              check_id="$(jq -r '.check_id // ""' <<<"$inspection")"
+              preview_url="$(jq -r '.preview_url // ""' <<<"$inspection")"
+              if [[ "$status" == 'completed' && -n "$preview_url" ]]; then
+                break
+              fi
+            fi
+
+            echo "Cloudflare Public exact-head build not complete yet (attempt ${attempt}/40)." >> "$GITHUB_STEP_SUMMARY"
+            sleep 15
+          done
+
+          [[ "$found" == 'true' ]] || {
+            echo "No gacha-lens-public Cloudflare check run found for exact head ${TARGET_SHA}." >&2
+            exit 1
+          }
+          [[ "$status" == 'completed' ]] || {
+            echo 'gacha-lens-public Cloudflare check did not complete within the bounded wait.' >&2
+            exit 1
+          }
+          [[ "$conclusion" == 'success' ]] || {
+            echo "gacha-lens-public exact-head build concluded ${conclusion:-unknown}." >&2
+            exit 1
+          }
+          [[ -n "$preview_url" ]] || {
+            echo 'gacha-lens-public check succeeded but did not expose one approved immutable Version URL.' >&2
+            exit 1
+          }
+
+          echo "PUBLIC_PREVIEW_URL=${preview_url}" >> "$GITHUB_ENV"
+          echo "Public Cloudflare check run: ${check_id}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Public exact source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Public immutable Version URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prove Public Preview runtime source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          headers="$(mktemp)"
+          trap 'rm -f "$body" "$headers"' EXIT
+
+          rc=0
+          code="$(curl --silent --show-error --max-time 60 \
+            -H 'Accept: application/json' \
+            -H 'Cache-Control: no-cache' \
+            --dump-header "$headers" \
+            --output "$body" \
+            --write-out '%{http_code}' \
+            "${PUBLIC_PREVIEW_URL}/api/runtime-diagnostics/release-source")" || rc=$?
+          code="${code:-000}"
+
+          [[ "$rc" == '0' && "$code" == '200' ]] || {
+            echo "Public Preview source identity failed rc=${rc} HTTP ${code}." >&2
+            cat "$body" >&2 || true
+            exit 1
+          }
+
+          deployed_sha="$(node scripts/cloudflare-release-integrity.mjs read-source-sha < "$body")"
+          [[ "$deployed_sha" == "$TARGET_SHA" ]] || {
+            echo "Public Preview runtime SHA ${deployed_sha} does not match target ${TARGET_SHA}." >&2
+            exit 1
+          }
+
+          plane="$(jq -r '.plane // ""' < "$body")"
+          [[ "$plane" == 'public' ]] || {
+            echo "Public Preview release-source plane is ${plane:-missing}, expected public." >&2
+            exit 1
+          }
+
+          cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cache-control:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+          [[ "$cache_control" == *'no-store'* ]] || {
+            echo "Public Preview release identity endpoint is missing no-store: ${cache_control:-none}." >&2
+            exit 1
+          }
+
+          echo "Public Preview runtime source identity: ${deployed_sha}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Public Preview plane: ${plane}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prove bootstrap route boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+
+          code="$(curl --silent --show-error --max-time 60 \
+            -H 'Accept: application/json' \
+            --output "$body" \
+            --write-out '%{http_code}' \
+            "${PUBLIC_PREVIEW_URL}/__public-bootstrap-unknown")"
+
+          [[ "$code" == '404' ]] || {
+            echo "Unknown Public bootstrap route returned HTTP ${code}, expected 404." >&2
+            cat "$body" >&2 || true
+            exit 1
+          }
+
+          error="$(jq -r '.error // ""' < "$body")"
+          [[ "$error" == 'route_not_owned_by_public_bootstrap' ]] || {
+            echo "Unknown Public bootstrap route returned unexpected error: ${error:-missing}." >&2
+            exit 1
+          }
+
+          echo 'Unknown Public bootstrap route: fail-closed HTTP 404' >> "$GITHUB_STEP_SUMMARY"
