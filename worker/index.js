@@ -1,3 +1,4 @@
+import handler from "vinext/server/fetch-handler";
 import { getLegacyCategoryDiscoveryPageRedirectPath } from "../lib/domain/category-discovery.js";
 import { getLegacyDiscoveryFacetPageRedirectPath } from "../lib/domain/discovery-facets.js";
 import { getLegacyRankingRedirectPath } from "../lib/domain/ranking-routes.js";
@@ -23,12 +24,6 @@ const STATIC_ASSET_PROBE_TARGETS = [
   "/series/group/gashapon-4582770121827000",
 ];
 
-let vinextHandlerPromise;
-
-function loadVinextHandler() {
-  vinextHandlerPromise ??= import("vinext/server/fetch-handler").then((module) => module.default);
-  return vinextHandlerPromise;
-}
 
 async function getStaticAssetProbeResponse(request, env) {
   const url = new URL(request.url);
@@ -347,7 +342,6 @@ export default {
     if (legacyRankingRedirect) return legacyRankingRedirect;
 
     const policy = getEdgeCachePolicy(request);
-    const handler = await loadVinextHandler();
     const response = await handler.fetch(request, env, ctx);
 
     if (!(await canStoreResponse(response, policy))) {
