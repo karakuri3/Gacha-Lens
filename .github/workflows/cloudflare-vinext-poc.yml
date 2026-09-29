@@ -10,6 +10,7 @@ on:
       - "scripts/build-public-worker.mjs"
       - "scripts/cloudflare-release-integrity.mjs"
       - "tests/cloudflare-dual-worker-bootstrap.test.mjs"
+      - "tests/cloudflare-public-data-read.test.mjs"
       - "tests/cloudflare-release-integrity.test.mjs"
       - "next.config.mjs"
       - "package.json"
@@ -220,7 +221,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/build-public-worker.mjs
-          node --test tests/cloudflare-dual-worker-bootstrap.test.mjs tests/cloudflare-release-integrity.test.mjs
+          node --test tests/cloudflare-dual-worker-bootstrap.test.mjs tests/cloudflare-public-data-read.test.mjs tests/cloudflare-release-integrity.test.mjs
 
       - name: Dry-run dependency-free Public Worker
         shell: bash
