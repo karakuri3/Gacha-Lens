@@ -150,49 +150,36 @@ jobs:
             local needle="${3:-}"
             local body="$tmp/${name}.body"
             local headers="$tmp/${name}.headers"
-            local attempt rc code delay
+            local rc=0
+            local code
 
-            for attempt in $(seq 1 6); do
-              rc=0
-              code="$(curl --silent --show-error --location --max-time 90 \
-                -H "Accept: ${BROWSER_ACCEPT}" \
-                --dump-header "$headers" \
-                --output "$body" \
-                --write-out '%{http_code}' \
-                "${PREVIEW_URL}${path}")" || rc=$?
-              code="${code:-000}"
+            code="$(curl --silent --show-error --location --max-time 90 \
+              -H "Accept: ${BROWSER_ACCEPT}" \
+              --dump-header "$headers" \
+              --output "$body" \
+              --write-out '%{http_code}' \
+              "${PREVIEW_URL}${path}")" || rc=$?
+            code="${code:-000}"
 
-              if [[ "$rc" == "0" && "$code" == "200" ]]; then
-                if [[ -n "$needle" ]] && ! grep -Fq "$needle" "$body"; then
-                  echo "$name did not contain required marker: $needle" >&2
-                  echo 'Bounded public HTML diagnostic (first 2000 bytes):' >&2
-                  head -c 2000 "$body" >&2 || true
-                  echo >&2
-                  echo 'Bounded public HTML error signatures:' >&2
-                  grep -Eo '商品情報を取得できません|一時的な通信エラー[^<]{0,160}|Data source[^<]{0,160}|Product data[^<]{0,160}|digest.{0,160}' "$body" | head -20 >&2 || true
-                  echo 'Bounded public HTML diagnostic (last 6000 bytes):' >&2
-                  tail -c 6000 "$body" >&2 || true
-                  exit 1
-                fi
-                printf '%-24s HTTP 200 (attempt %s)\n' "$name" "$attempt" >> "$GITHUB_STEP_SUMMARY"
-                return 0
-              fi
-
-              if [[ "$attempt" -lt 6 ]]; then
-                case "$code" in
-                  000|429|500|502|503|504)
-                    delay=$((attempt * 3))
-                    echo "$name transient failure rc=$rc HTTP $code on attempt $attempt; retrying after ${delay}s" | tee -a "$GITHUB_STEP_SUMMARY"
-                    sleep "$delay"
-                    continue
-                    ;;
-                esac
-              fi
-
-              echo "$name failed rc=$rc HTTP $code on attempt $attempt" >&2
+            if [[ "$rc" != "0" || "$code" != "200" ]]; then
+              echo "$name failed rc=$rc HTTP $code; #430 forbids retry masking" >&2
               head -c 1000 "$body" >&2 || true
               exit 1
-            done
+            fi
+
+            if [[ -n "$needle" ]] && ! grep -Fq "$needle" "$body"; then
+              echo "$name did not contain required marker: $needle" >&2
+              echo 'Bounded public HTML diagnostic (first 2000 bytes):' >&2
+              head -c 2000 "$body" >&2 || true
+              echo >&2
+              echo 'Bounded public HTML error signatures:' >&2
+              grep -Eo '商品情報を取得できません|一時的な通信エラー[^<]{0,160}|Data source[^<]{0,160}|Product data[^<]{0,160}|digest.{0,160}' "$body" | head -20 >&2 || true
+              echo 'Bounded public HTML diagnostic (last 6000 bytes):' >&2
+              tail -c 6000 "$body" >&2 || true
+              exit 1
+            fi
+
+            printf '%-24s HTTP 200 (single attempt)\n' "$name" >> "$GITHUB_STEP_SUMMARY"
           }
 
           edge_policy() {
@@ -291,30 +278,14 @@ jobs:
           done
 
 
-          invalid_variant_shard_code=''
-          for attempt in $(seq 1 6); do
-            rc=0
-            invalid_variant_shard_code="$(curl --silent --show-error --max-time 60 --output "$tmp/variant-sitemap-invalid.body" --write-out '%{http_code}' "${PREVIEW_URL}/variant-sitemap/5001")" || rc=$?
-            invalid_variant_shard_code="${invalid_variant_shard_code:-000}"
-            if [[ "$rc" == '0' && "$invalid_variant_shard_code" == '404' ]]; then break; fi
-            if [[ "$attempt" -lt 6 ]]; then
-              case "$invalid_variant_shard_code" in
-                000|429|500|502|503|504)
-                  delay=$((attempt * 3))
-                  echo "variant-sitemap-invalid transient failure rc=$rc HTTP $invalid_variant_shard_code on attempt $attempt; retrying after ${delay}s" >> "$GITHUB_STEP_SUMMARY"
-                  sleep "$delay"
-                  continue
-                  ;;
-              esac
-            fi
-            echo "Out-of-range variant sitemap shard returned rc=$rc HTTP $invalid_variant_shard_code, expected 404" >&2
-            exit 1
-          done
-          [[ "$invalid_variant_shard_code" == "404" ]] || {
-            echo "Out-of-range variant sitemap shard returned $invalid_variant_shard_code, expected 404" >&2
+          rc=0
+          invalid_variant_shard_code="$(curl --silent --show-error --max-time 60 --output "$tmp/variant-sitemap-invalid.body" --write-out '%{http_code}' "${PREVIEW_URL}/variant-sitemap/5001")" || rc=$?
+          invalid_variant_shard_code="${invalid_variant_shard_code:-000}"
+          [[ "$rc" == "0" && "$invalid_variant_shard_code" == "404" ]] || {
+            echo "Out-of-range variant sitemap shard returned rc=$rc HTTP $invalid_variant_shard_code, expected 404; #430 forbids retry masking" >&2
             exit 1
           }
-          echo 'Out-of-range variant sitemap shard boundary: HTTP 404' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Out-of-range variant sitemap shard boundary: HTTP 404 (single attempt)' >> "$GITHUB_STEP_SUMMARY"
 
           [[ -z "$(edge_policy catalog_search)" ]] || {
             echo 'Query/search variant unexpectedly received a shared edge-cache policy.' >&2
