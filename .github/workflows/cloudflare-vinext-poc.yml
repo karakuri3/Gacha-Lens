@@ -6,6 +6,11 @@ on:
     paths:
       - "app/**"
       - "lib/**"
+      - "workers/public/**"
+      - "scripts/build-public-worker.mjs"
+      - "scripts/cloudflare-release-integrity.mjs"
+      - "tests/cloudflare-dual-worker-bootstrap.test.mjs"
+      - "tests/cloudflare-release-integrity.test.mjs"
       - "next.config.mjs"
       - "package.json"
       - "package-lock.json"
@@ -205,3 +210,85 @@ jobs:
           test -f dist/server/wrangler.json
           sha256sum -c /tmp/root-package-lock.before
           git diff --exit-code -- package-lock.json
+
+      - name: Build exact-head Public Worker bootstrap
+        shell: bash
+        env:
+          WORKERS_CI_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          node scripts/build-public-worker.mjs
+          node --test tests/cloudflare-dual-worker-bootstrap.test.mjs tests/cloudflare-release-integrity.test.mjs
+
+      - name: Dry-run dependency-free Public Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$TOOLCHAIN_DIR/node_modules/.bin/wrangler" deploy             --dry-run             --config workers/public/wrangler.jsonc             --outdir /tmp/gacha-public-bundle | tee /tmp/public-dry-run.log
+          if grep -REiq 'vinext|react|@supabase/supabase-js' /tmp/gacha-public-bundle 2>/dev/null; then
+            echo 'Public Worker bundle unexpectedly contains App runtime dependencies.' >&2
+            exit 1
+          fi
+
+      - name: Prove exact-head Service Binding locally
+        shell: bash
+        env:
+          TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const path = "dist/server/wrangler.json";
+          const config = JSON.parse(fs.readFileSync(path, "utf8"));
+          config.name = "gacha-lens";
+          fs.writeFileSync(path, JSON.stringify(config, null, 2) + "\n");
+          NODE
+
+          log=/tmp/gacha-dual-worker.log
+          "$TOOLCHAIN_DIR/node_modules/.bin/wrangler" dev             --config workers/public/wrangler.jsonc             --config dist/server/wrangler.json             --ip 127.0.0.1             --port 8787 >"$log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; cat "$log" >&2 || true' EXIT
+
+          ready='false'
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail --max-time 2               http://127.0.0.1:8787/api/runtime-diagnostics/release-source >/tmp/public-source.json; then
+              ready='true'
+              break
+            fi
+            sleep 1
+          done
+          [[ "$ready" == 'true' ]] || {
+            echo 'Dual Worker local runtime did not become ready.' >&2
+            exit 1
+          }
+
+          public_sha="$(node scripts/cloudflare-release-integrity.mjs read-source-sha < /tmp/public-source.json)"
+          [[ "$public_sha" == "$TARGET_SHA" ]] || {
+            echo "Local Public SHA mismatch: ${public_sha}" >&2
+            exit 1
+          }
+
+          code="$(curl --silent --show-error --max-time 30             --output /tmp/delegation.json             --write-out '%{http_code}'             http://127.0.0.1:8787/api/runtime-diagnostics/app-delegation)"
+          [[ "$code" == '200' ]] || {
+            echo "Local Service Binding diagnostic returned HTTP ${code}." >&2
+            cat /tmp/delegation.json >&2 || true
+            exit 1
+          }
+
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const expected = process.env.TARGET_SHA;
+          const payload = JSON.parse(fs.readFileSync("/tmp/delegation.json", "utf8"));
+          if (payload.public_source_sha !== expected) throw new Error("public SHA mismatch");
+          if (payload.app_source_sha !== expected) throw new Error("app SHA mismatch");
+          if (payload.representative?.path !== "/review" || payload.representative?.status !== 200 || payload.representative?.marker !== true) {
+            throw new Error("representative App route delegation failed");
+          }
+          NODE
+
+          echo "Public exact SHA: $TARGET_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "App exact SHA via Service Binding: $TARGET_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Representative delegated route /review: HTTP 200" >> "$GITHUB_STEP_SUMMARY"
+          kill "$pid"
+          wait "$pid" || true
+          trap - EXIT
