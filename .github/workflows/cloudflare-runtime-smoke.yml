@@ -12,16 +12,19 @@ on:
       - "next.config.mjs"
       - "package.json"
       - "package-lock.json"
+      - "scripts/cloudflare-release-integrity.mjs"
+      - "tests/cloudflare-release-integrity.test.mjs"
       - ".github/workflows/cloudflare-runtime-smoke.yml"
       - ".github/workflows/cloudflare-cache-proof.yml"
+      - ".github/workflows/cloudflare-production-release-proof.yml"
 
 permissions:
   contents: read
   checks: read
 
 concurrency:
-  group: cloudflare-live-preview-proof-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  group: cloudflare-runtime-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   exact-head-runtime:
@@ -50,9 +53,11 @@ jobs:
             exit 1
           }
 
-          candidate=''
+          found='false'
           status=''
           conclusion=''
+          check_id=''
+          preview_url=''
 
           for attempt in $(seq 1 40); do
             payload="$(curl --fail --silent --show-error \
@@ -61,16 +66,13 @@ jobs:
               -H 'X-GitHub-Api-Version: 2022-11-28' \
               "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs?per_page=100")"
 
-            candidate="$(jq -c --arg sha "$TARGET_SHA" '
-              [.check_runs[]
-                | select(.name == "Workers Builds: gacha-lens" and .head_sha == $sha)]
-              | sort_by(.id)
-              | last // empty
-            ' <<<"$payload")"
-
-            if [[ -n "$candidate" ]]; then
-              status="$(jq -r '.status // ""' <<<"$candidate")"
-              conclusion="$(jq -r '.conclusion // ""' <<<"$candidate")"
+            inspection="$(node scripts/cloudflare-release-integrity.mjs inspect-check "$TARGET_SHA" --require-preview <<<"$payload")"
+            found="$(jq -r '.found' <<<"$inspection")"
+            if [[ "$found" == 'true' ]]; then
+              status="$(jq -r '.status // ""' <<<"$inspection")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$inspection")"
+              check_id="$(jq -r '.check_id // ""' <<<"$inspection")"
+              preview_url="$(jq -r '.preview_url // ""' <<<"$inspection")"
               if [[ "$status" == 'completed' ]]; then
                 break
               fi
@@ -80,36 +82,60 @@ jobs:
             sleep 15
           done
 
-          [[ -n "$candidate" ]] || {
+          [[ "$found" == 'true' ]] || {
             echo "No Cloudflare Workers check run found for exact head ${TARGET_SHA}." >&2
             exit 1
           }
           [[ "$status" == 'completed' ]] || {
-            echo "Cloudflare Workers check did not complete within the bounded wait." >&2
+            echo 'Cloudflare Workers check did not complete within the bounded wait.' >&2
             exit 1
           }
           [[ "$conclusion" == 'success' ]] || {
             echo "Cloudflare Workers exact-head build concluded ${conclusion:-unknown}." >&2
             exit 1
           }
-
-          summary="$(jq -r '.output.summary // ""' <<<"$candidate" | tr -d '\r')"
-          preview_url="$(printf '%s\n' "$summary" | grep -Eo 'https://[A-Za-z0-9-]+-gacha-lens\.senpingxingzuo\.workers\.dev' | head -1 || true)"
-          check_id="$(jq -r '.id' <<<"$candidate")"
-
-          case "$preview_url" in
-            https://*-gacha-lens.senpingxingzuo.workers.dev) ;;
-            *)
-              echo 'Cloudflare check succeeded but did not expose an approved exact-head Preview URL.' >&2
-              printf '%s\n' "$summary" >&2
-              exit 1
-              ;;
-          esac
+          [[ -n "$preview_url" ]] || {
+            echo 'Cloudflare check succeeded but did not expose one approved immutable exact-head deployment URL.' >&2
+            exit 1
+          }
 
           echo "PREVIEW_URL=${preview_url}" >> "$GITHUB_ENV"
           echo "Cloudflare check run: ${check_id}" >> "$GITHUB_STEP_SUMMARY"
           echo "Exact source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Exact-head Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Immutable exact-head Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prove Preview runtime source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(mktemp)"
+          headers="$(mktemp)"
+          trap 'rm -f "$body" "$headers"' EXIT
+          rc=0
+          code="$(curl --silent --show-error --max-time 60 \
+            -H 'Accept: application/json' \
+            -H 'Cache-Control: no-cache' \
+            --dump-header "$headers" \
+            --output "$body" \
+            --write-out '%{http_code}' \
+            "${PREVIEW_URL}/api/runtime-diagnostics/release-source")" || rc=$?
+          code="${code:-000}"
+          [[ "$rc" == '0' && "$code" == '200' ]] || {
+            echo "Preview source identity failed rc=${rc} HTTP ${code}." >&2
+            cat "$body" >&2 || true
+            exit 1
+          }
+          deployed_sha="$(node scripts/cloudflare-release-integrity.mjs read-source-sha < "$body")"
+          [[ "$deployed_sha" == "$TARGET_SHA" ]] || {
+            echo "Preview runtime SHA ${deployed_sha} does not match target ${TARGET_SHA}." >&2
+            exit 1
+          }
+          cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cache-control:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+          [[ "$cache_control" == *'no-store'* ]] || {
+            echo "Preview release identity endpoint is missing no-store: ${cache_control:-none}." >&2
+            exit 1
+          }
+          echo "Preview runtime source identity: ${deployed_sha}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Smoke public runtime and boundaries
         shell: bash
@@ -126,7 +152,7 @@ jobs:
             local headers="$tmp/${name}.headers"
             local attempt rc code delay
 
-            for attempt in 1 2 3; do
+            for attempt in $(seq 1 6); do
               rc=0
               code="$(curl --silent --show-error --location --max-time 90 \
                 -H "Accept: ${BROWSER_ACCEPT}" \
@@ -152,10 +178,10 @@ jobs:
                 return 0
               fi
 
-              if [[ "$attempt" -lt 3 ]]; then
+              if [[ "$attempt" -lt 6 ]]; then
                 case "$code" in
                   000|429|500|502|503|504)
-                    delay=$((attempt * 2))
+                    delay=$((attempt * 3))
                     echo "$name transient failure rc=$rc HTTP $code on attempt $attempt; retrying after ${delay}s" | tee -a "$GITHUB_STEP_SUMMARY"
                     sleep "$delay"
                     continue
@@ -201,7 +227,6 @@ jobs:
           request_get franchise_detail "$franchise_path" 'サンリオキャラクターズ'
           request_get franchise_api '/api/public-discovery?type=franchise&name=%E3%82%B5%E3%83%B3%E3%83%AA%E3%82%AA%E3%82%AD%E3%83%A3%E3%83%A9%E3%82%AF%E3%82%BF%E3%83%BC%E3%82%BA&page=1' 'サンリオキャラクターズ'
           request_get catalog_search '/series?q=%E3%83%9E%E3%83%AA%E3%83%BC' 'マリー'
-          request_get ranking '/ranking'
           request_get restocks '/restocks'
           request_get stock '/stock'
           request_get stock_query '/stock?q=%E3%83%9E%E3%83%AA%E3%83%BC' '在庫目撃情報'
@@ -246,7 +271,7 @@ jobs:
             }
           done
 
-          for name in home ranking restocks stock schedule guides; do
+          for name in home restocks stock schedule guides; do
             [[ "$(edge_policy "$name")" == 'public-document-120-v1' ]] || {
               echo "$name is missing public document edge-cache policy" >&2
               exit 1
@@ -261,7 +286,25 @@ jobs:
           done
 
 
-          invalid_variant_shard_code="$(curl --silent --show-error --max-time 60 --output "$tmp/variant-sitemap-invalid.body" --write-out '%{http_code}' "${PREVIEW_URL}/variant-sitemap/5001")"
+          invalid_variant_shard_code=''
+          for attempt in $(seq 1 6); do
+            rc=0
+            invalid_variant_shard_code="$(curl --silent --show-error --max-time 60 --output "$tmp/variant-sitemap-invalid.body" --write-out '%{http_code}' "${PREVIEW_URL}/variant-sitemap/5001")" || rc=$?
+            invalid_variant_shard_code="${invalid_variant_shard_code:-000}"
+            if [[ "$rc" == '0' && "$invalid_variant_shard_code" == '404' ]]; then break; fi
+            if [[ "$attempt" -lt 6 ]]; then
+              case "$invalid_variant_shard_code" in
+                000|429|500|502|503|504)
+                  delay=$((attempt * 3))
+                  echo "variant-sitemap-invalid transient failure rc=$rc HTTP $invalid_variant_shard_code on attempt $attempt; retrying after ${delay}s" >> "$GITHUB_STEP_SUMMARY"
+                  sleep "$delay"
+                  continue
+                  ;;
+              esac
+            fi
+            echo "Out-of-range variant sitemap shard returned rc=$rc HTTP $invalid_variant_shard_code, expected 404" >&2
+            exit 1
+          done
           [[ "$invalid_variant_shard_code" == "404" ]] || {
             echo "Out-of-range variant sitemap shard returned $invalid_variant_shard_code, expected 404" >&2
             exit 1
@@ -282,18 +325,17 @@ jobs:
           request_get category_detail_warm "$category_path" 'ガシャポン'
           request_get brand_detail_warm "$brand_path" 'バンダイ'
           request_get franchise_detail_warm "$franchise_path" 'サンリオキャラクターズ'
-          request_get ranking_warm '/ranking'
           request_get restocks_warm '/restocks'
           request_get series_sitemap_warm '/series-sitemap.xml'
 
-          for name in categories_warm series_warm category_detail_warm brand_detail_warm franchise_detail_warm ranking_warm series_sitemap_warm; do
+          for name in categories_warm series_warm category_detail_warm brand_detail_warm franchise_detail_warm series_sitemap_warm; do
             cf_status="$(cf_cache_status "$name")"
             case "$cf_status" in
-              HIT|STALE)
-                echo "$name edge cache: $cf_status" >> "$GITHUB_STEP_SUMMARY"
+              MISS|HIT|STALE)
+                echo "$name edge cache observation: $cf_status; exact-head HIT convergence is enforced by Cloudflare cache proof." >> "$GITHUB_STEP_SUMMARY"
                 ;;
               *)
-                echo "$name was ${cf_status:-none}, expected HIT or STALE" >&2
+                echo "$name had unexpected cache status ${cf_status:-none}" >&2
                 exit 1
                 ;;
             esac
@@ -321,120 +363,6 @@ jobs:
 
           echo 'Review/admin unauthenticated mutation boundary: HTTP 401' >> "$GITHUB_STEP_SUMMARY"
           echo 'Ingest unauthenticated boundary: HTTP 401; authorized path is code-pinned to HTTP 410/GitHub Actions.' >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Verify Production effective-release regression
-        shell: bash
-        run: |
-          set -euo pipefail
-          production='https://gachalens.com'
-          tmp="$(mktemp -d)"
-          trap 'rm -rf "$tmp"' EXIT
-
-          fetch_html() {
-            local name="$1"
-            local path="$2"
-            local body="$tmp/$name.html"
-            local code rc attempt delay
-            for attempt in 1 2 3; do
-              rc=0
-              code="$(curl --silent --show-error --location --max-time 90 \
-                -H "Accept: ${BROWSER_ACCEPT}" \
-                --output "$body" \
-                --write-out '%{http_code}' \
-                "${production}${path}")" || rc=$?
-              code="${code:-000}"
-              if [[ "$rc" == "0" && "$code" == "200" ]]; then
-                return 0
-              fi
-              if [[ "$attempt" -lt 3 ]]; then
-                case "$code" in
-                  000|429|500|502|503|504)
-                    delay=$((attempt * 2))
-                    echo "$name transient failure rc=$rc HTTP $code on attempt $attempt; retrying after ${delay}s" >> "$GITHUB_STEP_SUMMARY"
-                    sleep "$delay"
-                    continue
-                    ;;
-                esac
-              fi
-              echo "$name returned rc=$rc HTTP $code on attempt $attempt" >&2
-              head -c 2000 "$body" >&2 || true
-              exit 1
-            done
-          }
-
-          require_text() {
-            local name="$1"
-            local needle="$2"
-            grep -Fq "$needle" "$tmp/$name.html" || {
-              echo "$name did not contain required text: $needle" >&2
-              exit 1
-            }
-          }
-
-          forbid_text() {
-            local name="$1"
-            local needle="$2"
-            if grep -Fq "$needle" "$tmp/$name.html"; then
-              echo "$name unexpectedly contained: $needle" >&2
-              exit 1
-            fi
-          }
-
-          fetch_html kep1er_released '/series?scope=variant&release=released&q=CHAEHYUN'
-          require_text kep1er_released '/series/gashapon-4582770121827000-chaehyun'
-          fetch_html kep1er_upcoming '/series?scope=variant&release=upcoming&q=CHAEHYUN'
-          forbid_text kep1er_upcoming '/series/gashapon-4582770121827000-chaehyun'
-
-          fetch_html kep1er_series_released '/series?scope=series&release=released&q=Kep1er'
-          require_text kep1er_series_released '/series/group/gashapon-4582770121827000'
-          fetch_html kep1er_series_upcoming '/series?scope=series&release=upcoming&q=Kep1er'
-          forbid_text kep1er_series_upcoming '/series/group/gashapon-4582770121827000'
-
-          for spec in \
-            'gashapon-4582770121827000|Kep1er ミニCDコレクション' \
-            'gashapon-4582769776601000|NCT WISH ぷくっとリング' \
-            'gashapon-4582770068344000|【フラットガシャポン】サンリオキャラクターズ いちご新聞クリアラバーコースター' \
-            'gashapon-4570118233042000|パンどろぼう フィギュアウォッチコレクション' \
-            'gashapon-4582769979477000|TVアニメ『逃げ上手の若君』 まちぼうけ'
-          do
-            slug="${spec%%|*}"
-            name="${spec#*|}"
-            key="${slug//[^A-Za-z0-9]/_}"
-            fetch_html "series_${key}" "/series/group/${slug}?qa=release-state-332"
-            require_text "series_${key}" "$name"
-            require_text "series_${key}" '発売中'
-          done
-
-          for spec in \
-            'gashapon-4582770121827000-chaehyun|CHAEHYUN' \
-            'gashapon-4582769776601000-riku|RIKU' \
-            'gashapon-4582770068344000-no-207|No.207'
-          do
-            slug="${spec%%|*}"
-            name="${spec#*|}"
-            key="${slug//[^A-Za-z0-9]/_}"
-            fetch_html "variant_${key}" "/series/${slug}?qa=release-state-332"
-            require_text "variant_${key}" "$name"
-            require_text "variant_${key}" '発売中'
-          done
-
-          fetch_html ranking_upcoming '/ranking/upcoming?qa=release-state-332'
-          forbid_text ranking_upcoming 'CHAEHYUN'
-          forbid_text ranking_upcoming 'Kep1er ミニCDコレクション'
-
-          fetch_html schedule_sep '/schedule?month=2026-09&qa=release-state-332'
-          require_text schedule_sep '2026年9月'
-          require_text schedule_sep '発売シリーズ'
-          fetch_html schedule_aug '/schedule?month=2026-08&qa=release-state-332'
-          require_text schedule_aug '2026年8月'
-          require_text schedule_aug '発売シリーズ'
-
-          echo 'Production effective-release UI regression: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- released search includes repaired item and upcoming search excludes it' >> "$GITHUB_STEP_SUMMARY"
-          echo '- five parent series details render 発売中' >> "$GITHUB_STEP_SUMMARY"
-          echo '- three representative repaired variant details render 発売中' >> "$GITHUB_STEP_SUMMARY"
-          echo '- upcoming ranking excludes repaired Kep1er item/series' >> "$GITHUB_STEP_SUMMARY"
-          echo '- August/September schedule surfaces respond with their requested release months' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Compare security-header coverage with current Production
         shell: bash

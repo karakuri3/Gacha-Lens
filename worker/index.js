@@ -4,6 +4,34 @@ import { getLegacyDiscoveryFacetPageRedirectPath } from "../lib/domain/discovery
 import { getLegacyRankingRedirectPath } from "../lib/domain/ranking-routes.js";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
+const RELEASE_SOURCE_SHA = String(process.env.GACHA_RELEASE_SOURCE_SHA ?? "").trim().toLowerCase();
+const RELEASE_SOURCE_SHA_RE = /^[0-9a-f]{40}$/;
+const RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
+// Release proof returns only this immutable Git SHA; runtime bindings and secrets are never returned.
+// Keeping the marker in the Worker entrypoint makes Preview and custom-domain identity fail closed at runtime.
+
+function getReleaseSourceIdentityResponse(request) {
+  const url = new URL(request.url);
+  if (url.pathname !== RELEASE_SOURCE_PATH) return null;
+
+  const headers = new Headers({
+    "Cache-Control": "no-store, max-age=0",
+    "Content-Type": "application/json; charset=utf-8",
+  });
+  if (!["GET", "HEAD"].includes(request.method)) {
+    headers.set("Allow", "GET, HEAD");
+    return new Response(request.method === "HEAD" ? null : JSON.stringify({ error: "method_not_allowed" }), {
+      status: 405,
+      headers,
+    });
+  }
+
+  const sourceSha = RELEASE_SOURCE_SHA_RE.test(RELEASE_SOURCE_SHA) ? RELEASE_SOURCE_SHA : null;
+  return new Response(request.method === "HEAD" ? null : JSON.stringify({ source_sha: sourceSha }), {
+    status: sourceSha ? 200 : 503,
+    headers,
+  });
+}
 const NON_CACHEABLE_HTML_MARKERS = ["商品情報を取得できません"];
 
 const EDGE_CACHE_POLICIES = {
@@ -236,6 +264,9 @@ async function canStoreResponse(response, policy) {
 
 export default {
   async fetch(request, env, ctx) {
+    const releaseSourceIdentity = getReleaseSourceIdentityResponse(request);
+    if (releaseSourceIdentity) return releaseSourceIdentity;
+
     const legacyCategoryRedirect = getLegacyCategoryDiscoveryPageRedirect(request);
     if (legacyCategoryRedirect) return legacyCategoryRedirect;
 

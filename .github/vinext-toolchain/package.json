@@ -3,6 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "overrides": {
+    "undici": "7.29.1"
+  },
   "dependencies": {
     "@cloudflare/vite-plugin": "1.54.8",
     "@vinext/cloudflare": "1.0.0-beta.6",

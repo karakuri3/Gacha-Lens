@@ -1,0 +1,200 @@
+name: Cloudflare Production release proof
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: cloudflare-production-release-proof
+  cancel-in-progress: false
+
+jobs:
+  exact-main-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TARGET_SHA: ${{ github.sha }}
+      PRODUCTION_URL: https://gachalens.com
+      BROWSER_ACCEPT: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+    steps:
+      - name: Checkout exact main SHA
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Verify release-integrity contract tests
+        run: node --test tests/cloudflare-release-integrity.test.mjs
+
+      - name: Wait for exact-main Cloudflare Production build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          actual_sha="$(git rev-parse HEAD)"
+          [[ "$actual_sha" == "$TARGET_SHA" ]] || {
+            echo "Checkout SHA ${actual_sha} does not match target ${TARGET_SHA}." >&2
+            exit 1
+          }
+
+          found='false'
+          status=''
+          conclusion=''
+          check_id=''
+
+          for attempt in $(seq 1 40); do
+            payload="$(curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs?per_page=100")"
+
+            inspection="$(node scripts/cloudflare-release-integrity.mjs inspect-check "$TARGET_SHA" <<<"$payload")"
+            found="$(jq -r '.found' <<<"$inspection")"
+            if [[ "$found" == 'true' ]]; then
+              status="$(jq -r '.status // ""' <<<"$inspection")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$inspection")"
+              check_id="$(jq -r '.check_id // ""' <<<"$inspection")"
+              if [[ "$status" == 'completed' ]]; then
+                break
+              fi
+            fi
+
+            echo "Cloudflare exact-main build not complete yet (attempt ${attempt}/40)." >> "$GITHUB_STEP_SUMMARY"
+            sleep 15
+          done
+
+          [[ "$found" == 'true' ]] || {
+            echo "No Cloudflare Workers check run found for exact main ${TARGET_SHA}." >&2
+            exit 1
+          }
+          [[ "$status" == 'completed' ]] || {
+            echo 'Cloudflare Workers exact-main check did not complete within the bounded wait.' >&2
+            exit 1
+          }
+          [[ "$conclusion" == 'success' ]] || {
+            echo "Cloudflare Workers exact-main build concluded ${conclusion:-unknown}." >&2
+            exit 1
+          }
+
+          echo "Cloudflare Production check run: ${check_id}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact main source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prove custom domain serves exact main SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          deployed_sha=''
+          last_code='000'
+
+          for attempt in $(seq 1 40); do
+            body="$tmp/source.json"
+            headers="$tmp/source.headers"
+            rc=0
+            code="$(curl --silent --show-error --max-time 30 \
+              -H 'Accept: application/json' \
+              -H 'Cache-Control: no-cache' \
+              --dump-header "$headers" \
+              --output "$body" \
+              --write-out '%{http_code}' \
+              "${PRODUCTION_URL}/api/runtime-diagnostics/release-source")" || rc=$?
+            last_code="${code:-000}"
+
+            if [[ "$rc" == '0' && "$last_code" == '200' ]]; then
+              deployed_sha="$(node scripts/cloudflare-release-integrity.mjs read-source-sha < "$body")"
+              if [[ "$deployed_sha" == "$TARGET_SHA" ]]; then
+                cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cache-control:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+                [[ "$cache_control" == *'no-store'* ]] || {
+                  echo "Release identity endpoint is missing no-store: ${cache_control:-none}." >&2
+                  exit 1
+                }
+                echo "Production deployed source SHA: ${deployed_sha}" >> "$GITHUB_STEP_SUMMARY"
+                break
+              fi
+              echo "Production still serves ${deployed_sha}; waiting for ${TARGET_SHA} (attempt ${attempt}/40)." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "Production source identity unavailable rc=${rc} HTTP ${last_code} (attempt ${attempt}/40)." >> "$GITHUB_STEP_SUMMARY"
+            fi
+
+            if [[ "$attempt" -lt 40 ]]; then sleep 15; fi
+          done
+
+          [[ "$deployed_sha" == "$TARGET_SHA" ]] || {
+            echo "Production deployed SHA ${deployed_sha:-unavailable} does not match main ${TARGET_SHA}; last HTTP ${last_code}." >&2
+            exit 1
+          }
+
+      - name: Representative Production runtime QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          request_get() {
+            local name="$1"
+            local path="$2"
+            local needle="${3:-}"
+            local body="$tmp/${name}.body"
+            local headers="$tmp/${name}.headers"
+            local attempt rc code delay
+            for attempt in $(seq 1 6); do
+              rc=0
+              code="$(curl --silent --show-error --location --max-time 90 \
+                -H "Accept: ${BROWSER_ACCEPT}" \
+                --dump-header "$headers" \
+                --output "$body" \
+                --write-out '%{http_code}' \
+                "${PRODUCTION_URL}${path}")" || rc=$?
+              code="${code:-000}"
+              if [[ "$rc" == '0' && "$code" == '200' ]]; then break; fi
+              if [[ "$attempt" -lt 6 ]]; then
+                case "$code" in
+                  000|429|500|502|503|504)
+                    delay=$((attempt * 3))
+                    echo "$name transient failure rc=$rc HTTP $code on attempt $attempt; retrying after ${delay}s" >> "$GITHUB_STEP_SUMMARY"
+                    sleep "$delay"
+                    continue
+                    ;;
+                esac
+              fi
+              echo "$name failed rc=$rc HTTP $code on attempt $attempt" >&2
+              head -c 1200 "$body" >&2 || true
+              exit 1
+            done
+            if [[ -n "$needle" ]] && ! grep -Fq "$needle" "$body"; then
+              echo "$name did not contain required marker: $needle" >&2
+              exit 1
+            fi
+            printf '%-24s HTTP 200\n' "$name" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          encoded_slug='tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
+          request_get home '/' 'Gacha Lens'
+          request_get series '/series' 'ガチャ一覧'
+          request_get ranking '/ranking' '成約価格ランキング'
+          request_get schedule '/schedule'
+          request_get japanese_detail "/series/${encoded_slug}" 'ディズニー マリー'
+          request_get discovery_detail '/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3' 'ガシャポン'
+          request_get robots '/robots.txt' 'Sitemap: https://gachalens.com/sitemap.xml'
+
+          grep -qi '^strict-transport-security:' "$tmp/home.headers" || {
+            echo 'Production home is missing Strict-Transport-Security.' >&2
+            exit 1
+          }
+          policy="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-edge-cache-policy:/ {gsub("\r", ""); print $2; exit}' "$tmp/home.headers")"
+          [[ "$policy" == 'public-document-120-v1' ]] || {
+            echo "Production home edge policy was ${policy:-none}, expected public-document-120-v1." >&2
+            exit 1
+          }
+          echo 'Production security/cache headers: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Vercel status is intentionally not consulted; Cloudflare is the Production authority.' >> "$GITHUB_STEP_SUMMARY"
