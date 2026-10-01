@@ -87,7 +87,7 @@ test("fixed public variant read fails closed without the service-role secret and
 test("fixed public variant read ignores caller query and forwards only the server secret to the exact Supabase origin", async () => {
   const { worker, temp } = await builtWorker();
   const previousFetch = globalThis.fetch;
-  const secret = "test-only-service-role-secret";
+  const secret = "sb_secret_test-only-worker-key";
   const calls = [];
   globalThis.fetch = async (input, init = {}) => {
     const url = new URL(String(input));
@@ -123,7 +123,7 @@ test("fixed public variant read ignores caller query and forwards only the serve
     assert.equal((call.url.searchParams.get("select") || "").includes("*"), false);
     assert.equal(call.url.href.includes("evil.example"), false);
     assert.equal(call.url.href.includes("slug=evil"), false);
-    assert.equal(call.headers.get("authorization"), `Bearer ${secret}`);
+    assert.equal(call.headers.get("authorization"), null);
     assert.equal(call.headers.get("apikey"), secret);
     assert.equal(call.headers.get("cookie"), null);
     assert.equal(call.headers.get("user-agent"), "GachaLens-PublicWorker-DataRead");
@@ -152,6 +152,31 @@ test("fixed public variant read ignores caller query and forwards only the serve
         name: "ディズニー",
       },
     });
+  } finally {
+    globalThis.fetch = previousFetch;
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test("fixed public variant read keeps Authorization compatibility for a legacy service-role JWT", async () => {
+  const { worker, temp } = await builtWorker();
+  const previousFetch = globalThis.fetch;
+  const legacy = "legacy-jwt-service-role-value";
+  let captured;
+  globalThis.fetch = async (_input, init = {}) => {
+    captured = new Headers(init.headers);
+    return new Response(JSON.stringify([representativeRow()]), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    const response = await worker.fetch(new Request(`https://public.example${PATH}`), {
+      SUPABASE_SERVICE_ROLE_KEY: legacy,
+    });
+    assert.equal(response.status, 200);
+    assert.equal(captured.get("apikey"), legacy);
+    assert.equal(captured.get("authorization"), `Bearer ${legacy}`);
   } finally {
     globalThis.fetch = previousFetch;
     fs.rmSync(temp, { recursive: true, force: true });
