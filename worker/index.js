@@ -1,4 +1,10 @@
-import handler from "vinext/server/fetch-handler";
+import { handlePublicDocumentData } from "./public-document-data.js";
+
+let appHandlerPromise;
+async function getAppHandler() {
+  appHandlerPromise ??= import("vinext/server/fetch-handler").then((module) => module.default);
+  return appHandlerPromise;
+}
 import { getLegacyCategoryDiscoveryPageRedirectPath } from "../lib/domain/category-discovery.js";
 import { getLegacyDiscoveryFacetPageRedirectPath } from "../lib/domain/discovery-facets.js";
 import { getLegacyRankingRedirectPath } from "../lib/domain/ranking-routes.js";
@@ -267,6 +273,9 @@ export default {
     const releaseSourceIdentity = getReleaseSourceIdentityResponse(request);
     if (releaseSourceIdentity) return releaseSourceIdentity;
 
+    const publicDocumentData = await handlePublicDocumentData(request, env, { sourceSha: RELEASE_SOURCE_SHA });
+    if (publicDocumentData) return publicDocumentData;
+
     const legacyCategoryRedirect = getLegacyCategoryDiscoveryPageRedirect(request);
     if (legacyCategoryRedirect) return legacyCategoryRedirect;
 
@@ -277,6 +286,7 @@ export default {
     if (legacyRankingRedirect) return legacyRankingRedirect;
 
     const policy = getEdgeCachePolicy(request);
+    const handler = await getAppHandler();
     const response = await handler.fetch(request, env, ctx);
 
     if (!(await canStoreResponse(response, policy))) {
