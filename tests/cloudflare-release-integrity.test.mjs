@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  evaluateDualWorkerReleaseProof,
   evaluateProductionReleaseProof,
   extractApprovedImmutablePreviewUrl,
+  extractApprovedPublicImmutablePreviewUrl,
   inspectCloudflareCheckRuns,
   normalizeSourceSha,
   readReleaseSourceSha,
@@ -12,6 +14,7 @@ const SHA = "1234567890abcdef1234567890abcdef12345678";
 const OTHER_SHA = "abcdef1234567890abcdef1234567890abcdef12";
 const COMMIT_PREVIEW = "https://1e09280b-gacha-lens.senpingxingzuo.workers.dev";
 const BRANCH_PREVIEW = "https://fix-release-integrity-gacha-lens.senpingxingzuo.workers.dev";
+const PUBLIC_COMMIT_PREVIEW = "https://1e09280b-gacha-lens-public.senpingxingzuo.workers.dev";
 
 function check({ id = 100, sha = SHA, status = "completed", conclusion = "success", summary } = {}) {
   return {
@@ -138,4 +141,97 @@ test("source identity only accepts a full non-secret Git SHA", () => {
   assert.equal(normalizeSourceSha(SHA.toUpperCase()), SHA);
   assert.equal(readReleaseSourceSha({ source_sha: SHA }), SHA);
   assert.equal(readReleaseSourceSha({ source_sha: "1234" }), null);
+});
+
+
+test("public Worker exact-SHA check resolves only the public immutable host", () => {
+  const publicCheck = check({
+    summary: `Commit Preview URL: ${PUBLIC_COMMIT_PREVIEW}`,
+  });
+  publicCheck.name = "Workers Builds: gacha-lens-public";
+  const result = inspectCloudflareCheckRuns({ check_runs: [publicCheck] }, SHA, { worker: "public" });
+  assert.equal(result.found, true);
+  assert.equal(result.preview_url, PUBLIC_COMMIT_PREVIEW);
+  assert.equal(extractApprovedPublicImmutablePreviewUrl(PUBLIC_COMMIT_PREVIEW), PUBLIC_COMMIT_PREVIEW);
+  assert.equal(extractApprovedPublicImmutablePreviewUrl(COMMIT_PREVIEW), null);
+});
+
+test("dual Worker release proof rejects mixed App/Public SHA", () => {
+  const result = evaluateDualWorkerReleaseProof({
+    targetSha: SHA,
+    appBuildStatus: "completed",
+    appBuildConclusion: "success",
+    publicBuildStatus: "completed",
+    publicBuildConclusion: "success",
+    appIdentityHttpStatus: 200,
+    appDeployedSha: SHA,
+    publicIdentityHttpStatus: 200,
+    publicDeployedSha: OTHER_SHA,
+    bindingIdentityHttpStatus: 200,
+    bindingAppSha: SHA,
+    customDomainHttpStatus: 200,
+    customDomainSha: SHA,
+    customDomainPlane: "public",
+  });
+  assert.deepEqual(result, { ok: false, reason: "public_deployed_sha_mismatch" });
+});
+
+test("dual Worker release proof rejects stale App binding", () => {
+  const result = evaluateDualWorkerReleaseProof({
+    targetSha: SHA,
+    appBuildStatus: "completed",
+    appBuildConclusion: "success",
+    publicBuildStatus: "completed",
+    publicBuildConclusion: "success",
+    appIdentityHttpStatus: 200,
+    appDeployedSha: SHA,
+    publicIdentityHttpStatus: 200,
+    publicDeployedSha: SHA,
+    bindingIdentityHttpStatus: 200,
+    bindingAppSha: OTHER_SHA,
+    customDomainHttpStatus: 200,
+    customDomainSha: SHA,
+    customDomainPlane: "public",
+  });
+  assert.deepEqual(result, { ok: false, reason: "binding_app_sha_mismatch" });
+});
+
+test("dual Worker release proof rejects App Worker as custom-domain authority", () => {
+  const result = evaluateDualWorkerReleaseProof({
+    targetSha: SHA,
+    appBuildStatus: "completed",
+    appBuildConclusion: "success",
+    publicBuildStatus: "completed",
+    publicBuildConclusion: "success",
+    appIdentityHttpStatus: 200,
+    appDeployedSha: SHA,
+    publicIdentityHttpStatus: 200,
+    publicDeployedSha: SHA,
+    bindingIdentityHttpStatus: 200,
+    bindingAppSha: SHA,
+    customDomainHttpStatus: 200,
+    customDomainSha: SHA,
+    customDomainPlane: "app",
+  });
+  assert.deepEqual(result, { ok: false, reason: "custom_domain_not_public_plane" });
+});
+
+test("dual Worker release proof passes only when every identity is the same exact SHA", () => {
+  const result = evaluateDualWorkerReleaseProof({
+    targetSha: SHA,
+    appBuildStatus: "completed",
+    appBuildConclusion: "success",
+    publicBuildStatus: "completed",
+    publicBuildConclusion: "success",
+    appIdentityHttpStatus: 200,
+    appDeployedSha: SHA,
+    publicIdentityHttpStatus: 200,
+    publicDeployedSha: SHA,
+    bindingIdentityHttpStatus: 200,
+    bindingAppSha: SHA,
+    customDomainHttpStatus: 200,
+    customDomainSha: SHA,
+    customDomainPlane: "public",
+  });
+  assert.deepEqual(result, { ok: true, reason: "verified" });
 });
