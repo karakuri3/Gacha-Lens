@@ -89,10 +89,19 @@ test("robots and sitemap documents preserve canonical production origin", async 
     const robots = await built.worker.fetch(new Request("https://preview.example/robots.txt"), { APP:app.binding });
     const robotsText = await robots.text();
     assert.match(robotsText, /Disallow: \/api\//);
+    assert.match(robotsText, /Disallow: \/review\//);
+    assert.match(robotsText, /Disallow: \/supabase-series/);
     assert.match(robotsText, /Sitemap: https:\/\/gachalens\.com\/sitemap\.xml/);
+    assert.match(robotsText, /Sitemap: https:\/\/gachalens\.com\/series-sitemap\.xml/);
+    assert.match(robotsText, /Sitemap: https:\/\/gachalens\.com\/variant-sitemap\.xml/);
+    assert.match(robotsText, /Host: https:\/\/gachalens\.com\//);
 
     const root = await built.worker.fetch(new Request("https://preview.example/sitemap.xml"), { APP:app.binding });
-    assert.match(await root.text(), /https:\/\/gachalens\.com\/series-sitemap\.xml/);
+    const rootText = await root.text();
+    assert.match(rootText, /<urlset/);
+    assert.match(rootText, /https:\/\/gachalens\.com\/ranking/);
+    assert.match(rootText, /https:\/\/gachalens\.com\/schedule\?month=2026-10/);
+    assert.doesNotMatch(rootText, /<sitemapindex/);
 
     const series = await built.worker.fetch(new Request("https://preview.example/series-sitemap.xml"), { APP:app.binding });
     assert.match(await series.text(), /https:\/\/gachalens\.com\/series\/parent-1/);
