@@ -4,12 +4,12 @@ export async function loadOfficialCatalog(fallbackRows = [], options = {}) {
   const fetchRowsImpl = options.fetchRowsImpl ?? fetchRows;
   try {
     const series = await fetchRowsImpl("series", {
-      select: "id,slug,name,franchise,brand,category,official_url,release_date,release_month,is_released,updated_at",
+      select: "id,slug,name,franchise,brand,category,official_url,release_date,release_month,is_released,source_type,updated_at",
       params: { order: "id.asc" },
       operationName: "series.official_catalog",
     });
     const variants = await fetchRowsImpl("variants", {
-      select: "id,slug,series_id,name,variant_type,release_date,released,brand,updated_at",
+      select: "id,slug,series_id,name,variant_type,release_date,released,brand,official_url,source_type,review_required,updated_at",
       params: { order: "id.asc" },
       operationName: "variants.official_catalog",
     });
@@ -30,6 +30,8 @@ function catalogFromRaw(rows) {
     release_date: text(raw.release_date || raw.releaseDate),
     release_month: text(raw.release_month || raw.releaseMonth),
     is_released: Boolean(raw.is_released ?? raw.released),
+    official_url: text(raw.official_url || raw.officialUrl),
+    source_type: text(raw.source_type || raw.sourceType),
   }));
   const variants = rows.flatMap((row) => asArray(row.variants || row.items || row.lineup || row.line_up).map((variant) => ({
     id: text(variant.id || variant.variant_id),
@@ -39,6 +41,9 @@ function catalogFromRaw(rows) {
     variant_type: text(variant.variant_type) || "normal",
     release_date: text(variant.release_date || variant.releaseDate || row.release_date || row.releaseDate),
     released: Boolean(variant.released ?? row.is_released ?? row.released),
+    official_url: text(variant.official_url || variant.officialUrl),
+    source_type: text(variant.source_type || variant.sourceType || row.source_type || row.sourceType),
+    review_required: variant.review_required === true,
   })));
   return catalogShape(series, variants);
 }
