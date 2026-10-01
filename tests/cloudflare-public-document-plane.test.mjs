@@ -36,6 +36,7 @@ function binding() {
         if (url.pathname === "/__public-data/v1/series-detail") return Response.json({ series:series[0], variants });
         if (url.pathname === "/__public-data/v1/variant-detail") return Response.json({ series:series[0], variant:variants[0] });
         if (url.pathname === "/__public-data/v1/sitemap-series") return Response.json([{ slug:"parent-1", updated_at:"2026-10-01T00:00:00Z" }]);
+        if (url.pathname === "/__public-data/v1/schedule-months") return Response.json([{ id:"s1", release_date:"2026-10-01", release_month:"2026-10" }]);
         if (url.pathname === "/__public-data/v1/sitemap-variants") return Response.json([{ slug:"variant-1", updated_at:"2026-10-01T00:00:00Z" }]);
         if (url.pathname === "/__public-data/v1/counts") return Response.json({ series:1, variants:1 });
         return new Response("not found", { status:404 });
@@ -59,7 +60,7 @@ test("public documents render in Public Worker and never proxy same document pat
   const built = await worker();
   try {
     const app = binding();
-    for (const route of ["/","/series","/schedule","/series/variant-1","/series/group/parent-1"]) {
+    for (const route of ["/","/series","/schedule?month=2026-10","/series/variant-1","/series/group/parent-1"]) {
       const before = app.calls.length;
       const response = await built.worker.fetch(new Request(`https://preview.example${route}`), { APP:app.binding });
       assert.equal(response.status, 200, route);
@@ -118,5 +119,34 @@ test("public renderer source has no Next vinext React or Supabase client depende
   const text = fs.readFileSync(new URL("../workers/public/src/document-renderer.js", import.meta.url), "utf8");
   for (const token of ["vinext", "next/", "react", "@supabase/supabase-js", "SUPABASE_SERVICE_ROLE_KEY"]) {
     assert.equal(text.includes(token), false, token);
+  }
+});
+
+test("interactive series queries delegate explicitly while canonical series stays public-owned", async () => {
+  const built = await worker();
+  try {
+    const app = binding();
+    const response = await built.worker.fetch(new Request("https://preview.example/series?q=test", {
+      headers:{ cookie:"catalog_session=ok" },
+    }), { APP:app.binding });
+    assert.equal(response.status, 404);
+    assert.deepEqual(app.calls.map((call) => call.path), ["/api/runtime-diagnostics/release-source","/series"]);
+    assert.equal(app.calls[1].search, "?q=test");
+    assert.equal(app.calls[1].cookie, "catalog_session=ok");
+  } finally {
+    fs.rmSync(built.temp, { recursive:true, force:true });
+  }
+});
+
+test("schedule canonicalizes bare and invalid query forms without invoking App SSR", async () => {
+  const built = await worker();
+  try {
+    const app = binding();
+    const bare = await built.worker.fetch(new Request("https://preview.example/schedule"), { APP:app.binding });
+    assert.equal(bare.status, 308);
+    assert.match(bare.headers.get("location") || "", /\/schedule\?month=\d{4}-\d{2}$/);
+    assert.equal(app.calls.length, 0);
+  } finally {
+    fs.rmSync(built.temp, { recursive:true, force:true });
   }
 });
