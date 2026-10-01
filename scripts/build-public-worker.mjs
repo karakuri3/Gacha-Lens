@@ -20,6 +20,9 @@ export function buildPublicWorker({
   sourceSha = resolveBuildSourceSha(),
   sourcePath = path.resolve("workers/public/src/index.js"),
   routeContractPath = path.resolve("workers/public/src/route-contract.js"),
+  documentRendererPath = path.resolve("workers/public/src/document-renderer.js"),
+  discoveryManifestPath = path.resolve("lib/domain/discovery-static-manifest.js"),
+  categoryManifestPath = path.resolve("lib/domain/category-static-manifest.js"),
   outputPath = path.resolve("workers/public/dist/index.js"),
 } = {}) {
   const normalizedSha = String(sourceSha || "").trim().toLowerCase();
@@ -32,7 +35,10 @@ export function buildPublicWorker({
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(outputPath, built);
   fs.copyFileSync(routeContractPath, path.join(outputDir, "route-contract.js"));
-  return { sourceSha: normalizedSha, sourcePath, routeContractPath, outputPath };
+  fs.copyFileSync(documentRendererPath, path.join(outputDir, "document-renderer.js"));
+  fs.copyFileSync(discoveryManifestPath, path.join(outputDir, "discovery-static-manifest.js"));
+  fs.copyFileSync(categoryManifestPath, path.join(outputDir, "category-static-manifest.js"));
+  return { sourceSha: normalizedSha, sourcePath, routeContractPath, documentRendererPath, discoveryManifestPath, categoryManifestPath, outputPath };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === fileURLToPath(new URL(`file://${process.argv[1]}`))) {

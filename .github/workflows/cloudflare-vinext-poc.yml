@@ -232,7 +232,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/build-public-worker.mjs
-          node --test tests/cloudflare-dual-worker-bootstrap.test.mjs tests/cloudflare-release-integrity.test.mjs
+          node --test tests/cloudflare-dual-worker-bootstrap.test.mjs tests/cloudflare-public-document-plane.test.mjs tests/cloudflare-release-integrity.test.mjs
 
       - name: Dry-run dependency-free Public Worker
         shell: bash

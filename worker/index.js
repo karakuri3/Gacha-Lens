@@ -2,6 +2,7 @@ import handler from "vinext/server/fetch-handler";
 import { getLegacyCategoryDiscoveryPageRedirectPath } from "../lib/domain/category-discovery.js";
 import { getLegacyDiscoveryFacetPageRedirectPath } from "../lib/domain/discovery-facets.js";
 import { getLegacyRankingRedirectPath } from "../lib/domain/ranking-routes.js";
+import { handlePublicDocumentData } from "./public-document-data.js";
 
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const RELEASE_SOURCE_SHA = String(process.env.GACHA_RELEASE_SOURCE_SHA ?? "").trim().toLowerCase();
@@ -264,6 +265,9 @@ async function canStoreResponse(response, policy) {
 
 export default {
   async fetch(request, env, ctx) {
+    const publicDocumentData = await handlePublicDocumentData(request, env);
+    if (publicDocumentData) return publicDocumentData;
+
     const releaseSourceIdentity = getReleaseSourceIdentityResponse(request);
     if (releaseSourceIdentity) return releaseSourceIdentity;
 
