@@ -512,6 +512,167 @@ jobs:
           echo "Public Preview runtime source identity: ${deployed_sha}" >> "$GITHUB_STEP_SUMMARY"
           echo "Public Preview plane: ${plane}" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Prove Public document plane cold and warm on exact-head Preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          request_public_document() {
+            local pass="$1"
+            local name="$2"
+            local path="$3"
+            local needle="$4"
+            local body="$tmp/${pass}-${name}.body"
+            local headers="$tmp/${pass}-${name}.headers"
+            local metrics code content_type plane canonical
+
+            metrics="$(curl --silent --show-error --max-time 60 \
+              -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7' \
+              --dump-header "$headers" \
+              --output "$body" \
+              --write-out '%{http_code} %{time_total}' \
+              "${PUBLIC_PREVIEW_URL}${path}")"
+            code="${metrics%% *}"
+
+            [[ "$code" == '200' ]] || {
+              echo "${pass} ${name} returned HTTP ${code}, expected 200." >&2
+              head -c 1500 "$body" >&2 || true
+              exit 1
+            }
+            grep -Fq "$needle" "$body" || {
+              echo "${pass} ${name} is missing marker: ${needle}" >&2
+              head -c 1500 "$body" >&2 || true
+              exit 1
+            }
+
+            plane="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-public-plane:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+            [[ "$plane" == 'phase-a3' ]] || {
+              echo "${pass} ${name} did not execute on the Phase A3 Public plane: ${plane:-missing}" >&2
+              exit 1
+            }
+
+            content_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+            echo "${pass} ${name}: HTTP ${code}; time_total=${metrics#* }; content-type=${content_type}" >> "$GITHUB_STEP_SUMMARY"
+
+            if [[ "$content_type" == text/html* ]]; then
+              grep -Fq '<link rel="canonical"' "$body" || {
+                echo "${pass} ${name} HTML is missing canonical metadata." >&2
+                exit 1
+              }
+              grep -Fq '<meta name="description"' "$body" || {
+                echo "${pass} ${name} HTML is missing description metadata." >&2
+                exit 1
+              }
+              canonical="$(grep -Eo '<link rel="canonical" href="[^"]+"' "$body" | head -1 | sed -E 's/.*href="([^"]+)"/\1/')"
+              [[ "$canonical" == https://gachalens.com/* ]] || {
+                echo "${pass} ${name} canonical escaped production origin: ${canonical:-missing}" >&2
+                exit 1
+              }
+            fi
+          }
+
+          routes=(
+            'home|/|Gacha Lens'
+            'series|/series|ガチャ一覧'
+            'schedule|/schedule?month=2026-10|2026-10'
+            'robots|/robots.txt|Sitemap: https://gachalens.com/sitemap.xml'
+            'sitemap|/sitemap.xml|<loc>https://gachalens.com/'
+            'series_sitemap|/series-sitemap.xml|<loc>https://gachalens.com/series/'
+            'variant_sitemap|/variant-sitemap.xml|<sitemapindex'
+          )
+
+          for pass in cold warm; do
+            for spec in "${routes[@]}"; do
+              IFS='|' read -r name path needle <<<"$spec"
+              request_public_document "$pass" "$name" "$path" "$needle"
+            done
+
+            series_detail_path="$(grep -Eo 'href="/series/group/[^"]+"' "$tmp/${pass}-series.body" | head -1 | sed -E 's/^href="([^"]+)"/\1/')"
+            [[ -n "$series_detail_path" ]] || {
+              echo "${pass} series index did not expose a Public-owned parent-series detail link." >&2
+              exit 1
+            }
+            request_public_document "$pass" series_detail "$series_detail_path" '<article><h1'
+          done
+
+          if grep -R -E 'HTTP (429|500|502|503|504)' "$GITHUB_STEP_SUMMARY" >/dev/null 2>&1; then
+            echo 'Public document proof observed a transient/resource-limit HTTP failure.' >&2
+            exit 1
+          fi
+
+      - name: Audit Public Preview SEO and discovery semantics against current Production
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          compare_canonical() {
+            local name="$1"
+            local path="$2"
+            local preview="$tmp/${name}.preview"
+            local production="$tmp/${name}.production"
+
+            curl --fail --silent --show-error --max-time 60 -H 'Accept: text/html' "${PUBLIC_PREVIEW_URL}${path}" > "$preview"
+            curl --fail --silent --show-error --max-time 60 -H 'Accept: text/html' "https://gachalens.com${path}" > "$production"
+
+            local preview_canonical production_canonical
+            preview_canonical="$(grep -Eo '<link rel="canonical" href="[^"]+"' "$preview" | head -1 | sed -E 's/.*href="([^"]+)"/\1/')"
+            production_canonical="$(grep -Eo '<link rel="canonical" href="[^"]+"' "$production" | head -1 | sed -E 's/.*href="([^"]+)"/\1/')"
+
+            preview_canonical_normalized="${preview_canonical%/}"
+            production_canonical_normalized="${production_canonical%/}"
+            [[ -n "$preview_canonical" && "$preview_canonical_normalized" == "$production_canonical_normalized" ]] || {
+              echo "${name} canonical mismatch: Public=${preview_canonical:-missing}; Production=${production_canonical:-missing}" >&2
+              exit 1
+            }
+            grep -Fq '<meta name="description"' "$preview" || { echo "${name} Public HTML missing description." >&2; exit 1; }
+            grep -Fq '<h1' "$preview" || { echo "${name} Public HTML missing primary heading." >&2; exit 1; }
+            ! grep -Fq 'noindex' "$preview" || { echo "${name} Public HTML unexpectedly contains noindex." >&2; exit 1; }
+            echo "${name}: canonical parity ${preview_canonical}; indexable HTML semantics preserved." >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          compare_canonical home '/'
+          compare_canonical series '/series'
+          compare_canonical schedule '/schedule?month=2026-10'
+
+          curl --fail --silent --show-error --max-time 60 -H 'Accept: text/html' "${PUBLIC_PREVIEW_URL}/series" > "$tmp/series-for-detail"
+          series_detail_path="$(grep -Eo 'href="/series/group/[^"]+"' "$tmp/series-for-detail" | head -1 | sed -E 's/^href="([^"]+)"/\1/')"
+          [[ -n "$series_detail_path" ]] || {
+            echo 'Public series index did not expose a parent-series detail for parity audit.' >&2
+            exit 1
+          }
+          compare_canonical series_detail "$series_detail_path"
+
+          curl --fail --silent --show-error --max-time 60 "${PUBLIC_PREVIEW_URL}/robots.txt" > "$tmp/robots.preview"
+          curl --fail --silent --show-error --max-time 60 'https://gachalens.com/robots.txt' > "$tmp/robots.production"
+          for directive in \
+            'Disallow: /api/' \
+            'Disallow: /review/' \
+            'Disallow: /supabase-series' \
+            'Sitemap: https://gachalens.com/sitemap.xml' \
+            'Sitemap: https://gachalens.com/series-sitemap.xml' \
+            'Sitemap: https://gachalens.com/variant-sitemap.xml' \
+            'Host: https://gachalens.com/'; do
+            grep -Fq "$directive" "$tmp/robots.preview" || { echo "Public robots missing: $directive" >&2; exit 1; }
+            grep -Fq "$directive" "$tmp/robots.production" || { echo "Production robots baseline missing: $directive" >&2; exit 1; }
+          done
+
+          for path in /sitemap.xml /series-sitemap.xml /variant-sitemap.xml; do
+            preview_code="$(curl --silent --show-error --max-time 60 --output "$tmp/preview-sitemap" --write-out '%{http_code}' "${PUBLIC_PREVIEW_URL}${path}")"
+            production_code="$(curl --silent --show-error --max-time 60 --output "$tmp/production-sitemap" --write-out '%{http_code}' "https://gachalens.com${path}")"
+            [[ "$preview_code" == '200' && "$production_code" == '200' ]] || {
+              echo "Sitemap status mismatch on ${path}: Public=${preview_code}; Production=${production_code}" >&2
+              exit 1
+            }
+            grep -Fq 'https://gachalens.com/' "$tmp/preview-sitemap" || { echo "Public sitemap ${path} escaped canonical origin." >&2; exit 1; }
+            echo "${path}: Public/Production HTTP 200 and canonical gachalens.com origin preserved." >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          echo 'Robots directives and sitemap/canonical meaning preserved relative to current Production.' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Prove bootstrap route boundary
         shell: bash
         run: |
