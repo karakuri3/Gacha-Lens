@@ -1,4 +1,5 @@
-import { PUBLIC_BOOTSTRAP_OWNED_PATHS } from "./route-contract.js";
+import { classifyPublicRoute, PUBLIC_DIAGNOSTIC_PATHS } from "./route-contract.js";
+import { renderPublicDocument } from "./document-renderer.js";
 
 const RELEASE_SOURCE_SHA = "__GACHA_RELEASE_SOURCE_SHA__";
 const SHA_RE = /^[0-9a-f]{40}$/;
@@ -32,7 +33,7 @@ function fixedAppRequest(pathname) {
       Accept: pathname === APP_RELEASE_SOURCE_PATH
         ? "application/json"
         : "text/html,application/xhtml+xml",
-      "User-Agent": "GachaLens-PublicWorker-Bootstrap",
+      "User-Agent": "GachaLens-PublicWorker-A3",
     },
   });
 }
@@ -53,28 +54,38 @@ async function readAppSourceSha(env) {
   return { ok: true, status: 200, error: null, sourceSha };
 }
 
-async function appDelegationDiagnostic(request, env) {
+async function assertAppExactSha(request, env) {
   const ownSha = releaseSourceSha();
-  if (!ownSha) return jsonResponse(request, { error: "public_source_identity_unavailable" }, 503);
-
+  if (!ownSha) return { ok: false, response: jsonResponse(request, { error: "public_source_identity_unavailable" }, 503) };
   const appIdentity = await readAppSourceSha(env);
   if (!appIdentity.ok) {
-    return jsonResponse(request, {
+    return {
       ok: false,
-      public_source_sha: ownSha,
-      app_source_sha: appIdentity.sourceSha,
-      error: appIdentity.error,
-    }, appIdentity.status);
+      response: jsonResponse(request, {
+        ok: false,
+        public_source_sha: ownSha,
+        app_source_sha: appIdentity.sourceSha,
+        error: appIdentity.error,
+      }, appIdentity.status),
+    };
   }
-
   if (appIdentity.sourceSha !== ownSha) {
-    return jsonResponse(request, {
+    return {
       ok: false,
-      public_source_sha: ownSha,
-      app_source_sha: appIdentity.sourceSha,
-      error: "mixed_source_sha",
-    }, 409);
+      response: jsonResponse(request, {
+        ok: false,
+        public_source_sha: ownSha,
+        app_source_sha: appIdentity.sourceSha,
+        error: "mixed_source_sha",
+      }, 409),
+    };
   }
+  return { ok: true, ownSha, appSha: appIdentity.sourceSha };
+}
+
+async function appDelegationDiagnostic(request, env) {
+  const integrity = await assertAppExactSha(request, env);
+  if (!integrity.ok) return integrity.response;
 
   const representative = await env.APP.fetch(fixedAppRequest(APP_REPRESENTATIVE_PATH));
   const representativeBody = representative.status === 200
@@ -84,8 +95,8 @@ async function appDelegationDiagnostic(request, env) {
 
   return jsonResponse(request, {
     ok: representativeOk,
-    public_source_sha: ownSha,
-    app_source_sha: appIdentity.sourceSha,
+    public_source_sha: integrity.ownSha,
+    app_source_sha: integrity.appSha,
     representative: {
       path: APP_REPRESENTATIVE_PATH,
       status: representative.status,
@@ -95,30 +106,62 @@ async function appDelegationDiagnostic(request, env) {
   }, representativeOk ? 200 : 502);
 }
 
+async function delegateAppOwned(request, env) {
+  const integrity = await assertAppExactSha(request, env);
+  if (!integrity.ok) return integrity.response;
+  const incoming = new URL(request.url);
+  const target = new URL(incoming.pathname + incoming.search, INTERNAL_ORIGIN);
+  const forwarded = new Request(target, request);
+  return env.APP.fetch(forwarded);
+}
+
+async function publicDiagnostic(request, env, pathname) {
+  const guard = methodGuard(request);
+  if (guard) return guard;
+  const sourceSha = releaseSourceSha();
+
+  if (pathname === "/api/runtime-diagnostics/release-source") {
+    return jsonResponse(request, { plane: "public", source_sha: sourceSha }, sourceSha ? 200 : 503);
+  }
+  if (pathname === "/api/runtime-diagnostics/public-plane") {
+    return jsonResponse(request, {
+      plane: "public",
+      source_sha: sourceSha,
+      app_binding: "APP",
+      route_contract: "phase-a3-public-documents",
+      public_document_runtime: "lightweight-renderer",
+    }, sourceSha ? 200 : 503);
+  }
+  return appDelegationDiagnostic(request, env);
+}
+
 export default {
   async fetch(request, env) {
-    const guard = methodGuard(request);
-    if (guard) return guard;
-
     const url = new URL(request.url);
-    if (!PUBLIC_BOOTSTRAP_OWNED_PATHS.includes(url.pathname)) {
-      return jsonResponse(request, { error: "route_not_owned_by_public_bootstrap" }, 404);
+    const ownership = classifyPublicRoute(url.pathname);
+
+    if (ownership === "public-diagnostic" && PUBLIC_DIAGNOSTIC_PATHS.includes(url.pathname)) {
+      return publicDiagnostic(request, env, url.pathname);
     }
 
-    const sourceSha = releaseSourceSha();
-    if (url.pathname === "/api/runtime-diagnostics/release-source") {
-      return jsonResponse(request, { plane: "public", source_sha: sourceSha }, sourceSha ? 200 : 503);
+    if (ownership === "public-document") {
+      const guard = methodGuard(request);
+      if (guard) return guard;
+      try {
+        const response = await renderPublicDocument(request, env);
+        return response ?? jsonResponse(request, { error: "public_document_route_unimplemented" }, 500);
+      } catch (error) {
+        return jsonResponse(request, {
+          error: "public_document_unavailable",
+          detail: String(error?.message ?? error),
+        }, 503);
+      }
     }
 
-    if (url.pathname === "/api/runtime-diagnostics/public-plane") {
-      return jsonResponse(request, {
-        plane: "public",
-        source_sha: sourceSha,
-        app_binding: "APP",
-        route_contract: "phase-a2-bootstrap",
-      }, sourceSha ? 200 : 503);
+    if (ownership === "app-owned") {
+      return delegateAppOwned(request, env);
     }
 
-    return appDelegationDiagnostic(request, env);
+    return jsonResponse(request, { error: "route_not_owned_by_public_worker" }, 404);
   },
 };
