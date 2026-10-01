@@ -10,5 +10,8 @@
       "binding": "APP",
       "service": "gacha-lens"
     }
+  ],
+  "compatibility_flags": [
+    "global_fetch_strictly_public"
   ]
 }
