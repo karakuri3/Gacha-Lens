@@ -4,7 +4,7 @@ import { getLegacyDiscoveryFacetPageRedirectPath } from "../lib/domain/discovery
 import { getLegacyRankingRedirectPath } from "../lib/domain/ranking-routes.js";
 import { handlePublicDocumentData } from "./public-document-data.js";
 
-// Phase A3 exact-head Preview verification anchor v2; no runtime behavior change.
+// Phase A3 exact-head Preview verification anchor v3; no runtime behavior change.
 const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const RELEASE_SOURCE_SHA = String(process.env.GACHA_RELEASE_SOURCE_SHA ?? "").trim().toLowerCase();
 const RELEASE_SOURCE_SHA_RE = /^[0-9a-f]{40}$/;
