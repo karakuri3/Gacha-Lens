@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
+import {
+  contractFromNormalizedStockRecord,
+  resolveStockEvidenceTarget,
+} from "../lib/domain/stock-evidence-contract.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { loadOfficialCatalog } from "./load-official-catalog.mjs";
 import { includeStaticSampleData, productionRecords } from "./nonproduction-data.mjs";
@@ -24,11 +28,17 @@ const stockReportsRaw = productionRecords(loadedStockRaw.stockReportsRaw);
 const restockRows = restockEventsRaw.map((raw) => normalizeRestockEvent(raw, catalog));
 const stockRows = stockReportsRaw.map((raw) => normalizeStockReport(raw, catalog));
 const referenceIds = await loadReferenceIds();
-const dbRestockRows = restockRows.map((row) => applyDbReferenceSafety(row, referenceIds));
-const dbStockRows = stockRows.map((row) => applyDbReferenceSafety(row, referenceIds));
+const restockPersistence = restockRows.map((row) => prepareForPersistence(row, referenceIds));
+const stockPersistence = stockRows.map((row) => prepareForPersistence(row, referenceIds));
+const dbRestockRows = restockPersistence.filter((entry) => entry.persist).map((entry) => entry.row);
+const dbStockRows = stockPersistence.filter((entry) => entry.persist).map((entry) => entry.row);
 const issueRows = [
-  ...dbRestockRows.filter((row) => row.review_required).map((row) => createImportIssue("restock_events", row.raw, "unknown_variant", row.id)),
-  ...dbStockRows.filter((row) => row.review_required).map((row) => createImportIssue("stock_reports", row.raw, "unknown_variant", row.id)),
+  ...restockPersistence
+    .filter((entry) => entry.row.review_required || !entry.persist)
+    .map((entry) => createImportIssue("restock_events", entry.row.raw, entry.reason || reviewReason(entry.row, "restock"), entry.row.id)),
+  ...stockPersistence
+    .filter((entry) => entry.row.review_required || !entry.persist)
+    .map((entry) => createImportIssue("stock_reports", entry.row.raw, entry.reason || reviewReason(entry.row, "stock"), entry.row.id)),
 ];
 
 await upsertRows("restock_events", dbRestockRows, { label: "upsert-stock" });
@@ -63,6 +73,11 @@ console.log(JSON.stringify({
     total: savedRestockLinked + savedStockLinked,
   },
   reviewRequired,
+  persistenceBlocked: {
+    restock: restockPersistence.filter((entry) => !entry.persist).length,
+    stock: stockPersistence.filter((entry) => !entry.persist).length,
+    reasons: countReasons([...restockPersistence, ...stockPersistence].filter((entry) => !entry.persist)),
+  },
   restockBreakdown: countBy(dbRestockRows, "event_type"),
   stockBreakdown: countBy(dbStockRows, "status"),
 }, null, 2));
