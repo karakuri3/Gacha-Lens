@@ -242,13 +242,16 @@ function representativeVariantReadUrl() {
 }
 
 function publicVariantReadHeaders(secret) {
-  return new Headers({
+  const headers = new Headers({
     Accept: "application/json",
-    Authorization: `Bearer ${secret}`,
     apikey: secret,
     "Accept-Profile": "public",
     "User-Agent": "GachaLens-PublicWorker-DataRead",
   });
+  if (!secret.startsWith("sb_secret_")) {
+    headers.set("Authorization", `Bearer ${secret}`);
+  }
+  return headers;
 }
 
 function publicVariantReadResult(row) {
