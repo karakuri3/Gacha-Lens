@@ -292,7 +292,7 @@ function importIssueNote(issueType) {
     invalid_variant_id: "supplied variant_id does not exist in the official catalog; no text fallback was attempted",
     variant_series_mismatch: "supplied series_id and variant_id disagree with the official catalog",
     ambiguous_variant_text: "multiple variants match the legacy text; arbitrary first-match selection is forbidden",
-    db_reference_missing: "resolved local identity is missing from current DB references; row was not persisted",
+    db_reference_missing: "resolved local identity is missing from current DB references; missing references were dropped and the review row was retained",
     missing_provider_timestamp: "provider evidence is missing a reported/updated timestamp",
     missing_provenance: "provider evidence is missing provenance",
     unknown_stock_state: "stock state could not be classified",
