@@ -1,0 +1,14 @@
+{
+  "$schema": "../../.github/vinext-toolchain/node_modules/wrangler/config-schema.json",
+  "name": "gacha-lens-public",
+  "main": "./dist/index.js",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "preview_urls": true,
+  "services": [
+    {
+      "binding": "APP",
+      "service": "gacha-lens"
+    }
+  ]
+}

@@ -1,31 +1,45 @@
 import { fileURLToPath } from "node:url";
 
 export const CLOUDFLARE_WORKERS_CHECK_NAME = "Workers Builds: gacha-lens";
+export const CLOUDFLARE_PUBLIC_WORKERS_CHECK_NAME = "Workers Builds: gacha-lens-public";
 export const CLOUDFLARE_CHECK_APP_SLUG = "cloudflare-workers-and-pages";
 export const APPROVED_PREVIEW_HOST_SUFFIX = "-gacha-lens.senpingxingzuo.workers.dev";
+export const APPROVED_PUBLIC_PREVIEW_HOST_SUFFIX = "-gacha-lens-public.senpingxingzuo.workers.dev";
 const SHA_RE = /^[0-9a-f]{40}$/i;
 const IMMUTABLE_PREVIEW_RE = /^https:\/\/[0-9a-f]{8,64}-gacha-lens\.senpingxingzuo\.workers\.dev$/i;
+const IMMUTABLE_PUBLIC_PREVIEW_RE = /^https:\/\/[0-9a-f]{8,64}-gacha-lens-public\.senpingxingzuo\.workers\.dev$/i;
 
 export function normalizeSourceSha(value) {
   const sha = String(value ?? "").trim().toLowerCase();
   return SHA_RE.test(sha) ? sha : null;
 }
 
-export function extractApprovedImmutablePreviewUrl(summary) {
+function extractImmutablePreviewUrl(summary, matcher) {
   const text = String(summary ?? "").replaceAll("&amp;", "&");
   const urls = text.match(/https:\/\/[A-Za-z0-9.-]+/g) ?? [];
   const approved = [...new Set(urls
     .map((value) => value.replace(/[),.;]+$/g, ""))
-    .filter((value) => IMMUTABLE_PREVIEW_RE.test(value)))];
+    .filter((value) => matcher.test(value)))];
   return approved.length === 1 ? approved[0] : null;
 }
 
-export function inspectCloudflareCheckRuns(payload, targetSha) {
+export function extractApprovedImmutablePreviewUrl(summary) {
+  return extractImmutablePreviewUrl(summary, IMMUTABLE_PREVIEW_RE);
+}
+
+export function extractApprovedPublicImmutablePreviewUrl(summary) {
+  return extractImmutablePreviewUrl(summary, IMMUTABLE_PUBLIC_PREVIEW_RE);
+}
+
+export function inspectCloudflareCheckRuns(payload, targetSha, options = {}) {
   const sha = normalizeSourceSha(targetSha);
   if (!sha) throw new Error("invalid_target_sha");
+  const worker = options.worker === "public" ? "public" : "app";
+  const checkName = worker === "public" ? CLOUDFLARE_PUBLIC_WORKERS_CHECK_NAME : CLOUDFLARE_WORKERS_CHECK_NAME;
+  const previewExtractor = worker === "public" ? extractApprovedPublicImmutablePreviewUrl : extractApprovedImmutablePreviewUrl;
   const checkRuns = Array.isArray(payload?.check_runs) ? payload.check_runs : [];
   const candidates = checkRuns
-    .filter((run) => run?.name === CLOUDFLARE_WORKERS_CHECK_NAME
+    .filter((run) => run?.name === checkName
       && run?.app?.slug === CLOUDFLARE_CHECK_APP_SLUG
       && normalizeSourceSha(run?.head_sha) === sha)
     .sort((left, right) => Number(left?.id ?? 0) - Number(right?.id ?? 0));
@@ -39,7 +53,7 @@ export function inspectCloudflareCheckRuns(payload, targetSha) {
     check_id: candidate.id ?? null,
     status: String(candidate.status ?? ""),
     conclusion: candidate.conclusion == null ? null : String(candidate.conclusion),
-    preview_url: extractApprovedImmutablePreviewUrl(candidate?.output?.summary),
+    preview_url: previewExtractor(candidate?.output?.summary),
   };
 }
 
@@ -66,6 +80,40 @@ export function evaluateProductionReleaseProof({
   return { ok: true, reason: "verified" };
 }
 
+export function evaluateDualWorkerReleaseProof({
+  targetSha,
+  appBuildStatus,
+  appBuildConclusion,
+  publicBuildStatus,
+  publicBuildConclusion,
+  appIdentityHttpStatus,
+  appDeployedSha,
+  publicIdentityHttpStatus,
+  publicDeployedSha,
+  bindingIdentityHttpStatus,
+  bindingAppSha,
+  customDomainHttpStatus,
+  customDomainSha,
+  customDomainPlane,
+} = {}) {
+  const target = normalizeSourceSha(targetSha);
+  if (!target) return { ok: false, reason: "invalid_target_sha" };
+  if (appBuildStatus !== "completed") return { ok: false, reason: "app_build_incomplete" };
+  if (appBuildConclusion !== "success") return { ok: false, reason: "app_build_failed" };
+  if (publicBuildStatus !== "completed") return { ok: false, reason: "public_build_incomplete" };
+  if (publicBuildConclusion !== "success") return { ok: false, reason: "public_build_failed" };
+  if (Number(appIdentityHttpStatus) !== 200) return { ok: false, reason: "app_source_identity_http_failure" };
+  if (normalizeSourceSha(appDeployedSha) !== target) return { ok: false, reason: "app_deployed_sha_mismatch" };
+  if (Number(publicIdentityHttpStatus) !== 200) return { ok: false, reason: "public_source_identity_http_failure" };
+  if (normalizeSourceSha(publicDeployedSha) !== target) return { ok: false, reason: "public_deployed_sha_mismatch" };
+  if (Number(bindingIdentityHttpStatus) !== 200) return { ok: false, reason: "binding_source_identity_http_failure" };
+  if (normalizeSourceSha(bindingAppSha) !== target) return { ok: false, reason: "binding_app_sha_mismatch" };
+  if (Number(customDomainHttpStatus) !== 200) return { ok: false, reason: "custom_domain_http_failure" };
+  if (normalizeSourceSha(customDomainSha) !== target) return { ok: false, reason: "custom_domain_sha_mismatch" };
+  if (customDomainPlane !== "public") return { ok: false, reason: "custom_domain_not_public_plane" };
+  return { ok: true, reason: "verified" };
+}
+
 async function readStdin() {
   let body = "";
   for await (const chunk of process.stdin) body += chunk;
@@ -78,7 +126,8 @@ async function main() {
     const targetSha = process.argv[3];
     const input = await readStdin();
     const payload = JSON.parse(input || "{}");
-    const result = inspectCloudflareCheckRuns(payload, targetSha);
+    const worker = process.argv.includes("--public") ? "public" : "app";
+    const result = inspectCloudflareCheckRuns(payload, targetSha, { worker });
     process.stdout.write(`${JSON.stringify(result)}\n`);
     return;
   }
