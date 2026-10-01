@@ -117,17 +117,34 @@ async function renderSeries(request, env) {
   }), 200, 300);
 }
 
+function currentJstMonth(now = new Date()) {
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return `${jst.getUTCFullYear()}-${String(jst.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 async function renderSchedule(request, env, url) {
-  const month = url.searchParams.get("month") ?? "";
-  const page = Number(url.searchParams.get("page") ?? "1");
-  const offset = Number.isInteger(page) && page > 1 ? (page - 1) * 120 : 0;
-  const rows = await readData(env, "/__public-data/v1/schedule", { month, limit: 120, offset });
-  const suffix = /^\d{4}-\d{2}$/.test(month) ? `（${escapeHtml(month)}）` : "";
-  const body = `<h1>ガチャ発売予定${suffix}</h1><p>公式情報から発売予定を確認できます。</p>${seriesCards(rows)}`;
+  const keys = [...url.searchParams.keys()];
+  const rawMonth = url.searchParams.get("month") ?? "";
+  const rawPage = url.searchParams.get("page");
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(rawMonth) ? rawMonth : currentJstMonth();
+  const page = rawPage && /^[1-9]\d*$/.test(rawPage) && Number(rawPage) <= 1000 ? Number(rawPage) : 1;
+  const canonicalSearch = new URLSearchParams({ month });
+  if (page > 1) canonicalSearch.set("page", String(page));
+  const canonicalPath = `/schedule?${canonicalSearch.toString()}`;
+  const validKeys = keys.every((key) => key === "month" || key === "page")
+    && url.searchParams.getAll("month").length === 1
+    && url.searchParams.getAll("page").length <= 1;
+  if (!validKeys || rawMonth !== month || (rawPage !== null && (String(page) !== rawPage || page === 1))) {
+    return Response.redirect(new URL(canonicalPath, url.origin).toString(), 308);
+  }
+  const offset = (page - 1) * 60;
+  const rows = await readData(env, "/__public-data/v1/schedule", { month, limit: 60, offset });
+  const suffix = page > 1 ? `（${page}ページ目）` : "";
+  const body = `<h1>新作・発売スケジュール</h1><p>${escapeHtml(month)}の正式公開されたガチャシリーズを確認できます。</p>${seriesCards(rows)}`;
   return htmlResponse(request, htmlDocument({
-    title: `ガチャ発売予定${suffix} | Gacha Lens`,
-    description: "ガチャの発売予定・発売月を公式情報ベースで確認できます。",
-    pathname: "/schedule",
+    title: `${escapeHtml(month)}のガチャ新作・発売情報${suffix} | Gacha Lens`,
+    description: "正式公開されたガチャシリーズの発売情報を月単位で漏れなく確認できます。",
+    pathname: canonicalPath,
     body,
   }));
 }
