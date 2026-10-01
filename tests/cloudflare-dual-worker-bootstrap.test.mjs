@@ -278,14 +278,19 @@ test("public Worker stays dependency-free and permits only the fixed runtime Sup
     "REVIEW_ADMIN_TOKEN",
     "ADMIN_REVIEW_TOKEN",
     "select=*",
-    "sb_secret_",
     "eyJhbGciOi",
     "service-role-secret",
   ]) {
     assert.equal(source.includes(forbidden), false, `forbidden public runtime dependency/credential material: ${forbidden}`);
   }
 
-  const serviceRoleReferences = source.match(/SUPABASE_SERVICE_ROLE_KEY/g) ?? [];
+  assert.doesNotMatch(
+    source,
+    /sb_secret_[A-Za-z0-9_-]{16,}/,
+    "Public Worker source must not embed an actual-looking modern Supabase secret key",
+  );
+
+    const serviceRoleReferences = source.match(/SUPABASE_SERVICE_ROLE_KEY/g) ?? [];
   assert.equal(serviceRoleReferences.length, 1, "service-role binding name must appear exactly once");
   assert.match(
     source,
