@@ -5,6 +5,7 @@ import {
   buildStockEvidenceContract,
   resolveStockEvidenceTarget,
 } from "../lib/domain/stock-evidence-contract.js";
+import { fetchStockRaw } from "../lib/fetchers/stock-fetcher.js";
 
 const fixture = JSON.parse(fs.readFileSync(new URL("./fixtures/stock-evidence-contract.json", import.meta.url), "utf8"));
 const catalog = {
@@ -101,4 +102,36 @@ test("legacy unscoped unique text keeps current variant matching behavior", () =
   assert.equal(target.series.id, "series-alpha");
   assert.equal(target.reason, "legacy_text_variant_match");
   assert.equal(target.persistence_blocked, false);
+});
+
+
+test("stock fetcher carries scope, provider identity, timestamps, provenance, and raw evidence", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => "application/json" },
+    text: async () => JSON.stringify({ stockReportsRaw: [fixture.records.validSeries] }),
+  });
+
+  try {
+    const result = await fetchStockRaw({
+      rawFeedUrls: "https://provider.example/feed.json",
+      fetchedAt: fixture.context.fetched_at,
+      xSearchEnabled: false,
+    });
+    assert.equal(result.stockReportsRaw.length, 1);
+    const row = result.stockReportsRaw[0];
+    assert.equal(row.evidence_scope, "series");
+    assert.equal(row.provider_product_id, "P-100");
+    assert.equal(row.provider_jan, "4580000000001");
+    assert.equal(row.provider_store_id, "SHOP-1");
+    assert.equal(row.reported_at, "2026-10-02T01:55:00+09:00");
+    assert.equal(row.fetched_at, fixture.context.fetched_at);
+    assert.equal(row.provenance.source, "stock_raw_feed");
+    assert.equal(row.raw.stock_contract.evidence_scope, "series");
+    assert.equal(row.raw.stock_contract.raw_evidence.id, "series-stock");
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
