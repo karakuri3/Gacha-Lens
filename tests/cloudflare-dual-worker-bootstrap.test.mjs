@@ -30,12 +30,17 @@ function appBinding({ sourceSha = SHA, reviewStatus = 200, reviewBody = "Review 
     binding: {
       async fetch(request) {
         const url = new URL(request.url);
+        const requestBody = request.method === "GET" || request.method === "HEAD"
+          ? ""
+          : await request.clone().text();
         calls.push({
           pathname: url.pathname,
           method: request.method,
           authorization: request.headers.get("authorization"),
           cookie: request.headers.get("cookie"),
           accept: request.headers.get("accept"),
+          contentType: request.headers.get("content-type"),
+          body: requestBody,
         });
         if (url.pathname === "/api/runtime-diagnostics/release-source") {
           return new Response(JSON.stringify({ source_sha: sourceSha }), {
@@ -47,6 +52,24 @@ function appBinding({ sourceSha = SHA, reviewStatus = 200, reviewBody = "Review 
           return new Response(reviewBody, {
             status: reviewStatus,
             headers: { "content-type": "text/html; charset=utf-8" },
+          });
+        }
+        if (url.pathname === "/review/login") {
+          return new Response(null, {
+            status: 303,
+            headers: {
+              location: "https://gacha-lens.internal/review",
+              "set-cookie": "gacha_review_admin=session-value; Path=/; HttpOnly; SameSite=Strict",
+            },
+          });
+        }
+        if (url.pathname === "/review/logout") {
+          return new Response(null, {
+            status: 303,
+            headers: {
+              location: "https://gacha-lens.internal/review",
+              "set-cookie": "gacha_review_admin=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict",
+            },
           });
         }
         return new Response("not found", { status: 404 });
@@ -76,6 +99,100 @@ test("release-source exposes only exact public SHA and no secret material", asyn
     const body = await response.json();
     assert.deepEqual(body, { plane: "public", source_sha: SHA });
     assert.equal(JSON.stringify(body).includes("SUPABASE"), false);
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+
+test("review cold path renders login without touching App binding when review session cookie is absent", async () => {
+  const { worker, temp } = await builtWorker();
+  try {
+    const app = appBinding();
+    const response = await worker.fetch(new Request("https://public.example/review", {
+      headers: { cookie: "unrelated=private-value" },
+    }), { APP: app.binding });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("cache-control") || "", /no-store/);
+    assert.equal(response.headers.get("x-gacha-plane"), "public");
+    assert.equal(response.headers.get("x-gacha-route"), "review-login-cold");
+    assert.match(response.headers.get("x-robots-tag") || "", /noindex/);
+    const body = await response.text();
+    assert.match(body, /Review access/);
+    assert.match(body, /action="\/review\/login"/);
+    assert.deepEqual(app.calls, []);
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test("review session cookie triggers App verification and forwards only that cookie", async () => {
+  const { worker, temp } = await builtWorker();
+  try {
+    const app = appBinding({ reviewBody: "Review access authenticated" });
+    const response = await worker.fetch(new Request("https://public.example/review", {
+      headers: {
+        authorization: "Bearer must-not-forward",
+        cookie: "unrelated=private; gacha_review_admin=session-value; another=secret",
+      },
+    }), { APP: app.binding });
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), "Review access authenticated");
+    assert.equal(app.calls.length, 1);
+    assert.equal(app.calls[0].pathname, "/review");
+    assert.equal(app.calls[0].method, "GET");
+    assert.equal(app.calls[0].cookie, "gacha_review_admin=session-value");
+    assert.equal(app.calls[0].authorization, null);
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test("review login POST delegates explicitly and rewrites internal redirect to public origin", async () => {
+  const { worker, temp } = await builtWorker();
+  try {
+    const app = appBinding();
+    const response = await worker.fetch(new Request("https://public.example/review/login", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        authorization: "Bearer must-not-forward",
+        cookie: "unrelated=must-not-forward",
+      },
+      body: "token=example-secret",
+    }), { APP: app.binding });
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "https://public.example/review");
+    assert.match(response.headers.get("set-cookie") || "", /gacha_review_admin=session-value/);
+    assert.equal(app.calls.length, 1);
+    assert.equal(app.calls[0].pathname, "/review/login");
+    assert.equal(app.calls[0].method, "POST");
+    assert.equal(app.calls[0].cookie, null);
+    assert.equal(app.calls[0].authorization, null);
+    assert.equal(app.calls[0].contentType, "application/x-www-form-urlencoded");
+    assert.equal(app.calls[0].body, "token=example-secret");
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test("review logout POST forwards only the review session cookie and rewrites redirect", async () => {
+  const { worker, temp } = await builtWorker();
+  try {
+    const app = appBinding();
+    const response = await worker.fetch(new Request("https://public.example/review/logout", {
+      method: "POST",
+      headers: {
+        cookie: "unrelated=private; gacha_review_admin=session-value",
+      },
+    }), { APP: app.binding });
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "https://public.example/review");
+    assert.match(response.headers.get("set-cookie") || "", /Max-Age=0/);
+    assert.equal(app.calls.length, 1);
+    assert.equal(app.calls[0].pathname, "/review/logout");
+    assert.equal(app.calls[0].method, "POST");
+    assert.equal(app.calls[0].cookie, "gacha_review_admin=session-value");
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }
@@ -159,6 +276,8 @@ test("public Worker source is dependency-free from vinext React Next and Supabas
     "next/",
     "@supabase/supabase-js",
     "SUPABASE_SERVICE_ROLE_KEY",
+    "REVIEW_ADMIN_TOKEN",
+    "ADMIN_REVIEW_TOKEN",
     "select=*",
   ]) {
     assert.equal(source.includes(forbidden), false, `forbidden public bootstrap dependency/token: ${forbidden}`);
