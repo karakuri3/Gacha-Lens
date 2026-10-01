@@ -78,7 +78,7 @@ jobs:
           }
           NODE
 
-      - name: Verify patched undici lock resolution
+      - name: Verify patched security lock resolutions
         shell: bash
         run: |
           set -euo pipefail
@@ -87,19 +87,10 @@ jobs:
 
           const toolchain = JSON.parse(fs.readFileSync(".github/vinext-toolchain/package.json", "utf8"));
           const lock = JSON.parse(fs.readFileSync(".github/vinext-toolchain/package-lock.json", "utf8"));
-          const override = toolchain.overrides?.undici;
-          const resolved = lock.packages?.["node_modules/undici"]?.version;
-          const miniflare = lock.packages?.["node_modules/miniflare"];
 
-          if (!override) throw new Error("Missing fail-closed undici override in locked vinext toolchain.");
-          if (!resolved) throw new Error("Locked vinext toolchain does not resolve undici.");
-          if (resolved !== override) {
-            throw new Error(`undici override/lock mismatch: override=${override}, lock=${resolved}. Regenerate package-lock.json with npm instead of hand-editing it.`);
-          }
-
-          const parseVersion = (version) => {
-            const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
-            if (!match) throw new Error(`Unexpected undici version format: ${version}`);
+          const parseVersion = (version, label) => {
+            const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version || "");
+            if (!match) throw new Error(`Unexpected ${label} version format: ${version}`);
             return match.slice(1).map(Number);
           };
           const compare = (left, right) => {
@@ -109,15 +100,36 @@ jobs:
             return 0;
           };
 
-          const actual = parseVersion(resolved);
-          const affectedFloor = [7, 28, 0];
-          const patchedFloor = [7, 29, 1];
-          if (actual[0] === 7 && compare(actual, affectedFloor) >= 0 && compare(actual, patchedFloor) < 0) {
-            throw new Error(`GHSA-3wwx-pv8p-q78v vulnerable undici remains locked: ${resolved}`);
+          const undiciOverride = toolchain.overrides?.undici;
+          const undiciResolved = lock.packages?.["node_modules/undici"]?.version;
+          const miniflare = lock.packages?.["node_modules/miniflare"];
+          if (!undiciOverride) throw new Error("Missing fail-closed undici override in locked vinext toolchain.");
+          if (!undiciResolved) throw new Error("Locked vinext toolchain does not resolve undici.");
+          if (undiciResolved !== undiciOverride) {
+            throw new Error(`undici override/lock mismatch: override=${undiciOverride}, lock=${undiciResolved}. Regenerate package-lock.json with npm instead of hand-editing it.`);
+          }
+          const undiciActual = parseVersion(undiciResolved, "undici");
+          if (undiciActual[0] === 7 && compare(undiciActual, [7, 28, 0]) >= 0 && compare(undiciActual, [7, 29, 1]) < 0) {
+            throw new Error(`GHSA-3wwx-pv8p-q78v vulnerable undici remains locked: ${undiciResolved}`);
           }
 
-          const requested = miniflare?.dependencies?.undici ?? "not-present";
-          console.log(`Patched undici lock verified: miniflare requests ${requested}; override/resolved=${resolved}.`);
+          const fastUriOverride = toolchain.overrides?.["fast-uri"];
+          const fastUriResolved = lock.packages?.["node_modules/fast-uri"]?.version;
+          const ajv = lock.packages?.["node_modules/ajv"];
+          if (!fastUriOverride) throw new Error("Missing fail-closed fast-uri override in locked vinext toolchain.");
+          if (!fastUriResolved) throw new Error("Locked vinext toolchain does not resolve fast-uri.");
+          if (fastUriResolved !== fastUriOverride) {
+            throw new Error(`fast-uri override/lock mismatch: override=${fastUriOverride}, lock=${fastUriResolved}. Regenerate package-lock.json with npm instead of hand-editing it.`);
+          }
+          const fastUriActual = parseVersion(fastUriResolved, "fast-uri");
+          if (fastUriActual[0] === 3 && compare(fastUriActual, [3, 1, 8]) < 0) {
+            throw new Error(`GHSA-hrr3-gc8f-f4qj vulnerable fast-uri remains locked: ${fastUriResolved}`);
+          }
+
+          const undiciRequested = miniflare?.dependencies?.undici ?? "not-present";
+          const fastUriRequested = ajv?.dependencies?.["fast-uri"] ?? "not-present";
+          console.log(`Patched undici lock verified: miniflare requests ${undiciRequested}; override/resolved=${undiciResolved}.`);
+          console.log(`Patched fast-uri lock verified: ajv requests ${fastUriRequested}; override/resolved=${fastUriResolved}.`);
           NODE
 
       - name: Expose locked toolchain without mutating root lockfile
