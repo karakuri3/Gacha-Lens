@@ -130,12 +130,28 @@ async function variantDetail(env, url) {
 async function sitemapSeries(env, url) {
   const limit = int(url.searchParams.get("limit"), MAX_LIMIT, 1);
   const offset = int(url.searchParams.get("offset"), 0);
-  return rest(env, "series", publicSeriesFilter({
-    select: "slug,updated_at",
+  return rest(env, "series", {
+    select: "slug,updated_at,variants!inner()",
+    "variants.variant_type": "neq.provisional",
+    "variants.series_id": "not.is.null",
+    "variants.slug": "not.eq.",
+    "variants.name": "not.eq.",
+    slug: "not.eq.",
     order: "slug.asc",
     limit,
     offset,
-  }));
+  });
+}
+
+async function scheduleMonths(env, url) {
+  const limit = int(url.searchParams.get("limit"), MAX_LIMIT, 1);
+  const offset = int(url.searchParams.get("offset"), 0);
+  return rest(env, "series", {
+    select: "id,release_date,release_month",
+    order: "id.asc",
+    limit,
+    offset,
+  });
 }
 
 async function sitemapVariants(env, url) {
@@ -188,6 +204,7 @@ export async function handlePublicDocumentData(request, env) {
     else if (url.pathname === `${PATH_PREFIX}series-detail`) value = await seriesDetail(env, url);
     else if (url.pathname === `${PATH_PREFIX}variant-detail`) value = await variantDetail(env, url);
     else if (url.pathname === `${PATH_PREFIX}sitemap-series`) value = await sitemapSeries(env, url);
+    else if (url.pathname === `${PATH_PREFIX}schedule-months`) value = await scheduleMonths(env, url);
     else if (url.pathname === `${PATH_PREFIX}sitemap-variants`) value = await sitemapVariants(env, url);
     else if (url.pathname === `${PATH_PREFIX}counts`) value = await counts(env);
     else return json({ error: "public_data_route_not_found" }, 404);
