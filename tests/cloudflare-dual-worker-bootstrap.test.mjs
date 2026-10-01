@@ -268,20 +268,40 @@ test("route ownership matrix distinguishes public, conditional, app-owned, plann
   assert.equal(classifyPhaseA2Route("/api/arbitrary-proxy"), "explicitly-rejected");
 });
 
-test("public Worker source is dependency-free from vinext React Next and Supabase clients", () => {
+test("public Worker stays dependency-free and permits only the fixed runtime Supabase secret binding", () => {
   const source = fs.readFileSync(path.join(root, "workers/public/src/index.js"), "utf8");
   for (const forbidden of [
     "vinext",
     "react",
     "next/",
     "@supabase/supabase-js",
-    "SUPABASE_SERVICE_ROLE_KEY",
     "REVIEW_ADMIN_TOKEN",
     "ADMIN_REVIEW_TOKEN",
     "select=*",
+    "eyJhbGciOi",
+    "service-role-secret",
   ]) {
-    assert.equal(source.includes(forbidden), false, `forbidden public bootstrap dependency/token: ${forbidden}`);
+    assert.equal(source.includes(forbidden), false, `forbidden public runtime dependency/credential material: ${forbidden}`);
   }
+
+  assert.doesNotMatch(
+    source,
+    /sb_secret_[A-Za-z0-9_-]{16,}/,
+    "Public Worker source must not embed an actual-looking modern Supabase secret key",
+  );
+
+    const serviceRoleReferences = source.match(/SUPABASE_SERVICE_ROLE_KEY/g) ?? [];
+  assert.equal(serviceRoleReferences.length, 1, "service-role binding name must appear exactly once");
+  assert.match(
+    source,
+    /env\?\.SUPABASE_SERVICE_ROLE_KEY/,
+    "service-role credential must be read only from the Worker runtime env binding",
+  );
+  assert.doesNotMatch(
+    source,
+    /process\.env\.SUPABASE_SERVICE_ROLE_KEY/,
+    "Public Worker must not depend on a build-time/process environment secret",
+  );
 });
 
 test("public Wrangler config binds only to existing gacha-lens App Worker and declares no custom domain yet", () => {
@@ -289,6 +309,7 @@ test("public Wrangler config binds only to existing gacha-lens App Worker and de
   assert.equal(config.name, "gacha-lens-public");
   assert.equal(config.services?.length, 1);
   assert.deepEqual(config.services[0], { binding: "APP", service: "gacha-lens" });
+  assert.deepEqual(config.compatibility_flags, ["global_fetch_strictly_public"]);
   assert.equal("routes" in config, false);
   assert.equal("route" in config, false);
   assert.equal("custom_domains" in config, false);

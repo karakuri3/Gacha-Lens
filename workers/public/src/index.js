@@ -9,6 +9,28 @@ const REVIEW_LOGIN_PATH = "/review/login";
 const REVIEW_LOGOUT_PATH = "/review/logout";
 const REVIEW_COOKIE_NAME = "gacha_review_admin";
 const INTERNAL_ORIGIN = "https://gacha-lens.internal";
+const PUBLIC_VARIANT_READ_PATH = "/api/runtime-diagnostics/public-variant-read";
+const SUPABASE_ORIGIN = "https://vxbrnvfhmzcxehuuzzum.supabase.co";
+const REPRESENTATIVE_VARIANT_SLUG = "tarts-y901096-ディズニー-マリー";
+const REPRESENTATIVE_VARIANT_SELECT = [
+  "id",
+  "slug",
+  "series_id",
+  "name",
+  "variant_type",
+  "rarity",
+  "role",
+  "image",
+  "released",
+  "price",
+  "brand",
+  "release_month",
+  "release_week",
+  "release_date",
+  "official_url",
+  "review_required",
+  "parent:series!inner(id,slug,name,franchise,brand,category,release_month,release_week,release_date,price,image_url,official_url,is_released)",
+].join(",");
 
 function releaseSourceSha() {
   return SHA_RE.test(RELEASE_SOURCE_SHA) ? RELEASE_SOURCE_SHA : null;
@@ -204,6 +226,138 @@ async function handleReviewAuthPost(request, env, url) {
   return forwardReviewToApp(request, env, `${url.pathname}${url.search}`, sessionCookie);
 }
 
+function publicDataSecret(env) {
+  return String(env?.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+}
+
+function representativeVariantReadUrl() {
+  const target = new URL("/rest/v1/variants", SUPABASE_ORIGIN);
+  target.searchParams.set("select", REPRESENTATIVE_VARIANT_SELECT);
+  target.searchParams.set("slug", `eq.${REPRESENTATIVE_VARIANT_SLUG}`);
+  target.searchParams.set("or", "(variant_type.is.null,variant_type.neq.provisional)");
+  target.searchParams.set("series_id", "not.is.null");
+  target.searchParams.set("name", "not.is.null");
+  target.searchParams.set("limit", "1");
+  return target;
+}
+
+function publicVariantReadHeaders(secret) {
+  const headers = new Headers({
+    Accept: "application/json",
+    apikey: secret,
+    "Accept-Profile": "public",
+    "User-Agent": "GachaLens-PublicWorker-DataRead",
+  });
+  if (!secret.startsWith("sb_secret_")) {
+    headers.set("Authorization", `Bearer ${secret}`);
+  }
+  return headers;
+}
+
+function publicVariantReadResult(row) {
+  const parent = Array.isArray(row?.parent) ? row.parent[0] : row?.parent;
+  return {
+    id: String(row?.id || ""),
+    slug: String(row?.slug || ""),
+    name: String(row?.name || ""),
+    series_id: String(row?.series_id || ""),
+    parent: parent ? {
+      id: String(parent.id || ""),
+      slug: String(parent.slug || ""),
+      name: String(parent.name || ""),
+    } : null,
+  };
+}
+
+async function publicVariantReadDiagnostic(request, env) {
+  const sourceSha = releaseSourceSha();
+  if (!sourceSha) {
+    return jsonResponse(request, { error: "public_source_identity_unavailable" }, 503);
+  }
+
+  const secret = publicDataSecret(env);
+  if (!secret) {
+    return jsonResponse(request, {
+      error: "public_data_secret_unavailable",
+      plane: "public",
+      source_sha: sourceSha,
+    }, 503, {
+      "X-Gacha-Plane": "public",
+      "X-Gacha-Route": "public-variant-read-fixed-v1",
+      "X-Gacha-External-Subrequests": "0",
+    });
+  }
+
+  let upstream;
+  try {
+    upstream = await fetch(representativeVariantReadUrl(), {
+      method: "GET",
+      headers: publicVariantReadHeaders(secret),
+      redirect: "error",
+    });
+  } catch {
+    return jsonResponse(request, {
+      error: "public_data_upstream_unavailable",
+      plane: "public",
+      source_sha: sourceSha,
+    }, 502, {
+      "X-Gacha-Plane": "public",
+      "X-Gacha-Route": "public-variant-read-fixed-v1",
+      "X-Gacha-External-Subrequests": "1",
+    });
+  }
+
+  if (upstream.status !== 200) {
+    return jsonResponse(request, {
+      error: "public_data_upstream_http_failure",
+      plane: "public",
+      source_sha: sourceSha,
+      upstream_status: upstream.status,
+    }, 502, {
+      "X-Gacha-Plane": "public",
+      "X-Gacha-Route": "public-variant-read-fixed-v1",
+      "X-Gacha-External-Subrequests": "1",
+    });
+  }
+
+  const rows = await upstream.json().catch(() => null);
+  if (!Array.isArray(rows)) {
+    return jsonResponse(request, {
+      error: "public_data_upstream_invalid_json",
+      plane: "public",
+      source_sha: sourceSha,
+    }, 502, {
+      "X-Gacha-Plane": "public",
+      "X-Gacha-Route": "public-variant-read-fixed-v1",
+      "X-Gacha-External-Subrequests": "1",
+    });
+  }
+
+  if (!rows[0]) {
+    return jsonResponse(request, {
+      error: "representative_variant_not_found",
+      plane: "public",
+      source_sha: sourceSha,
+    }, 404, {
+      "X-Gacha-Plane": "public",
+      "X-Gacha-Route": "public-variant-read-fixed-v1",
+      "X-Gacha-External-Subrequests": "1",
+    });
+  }
+
+  return jsonResponse(request, {
+    ok: true,
+    plane: "public",
+    source_sha: sourceSha,
+    route_contract: "public-variant-read-fixed-v1",
+    representative: publicVariantReadResult(rows[0]),
+  }, 200, {
+    "X-Gacha-Plane": "public",
+    "X-Gacha-Route": "public-variant-read-fixed-v1",
+    "X-Gacha-External-Subrequests": "1",
+  });
+}
+
 async function readAppSourceSha(env) {
   if (!appBindingAvailable(env)) {
     return { ok: false, status: 503, error: "app_binding_unavailable", sourceSha: null };
@@ -293,6 +447,10 @@ export default {
         app_binding: "APP",
         route_contract: "phase-a2-bootstrap",
       }, sourceSha ? 200 : 503);
+    }
+
+    if (url.pathname === PUBLIC_VARIANT_READ_PATH) {
+      return publicVariantReadDiagnostic(request, env);
     }
 
     return appDelegationDiagnostic(request, env);
