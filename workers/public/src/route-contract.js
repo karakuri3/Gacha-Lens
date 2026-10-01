@@ -48,4 +48,11 @@ export function classifyPublicRoute(pathname) {
 export const PUBLIC_BOOTSTRAP_OWNED_PATHS = PUBLIC_DIAGNOSTIC_PATHS;
 export const CONDITIONAL_PUBLIC_PATHS = Object.freeze(["/review"]);
 export const PLANNED_PUBLIC_DOCUMENT_PATHS = PUBLIC_DOCUMENT_EXACT_PATHS;
-export const classifyPhaseA2Route = classifyPublicRoute;
+export function classifyPhaseA2Route(pathname) {
+  const current = classifyPublicRoute(pathname);
+  if (current === "public-diagnostic") return "public-owned";
+  if (pathname === "/review") return "conditional";
+  if (current === "app-owned") return "app-owned";
+  if (current === "public-document") return "planned-public";
+  return "explicitly-rejected";
+}
