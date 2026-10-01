@@ -140,6 +140,12 @@ export default {
     const url = new URL(request.url);
     const ownership = classifyPublicRoute(url.pathname);
 
+    // Preserve the full interactive catalog contract without turning the canonical
+    // no-query public document into a catch-all App proxy.
+    if (url.pathname === "/series" && url.searchParams.size > 0) {
+      return delegateAppOwned(request, env);
+    }
+
     if (ownership === "public-diagnostic" && PUBLIC_DIAGNOSTIC_PATHS.includes(url.pathname)) {
       return publicDiagnostic(request, env, url.pathname);
     }
