@@ -68,6 +68,10 @@ test("public documents render in Public Worker and never proxy same document pat
       assert.equal(response.headers.get("x-gacha-public-plane"), "phase-a3");
       const body = await response.text();
       assert.match(body, /<link rel="canonical"/);
+      if (route.startsWith("/series/")) {
+        assert.match(body, /application\/ld\+json/);
+        assert.match(body, /BreadcrumbList/);
+      }
       const calls = app.calls.slice(before);
       assert.ok(calls.length >= 1);
       assert.ok(calls.every((call) => call.path.startsWith("/__public-data/v1/")), JSON.stringify(calls));
