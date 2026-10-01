@@ -129,7 +129,7 @@ async function renderSchedule(request, env, url) {
   }));
 }
 
-async function renderSeriesDetail(request, env, slug) {
+async function renderSeriesGroupDetail(request, env, slug) {
   const payload = await readData(env, "/__public-data/v1/series-detail", { slug }).catch((error) => {
     if (String(error?.message).includes("public_data_http_404")) return null;
     throw error;
@@ -138,7 +138,7 @@ async function renderSeriesDetail(request, env, slug) {
     return htmlResponse(request, htmlDocument({
       title: "商品が見つかりません | Gacha Lens",
       description: "指定されたガチャシリーズは見つかりませんでした。",
-      pathname: `/series/${slug}`,
+      pathname: `/series/group/${slug}`,
       body: "<h1>商品が見つかりません</h1>",
       robots: "noindex,follow",
     }), 404, 60);
@@ -152,6 +152,31 @@ async function renderSeriesDetail(request, env, slug) {
   return htmlResponse(request, htmlDocument({
     title: `${item.name} | Gacha Lens`,
     description: `${item.name}の発売情報とラインナップを確認できます。`,
+    pathname: `/series/group/${slug}`,
+    body,
+  }), 200, 300);
+}
+
+async function renderVariantDetail(request, env, slug) {
+  const payload = await readData(env, "/__public-data/v1/variant-detail", { slug }).catch((error) => {
+    if (String(error?.message).includes("public_data_http_404")) return null;
+    throw error;
+  });
+  if (!payload) {
+    return htmlResponse(request, htmlDocument({
+      title: "商品が見つかりません | Gacha Lens",
+      description: "指定されたガチャ商品は見つかりませんでした。",
+      pathname: `/series/${slug}`,
+      body: "<h1>商品が見つかりません</h1>",
+      robots: "noindex,follow",
+    }), 404, 60);
+  }
+  const item = payload.variant;
+  const parent = payload.series;
+  const body = `<article><h1>${escapeHtml(item.name)}</h1><p><a href="/series/group/${encodeURIComponent(parent.slug)}">${escapeHtml(parent.name)}</a></p><p>${escapeHtml([item.brand || parent.brand, item.rarity, item.release_date || item.release_month].filter(Boolean).join(" / "))}</p>${item.official_url ? `<p><a rel="nofollow noopener" href="${escapeHtml(item.official_url)}">公式情報</a></p>` : ""}</article>`;
+  return htmlResponse(request, htmlDocument({
+    title: `${item.name} | Gacha Lens`,
+    description: `${item.name}の発売情報・シリーズ情報を確認できます。`,
     pathname: `/series/${slug}`,
     body,
   }), 200, 300);
@@ -206,7 +231,9 @@ export async function renderPublicDocument(request, env) {
   if (url.pathname === "/variant-sitemap.xml") return renderVariantSitemapIndex(request, env);
   const shard = /^\/variant-sitemap\/([1-9]\d*)$/.exec(url.pathname);
   if (shard) return renderVariantSitemapPage(request, env, Number(shard[1]));
+  const groupDetail = /^\/series\/group\/([^/]+)$/.exec(url.pathname);
+  if (groupDetail) return renderSeriesGroupDetail(request, env, decodeURIComponent(groupDetail[1]));
   const detail = /^\/series\/([^/]+)$/.exec(url.pathname);
-  if (detail) return renderSeriesDetail(request, env, decodeURIComponent(detail[1]));
+  if (detail) return renderVariantDetail(request, env, decodeURIComponent(detail[1]));
   return null;
 }
