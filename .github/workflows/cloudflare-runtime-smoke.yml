@@ -577,7 +577,6 @@ jobs:
             'home|/|Gacha Lens'
             'series|/series|ガチャ一覧'
             'schedule|/schedule?month=2026-10|2026-10'
-            'variant_detail|/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC|ディズニー マリー'
             'robots|/robots.txt|Sitemap: https://gachalens.com/sitemap.xml'
             'sitemap|/sitemap.xml|<loc>https://gachalens.com/'
             'series_sitemap|/series-sitemap.xml|<loc>https://gachalens.com/series/'
@@ -589,6 +588,13 @@ jobs:
               IFS='|' read -r name path needle <<<"$spec"
               request_public_document "$pass" "$name" "$path" "$needle"
             done
+
+            series_detail_path="$(grep -Eo 'href="/series/group/[^"]+"' "$tmp/${pass}-series.body" | head -1 | sed -E 's/^href="([^"]+)"/\1/')"
+            [[ -n "$series_detail_path" ]] || {
+              echo "${pass} series index did not expose a Public-owned parent-series detail link." >&2
+              exit 1
+            }
+            request_public_document "$pass" series_detail "$series_detail_path" '<article><h1'
           done
 
           if grep -R -E 'HTTP (429|500|502|503|504)' "$GITHUB_STEP_SUMMARY" >/dev/null 2>&1; then
@@ -629,7 +635,14 @@ jobs:
           compare_canonical home '/'
           compare_canonical series '/series'
           compare_canonical schedule '/schedule?month=2026-10'
-          compare_canonical variant_detail '/series/tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
+
+          curl --fail --silent --show-error --max-time 60 -H 'Accept: text/html' "${PUBLIC_PREVIEW_URL}/series" > "$tmp/series-for-detail"
+          series_detail_path="$(grep -Eo 'href="/series/group/[^"]+"' "$tmp/series-for-detail" | head -1 | sed -E 's/^href="([^"]+)"/\1/')"
+          [[ -n "$series_detail_path" ]] || {
+            echo 'Public series index did not expose a parent-series detail for parity audit.' >&2
+            exit 1
+          }
+          compare_canonical series_detail "$series_detail_path"
 
           curl --fail --silent --show-error --max-time 60 "${PUBLIC_PREVIEW_URL}/robots.txt" > "$tmp/robots.preview"
           curl --fail --silent --show-error --max-time 60 'https://gachalens.com/robots.txt' > "$tmp/robots.production"
