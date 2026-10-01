@@ -107,7 +107,7 @@ function scheduleText(item) {
 
 function seriesCards(rows) {
   if (!rows.length) return "<p>公開中の商品情報を準備しています。</p>";
-  return `<ul>${rows.map((item) => `<li><a href="/series/${encodeURIComponent(item.slug)}"><strong>${escapeHtml(item.name)}</strong></a><div>${escapeHtml([item.brand, item.category, scheduleText(item)].filter(Boolean).join(" / "))}</div></li>`).join("")}</ul>`;
+  return `<ul>${rows.map((item) => `<li><a href="/series/group/${encodeURIComponent(item.slug)}"><strong>${escapeHtml(item.name)}</strong></a><div>${escapeHtml([item.brand, item.category, scheduleText(item)].filter(Boolean).join(" / "))}</div></li>`).join("")}</ul>`;
 }
 
 async function renderHome(request, env) {
