@@ -622,7 +622,9 @@ jobs:
             preview_canonical="$(grep -Eo '<link rel="canonical" href="[^"]+"' "$preview" | head -1 | sed -E 's/.*href="([^"]+)"/\1/')"
             production_canonical="$(grep -Eo '<link rel="canonical" href="[^"]+"' "$production" | head -1 | sed -E 's/.*href="([^"]+)"/\1/')"
 
-            [[ -n "$preview_canonical" && "$preview_canonical" == "$production_canonical" ]] || {
+            preview_canonical_normalized="${preview_canonical%/}"
+            production_canonical_normalized="${production_canonical%/}"
+            [[ -n "$preview_canonical" && "$preview_canonical_normalized" == "$production_canonical_normalized" ]] || {
               echo "${name} canonical mismatch: Public=${preview_canonical:-missing}; Production=${production_canonical:-missing}" >&2
               exit 1
             }
