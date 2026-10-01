@@ -35,6 +35,7 @@ export function classifyPublicRoute(pathname) {
   if (PUBLIC_DIAGNOSTIC_PATHS.includes(path)) return "public-diagnostic";
   if (PUBLIC_DOCUMENT_EXACT_PATHS.includes(path)
       || /^\/series\/[^/]+$/.test(path)
+      || /^\/series\/group\/[^/]+$/.test(path)
       || /^\/variant-sitemap\/[1-9]\d*$/.test(path)) {
     return "public-document";
   }
