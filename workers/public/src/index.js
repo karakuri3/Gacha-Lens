@@ -168,6 +168,6 @@ export default {
       return delegateAppOwned(request, env);
     }
 
-    return jsonResponse(request, { error: "route_not_owned_by_public_worker" }, 404);
+    return jsonResponse(request, { error: "route_not_owned_by_public_bootstrap" }, 404);
   },
 };
