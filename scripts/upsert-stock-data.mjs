@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { officialProducts, officialSchedule } from "../lib/data/official-input.js";
+import {
+  contractFromNormalizedStockRecord,
+  resolveStockEvidenceTarget,
+} from "../lib/domain/stock-evidence-contract.js";
 import { getGeneratedDataPath } from "./generated-paths.mjs";
 import { loadOfficialCatalog } from "./load-official-catalog.mjs";
 import { includeStaticSampleData, productionRecords } from "./nonproduction-data.mjs";
@@ -24,11 +28,17 @@ const stockReportsRaw = productionRecords(loadedStockRaw.stockReportsRaw);
 const restockRows = restockEventsRaw.map((raw) => normalizeRestockEvent(raw, catalog));
 const stockRows = stockReportsRaw.map((raw) => normalizeStockReport(raw, catalog));
 const referenceIds = await loadReferenceIds();
-const dbRestockRows = restockRows.map((row) => applyDbReferenceSafety(row, referenceIds));
-const dbStockRows = stockRows.map((row) => applyDbReferenceSafety(row, referenceIds));
+const restockPersistence = restockRows.map((row) => prepareForPersistence(row, referenceIds));
+const stockPersistence = stockRows.map((row) => prepareForPersistence(row, referenceIds));
+const dbRestockRows = restockPersistence.filter((entry) => entry.persist).map((entry) => entry.row);
+const dbStockRows = stockPersistence.filter((entry) => entry.persist).map((entry) => entry.row);
 const issueRows = [
-  ...dbRestockRows.filter((row) => row.review_required).map((row) => createImportIssue("restock_events", row.raw, "unknown_variant", row.id)),
-  ...dbStockRows.filter((row) => row.review_required).map((row) => createImportIssue("stock_reports", row.raw, "unknown_variant", row.id)),
+  ...restockPersistence
+    .filter((entry) => entry.row.review_required || !entry.persist)
+    .map((entry) => createImportIssue("restock_events", entry.row.raw, entry.reason || reviewReason(entry.row, "restock"), entry.row.id)),
+  ...stockPersistence
+    .filter((entry) => entry.row.review_required || !entry.persist)
+    .map((entry) => createImportIssue("stock_reports", entry.row.raw, entry.reason || reviewReason(entry.row, "stock"), entry.row.id)),
 ];
 
 await upsertRows("restock_events", dbRestockRows, { label: "upsert-stock" });
@@ -39,7 +49,7 @@ const restockLinked = restockRows.filter((row) => row.variant_id).length;
 const stockLinked = stockRows.filter((row) => row.variant_id).length;
 const savedRestockLinked = dbRestockRows.filter((row) => row.variant_id).length;
 const savedStockLinked = dbStockRows.filter((row) => row.variant_id).length;
-const reviewRequired = [...dbRestockRows, ...dbStockRows].filter((row) => row.review_required).length;
+const reviewRequired = [...restockPersistence, ...stockPersistence].filter((entry) => entry.row.review_required).length;
 
 console.log(JSON.stringify({
   ok: true,
@@ -63,23 +73,31 @@ console.log(JSON.stringify({
     total: savedRestockLinked + savedStockLinked,
   },
   reviewRequired,
+  persistenceBlocked: {
+    restock: restockPersistence.filter((entry) => !entry.persist).length,
+    stock: stockPersistence.filter((entry) => !entry.persist).length,
+    reasons: countReasons([...restockPersistence, ...stockPersistence].filter((entry) => !entry.persist)),
+  },
   restockBreakdown: countBy(dbRestockRows, "event_type"),
   stockBreakdown: countBy(dbStockRows, "status"),
 }, null, 2));
 
 function normalizeRestockEvent(raw, catalog) {
-  const variant = resolveVariant(raw, catalog);
-  const sourceType = normalizeSourceType(raw.source_type || raw.sourceType || raw.source);
+  const { contract, resolution } = resolveEvidence(raw, catalog);
+  const variant = resolution.variant;
+  const series = resolution.series;
+  const sourceType = normalizeSourceType(raw.source_type || raw.sourceType || raw.source || contract.provenance?.source_type);
   const classification = inferRestockEvent(raw);
-  const reviewRequired = !variant || classification.event_type === "unknown";
+  const reviewRequired = contract.review_required || resolution.review_required || classification.event_type === "unknown";
+  const sourceWeight = SOURCE_WEIGHTS[sourceType] ?? SOURCE_WEIGHTS.user_x;
 
   return {
-    id: text(raw.id) || stableId("restock", variant?.id || raw.variant_id, raw.reported_at, raw.shop_name),
+    id: text(raw.id) || stableId("restock", variant?.id || contract.local_identity.variant_id, contract.provider_reported_at || contract.provider_updated_at, raw.shop_name),
     variant_id: variant?.id || null,
     matched_variant_id: variant?.id || null,
-    series_id: variant?.series_id || null,
+    series_id: series?.id || variant?.series_id || null,
     source_type: sourceType,
-    source_weight: SOURCE_WEIGHTS[sourceType] ?? SOURCE_WEIGHTS.user_x,
+    source_weight: sourceWeight,
     event_type: classification.event_type,
     event_label: classification.event_label,
     classification_reason: classification.reason,
@@ -87,27 +105,30 @@ function normalizeRestockEvent(raw, catalog) {
     text: text(raw.text || raw.body || raw.title || raw.status),
     region: text(raw.region),
     shop_name: text(raw.shop_name || raw.shopName),
-    source_url: text(raw.source_url || raw.url),
-    reported_at: nullableText(raw.reported_at || raw.created_at || raw.createdAt),
-    confidence: reviewRequired ? 0.25 : (SOURCE_WEIGHTS[sourceType] ?? SOURCE_WEIGHTS.user_x),
+    source_url: contract.source_url || text(raw.source_url || raw.url),
+    reported_at: contract.provider_reported_at || contract.provider_updated_at || nullableText(raw.reported_at || raw.created_at || raw.createdAt),
+    confidence: reviewRequired ? Math.min(contract.confidence ?? 0.25, 0.25) : (contract.confidence ?? sourceWeight),
     review_required: reviewRequired,
-    raw,
+    raw: attachEvidenceResolution(raw, contract, resolution),
   };
 }
 
 function normalizeStockReport(raw, catalog) {
-  const variant = resolveVariant(raw, catalog);
-  const sourceType = normalizeSourceType(raw.source_type || raw.sourceType || raw.source);
+  const { contract, resolution } = resolveEvidence(raw, catalog);
+  const variant = resolution.variant;
+  const series = resolution.series;
+  const sourceType = normalizeSourceType(raw.source_type || raw.sourceType || raw.source || contract.provenance?.source_type);
   const classification = inferStockReport(raw);
-  const reviewRequired = !variant || classification.status === "unknown";
+  const reviewRequired = contract.review_required || resolution.review_required || classification.status === "unknown";
+  const sourceWeight = SOURCE_WEIGHTS[sourceType] ?? SOURCE_WEIGHTS.user_x;
 
   return {
-    id: text(raw.id) || stableId("stock", variant?.id || raw.variant_id, raw.reported_at, raw.shop_name),
+    id: text(raw.id) || stableId("stock", variant?.id || contract.local_identity.variant_id, contract.provider_reported_at || contract.provider_updated_at, raw.shop_name),
     variant_id: variant?.id || null,
     matched_variant_id: variant?.id || null,
-    series_id: variant?.series_id || null,
+    series_id: series?.id || variant?.series_id || null,
     source_type: sourceType,
-    source_weight: SOURCE_WEIGHTS[sourceType] ?? SOURCE_WEIGHTS.user_x,
+    source_weight: sourceWeight,
     status: classification.status,
     status_label: text(raw.status_label || raw.status) || classification.status_label,
     classification_reason: classification.reason,
@@ -115,11 +136,35 @@ function normalizeStockReport(raw, catalog) {
     text: text(raw.text || raw.body || raw.title || raw.status),
     region: text(raw.region),
     shop_name: text(raw.shop_name || raw.shopName),
-    source_url: text(raw.source_url || raw.url),
-    reported_at: nullableText(raw.reported_at || raw.created_at || raw.createdAt),
-    confidence: reviewRequired ? 0.25 : (SOURCE_WEIGHTS[sourceType] ?? SOURCE_WEIGHTS.user_x),
+    source_url: contract.source_url || text(raw.source_url || raw.url),
+    reported_at: contract.provider_reported_at || contract.provider_updated_at || nullableText(raw.reported_at || raw.created_at || raw.createdAt),
+    confidence: reviewRequired ? Math.min(contract.confidence ?? 0.25, 0.25) : (contract.confidence ?? sourceWeight),
     review_required: reviewRequired,
-    raw,
+    raw: attachEvidenceResolution(raw, contract, resolution),
+  };
+}
+
+function resolveEvidence(raw, catalog) {
+  const contract = contractFromNormalizedStockRecord(raw);
+  const resolution = resolveStockEvidenceTarget(contract, catalog);
+  return { contract, resolution };
+}
+
+function attachEvidenceResolution(raw, contract, resolution) {
+  return {
+    ...raw,
+    stock_contract: contract,
+    stock_contract_resolution: {
+      evidence_scope: resolution.evidence_scope,
+      reason: resolution.reason,
+      persistence_blocked: Boolean(resolution.persistence_blocked),
+      review_required: Boolean(resolution.review_required),
+      supplied_series_id: contract.local_identity.series_id,
+      supplied_variant_id: contract.local_identity.variant_id,
+      resolved_series_id: resolution.series?.id ?? null,
+      resolved_variant_id: resolution.variant?.id ?? null,
+      candidate_variant_ids: resolution.candidate_variant_ids ?? [],
+    },
   };
 }
 
@@ -155,24 +200,47 @@ function inferStockReport(raw) {
   return { status: "unknown", status_label: "unknown", reason: body ? "no_stock_keyword" : "empty_text", keywords: [] };
 }
 
-function resolveVariant(raw, catalog) {
-  const explicit = text(raw.variant_id || raw.variantId);
-  if (explicit && catalog.variantById.has(explicit)) return catalog.variantById.get(explicit);
-
-  const body = normalize(`${raw.text || raw.body || raw.title || raw.name || ""}`);
-  if (!body) return null;
-
-  return catalog.variants.find((variant) => {
-    return [variant.name, variant.slug].filter(Boolean).map(normalize).some((term) => term && body.includes(term));
-  }) ?? null;
-}
-
 async function loadReferenceIds() {
   const [seriesIds, variantIds] = await Promise.all([
     fetchIdSetSafe("series", "upsert-stock"),
     fetchIdSetSafe("variants", "upsert-stock"),
   ]);
   return { seriesIds, variantIds };
+}
+
+function prepareForPersistence(row, referenceIds) {
+  const resolution = row.raw?.stock_contract_resolution ?? {};
+  if (resolution.persistence_blocked) {
+    return {
+      persist: false,
+      row: {
+        ...row,
+        review_required: true,
+        confidence: Math.min(row.confidence ?? 0.25, 0.25),
+      },
+      reason: resolution.reason || "stock_contract_persistence_blocked",
+    };
+  }
+
+  const safeRow = applyDbReferenceSafety(row, referenceIds);
+  return {
+    persist: true,
+    row: safeRow,
+    reason: safeRow.raw?.db_reference_missing ? "db_reference_missing" : (safeRow.review_required ? reviewReason(safeRow) : null),
+  };
+}
+
+function reviewReason(row, kind = "stock") {
+  const resolutionReason = row.raw?.stock_contract_resolution?.reason;
+  if (resolutionReason && resolutionReason !== "resolved_variant" && resolutionReason !== "legacy_text_variant_match") {
+    return resolutionReason;
+  }
+  const contractReason = row.raw?.stock_contract?.review_reasons?.[0];
+  if (contractReason) return contractReason;
+  if (kind === "restock" && row.event_type === "unknown") return "unknown_restock_state";
+  if (kind === "stock" && row.status === "unknown") return "unknown_stock_state";
+  if (!row.variant_id) return "unknown_variant";
+  return "review_required";
 }
 
 function applyDbReferenceSafety(row, referenceIds) {
@@ -208,12 +276,30 @@ function createImportIssue(tableName, raw, issueType, recordId) {
     issue_type: issueType,
     table_name: tableName,
     record_id: recordId || raw.id || "",
-    source: raw.source_type || raw.sourceType || "user_x",
-    source_url: raw.source_url || raw.url || "",
+    source: raw.source_type || raw.sourceType || raw.provenance?.source_type || "user_x",
+    source_url: raw.source_url || raw.url || raw.stock_contract?.source_url || "",
     raw,
     resolved: false,
-    note: "variant_id に自動紐付けできないため、人間の確認対象として保持",
+    note: importIssueNote(issueType),
   };
+}
+
+function importIssueNote(issueType) {
+  const notes = {
+    series_level_persistence_unsupported: "series-level stock evidence is preserved in the normalized contract but cannot be published through the current variant-oriented stock persistence path",
+    provider_identity_unresolved: "provider product/store identity is preserved, but no local series/variant identity is approved yet",
+    invalid_series_id: "supplied series_id does not exist in the official catalog; no fallback mapping was attempted",
+    invalid_variant_id: "supplied variant_id does not exist in the official catalog; no text fallback was attempted",
+    variant_series_mismatch: "supplied series_id and variant_id disagree with the official catalog",
+    ambiguous_variant_text: "multiple variants match the legacy text; arbitrary first-match selection is forbidden",
+    db_reference_missing: "resolved local identity is missing from current DB references; row was not persisted",
+    missing_provider_timestamp: "provider evidence is missing a reported/updated timestamp",
+    missing_provenance: "provider evidence is missing provenance",
+    unknown_stock_state: "stock state could not be classified",
+    unknown_restock_state: "restock state could not be classified",
+    unknown_variant: "variant_id could not be deterministically resolved",
+  };
+  return notes[issueType] || "stock evidence requires human review before it can be trusted for publication";
 }
 
 function buildOfficialCatalog(rows) {
@@ -279,6 +365,14 @@ function loadGeneratedStockRaw() {
   };
 }
 
+function countReasons(entries) {
+  return entries.reduce((counts, entry) => {
+    const reason = entry.reason || "stock_contract_persistence_blocked";
+    counts[reason] = (counts[reason] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
 function countBy(rows, key) {
   return rows.reduce((counts, row) => {
     const value = row[key] || "unknown";
@@ -319,12 +413,6 @@ function stableId(...parts) {
   return parts.filter(Boolean).map((part) => String(part).replace(/[^a-zA-Z0-9_-]+/g, "-")).join("-").slice(0, 120);
 }
 
-function normalize(value = "") {
-  return String(value)
-    .trim()
-    .toLowerCase()
-    .replace(/[（）()・･\s_-]+/g, "");
-}
 
 function normalizeSignal(value = "") {
   return String(value).trim().toLowerCase().replace(/[\s_・･-]+/g, "");
