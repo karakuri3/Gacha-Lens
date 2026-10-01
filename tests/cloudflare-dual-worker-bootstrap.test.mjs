@@ -309,6 +309,7 @@ test("public Wrangler config binds only to existing gacha-lens App Worker and de
   assert.equal(config.name, "gacha-lens-public");
   assert.equal(config.services?.length, 1);
   assert.deepEqual(config.services[0], { binding: "APP", service: "gacha-lens" });
+  assert.deepEqual(config.compatibility_flags, ["global_fetch_strictly_public"]);
   assert.equal("routes" in config, false);
   assert.equal("route" in config, false);
   assert.equal("custom_domains" in config, false);
