@@ -1,5 +1,5 @@
-import { STATIC_BRAND_FACETS, STATIC_FRANCHISE_FACETS } from "../../../lib/domain/discovery-static-manifest.js";
-import { STATIC_CATEGORY_FACETS } from "../../../lib/domain/category-static-manifest.js";
+import { STATIC_BRAND_FACETS, STATIC_FRANCHISE_FACETS } from "./discovery-static-manifest.js";
+import { STATIC_CATEGORY_FACETS } from "./category-static-manifest.js";
 
 const SITE_ORIGIN = "https://gachalens.com";
 const DATA_ORIGIN = "https://gacha-lens.internal";
