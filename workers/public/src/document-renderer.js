@@ -1,3 +1,6 @@
+import { STATIC_BRAND_FACETS, STATIC_FRANCHISE_FACETS } from "../../../lib/domain/discovery-static-manifest.js";
+import { STATIC_CATEGORY_FACETS } from "../../../lib/domain/category-static-manifest.js";
+
 const SITE_ORIGIN = "https://gachalens.com";
 const DATA_ORIGIN = "https://gacha-lens.internal";
 const MAX_SERIES_SITEMAP_PAGES = 20;
@@ -108,7 +111,7 @@ async function renderSeries(request, env) {
   const body = `<h1>ガチャ一覧</h1><p>公式情報をもとに公開中のガチャシリーズを掲載しています。</p>${seriesCards(rows)}`;
   return htmlResponse(request, htmlDocument({
     title: "ガチャ一覧 | Gacha Lens",
-    description: "ガチャシリーズを発売時期・ブランド・カテゴリ情報とあわせて確認できます。",
+    description: "商品名・作品名・シリーズ名・カテゴリ・発売月から、公開中のガチャを探せます。",
     pathname: "/series",
     body,
   }), 200, 300);
@@ -150,8 +153,8 @@ async function renderSeriesGroupDetail(request, env, slug) {
     : "<p>公開可能なバリエーション情報はありません。</p>";
   const body = `<article><h1>${escapeHtml(item.name)}</h1><p>${escapeHtml([item.brand, item.category, scheduleText(item)].filter(Boolean).join(" / "))}</p><section><h2>ラインナップ</h2>${variantsHtml}</section>${item.official_url ? `<p><a rel="nofollow noopener" href="${escapeHtml(item.official_url)}">公式情報</a></p>` : ""}</article>`;
   return htmlResponse(request, htmlDocument({
-    title: `${item.name} | Gacha Lens`,
-    description: `${item.name}の発売情報とラインナップを確認できます。`,
+    title: `${item.name} シリーズ | Gacha Lens`,
+    description: `${item.name}のラインナップ、定価、発売情報を確認できます。`,
     pathname: `/series/group/${slug}`,
     body,
   }), 200, 300);
@@ -176,7 +179,7 @@ async function renderVariantDetail(request, env, slug) {
   const body = `<article><h1>${escapeHtml(item.name)}</h1><p><a href="/series/group/${encodeURIComponent(parent.slug)}">${escapeHtml(parent.name)}</a></p><p>${escapeHtml([item.brand || parent.brand, item.rarity, item.release_date || item.release_month].filter(Boolean).join(" / "))}</p>${item.official_url ? `<p><a rel="nofollow noopener" href="${escapeHtml(item.official_url)}">公式情報</a></p>` : ""}</article>`;
   return htmlResponse(request, htmlDocument({
     title: `${item.name} | Gacha Lens`,
-    description: `${item.name}の発売情報・シリーズ情報を確認できます。`,
+    description: `${item.name}の定価、発売時期、${item.released ? "価格の動きと在庫情報" : "発売前の注目度と入手情報"}を確認できます。`,
     pathname: `/series/${slug}`,
     body,
   }), 200, 300);
@@ -210,13 +213,55 @@ async function renderVariantSitemapPage(request, env, page) {
   return xmlResponse(request, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`);
 }
 
-function renderRootSitemap(request) {
-  const paths = ["/series-sitemap.xml", "/variant-sitemap.xml"];
-  return xmlResponse(request, `<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${paths.map((path) => `<sitemap><loc>${escapeXml(canonical(path))}</loc></sitemap>`).join("")}</sitemapindex>`);
+function toMonth(row) {
+  const date = String(row?.release_date || "");
+  if (/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/.test(date)) return date.slice(0, 7);
+  const month = String(row?.release_month || "");
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? month : "";
+}
+
+async function readAllScheduleMonths(env) {
+  const months = new Set();
+  for (let offset = 0; offset < 50000; offset += 1000) {
+    const rows = await readData(env, "/__public-data/v1/schedule-months", { limit: 1000, offset });
+    for (const row of rows) {
+      const month = toMonth(row);
+      if (month) months.add(month);
+    }
+    if (rows.length < 1000) break;
+  }
+  return [...months].sort();
+}
+
+function rootSitemapUrl(pathname, frequency, priority) {
+  return `<url><loc>${escapeXml(canonical(pathname))}</loc><changefreq>${frequency}</changefreq><priority>${priority}</priority></url>`;
+}
+
+async function renderRootSitemap(request, env) {
+  const staticPages = [
+    ["/","daily","1"], ["/ranking","daily","0.9"], ["/ranking/series","daily","0.85"],
+    ["/ranking/upcoming","daily","0.85"], ["/ranking/upcoming/series","daily","0.8"],
+    ["/series","daily","0.9"], ["/guides","weekly","0.7"], ["/franchises","weekly","0.8"],
+    ["/brands","weekly","0.8"], ["/categories","weekly","0.8"], ["/restocks","daily","0.8"],
+    ["/stock","daily","0.8"], ["/privacy","yearly","0.3"], ["/terms","yearly","0.3"],
+    ["/disclaimer","yearly","0.3"], ["/affiliate-disclosure","yearly","0.3"],
+    ["/operator","yearly","0.3"], ["/contact","yearly","0.3"],
+  ];
+  const guideSlugs = ["market-price","price-history","stock-restock","forecast-ranking"];
+  const months = await readAllScheduleMonths(env);
+  const entries = [
+    ...staticPages.map(([path, frequency, priority]) => rootSitemapUrl(path, frequency, priority)),
+    ...months.map((month) => rootSitemapUrl(`/schedule?month=${encodeURIComponent(month)}`, "monthly", "0.8")),
+    ...guideSlugs.map((slug) => rootSitemapUrl(`/guides/${encodeURIComponent(slug)}`, "monthly", "0.6")),
+    ...STATIC_FRANCHISE_FACETS.map((facet) => rootSitemapUrl(`/franchises/${encodeURIComponent(facet.name)}`, "weekly", "0.7")),
+    ...STATIC_BRAND_FACETS.map((facet) => rootSitemapUrl(`/brands/${encodeURIComponent(facet.name)}`, "weekly", "0.7")),
+    ...STATIC_CATEGORY_FACETS.map((facet) => rootSitemapUrl(`/categories/${encodeURIComponent(facet.name)}`, "weekly", "0.7")),
+  ];
+  return xmlResponse(request, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${entries.join("")}</urlset>`);
 }
 
 function renderRobots(request) {
-  return textResponse(request, `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /review/\nSitemap: ${canonical("/sitemap.xml")}\n`);
+  return textResponse(request, `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /review/\nDisallow: /supabase-series\nSitemap: ${canonical("/sitemap.xml")}\nSitemap: ${canonical("/series-sitemap.xml")}\nSitemap: ${canonical("/variant-sitemap.xml")}\nHost: ${canonical("/")}\n`);
 }
 
 export async function renderPublicDocument(request, env) {
@@ -226,7 +271,7 @@ export async function renderPublicDocument(request, env) {
   if (url.pathname === "/series") return renderSeries(request, env);
   if (url.pathname === "/schedule") return renderSchedule(request, env, url);
   if (url.pathname === "/robots.txt") return renderRobots(request);
-  if (url.pathname === "/sitemap.xml") return renderRootSitemap(request);
+  if (url.pathname === "/sitemap.xml") return renderRootSitemap(request, env);
   if (url.pathname === "/series-sitemap.xml") return renderSeriesSitemap(request, env);
   if (url.pathname === "/variant-sitemap.xml") return renderVariantSitemapIndex(request, env);
   const shard = /^\/variant-sitemap\/([1-9]\d*)$/.exec(url.pathname);
