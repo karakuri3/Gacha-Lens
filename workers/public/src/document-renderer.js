@@ -24,9 +24,27 @@ function canonical(pathname, search = "") {
   return url.toString();
 }
 
-function htmlDocument({ title, description, pathname, body, robots = "index,follow" }) {
+function jsonLd(value) {
+  return `<script type="application/ld+json">${JSON.stringify(value).replaceAll("<", "\\u003c")}</script>`;
+}
+
+function websiteReference() {
+  return { "@type":"WebSite", "@id":`${SITE_ORIGIN}/#website`, name:"Gacha Lens", url:`${SITE_ORIGIN}/` };
+}
+
+function breadcrumb(items) {
+  return {
+    "@context":"https://schema.org",
+    "@type":"BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type":"ListItem", position:index + 1, name:item.name, item:item.url,
+    })),
+  };
+}
+
+function htmlDocument({ title, description, pathname, body, robots = "index,follow", structuredData = [] }) {
   const canonicalUrl = canonical(pathname);
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><meta name="robots" content="${robots}"><link rel="canonical" href="${escapeHtml(canonicalUrl)}"><meta property="og:type" content="website"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(canonicalUrl)}"></head><body><header><a href="/">Gacha Lens</a><nav><a href="/series">ガチャ一覧</a> <a href="/schedule">発売予定</a></nav></header><main>${body}</main></body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><meta name="robots" content="${robots}"><link rel="canonical" href="${escapeHtml(canonicalUrl)}"><meta property="og:type" content="website"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(canonicalUrl)}">${structuredData.map(jsonLd).join("")}</head><body><header><a href="/">Gacha Lens</a><nav><a href="/series">ガチャ一覧</a> <a href="/schedule">発売予定</a></nav></header><main>${body}</main></body></html>`;
 }
 
 function htmlResponse(request, document, status = 200, ttl = 120) {
@@ -169,11 +187,36 @@ async function renderSeriesGroupDetail(request, env, slug) {
     ? `<ul>${variants.map((variant) => `<li><strong>${escapeHtml(variant.name)}</strong><div>${escapeHtml([variant.rarity, variant.release_date || variant.release_month].filter(Boolean).join(" / "))}</div></li>`).join("")}</ul>`
     : "<p>公開可能なバリエーション情報はありません。</p>";
   const body = `<article><h1>${escapeHtml(item.name)}</h1><p>${escapeHtml([item.brand, item.category, scheduleText(item)].filter(Boolean).join(" / "))}</p><section><h2>ラインナップ</h2>${variantsHtml}</section>${item.official_url ? `<p><a rel="nofollow noopener" href="${escapeHtml(item.official_url)}">公式情報</a></p>` : ""}</article>`;
+  const pageUrl = canonical(`/series/group/${slug}`);
+  const description = `${item.name}のラインナップ、定価、発売情報を確認できます。`;
+  const listId = `${pageUrl}#lineup`;
+  const structuredData = [
+    {
+      "@context":"https://schema.org", "@type":"CollectionPage",
+      "@id":`${pageUrl}#collection-page`, name:item.name, description, url:pageUrl,
+      image:item.image_url ? [item.image_url] : undefined, isPartOf:websiteReference(),
+      mainEntity:{ "@id":listId },
+    },
+    {
+      "@context":"https://schema.org", "@type":"ItemList", "@id":listId,
+      name:`${item.name}の単品ラインナップ`, numberOfItems:variants.length,
+      itemListElement:variants.map((variant, index) => ({
+        "@type":"ListItem", position:index + 1, name:variant.name,
+        url:canonical(`/series/${encodeURIComponent(variant.slug)}`),
+      })),
+    },
+    breadcrumb([
+      { name:"Gacha Lens", url:canonical("/") },
+      { name:"ガチャ一覧", url:canonical("/series") },
+      { name:item.name, url:pageUrl },
+    ]),
+  ];
   return htmlResponse(request, htmlDocument({
     title: `${item.name} シリーズ | Gacha Lens`,
-    description: `${item.name}のラインナップ、定価、発売情報を確認できます。`,
+    description,
     pathname: `/series/group/${slug}`,
     body,
+    structuredData,
   }), 200, 300);
 }
 
@@ -194,11 +237,27 @@ async function renderVariantDetail(request, env, slug) {
   const item = payload.variant;
   const parent = payload.series;
   const body = `<article><h1>${escapeHtml(item.name)}</h1><p><a href="/series/group/${encodeURIComponent(parent.slug)}">${escapeHtml(parent.name)}</a></p><p>${escapeHtml([item.brand || parent.brand, item.rarity, item.release_date || item.release_month].filter(Boolean).join(" / "))}</p>${item.official_url ? `<p><a rel="nofollow noopener" href="${escapeHtml(item.official_url)}">公式情報</a></p>` : ""}</article>`;
+  const pageUrl = canonical(`/series/${slug}`);
+  const description = `${item.name}の定価、発売時期、${item.released ? "価格の動きと在庫情報" : "発売前の注目度と入手情報"}を確認できます。`;
+  const structuredData = [
+    {
+      "@context":"https://schema.org", "@type":"ItemPage", "@id":`${pageUrl}#item-page`,
+      name:item.name, description, url:pageUrl, image:item.image ? [item.image] : undefined,
+      isPartOf:websiteReference(),
+    },
+    breadcrumb([
+      { name:"Gacha Lens", url:canonical("/") },
+      { name:"ガチャ一覧", url:canonical("/series") },
+      { name:parent.name, url:canonical(`/series/group/${encodeURIComponent(parent.slug)}`) },
+      { name:item.name, url:pageUrl },
+    ]),
+  ];
   return htmlResponse(request, htmlDocument({
     title: `${item.name} | Gacha Lens`,
-    description: `${item.name}の定価、発売時期、${item.released ? "価格の動きと在庫情報" : "発売前の注目度と入手情報"}を確認できます。`,
+    description,
     pathname: `/series/${slug}`,
     body,
+    structuredData,
   }), 200, 300);
 }
 
