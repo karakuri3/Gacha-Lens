@@ -37,8 +37,10 @@ function binding() {
         if (url.pathname === "/__public-data/v1/variant-detail") return Response.json({ series:series[0], variant:variants[0] });
         if (url.pathname === "/__public-data/v1/sitemap-series") return Response.json([{ slug:"parent-1", updated_at:"2026-10-01T00:00:00Z" }]);
         if (url.pathname === "/__public-data/v1/schedule-months") return Response.json([{ id:"s1", release_date:"2026-10-01", release_month:"2026-10" }]);
-        if (url.pathname === "/__public-data/v1/sitemap-variants") return Response.json([{ slug:"variant-1", updated_at:"2026-10-01T00:00:00Z" }]);
-        if (url.pathname === "/__public-data/v1/counts") return Response.json({ series:1, variants:1 });
+        if (url.pathname === "/__public-data/v1/sitemap-variants") {
+          const offset = Number(url.searchParams.get("offset") || 0);
+          return Response.json(offset === 0 ? [{ slug:"variant-1", updated_at:"2026-10-01T00:00:00Z" }] : []);
+        }
         return new Response("not found", { status:404 });
       },
     },
