@@ -273,6 +273,63 @@ test("A6 front door delegates pages, queries, APIs, and static assets with exact
   }
 });
 
+test("A6 immutable Preview bridge is workers.dev-only, host-restricted, and exact-SHA checked", async () => {
+  const built = await builtWorker();
+  const originalFetch = globalThis.fetch;
+  const externalCalls = [];
+  try {
+    globalThis.fetch = async (request) => {
+      const url = new URL(request.url);
+      externalCalls.push({
+        url: url.toString(),
+        override: request.headers.get("x-gacha-a6-app-preview-origin"),
+      });
+      return new Response("<!doctype html><h1>Preview App</h1>", {
+        status: 200,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "x-gacha-source-sha": SHA,
+        },
+      });
+    };
+
+    const app = binding({ sourceSha: OTHER_SHA });
+    const response = await built.worker.fetch(new Request(
+      "https://a6-gacha-lens-public.senpingxingzuo.workers.dev/ranking",
+      { headers: { "x-gacha-a6-app-preview-origin": "https://exact-gacha-lens.senpingxingzuo.workers.dev" } },
+    ), { APP: app.binding });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-gacha-app-source-sha"), SHA);
+    assert.equal(response.headers.get("x-gacha-app-transport"), "preview-http");
+    assert.equal(externalCalls.length, 1);
+    assert.equal(externalCalls[0].url, "https://exact-gacha-lens.senpingxingzuo.workers.dev/ranking");
+    assert.equal(externalCalls[0].override, null);
+    assert.deepEqual(app.calls, []);
+
+    const invalid = await built.worker.fetch(new Request(
+      "https://a6-gacha-lens-public.senpingxingzuo.workers.dev/ranking",
+      { headers: { "x-gacha-a6-app-preview-origin": "https://evil.example" } },
+    ), { APP: app.binding });
+    assert.equal(invalid.status, 409);
+    assert.equal((await invalid.json()).error, "mixed_source_sha");
+    assert.equal(externalCalls.length, 1);
+
+    const production = binding();
+    const productionResponse = await built.worker.fetch(new Request(
+      "https://gachalens.com/ranking",
+      { headers: { "x-gacha-a6-app-preview-origin": "https://exact-gacha-lens.senpingxingzuo.workers.dev" } },
+    ), { APP: production.binding });
+    assert.equal(productionResponse.status, 200);
+    assert.equal(productionResponse.headers.get("x-gacha-app-transport"), "service-binding");
+    assert.equal(externalCalls.length, 1);
+    assert.equal(production.calls.length, 1);
+    assert.equal(production.calls[0].path, "/ranking");
+  } finally {
+    globalThis.fetch = originalFetch;
+    fs.rmSync(built.temp, { recursive: true, force: true });
+  }
+});
+
 test("A6 rewrites only internal same-origin redirects back to the incoming public origin", async () => {
   const built = await builtWorker();
   try {
