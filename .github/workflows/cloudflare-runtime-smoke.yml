@@ -419,11 +419,6 @@ jobs:
           get_once guide_price '/guides/price-history' 200
           get_once guide_stock '/guides/stock-restock' 200
           get_once guide_forecast '/guides/forecast-ranking' 200
-          get_once privacy '/privacy' 200
-          get_once terms '/terms' 200
-          get_once disclaimer '/disclaimer' 200
-          get_once affiliate '/affiliate-disclosure' 200
-          get_once operator '/operator' 200
           get_once contact '/contact' 200
           get_once schedule_oct '/schedule?month=2026-10' 200 '2026-10'
           get_once public_stock '/api/public-stock' 200 '"rows"'
@@ -687,6 +682,11 @@ jobs:
             'home|/|Gacha Lens'
             'series|/series|ガチャ一覧'
             'schedule|/schedule?month=2026-10|2026-10'
+            'privacy|/privacy|プライバシーポリシー'
+            'terms|/terms|利用規約'
+            'disclaimer|/disclaimer|免責事項'
+            'affiliate|/affiliate-disclosure|広告・アフィリエイトについて'
+            'operator|/operator|運営情報'
             'robots|/robots.txt|Sitemap: https://gachalens.com/sitemap.xml'
             'sitemap|/sitemap.xml|<loc>https://gachalens.com/'
             'series_sitemap|/series-sitemap.xml|<loc>https://gachalens.com/series/'
