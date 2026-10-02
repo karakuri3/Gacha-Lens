@@ -269,15 +269,18 @@ async function renderSeriesSitemap(request, env) {
   const urls = [];
   for (let page = 0; page < MAX_SERIES_SITEMAP_PAGES; page += 1) {
     const rows = await readData(env, "/__public-data/v1/sitemap-series", { limit: 1000, offset: page * 1000 });
-    urls.push(...rows.map((row) => sitemapUrl(`/series/${encodeURIComponent(row.slug)}`, row.updated_at)));
+    urls.push(...rows.map((row) => sitemapUrl(`/series/group/${encodeURIComponent(row.slug)}`, row.updated_at)));
     if (rows.length < 1000) break;
   }
   return xmlResponse(request, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`);
 }
 
 async function renderVariantSitemapIndex(request, env) {
-  const counts = await readData(env, "/__public-data/v1/counts");
-  const pages = Math.max(1, Math.ceil(Number(counts.variants || 0) / VARIANT_SITEMAP_PAGE_SIZE));
+  const shardDiscovery = await readData(env, "/__public-data/v1/sitemap-variant-shards");
+  const pages = Number(shardDiscovery.pages);
+  if (!Number.isInteger(pages) || pages < 1 || pages > 5000) {
+    throw new Error("public_data_variant_sitemap_shards_invalid");
+  }
   const sitemaps = Array.from({ length: pages }, (_, index) => `<sitemap><loc>${escapeXml(canonical(`/variant-sitemap/${index + 1}`))}</loc></sitemap>`);
   return xmlResponse(request, `<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${sitemaps.join("")}</sitemapindex>`);
 }

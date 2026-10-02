@@ -40,13 +40,13 @@ function appBinding({ sourceSha = SHA, reviewStatus = 200, reviewBody = "Review 
         if (url.pathname === "/api/runtime-diagnostics/release-source") {
           return new Response(JSON.stringify({ source_sha: sourceSha }), {
             status: 200,
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", "x-gacha-source-sha": sourceSha },
           });
         }
         if (url.pathname === "/review") {
           return new Response(reviewBody, {
             status: reviewStatus,
-            headers: { "content-type": "text/html; charset=utf-8" },
+            headers: { "content-type": "text/html; charset=utf-8", "x-gacha-source-sha": sourceSha },
           });
         }
         return new Response("not found", { status: 404 });
@@ -146,8 +146,13 @@ test("route ownership matrix distinguishes public, conditional, app-owned, plann
   assert.equal(classifyPhaseA2Route("/review"), "conditional");
   assert.equal(classifyPhaseA2Route("/review/login"), "app-owned");
   assert.equal(classifyPhaseA2Route("/api/review/community-reports/1"), "app-owned");
-  assert.equal(classifyPhaseA2Route("/series"), "planned-public");
-  assert.equal(classifyPhaseA2Route("/series/example"), "planned-public");
+  assert.equal(classifyPhaseA2Route("/series"), "app-owned");
+  assert.equal(classifyPhaseA2Route("/series/example"), "app-owned");
+  assert.equal(classifyPhaseA2Route("/_next/static/chunks/app.js"), "app-owned");
+  assert.equal(classifyPhaseA2Route("/brand/gacha-lens-logo.png"), "app-owned");
+  assert.equal(classifyPhaseA2Route("/manifest.webmanifest"), "app-owned");
+  assert.equal(classifyPhaseA2Route("/api/public-stock"), "app-owned");
+  assert.equal(classifyPhaseA2Route("/__public-data/v1/series"), "explicitly-rejected");
   assert.equal(classifyPhaseA2Route("/api/arbitrary-proxy"), "explicitly-rejected");
 });
 
@@ -170,6 +175,7 @@ test("public Wrangler config binds only to existing gacha-lens App Worker and de
   assert.equal(config.name, "gacha-lens-public");
   assert.equal(config.services?.length, 1);
   assert.deepEqual(config.services[0], { binding: "APP", service: "gacha-lens" });
+  assert.deepEqual(config.compatibility_flags, ["global_fetch_strictly_public"]);
   assert.equal("routes" in config, false);
   assert.equal("route" in config, false);
   assert.equal("custom_domains" in config, false);

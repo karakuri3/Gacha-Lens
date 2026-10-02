@@ -9,6 +9,24 @@ const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const RELEASE_SOURCE_SHA = String(process.env.GACHA_RELEASE_SOURCE_SHA ?? "").trim().toLowerCase();
 const RELEASE_SOURCE_SHA_RE = /^[0-9a-f]{40}$/;
 const RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
+const RELEASE_SOURCE_HEADER = "x-gacha-source-sha";
+
+function releaseSourceSha() {
+  return RELEASE_SOURCE_SHA_RE.test(RELEASE_SOURCE_SHA) ? RELEASE_SOURCE_SHA : null;
+}
+
+function withReleaseSourceIdentity(response) {
+  const sourceSha = releaseSourceSha();
+  if (!sourceSha) return response;
+  const headers = new Headers(response.headers);
+  headers.set(RELEASE_SOURCE_HEADER, sourceSha);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 // Release proof returns only this immutable Git SHA; runtime bindings and secrets are never returned.
 // Keeping the marker in the Worker entrypoint makes Preview and custom-domain identity fail closed at runtime.
 
@@ -28,7 +46,7 @@ function getReleaseSourceIdentityResponse(request) {
     });
   }
 
-  const sourceSha = RELEASE_SOURCE_SHA_RE.test(RELEASE_SOURCE_SHA) ? RELEASE_SOURCE_SHA : null;
+  const sourceSha = releaseSourceSha();
   return new Response(request.method === "HEAD" ? null : JSON.stringify({ source_sha: sourceSha }), {
     status: sourceSha ? 200 : 503,
     headers,
@@ -267,25 +285,25 @@ async function canStoreResponse(response, policy) {
 export default {
   async fetch(request, env, ctx) {
     const publicDocumentData = await handlePublicDocumentData(request, env);
-    if (publicDocumentData) return publicDocumentData;
+    if (publicDocumentData) return withReleaseSourceIdentity(publicDocumentData);
 
     const releaseSourceIdentity = getReleaseSourceIdentityResponse(request);
-    if (releaseSourceIdentity) return releaseSourceIdentity;
+    if (releaseSourceIdentity) return withReleaseSourceIdentity(releaseSourceIdentity);
 
     const legacyCategoryRedirect = getLegacyCategoryDiscoveryPageRedirect(request);
-    if (legacyCategoryRedirect) return legacyCategoryRedirect;
+    if (legacyCategoryRedirect) return withReleaseSourceIdentity(legacyCategoryRedirect);
 
     const legacyDiscoveryFacetRedirect = getLegacyDiscoveryFacetPageRedirect(request);
-    if (legacyDiscoveryFacetRedirect) return legacyDiscoveryFacetRedirect;
+    if (legacyDiscoveryFacetRedirect) return withReleaseSourceIdentity(legacyDiscoveryFacetRedirect);
 
     const legacyRankingRedirect = getLegacyRankingRedirect(request);
-    if (legacyRankingRedirect) return legacyRankingRedirect;
+    if (legacyRankingRedirect) return withReleaseSourceIdentity(legacyRankingRedirect);
 
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
 
     if (!(await canStoreResponse(response, policy))) {
-      return response;
+      return withReleaseSourceIdentity(response);
     }
 
     const headers = new Headers(response.headers);
@@ -293,10 +311,10 @@ export default {
     headers.set("Cache-Tag", policy.cacheTag);
     headers.set("X-Gacha-Edge-Cache-Policy", policy.marker);
 
-    return new Response(response.body, {
+    return withReleaseSourceIdentity(new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers,
-    });
+    }));
   },
 };
