@@ -1,5 +1,4 @@
 import { classifyPublicRoute, PUBLIC_DIAGNOSTIC_PATHS } from "./route-contract.js";
-import { renderPublicDocument } from "./document-renderer.js";
 
 // Phase A3 exact-head Preview verification anchor v4; no runtime behavior change.
 const RELEASE_SOURCE_SHA = "__GACHA_RELEASE_SOURCE_SHA__";
@@ -225,22 +224,6 @@ async function delegateAppOwned(request, env) {
   });
 }
 
-function renderEnvironment(request, env, previewOrigin) {
-  if (!previewOrigin) return env;
-  return {
-    ...env,
-    APP: {
-      async fetch(targetRequest) {
-        const internal = new URL(targetRequest.url);
-        const target = new URL(internal.pathname + internal.search, previewOrigin);
-        const forwarded = new Request(target, targetRequest);
-        forwarded.headers.delete(APP_PREVIEW_OVERRIDE_HEADER);
-        return fetch(forwarded);
-      },
-    },
-  };
-}
-
 async function publicDiagnostic(request, env, pathname) {
   const guard = methodGuard(request);
   if (guard) return guard;
@@ -254,8 +237,8 @@ async function publicDiagnostic(request, env, pathname) {
       plane: "public",
       source_sha: sourceSha,
       app_binding: "APP",
-      route_contract: "a6-full-parity-hybrid",
-      public_document_runtime: "lightweight-public-plus-exact-sha-app-delegation",
+      route_contract: "a6-full-parity",
+      public_document_runtime: "exact-sha-app-front-door",
     }, sourceSha ? 200 : 503);
   }
   return appDelegationDiagnostic(request, env);
@@ -268,46 +251,6 @@ export default {
 
     if (ownership === "public-diagnostic" && PUBLIC_DIAGNOSTIC_PATHS.includes(url.pathname)) {
       return publicDiagnostic(request, env, url.pathname);
-    }
-
-    if (ownership === "public-document") {
-      const guard = methodGuard(request);
-      if (guard) return guard;
-
-      // Every data-backed Public document is coupled to this exact App source.
-      // Fail closed before rendering, then route Preview-only internal reads to
-      // the immutable exact-head App Preview. Production keeps the Service Binding.
-      const integrity = await assertAppExactSha(request, env);
-      if (!integrity.ok) return integrity.response;
-
-      // Preserve the old interactive catalog query surface in App while the
-      // canonical no-query catalog remains on the lightweight Public plane.
-      if (url.pathname === "/series" && url.searchParams.size > 0) {
-        return delegateAppOwned(request, env);
-      }
-
-      try {
-        const response = await renderPublicDocument(
-          request,
-          renderEnvironment(request, env, integrity.previewOrigin),
-        );
-        if (!response) return jsonResponse(request, { error: "public_document_route_unimplemented" }, 500);
-
-        const headers = new Headers(response.headers);
-        headers.set("x-gacha-public-plane", "phase-a3");
-        headers.set("x-gacha-app-source-sha", integrity.appSha);
-        headers.set("x-gacha-app-transport", integrity.previewOrigin ? "preview-http" : "service-binding");
-        return new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers,
-        });
-      } catch (error) {
-        return jsonResponse(request, {
-          error: "public_document_unavailable",
-          detail: String(error?.message ?? error),
-        }, 503);
-      }
     }
 
     if (ownership === "app-owned") {
