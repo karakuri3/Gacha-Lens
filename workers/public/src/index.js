@@ -5,7 +5,6 @@ const RELEASE_SOURCE_SHA = "__GACHA_RELEASE_SOURCE_SHA__";
 const SHA_RE = /^[0-9a-f]{40}$/;
 const APP_RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
 const APP_REPRESENTATIVE_PATH = "/review";
-const APP_SOURCE_HEADER = "x-gacha-source-sha";
 const APP_PREVIEW_OVERRIDE_HEADER = "x-gacha-a6-app-preview-origin";
 const APP_PREVIEW_HOST_RE = /^[a-z0-9-]+-gacha-lens\.senpingxingzuo\.workers\.dev$/;
 const PUBLIC_PREVIEW_HOST_RE = /^[a-z0-9-]+-gacha-lens-public\.senpingxingzuo\.workers\.dev$/;
