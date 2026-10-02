@@ -104,7 +104,7 @@ test("robots and sitemap documents preserve canonical production origin", async 
     assert.doesNotMatch(rootText, /<sitemapindex/);
 
     const series = await built.worker.fetch(new Request("https://preview.example/series-sitemap.xml"), { APP:app.binding });
-    assert.match(await series.text(), /https:\/\/gachalens\.com\/series\/parent-1/);
+    assert.match(await series.text(), /https:\/\/gachalens\.com\/series\/group\/parent-1/);
 
     const variants = await built.worker.fetch(new Request("https://preview.example/variant-sitemap/1"), { APP:app.binding });
     assert.match(await variants.text(), /https:\/\/gachalens\.com\/series\/variant-1/);
