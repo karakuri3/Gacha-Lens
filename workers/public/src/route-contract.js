@@ -12,6 +12,11 @@ export const PUBLIC_DOCUMENT_EXACT_PATHS = Object.freeze([
   "/series-sitemap.xml",
   "/variant-sitemap.xml",
   "/robots.txt",
+  "/privacy",
+  "/terms",
+  "/disclaimer",
+  "/affiliate-disclosure",
+  "/operator",
 ]);
 
 export const APP_OWNED_EXACT_PATHS = Object.freeze([
@@ -27,11 +32,6 @@ export const APP_OWNED_EXACT_PATHS = Object.freeze([
   "/franchises",
   "/guides",
   "/trends",
-  "/privacy",
-  "/terms",
-  "/disclaimer",
-  "/affiliate-disclosure",
-  "/operator",
   "/contact",
   "/manifest.webmanifest",
   "/favicon.ico",
