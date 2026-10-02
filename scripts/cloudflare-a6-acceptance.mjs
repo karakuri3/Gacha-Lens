@@ -302,9 +302,15 @@ export async function runA6Acceptance({
       assert.equal(response.status, 200, `${pass} sitemap loc ${path}`);
     });
 
-    for (const invalidPath of ["/variant-sitemap/0", "/variant-sitemap/5001"]) {
+    const shardNumbers = shardLocs.map((loc) => Number(new URL(loc).pathname.split("/").at(-1)));
+    const maxShard = Math.max(...shardNumbers);
+    assert.deepEqual(shardNumbers, Array.from({ length: maxShard }, (_, index) => index + 1), "variant sitemap shards must be contiguous");
+    assert.equal(new Set(variantLocs).size, variantLocs.length, "variant sitemap contains duplicate locs");
+    assert.ok(variantLocs.length > (maxShard - 1) * 1000, "last emitted variant shard must be non-empty");
+    assert.ok(variantLocs.length <= maxShard * 1000, "variant sitemap emitted more than shard capacity");
+    for (const invalidPath of ["/variant-sitemap/0", `/variant-sitemap/${maxShard + 1}`]) {
       const response = await publicRequest(invalidPath, { method: "HEAD" });
-      assert.equal(response.status, 404, `${pass} invalid sitemap shard ${invalidPath}`);
+      assert.equal(response.status, 404, `${pass} invalid/extra sitemap shard ${invalidPath}`);
     }
 
     const categoryLoc = rootLocs.find((loc) => new URL(loc).pathname.startsWith("/categories/"));
