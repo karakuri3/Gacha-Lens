@@ -24,13 +24,13 @@ function isJwtCredential(key) {
   return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(String(key || ""));
 }
 
-function restHeaders(cfg, extra = {}) {
+export function buildPublicDataHeaders(key, extra = {}) {
   const headers = {
-    apikey: cfg.key,
+    apikey: key,
     accept: "application/json",
     ...extra,
   };
-  if (isJwtCredential(cfg.key)) headers.authorization = `Bearer ${cfg.key}`;
+  if (isJwtCredential(key)) headers.authorization = `Bearer ${key}`;
   return headers;
 }
 
@@ -42,7 +42,7 @@ async function rest(env, table, params) {
     if (value !== null && value !== undefined && value !== "") url.searchParams.set(key, String(value));
   }
   const response = await fetch(url, {
-    headers: restHeaders(cfg),
+    headers: buildPublicDataHeaders(cfg.key),
   });
   if (!response.ok) throw new Error(`public_data_rest_${table}_${response.status}`);
   return response.json();
