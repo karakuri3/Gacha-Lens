@@ -2,6 +2,8 @@ const INTERNAL_HOST = "gacha-lens.internal";
 const PATH_PREFIX = "/__public-data/v1/";
 const DEFAULT_LIMIT = 60;
 const MAX_LIMIT = 1000;
+const VARIANT_SITEMAP_PAGE_SIZE = 1000;
+const MAX_VARIANT_SITEMAP_SHARDS = 5000;
 
 function json(value, status = 200) {
   return new Response(JSON.stringify(value), {
@@ -20,6 +22,33 @@ function config(env) {
   return { base, key };
 }
 
+export function isLegacyServiceRoleJwt(key) {
+  const value = String(key || "").trim();
+  const parts = value.split(".");
+  if (parts.length !== 3 || !parts.every((part) => /^[A-Za-z0-9_-]+$/.test(part))) return false;
+  try {
+    const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded));
+    return payload?.role === "service_role";
+  } catch {
+    return false;
+  }
+}
+
+export function buildPublicDataRestHeaders(key, extra = {}) {
+  const value = String(key || "");
+  const headers = {
+    apikey: value,
+    accept: "application/json",
+    ...extra,
+  };
+  if (isLegacyServiceRoleJwt(value)) {
+    headers.authorization = `Bearer ${value}`;
+  }
+  return headers;
+}
+
 async function rest(env, table, params) {
   const cfg = config(env);
   if (!cfg) throw new Error("public_data_supabase_config_unavailable");
@@ -28,11 +57,7 @@ async function rest(env, table, params) {
     if (value !== null && value !== undefined && value !== "") url.searchParams.set(key, String(value));
   }
   const response = await fetch(url, {
-    headers: {
-      apikey: cfg.key,
-      authorization: `Bearer ${cfg.key}`,
-      accept: "application/json",
-    },
+    headers: buildPublicDataRestHeaders(cfg.key),
   });
   if (!response.ok) throw new Error(`public_data_rest_${table}_${response.status}`);
   return response.json();
@@ -165,31 +190,40 @@ async function sitemapVariants(env, url) {
   }));
 }
 
-async function counts(env) {
-  const cfg = config(env);
-  if (!cfg) throw new Error("public_data_supabase_config_unavailable");
-  async function count(table, filters) {
-    const url = new URL(`${cfg.base}/rest/v1/${table}`);
-    url.searchParams.set("select", "id");
-    url.searchParams.set("limit", "1");
-    for (const [key, value] of Object.entries(filters)) url.searchParams.set(key, value);
-    const response = await fetch(url, {
-      headers: {
-        apikey: cfg.key,
-        authorization: `Bearer ${cfg.key}`,
-        prefer: "count=exact",
-        range: "0-0",
-      },
-    });
-    if (!response.ok) throw new Error(`public_data_count_${table}_${response.status}`);
-    const match = /\/(\d+)$/.exec(response.headers.get("content-range") ?? "");
-    return match ? Number(match[1]) : 0;
+async function variantSitemapShardExists(env, page) {
+  const offset = (page - 1) * VARIANT_SITEMAP_PAGE_SIZE;
+  const rows = await rest(env, "variants", publicVariantFilter({
+    select: "slug",
+    order: "slug.asc",
+    limit: 1,
+    offset,
+  }));
+  return rows.length > 0;
+}
+
+export async function discoverVariantSitemapShards(env) {
+  if (!(await variantSitemapShardExists(env, 1))) return { pages: 1 };
+
+  let low = 1;
+  let high = 2;
+
+  while (high <= MAX_VARIANT_SITEMAP_SHARDS) {
+    const exists = await variantSitemapShardExists(env, high);
+    if (!exists) break;
+    low = high;
+    if (high === MAX_VARIANT_SITEMAP_SHARDS) {
+      throw new Error("public_data_variant_sitemap_shard_cap_exceeded");
+    }
+    high = Math.min(MAX_VARIANT_SITEMAP_SHARDS, high * 2);
   }
-  const [series, variants] = await Promise.all([
-    count("series", publicSeriesFilter({})),
-    count("variants", publicVariantFilter({})),
-  ]);
-  return { series, variants };
+
+  while (low + 1 < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (await variantSitemapShardExists(env, middle)) low = middle;
+    else high = middle;
+  }
+
+  return { pages: low };
 }
 
 export async function handlePublicDocumentData(request, env) {
@@ -206,7 +240,7 @@ export async function handlePublicDocumentData(request, env) {
     else if (url.pathname === `${PATH_PREFIX}sitemap-series`) value = await sitemapSeries(env, url);
     else if (url.pathname === `${PATH_PREFIX}schedule-months`) value = await scheduleMonths(env, url);
     else if (url.pathname === `${PATH_PREFIX}sitemap-variants`) value = await sitemapVariants(env, url);
-    else if (url.pathname === `${PATH_PREFIX}counts`) value = await counts(env);
+    else if (url.pathname === `${PATH_PREFIX}sitemap-variant-shards`) value = await discoverVariantSitemapShards(env);
     else return json({ error: "public_data_route_not_found" }, 404);
 
     if (value === null) return json({ error: "not_found" }, 404);
