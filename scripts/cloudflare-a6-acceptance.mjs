@@ -163,6 +163,8 @@ export async function runA6Acceptance({
       assert.equal(response.headers.get("x-gacha-app-transport"), "preview-http", `${path} did not use immutable App Preview`);
     } else if (ownership === "public-document") {
       assert.equal(response.headers.get("x-gacha-public-plane"), "phase-a3", `${path} did not execute on lightweight Public document plane`);
+      assert.equal(response.headers.get("x-gacha-app-source-sha"), targetSha, `${path} missing exact App SHA proof`);
+      assert.equal(response.headers.get("x-gacha-app-transport"), "preview-http", `${path} did not use immutable App Preview data plane`);
     }
     return response;
   };
