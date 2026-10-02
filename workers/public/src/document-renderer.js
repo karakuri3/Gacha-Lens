@@ -269,7 +269,7 @@ async function renderSeriesSitemap(request, env) {
   const urls = [];
   for (let page = 0; page < MAX_SERIES_SITEMAP_PAGES; page += 1) {
     const rows = await readData(env, "/__public-data/v1/sitemap-series", { limit: 1000, offset: page * 1000 });
-    urls.push(...rows.map((row) => sitemapUrl(`/series/${encodeURIComponent(row.slug)}`, row.updated_at)));
+    urls.push(...rows.map((row) => sitemapUrl(`/series/group/${encodeURIComponent(row.slug)}`, row.updated_at)));
     if (rows.length < 1000) break;
   }
   return xmlResponse(request, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`);
