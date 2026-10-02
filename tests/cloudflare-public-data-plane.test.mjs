@@ -52,6 +52,32 @@ test("legacy Bearer compatibility is explicitly gated to a service_role JWT", ()
   assert.equal(buildPublicDataRestHeaders(anonJwt).authorization, undefined);
 });
 
+test("schedule month query preserves App release-date and month-only representations without inventing day precision", async () => {
+  let requestedUrl = null;
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (input) => {
+      requestedUrl = new URL(String(input));
+      return Response.json([]);
+    };
+    const response = await handlePublicDocumentData(
+      new Request("https://gacha-lens.internal/__public-data/v1/schedule?month=2026-10&limit=60"),
+      ENV,
+    );
+    assert.equal(response.status, 200);
+    assert.ok(requestedUrl);
+    assert.equal(requestedUrl.searchParams.get("release_month"), null);
+    const or = requestedUrl.searchParams.get("or") || "";
+    assert.match(or, /release_date\.gte\.2026-10-01/);
+    assert.match(or, /release_date\.lt\.2026-11-01/);
+    assert.match(or, /release_month\.eq\.10月/);
+    assert.match(or, /release_month\.eq\.2026-10/);
+    assert.doesNotMatch(or, /release_month\.eq\.2026-10-\d{2}/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("variant sitemap shard discovery finds 60 non-empty shards for the accepted 59095-row snapshot without exact count", async () => {
   const calls = [];
   const originalFetch = globalThis.fetch;
