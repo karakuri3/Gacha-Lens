@@ -467,6 +467,63 @@ jobs:
           echo "Public exact source SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
           echo "Public immutable Version URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Resolve exact-head Cloudflare App Preview for A6
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          found='false'
+          status=''
+          conclusion=''
+          check_id=''
+          preview_url=''
+
+          for attempt in $(seq 1 40); do
+            payload="$(curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs?per_page=100")"
+
+            inspection="$(node scripts/cloudflare-release-integrity.mjs inspect-check "$TARGET_SHA" <<<"$payload")"
+            found="$(jq -r '.found' <<<"$inspection")"
+            if [[ "$found" == 'true' ]]; then
+              status="$(jq -r '.status // ""' <<<"$inspection")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$inspection")"
+              check_id="$(jq -r '.check_id // ""' <<<"$inspection")"
+              preview_url="$(jq -r '.preview_url // ""' <<<"$inspection")"
+              if [[ "$status" == 'completed' && -n "$preview_url" ]]; then
+                break
+              fi
+            fi
+
+            echo "Cloudflare App exact-head build not complete yet (attempt ${attempt}/40)." >> "$GITHUB_STEP_SUMMARY"
+            sleep 15
+          done
+
+          [[ "$found" == 'true' ]] || {
+            echo "No gacha-lens Cloudflare check run found for exact head ${TARGET_SHA}." >&2
+            exit 1
+          }
+          [[ "$status" == 'completed' ]] || {
+            echo 'gacha-lens Cloudflare check did not complete within the bounded wait.' >&2
+            exit 1
+          }
+          [[ "$conclusion" == 'success' ]] || {
+            echo "gacha-lens exact-head build concluded ${conclusion:-unknown}." >&2
+            exit 1
+          }
+          [[ -n "$preview_url" ]] || {
+            echo 'gacha-lens check succeeded but did not expose one approved immutable Version URL.' >&2
+            exit 1
+          }
+
+          echo "APP_PREVIEW_URL=${preview_url}" >> "$GITHUB_ENV"
+          echo "App Cloudflare check run: ${check_id}" >> "$GITHUB_STEP_SUMMARY"
+          echo "App immutable Version URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Prove Public Preview runtime source identity
         shell: bash
         run: |
@@ -548,8 +605,14 @@ jobs:
             }
 
             plane="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-public-plane:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
-            [[ "$plane" == 'phase-a3' ]] || {
-              echo "${pass} ${name} did not execute on the Phase A3 Public plane: ${plane:-missing}" >&2
+            [[ "$plane" == 'a6-front-door' ]] || {
+              echo "${pass} ${name} did not execute through the A6 front door: ${plane:-missing}" >&2
+              exit 1
+            }
+
+            app_sha="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-app-source-sha:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\\r", ""); print; exit}' "$headers")"
+            [[ "$app_sha" == "$TARGET_SHA" ]] || {
+              echo "${pass} ${name} delegated App SHA mismatch: ${app_sha:-missing}" >&2
               exit 1
             }
 
@@ -601,6 +664,21 @@ jobs:
             echo 'Public document proof observed a transient/resource-limit HTTP failure.' >&2
             exit 1
           fi
+
+      - name: Run exhaustive A6 full-parity acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/cloudflare-a6-acceptance.mjs \
+            --public "$PUBLIC_PREVIEW_URL" \
+            --app "$APP_PREVIEW_URL" \
+            --sha "$TARGET_SHA" | tee /tmp/a6-acceptance.json
+          {
+            echo '### A6 full-parity acceptance'
+            echo '```json'
+            cat /tmp/a6-acceptance.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Audit Public Preview SEO and discovery semantics against current Production
         shell: bash
