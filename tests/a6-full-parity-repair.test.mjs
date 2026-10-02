@@ -91,7 +91,7 @@ test("A6 route inventory has an explicit owner and unknown/internal paths stay f
     "/brands", "/brands/%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4", "/brands/x/page/2",
     "/franchises", "/franchises/x", "/franchises/x/page/2",
     "/guides", "/guides/market-price", "/trends",
-    "/privacy", "/terms", "/disclaimer", "/affiliate-disclosure", "/operator", "/contact",
+"/terms", "/disclaimer", "/affiliate-disclosure", "/operator", "/contact",
     "/review", "/review/login", "/review/logout",
     "/api/public-stock", "/api/public-variants", "/api/public-discovery",
     "/api/community-reports", "/api/review/community-reports/1", "/api/import-issues",
@@ -102,7 +102,7 @@ test("A6 route inventory has an explicit owner and unknown/internal paths stay f
   for (const route of appOwned) assert.equal(classifyPublicRoute(route), "app-owned", route);
 
   for (const route of [
-    "/", "/series", "/schedule", "/robots.txt", "/sitemap.xml", "/series-sitemap.xml",
+    "/", "/series", "/schedule", "/privacy", "/terms", "/disclaimer", "/affiliate-disclosure", "/operator", "/robots.txt", "/sitemap.xml", "/series-sitemap.xml",
     "/variant-sitemap.xml", "/variant-sitemap/1", "/series/group/parent", "/series/variant",
   ]) {
     assert.equal(classifyPublicRoute(route), "public-document", route);
@@ -191,6 +191,7 @@ test("A6 public data source removes global exact-count dependency and mirrors pr
   assert.match(source, /release_date\.gte\.\$\{start\}/);
   assert.match(source, /release_month\.eq\.\$\{monthNumber\}月/);
   assert.match(source, /release_month\.eq\.\$\{month\}/);
+  assert.match(source, /MAX_OFFSET = 1_000_000/);
 });
 
 test("A6 sitemap closure is exact: parent namespace fixed and 59,095 variants emit 60 complete shards", async () => {
