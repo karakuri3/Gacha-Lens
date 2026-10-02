@@ -130,8 +130,10 @@ async function delegateAppOwned(request, env) {
   }
 
   const incoming = new URL(request.url);
-  const target = new URL(incoming.pathname + incoming.search, INTERNAL_ORIGIN);
-  const forwarded = new Request(target, request);
+  // Preserve the public request origin for App semantics (redirects, host-gated
+  // Preview diagnostics, canonical handling). Service Binding selects the App
+  // service; the URL host is not used as a network routing target.
+  const forwarded = new Request(request);
   const response = await env.APP.fetch(forwarded);
   const appSha = String(response.headers.get(APP_SOURCE_HEADER) || "").trim().toLowerCase();
 
