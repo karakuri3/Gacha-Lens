@@ -190,14 +190,8 @@ async function delegateAppOwned(request, env) {
   const target = previewOrigin
     ? new URL(incoming.pathname + incoming.search, previewOrigin)
     : incoming;
-  const forwardedHeaders = new Headers(request.headers);
-  forwardedHeaders.delete(APP_PREVIEW_OVERRIDE_HEADER);
-  const forwarded = new Request(target, {
-    method: request.method,
-    headers: forwardedHeaders,
-    body: ["GET", "HEAD"].includes(request.method) ? null : request.body,
-    redirect: request.redirect,
-  });
+  const forwarded = new Request(target, request);
+  forwarded.headers.delete(APP_PREVIEW_OVERRIDE_HEADER);
   const response = await fetchApp(request, env, forwarded, previewOrigin);
   if (!response) return jsonResponse(request, { error: "app_binding_unavailable" }, 503);
   const appSha = String(response.headers.get(APP_SOURCE_HEADER) || "").trim().toLowerCase();
