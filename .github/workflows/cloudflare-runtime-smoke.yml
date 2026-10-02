@@ -678,34 +678,74 @@ jobs:
             fi
           }
 
-          routes=(
-            'home|/|Gacha Lens'
-            'series|/series|ガチャ一覧'
-            'schedule|/schedule?month=2026-10|2026-10'
-            'privacy|/privacy|プライバシーポリシー'
-            'terms|/terms|利用規約'
-            'disclaimer|/disclaimer|免責事項'
-            'affiliate|/affiliate-disclosure|広告・アフィリエイトについて'
-            'operator|/operator|運営情報'
-            'robots|/robots.txt|Sitemap: https://gachalens.com/sitemap.xml'
-            'sitemap|/sitemap.xml|<loc>https://gachalens.com/'
-            'series_sitemap|/series-sitemap.xml|<loc>https://gachalens.com/series/'
-            'variant_sitemap|/variant-sitemap.xml|<sitemapindex'
-          )
+          integrity_body="$tmp/app-integrity.body"
+          integrity_code="$(curl --silent --show-error --max-time 60 --output "$integrity_body" --write-out '%{http_code}' "${PUBLIC_PREVIEW_URL}/api/runtime-diagnostics/app-delegation")"
+          if [[ "$integrity_code" == '200' ]]; then
+            echo 'PUBLIC_APP_SHA_MATCH=true' >> "$GITHUB_ENV"
+            routes=(
+              'home|/|Gacha Lens'
+              'series|/series|ガチャ一覧'
+              'schedule|/schedule?month=2026-10|2026-10'
+              'privacy|/privacy|プライバシーポリシー'
+              'terms|/terms|利用規約'
+              'disclaimer|/disclaimer|免責事項'
+              'affiliate|/affiliate-disclosure|広告・アフィリエイトについて'
+              'operator|/operator|運営情報'
+              'robots|/robots.txt|Sitemap: https://gachalens.com/sitemap.xml'
+              'sitemap|/sitemap.xml|<loc>https://gachalens.com/'
+              'series_sitemap|/series-sitemap.xml|<loc>https://gachalens.com/series/'
+              'variant_sitemap|/variant-sitemap.xml|<sitemapindex'
+            )
 
-          for pass in cold warm; do
-            for spec in "${routes[@]}"; do
-              IFS='|' read -r name path needle <<<"$spec"
-              request_public_document "$pass" "$name" "$path" "$needle"
+            for pass in cold warm; do
+              for spec in "${routes[@]}"; do
+                IFS='|' read -r name path needle <<<"$spec"
+                request_public_document "$pass" "$name" "$path" "$needle"
+              done
+
+              series_detail_path="$(grep -Eo 'href="/series/group/[^"]+"' "$tmp/${pass}-series.body" | head -1 | sed -E 's/^href="([^"]+)"/\1/')"
+              [[ -n "$series_detail_path" ]] || {
+                echo "${pass} series index did not expose a Public-owned parent-series detail link." >&2
+                exit 1
+              }
+              request_public_document "$pass" series_detail "$series_detail_path" '<article><h1'
             done
+          elif [[ "$integrity_code" == '409' ]] && grep -Fq '"error":"mixed_source_sha"' "$integrity_body"; then
+            echo 'PUBLIC_APP_SHA_MATCH=false' >> "$GITHUB_ENV"
+            echo 'Public Preview binding points at a different App SHA; exact-head data-backed documents must fail closed with 409.' >> "$GITHUB_STEP_SUMMARY"
 
-            series_detail_path="$(grep -Eo 'href="/series/group/[^"]+"' "$tmp/${pass}-series.body" | head -1 | sed -E 's/^href="([^"]+)"/\1/')"
-            [[ -n "$series_detail_path" ]] || {
-              echo "${pass} series index did not expose a Public-owned parent-series detail link." >&2
-              exit 1
-            }
-            request_public_document "$pass" series_detail "$series_detail_path" '<article><h1'
-          done
+            static_routes=(
+              'privacy|/privacy|プライバシーポリシー'
+              'terms|/terms|利用規約'
+              'disclaimer|/disclaimer|免責事項'
+              'affiliate|/affiliate-disclosure|広告・アフィリエイトについて'
+              'operator|/operator|運営情報'
+              'robots|/robots.txt|Sitemap: https://gachalens.com/sitemap.xml'
+            )
+            for pass in cold warm; do
+              for spec in "${static_routes[@]}"; do
+                IFS='|' read -r name path needle <<<"$spec"
+                request_public_document "$pass" "$name" "$path" "$needle"
+              done
+              for path in '/' '/series' '/schedule?month=2026-10' '/sitemap.xml' '/series-sitemap.xml' '/variant-sitemap.xml'; do
+                body="$tmp/${pass}-mixed.body"
+                code="$(curl --silent --show-error --max-time 60 --output "$body" --write-out '%{http_code}' "${PUBLIC_PREVIEW_URL}${path}")"
+                [[ "$code" == '409' ]] || {
+                  echo "${pass} mixed-SHA data-backed route ${path} returned HTTP ${code}, expected 409." >&2
+                  head -c 1200 "$body" >&2 || true
+                  exit 1
+                }
+                grep -Fq '"error":"mixed_source_sha"' "$body" || {
+                  echo "${pass} mixed-SHA route ${path} did not fail with mixed_source_sha." >&2
+                  exit 1
+                }
+              done
+            done
+          else
+            echo "Public Preview App integrity diagnostic returned HTTP ${integrity_code}, expected 200 or fail-closed 409." >&2
+            cat "$integrity_body" >&2 || true
+            exit 1
+          fi
 
           if grep -R -E 'HTTP (429|500|502|503|504)' "$GITHUB_STEP_SUMMARY" >/dev/null 2>&1; then
             echo 'Public document proof observed a transient/resource-limit HTTP failure.' >&2
@@ -718,6 +758,11 @@ jobs:
           set -euo pipefail
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
+
+          if [[ "${PUBLIC_APP_SHA_MATCH:-}" != 'true' ]]; then
+            echo 'Public SEO parity audit deferred: immutable Public Preview correctly fails closed because its live Service Binding App SHA differs from the PR SHA; same-SHA behavior is covered by local exact-head Service Binding proof.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
 
           compare_canonical() {
             local name="$1"
