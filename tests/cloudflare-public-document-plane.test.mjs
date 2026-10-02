@@ -1,165 +1,230 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import test from "node:test";
 import { pathToFileURL } from "node:url";
 import { buildPublicWorker } from "../scripts/build-public-worker.mjs";
-import { classifyPublicRoute } from "../workers/public/src/route-contract.js";
+import {
+  APP_OWNED_EXACT_PATHS,
+  APP_OWNED_PREFIXES,
+  classifyPublicRoute,
+  PUBLIC_DIAGNOSTIC_PATHS,
+} from "../workers/public/src/route-contract.js";
 
 const SHA = "1234567890abcdef1234567890abcdef12345678";
+const OTHER_SHA = "abcdef1234567890abcdef1234567890abcdef12";
 
-async function worker() {
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "gacha-a3-public-"));
+async function builtWorker() {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "gacha-a6-public-"));
   const outputPath = path.join(temp, "index.js");
   buildPublicWorker({ sourceSha: SHA, outputPath });
   const loaded = await import(`${pathToFileURL(outputPath).href}?${Date.now()}-${Math.random()}`);
   return { worker: loaded.default, temp };
 }
 
-function binding() {
+function binding({ sourceSha = SHA, omitSourceHeader = false } = {}) {
   const calls = [];
-  const series = [{ id:"s1", slug:"parent-1", name:"親シリーズ", brand:"Brand", category:"figure", release_date:"2026-10-01", source_type:"official_site" }];
-  const variants = [{ id:"v1", slug:"variant-1", series_id:"s1", name:"バリエーション1", rarity:"normal", release_date:"2026-10-01" }];
   return {
     calls,
     binding: {
       async fetch(request) {
         const url = new URL(request.url);
-        calls.push({ path:url.pathname, search:url.search, method:request.method, cookie:request.headers.get("cookie") });
+        calls.push({
+          path: url.pathname,
+          search: url.search,
+          method: request.method,
+          cookie: request.headers.get("cookie"),
+          body: request.method === "POST" ? await request.clone().text() : "",
+        });
+
+        const headers = new Headers({ "content-type": "text/html; charset=utf-8" });
+        if (!omitSourceHeader) headers.set("x-gacha-source-sha", sourceSha);
+
         if (url.pathname === "/api/runtime-diagnostics/release-source") {
-          return Response.json({ source_sha: SHA });
+          return Response.json({ source_sha: sourceSha }, {
+            headers: omitSourceHeader ? {} : { "x-gacha-source-sha": sourceSha },
+          });
         }
-        if (url.pathname === "/review") return new Response("Review access", { headers:{ "content-type":"text/html" } });
-        if (url.pathname === "/__public-data/v1/series") return Response.json(series);
-        if (url.pathname === "/__public-data/v1/schedule") return Response.json(series);
-        if (url.pathname === "/__public-data/v1/series-detail") return Response.json({ series:series[0], variants });
-        if (url.pathname === "/__public-data/v1/variant-detail") return Response.json({ series:series[0], variant:variants[0] });
-        if (url.pathname === "/__public-data/v1/sitemap-series") return Response.json([{ slug:"parent-1", updated_at:"2026-10-01T00:00:00Z" }]);
-        if (url.pathname === "/__public-data/v1/schedule-months") return Response.json([{ id:"s1", release_date:"2026-10-01", release_month:"2026-10" }]);
-        if (url.pathname === "/__public-data/v1/sitemap-variants") return Response.json([{ slug:"variant-1", updated_at:"2026-10-01T00:00:00Z" }]);
-        if (url.pathname === "/__public-data/v1/counts") return Response.json({ series:1, variants:1 });
-        return new Response("not found", { status:404 });
+        if (url.pathname === "/review") return new Response("Review access", { headers });
+        if (url.pathname === "/trends") {
+          return new Response(null, {
+            status: 308,
+            headers: {
+              location: "https://gacha-lens.internal/ranking",
+              ...(omitSourceHeader ? {} : { "x-gacha-source-sha": sourceSha }),
+            },
+          });
+        }
+        if (url.pathname === "/api/public-discovery" && !url.searchParams.get("type")) {
+          return Response.json({ error: "invalid_request" }, {
+            status: 400,
+            headers: omitSourceHeader ? {} : { "x-gacha-source-sha": sourceSha },
+          });
+        }
+        if (url.pathname.startsWith("/_next/") || url.pathname.startsWith("/brand/")) {
+          return new Response("asset", {
+            status: 200,
+            headers: {
+              "content-type": url.pathname.endsWith(".png") ? "image/png" : "application/javascript",
+              ...(omitSourceHeader ? {} : { "x-gacha-source-sha": sourceSha }),
+            },
+          });
+        }
+        if (url.pathname.startsWith("/api/")) {
+          return Response.json({ ok: true }, {
+            status: 200,
+            headers: omitSourceHeader ? {} : { "x-gacha-source-sha": sourceSha },
+          });
+        }
+        return new Response(`<!doctype html><h1>${url.pathname}</h1>`, { status: 200, headers });
       },
     },
   };
 }
 
-test("A3 ownership is explicit and unknown paths remain fail-closed", () => {
-  for (const route of ["/","/series","/schedule","/robots.txt","/sitemap.xml","/series-sitemap.xml","/variant-sitemap.xml","/variant-sitemap/1","/series/variant-1","/series/group/parent-1"]) {
-    assert.equal(classifyPublicRoute(route), "public-document", route);
+test("A6 route inventory explicitly owns the old App public surface and assets", () => {
+  for (const route of PUBLIC_DIAGNOSTIC_PATHS) assert.equal(classifyPublicRoute(route), "public-diagnostic", route);
+  for (const route of APP_OWNED_EXACT_PATHS) assert.equal(classifyPublicRoute(route), "app-owned", route);
+
+  const prefixExamples = {
+    "/series/": "/series/group/example",
+    "/categories/": "/categories/example/page/2",
+    "/brands/": "/brands/example/page/2",
+    "/franchises/": "/franchises/example/page/2",
+    "/guides/": "/guides/forecast-ranking",
+    "/variant-sitemap/": "/variant-sitemap/1",
+    "/api/review/": "/api/review/community-reports/1",
+    "/api/ingest/": "/api/ingest/official",
+    "/_next/": "/_next/static/chunks/app.js",
+    "/brand/": "/brand/gacha-lens-logo.png",
+  };
+  for (const prefix of APP_OWNED_PREFIXES) {
+    assert.equal(classifyPublicRoute(prefixExamples[prefix]), "app-owned", prefix);
   }
-  for (const route of ["/review","/review/login","/api/community-reports","/api/review/community-reports/1"]) {
-    assert.equal(classifyPublicRoute(route), "app-owned", route);
+
+  for (const rejected of [
+    "/__public-data/v1/series",
+    "/__public-data/v1/counts",
+    "/supabase-series",
+    "/api/arbitrary",
+    "/unknown",
+  ]) {
+    assert.equal(classifyPublicRoute(rejected), "explicitly-rejected", rejected);
   }
-  assert.equal(classifyPublicRoute("/arbitrary"), "explicitly-rejected");
-  assert.equal(classifyPublicRoute("/api/arbitrary"), "explicitly-rejected");
 });
 
-test("public documents render in Public Worker and never proxy same document path to App", async () => {
-  const built = await worker();
+test("A6 front door delegates pages, queries, APIs, and static assets with exact SHA proof", async () => {
+  const built = await builtWorker();
   try {
     const app = binding();
-    for (const route of ["/","/series","/schedule?month=2026-10","/series/variant-1","/series/group/parent-1"]) {
-      const before = app.calls.length;
-      const response = await built.worker.fetch(new Request(`https://preview.example${route}`), { APP:app.binding });
-      assert.equal(response.status, 200, route);
-      assert.match(response.headers.get("content-type") || "", /text\/html/);
-      assert.equal(response.headers.get("x-gacha-public-plane"), "phase-a3");
-      const body = await response.text();
-      assert.match(body, /<link rel="canonical"/);
-      if (route.startsWith("/series/")) {
-        assert.match(body, /application\/ld\+json/);
-        assert.match(body, /BreadcrumbList/);
-      }
-      const calls = app.calls.slice(before);
-      assert.ok(calls.length >= 1);
-      assert.ok(calls.every((call) => call.path.startsWith("/__public-data/v1/")), JSON.stringify(calls));
-      assert.ok(calls.every((call) => call.path !== route));
+    const cases = [
+      ["GET", "/", null],
+      ["GET", "/series?q=test&page=2", null],
+      ["GET", "/schedule?month=2026-10", null],
+      ["GET", "/ranking?tab=upcoming&scope=series", null],
+      ["GET", "/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3?page=2", null],
+      ["GET", "/api/public-stock", null],
+      ["GET", "/api/public-variants?ids=a,b", null],
+      ["GET", "/manifest.webmanifest", null],
+      ["GET", "/_next/static/chunks/app.js", null],
+      ["GET", "/brand/gacha-lens-logo.png", null],
+      ["POST", "/review/login", "password=x"],
+    ];
+
+    for (const [method, route, body] of cases) {
+      const headers = { cookie: "session=ok" };
+      if (body) headers["content-type"] = "application/x-www-form-urlencoded";
+      const response = await built.worker.fetch(new Request(`https://public.example${route}`, {
+        method,
+        headers,
+        body,
+      }), { APP: app.binding });
+      assert.notEqual(response.status, 409, route);
+      assert.notEqual(response.status, 502, route);
+      assert.equal(response.headers.get("x-gacha-public-plane"), "a6-front-door", route);
+      assert.equal(response.headers.get("x-gacha-app-source-sha"), SHA, route);
     }
+
+    assert.equal(app.calls.some((call) => call.path.startsWith("/__public-data/")), false);
+    const post = app.calls.find((call) => call.path === "/review/login");
+    assert.equal(post?.method, "POST");
+    assert.equal(post?.body, "password=x");
+    assert.equal(post?.cookie, "session=ok");
   } finally {
-    fs.rmSync(built.temp, { recursive:true, force:true });
+    fs.rmSync(built.temp, { recursive: true, force: true });
   }
 });
 
-test("robots and sitemap documents preserve canonical production origin", async () => {
-  const built = await worker();
+test("A6 rewrites only internal same-origin redirects back to the incoming public origin", async () => {
+  const built = await builtWorker();
   try {
     const app = binding();
-    const robots = await built.worker.fetch(new Request("https://preview.example/robots.txt"), { APP:app.binding });
-    const robotsText = await robots.text();
-    assert.match(robotsText, /Disallow: \/api\//);
-    assert.match(robotsText, /Disallow: \/review\//);
-    assert.match(robotsText, /Disallow: \/supabase-series/);
-    assert.match(robotsText, /Sitemap: https:\/\/gachalens\.com\/sitemap\.xml/);
-    assert.match(robotsText, /Sitemap: https:\/\/gachalens\.com\/series-sitemap\.xml/);
-    assert.match(robotsText, /Sitemap: https:\/\/gachalens\.com\/variant-sitemap\.xml/);
-    assert.match(robotsText, /Host: https:\/\/gachalens\.com\//);
-
-    const root = await built.worker.fetch(new Request("https://preview.example/sitemap.xml"), { APP:app.binding });
-    const rootText = await root.text();
-    assert.match(rootText, /<urlset/);
-    assert.match(rootText, /https:\/\/gachalens\.com\/ranking/);
-    assert.match(rootText, /https:\/\/gachalens\.com\/schedule\?month=2026-10/);
-    assert.doesNotMatch(rootText, /<sitemapindex/);
-
-    const series = await built.worker.fetch(new Request("https://preview.example/series-sitemap.xml"), { APP:app.binding });
-    assert.match(await series.text(), /https:\/\/gachalens\.com\/series\/parent-1/);
-
-    const variants = await built.worker.fetch(new Request("https://preview.example/variant-sitemap/1"), { APP:app.binding });
-    assert.match(await variants.text(), /https:\/\/gachalens\.com\/series\/variant-1/);
+    const response = await built.worker.fetch(new Request("https://preview.example/trends"), { APP: app.binding });
+    assert.equal(response.status, 308);
+    assert.equal(response.headers.get("location"), "https://preview.example/ranking");
   } finally {
-    fs.rmSync(built.temp, { recursive:true, force:true });
+    fs.rmSync(built.temp, { recursive: true, force: true });
   }
 });
 
-test("app-owned routes keep credentials and require exact App SHA before delegation", async () => {
-  const built = await worker();
+test("mixed or missing App source identity fails closed before delegated content is exposed", async () => {
+  const built = await builtWorker();
+  try {
+    const mixed = binding({ sourceSha: OTHER_SHA });
+    const mixedResponse = await built.worker.fetch(new Request("https://public.example/ranking"), { APP: mixed.binding });
+    assert.equal(mixedResponse.status, 409);
+    assert.equal((await mixedResponse.json()).error, "mixed_source_sha");
+
+    const missing = binding({ omitSourceHeader: true });
+    const missingResponse = await built.worker.fetch(new Request("https://public.example/ranking"), { APP: missing.binding });
+    assert.equal(missingResponse.status, 502);
+    assert.equal((await missingResponse.json()).error, "app_source_identity_missing");
+  } finally {
+    fs.rmSync(built.temp, { recursive: true, force: true });
+  }
+});
+
+test("internal public-data endpoints and unknown routes stay fail-closed without touching App", async () => {
+  const built = await builtWorker();
   try {
     const app = binding();
-    const response = await built.worker.fetch(new Request("https://preview.example/review", {
-      headers:{ cookie:"review_session=ok" },
-    }), { APP:app.binding });
-    assert.equal(response.status, 200);
-    assert.deepEqual(app.calls.map((call) => call.path), ["/api/runtime-diagnostics/release-source","/review"]);
-    assert.equal(app.calls[1].cookie, "review_session=ok");
+    for (const route of ["/__public-data/v1/series", "/__public-data/v1/counts", "/unknown"]) {
+      const response = await built.worker.fetch(new Request(`https://public.example${route}`), { APP: app.binding });
+      assert.equal(response.status, 404, route);
+      assert.equal((await response.json()).error, "route_not_owned_by_public_bootstrap");
+    }
+    assert.deepEqual(app.calls, []);
   } finally {
-    fs.rmSync(built.temp, { recursive:true, force:true });
+    fs.rmSync(built.temp, { recursive: true, force: true });
   }
 });
 
-test("public renderer source has no Next vinext React or Supabase client dependency", () => {
-  const text = fs.readFileSync(new URL("../workers/public/src/document-renderer.js", import.meta.url), "utf8");
-  for (const token of ["vinext", "next/", "react", "@supabase/supabase-js", "SUPABASE_SERVICE_ROLE_KEY"]) {
-    assert.equal(text.includes(token), false, token);
-  }
-});
-
-test("interactive series queries delegate explicitly while canonical series stays public-owned", async () => {
-  const built = await worker();
+test("public-discovery valid/error statuses are passed through instead of flattened", async () => {
+  const built = await builtWorker();
   try {
     const app = binding();
-    const response = await built.worker.fetch(new Request("https://preview.example/series?q=test", {
-      headers:{ cookie:"catalog_session=ok" },
-    }), { APP:app.binding });
-    assert.equal(response.status, 404);
-    assert.deepEqual(app.calls.map((call) => call.path), ["/api/runtime-diagnostics/release-source","/series"]);
-    assert.equal(app.calls[1].search, "?q=test");
-    assert.equal(app.calls[1].cookie, "catalog_session=ok");
+    const invalid = await built.worker.fetch(new Request("https://public.example/api/public-discovery"), { APP: app.binding });
+    assert.equal(invalid.status, 400);
+    assert.deepEqual(await invalid.json(), { error: "invalid_request" });
   } finally {
-    fs.rmSync(built.temp, { recursive:true, force:true });
+    fs.rmSync(built.temp, { recursive: true, force: true });
   }
 });
 
-test("schedule canonicalizes bare and invalid query forms without invoking App SSR", async () => {
-  const built = await worker();
-  try {
-    const app = binding();
-    const bare = await built.worker.fetch(new Request("https://preview.example/schedule"), { APP:app.binding });
-    assert.equal(bare.status, 308);
-    assert.match(bare.headers.get("location") || "", /\/schedule\?month=\d{4}-\d{2}$/);
-    assert.equal(app.calls.length, 0);
-  } finally {
-    fs.rmSync(built.temp, { recursive:true, force:true });
-  }
+test("retained lightweight renderer uses the canonical parent-series namespace if reused", () => {
+  const source = fs.readFileSync(new URL("../workers/public/src/document-renderer.js", import.meta.url), "utf8");
+  assert.match(source, /sitemapUrl\(\`\/series\/group\/\$\{encodeURIComponent\(row\.slug\)\}\`/);
+  assert.doesNotMatch(source, /sitemapUrl\(\`\/series\/\$\{encodeURIComponent\(row\.slug\)\}\`, row\.updated_at\)\)\);\n    if \(rows\.length < 1000\) break/);
+});
+
+test("App worker stamps every response family with immutable release identity", () => {
+  const source = fs.readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
+  assert.match(source, /const RELEASE_SOURCE_HEADER = "x-gacha-source-sha"/);
+  assert.match(source, /withReleaseSourceIdentity\(publicDocumentData\)/);
+  assert.match(source, /withReleaseSourceIdentity\(releaseSourceIdentity\)/);
+  assert.match(source, /withReleaseSourceIdentity\(legacyCategoryRedirect\)/);
+  assert.match(source, /withReleaseSourceIdentity\(legacyDiscoveryFacetRedirect\)/);
+  assert.match(source, /withReleaseSourceIdentity\(legacyRankingRedirect\)/);
+  assert.match(source, /return withReleaseSourceIdentity\(response\)/);
 });
