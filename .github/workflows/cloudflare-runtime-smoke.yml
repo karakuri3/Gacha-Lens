@@ -631,7 +631,7 @@ jobs:
                 exit 1
               }
               canonical="$(grep -Eo '<link rel="canonical" href="[^"]+"' "$body" | head -1 | sed -E 's/.*href="([^"]+)"/\1/')"
-              [[ "$canonical" == https://gachalens.com/* ]] || {
+              [[ "$canonical" == "https://gachalens.com" || "$canonical" == https://gachalens.com/* ]] || {
                 echo "${pass} ${name} canonical escaped production origin: ${canonical:-missing}" >&2
                 exit 1
               }
