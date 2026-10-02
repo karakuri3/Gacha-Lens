@@ -291,7 +291,17 @@ export default {
           request,
           renderEnvironment(request, env, integrity.previewOrigin),
         );
-        return response ?? jsonResponse(request, { error: "public_document_route_unimplemented" }, 500);
+        if (!response) return jsonResponse(request, { error: "public_document_route_unimplemented" }, 500);
+
+        const headers = new Headers(response.headers);
+        headers.set("x-gacha-public-plane", "phase-a3");
+        headers.set("x-gacha-app-source-sha", integrity.appSha);
+        headers.set("x-gacha-app-transport", integrity.previewOrigin ? "preview-http" : "service-binding");
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        });
       } catch (error) {
         return jsonResponse(request, {
           error: "public_document_unavailable",
