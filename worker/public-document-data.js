@@ -2,6 +2,7 @@ const INTERNAL_HOST = "gacha-lens.internal";
 const PATH_PREFIX = "/__public-data/v1/";
 const DEFAULT_LIMIT = 60;
 const MAX_LIMIT = 1000;
+const MAX_OFFSET = 1_000_000;
 
 function json(value, status = 200) {
   return new Response(JSON.stringify(value), {
@@ -71,7 +72,7 @@ function publicVariantFilter(extra = {}) {
 
 async function seriesList(env, url) {
   const limit = int(url.searchParams.get("limit"), DEFAULT_LIMIT, 1);
-  const offset = int(url.searchParams.get("offset"), 0);
+  const offset = int(url.searchParams.get("offset"), 0, 0, MAX_OFFSET);
   const released = url.searchParams.get("released");
   const params = publicSeriesFilter({
     select: "id,slug,name,franchise,brand,category,release_month,release_week,release_date,price,image_url,official_url,is_released,updated_at",
@@ -85,7 +86,7 @@ async function seriesList(env, url) {
 
 async function schedule(env, url) {
   const limit = int(url.searchParams.get("limit"), 120, 1);
-  const offset = int(url.searchParams.get("offset"), 0);
+  const offset = int(url.searchParams.get("offset"), 0, 0, MAX_OFFSET);
   const month = String(url.searchParams.get("month") ?? "").trim();
   const params = publicSeriesFilter({
     select: "id,slug,name,brand,category,release_month,release_week,release_date,price,image_url,is_released,updated_at",
@@ -147,7 +148,7 @@ async function variantDetail(env, url) {
 
 async function sitemapSeries(env, url) {
   const limit = int(url.searchParams.get("limit"), MAX_LIMIT, 1);
-  const offset = int(url.searchParams.get("offset"), 0);
+  const offset = int(url.searchParams.get("offset"), 0, 0, MAX_OFFSET);
   return rest(env, "series", {
     select: "slug,updated_at,variants!inner()",
     "variants.variant_type": "neq.provisional",
@@ -163,7 +164,7 @@ async function sitemapSeries(env, url) {
 
 async function scheduleMonths(env, url) {
   const limit = int(url.searchParams.get("limit"), MAX_LIMIT, 1);
-  const offset = int(url.searchParams.get("offset"), 0);
+  const offset = int(url.searchParams.get("offset"), 0, 0, MAX_OFFSET);
   return rest(env, "series", {
     select: "id,release_date,release_month",
     order: "id.asc",
@@ -174,7 +175,7 @@ async function scheduleMonths(env, url) {
 
 async function sitemapVariants(env, url) {
   const limit = int(url.searchParams.get("limit"), MAX_LIMIT, 1);
-  const offset = int(url.searchParams.get("offset"), 0);
+  const offset = int(url.searchParams.get("offset"), 0, 0, MAX_OFFSET);
   return rest(env, "variants", publicVariantFilter({
     select: "slug,updated_at",
     order: "slug.asc",
