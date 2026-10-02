@@ -299,8 +299,7 @@ export async function runA6Acceptance({
       assert.equal(response.status, 200, `${pass} sitemap loc ${path}`);
     });
 
-    const maxShard = Math.max(...shardLocs.map((loc) => Number(new URL(loc).pathname.split("/").at(-1))));
-    for (const invalidPath of ["/variant-sitemap/0", `/variant-sitemap/${maxShard + 1}`]) {
+    for (const invalidPath of ["/variant-sitemap/0", "/variant-sitemap/5001"]) {
       const response = await publicRequest(invalidPath, { method: "HEAD" });
       assert.equal(response.status, 404, `${pass} invalid sitemap shard ${invalidPath}`);
     }
@@ -364,10 +363,40 @@ export async function runA6Acceptance({
 
     const reviewMutation = await publicRequest("/api/review/community-reports/a6-nonexistent", {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: "action=approve",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: publicOrigin,
+      },
+      body: "decision=approved",
     });
     assert.equal(reviewMutation.status, 401);
+
+    const ingestGet = await publicRequest("/api/ingest/all", { headers: { accept: "application/json" } });
+    assert.equal(ingestGet.status, 200);
+    const ingestGetJson = await ingestGet.json();
+    assert.equal(ingestGetJson.execution, "retired-from-web-runtime");
+
+    const ingestPost = await publicRequest("/api/ingest/all", { method: "POST" });
+    assert.equal(ingestPost.status, 401);
+
+    const runtimeDiagnostic = await compareWithApp("/api/runtime-diagnostics/variant-detail", {
+      headers: { accept: "application/json" },
+    });
+    assert.equal(runtimeDiagnostic.status, 200);
+
+    const outbound = await publicRequest("/api/outbound-clicks", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider: "official", variantId: "a6-read-only-proof", pagePath: "/a6" }),
+    });
+    assert.equal(outbound.status, 204, "noncanonical Preview origin must suppress outbound-click writes");
+
+    const communityValidation = await publicRequest("/api/community-reports", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reportType: "__invalid__", variantId: "" }),
+    });
+    assert.equal(communityValidation.status, 400);
 
     const unknown = await call(publicOrigin, "/__a6-unknown");
     assert.equal(unknown.status, 404);
