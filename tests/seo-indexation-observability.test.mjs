@@ -211,7 +211,7 @@ test("root and series sitemaps use a bounded parent source instead of rescanning
   assert.match(series, /public-series-sitemap-parents/);
   assert.match(series, /buildPublicParentSitemapData/);
   assert.match(series, /getVariantObserverSitemapShardCount/);
-  assert.match(series, /loadCachedPublicVariantSitemapCount/);
+  assert.match(series, /loadCachedPublicVariantSitemapShardCount/);
   assert.match(series, /loadCachedPublicVariantSitemapPage/);
   assert.doesNotMatch(series, /getVariantObserverSitemapEntries[\s\S]{0,300}getPublicSitemapIdentifiers/);
 
