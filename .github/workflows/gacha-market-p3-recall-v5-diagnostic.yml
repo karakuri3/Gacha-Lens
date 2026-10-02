@@ -2,6 +2,19 @@ name: Gacha Market P3 Recall V5 Diagnostic
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_main_sha:
+        description: Exact current main SHA approved for this read-only diagnostic
+        required: true
+        type: string
+      approved_target_variant_ids_json:
+        description: Exact approved 10 variant IDs as a JSON array
+        required: true
+        type: string
+      confirmation:
+        description: Type APPROVE_P3_RECALL_V5_DIAGNOSTIC
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -16,19 +29,29 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.expected_main_sha }}
+          fetch-depth: 1
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Verify exact current main revision
+      - name: Verify exact approved current main revision
         shell: bash
+        env:
+          EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
           test "$GITHUB_REF" = "refs/heads/main"
+          test "$CONFIRMATION" = "APPROVE_P3_RECALL_V5_DIAGNOSTIC"
+          [[ "$EXPECTED_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
           git fetch --no-tags origin main --depth=1
-          test "$GITHUB_SHA" = "$(git rev-parse origin/main)"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_SHA"
       - name: Run read-only P3 recall V5 diagnostic
         id: diagnostic
         env:
@@ -40,7 +63,15 @@ jobs:
           YAHOO_SHOPPING_APP_ID: ${{ secrets.YAHOO_SHOPPING_APP_ID }}
           YAHOO_SHOPPING_FETCH_ENABLED: ${{ secrets.YAHOO_SHOPPING_FETCH_ENABLED }}
           YAHOO_SHOPPING_REQUEST_DELAY_MS: "5000"
-        run: node scripts/market-p3-recall-v5-diagnostic.mjs --output-dir=${{ runner.temp }}/gacha-market-p3-recall-v5-diagnostic
+          P3_RECALL_V5_DIAGNOSTIC_CONFIRMATION: ${{ inputs.confirmation }}
+          P3_RECALL_V5_DIAGNOSTIC_APPROVED_TARGET_VARIANT_IDS_JSON: ${{ inputs.approved_target_variant_ids_json }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/market-p3-recall-v5-diagnostic.mjs \
+            --expected-main-sha="${{ inputs.expected_main_sha }}" \
+            --origin-main-sha="$(git rev-parse origin/main)" \
+            --output-dir="${{ runner.temp }}/gacha-market-p3-recall-v5-diagnostic"
       - name: Scan sanitized recall V5 diagnostic artifact
         id: scan
         if: ${{ always() }}
