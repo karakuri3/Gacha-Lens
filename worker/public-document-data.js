@@ -20,6 +20,20 @@ function config(env) {
   return { base, key };
 }
 
+function isJwtCredential(key) {
+  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(String(key || ""));
+}
+
+function restHeaders(cfg, extra = {}) {
+  const headers = {
+    apikey: cfg.key,
+    accept: "application/json",
+    ...extra,
+  };
+  if (isJwtCredential(cfg.key)) headers.authorization = `Bearer ${cfg.key}`;
+  return headers;
+}
+
 async function rest(env, table, params) {
   const cfg = config(env);
   if (!cfg) throw new Error("public_data_supabase_config_unavailable");
@@ -28,11 +42,7 @@ async function rest(env, table, params) {
     if (value !== null && value !== undefined && value !== "") url.searchParams.set(key, String(value));
   }
   const response = await fetch(url, {
-    headers: {
-      apikey: cfg.key,
-      authorization: `Bearer ${cfg.key}`,
-      accept: "application/json",
-    },
+    headers: restHeaders(cfg),
   });
   if (!response.ok) throw new Error(`public_data_rest_${table}_${response.status}`);
   return response.json();
@@ -83,8 +93,16 @@ async function schedule(env, url) {
     limit,
     offset,
   });
-  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) params.release_month = `eq.${month}`;
-  else params.release_date = `gte.${new Date().toISOString().slice(0, 10)}`;
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    const [yearText, monthText] = month.split("-");
+    const year = Number(yearText);
+    const monthNumber = Number(monthText);
+    const nextYear = monthNumber === 12 ? year + 1 : year;
+    const nextMonth = monthNumber === 12 ? 1 : monthNumber + 1;
+    const start = `${yearText}-${monthText}-01`;
+    const end = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
+    params.or = `(and(release_date.gte.${start},release_date.lt.${end}),and(release_date.is.null,release_month.eq.${monthNumber}月),and(release_date.is.null,release_month.eq.${month}))`;
+  } else params.release_date = `gte.${new Date().toISOString().slice(0, 10)}`;
   return rest(env, "series", params);
 }
 
@@ -165,33 +183,6 @@ async function sitemapVariants(env, url) {
   }));
 }
 
-async function counts(env) {
-  const cfg = config(env);
-  if (!cfg) throw new Error("public_data_supabase_config_unavailable");
-  async function count(table, filters) {
-    const url = new URL(`${cfg.base}/rest/v1/${table}`);
-    url.searchParams.set("select", "id");
-    url.searchParams.set("limit", "1");
-    for (const [key, value] of Object.entries(filters)) url.searchParams.set(key, value);
-    const response = await fetch(url, {
-      headers: {
-        apikey: cfg.key,
-        authorization: `Bearer ${cfg.key}`,
-        prefer: "count=exact",
-        range: "0-0",
-      },
-    });
-    if (!response.ok) throw new Error(`public_data_count_${table}_${response.status}`);
-    const match = /\/(\d+)$/.exec(response.headers.get("content-range") ?? "");
-    return match ? Number(match[1]) : 0;
-  }
-  const [series, variants] = await Promise.all([
-    count("series", publicSeriesFilter({})),
-    count("variants", publicVariantFilter({})),
-  ]);
-  return { series, variants };
-}
-
 export async function handlePublicDocumentData(request, env) {
   const url = new URL(request.url);
   if (url.hostname !== INTERNAL_HOST || !url.pathname.startsWith(PATH_PREFIX)) return null;
@@ -206,7 +197,6 @@ export async function handlePublicDocumentData(request, env) {
     else if (url.pathname === `${PATH_PREFIX}sitemap-series`) value = await sitemapSeries(env, url);
     else if (url.pathname === `${PATH_PREFIX}schedule-months`) value = await scheduleMonths(env, url);
     else if (url.pathname === `${PATH_PREFIX}sitemap-variants`) value = await sitemapVariants(env, url);
-    else if (url.pathname === `${PATH_PREFIX}counts`) value = await counts(env);
     else return json({ error: "public_data_route_not_found" }, 404);
 
     if (value === null) return json({ error: "not_found" }, 404);
