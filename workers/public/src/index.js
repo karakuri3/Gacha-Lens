@@ -179,49 +179,30 @@ function rewriteDelegatedLocation(headers, incoming) {
 }
 
 async function delegateAppOwned(request, env) {
-  const ownSha = releaseSourceSha();
-  if (!ownSha) return jsonResponse(request, { error: "public_source_identity_unavailable" }, 503);
-  const incoming = new URL(request.url);
-  const previewOrigin = validatedAppPreviewOrigin(request);
-  if (!previewOrigin && (!env?.APP || typeof env.APP.fetch !== "function")) {
-    return jsonResponse(request, { error: "app_binding_unavailable" }, 503);
-  }
+  const integrity = await assertAppExactSha(request, env);
+  if (!integrity.ok) return integrity.response;
 
-  const target = previewOrigin
-    ? new URL(incoming.pathname + incoming.search, previewOrigin)
-    : incoming;
+  const incoming = new URL(request.url);
+  const target = integrity.previewOrigin
+    ? new URL(incoming.pathname + incoming.search, integrity.previewOrigin)
+    : new URL(incoming.pathname + incoming.search, INTERNAL_ORIGIN);
   const forwarded = new Request(target, request);
   forwarded.headers.delete(APP_PREVIEW_OVERRIDE_HEADER);
-  const response = await fetchApp(request, env, forwarded, previewOrigin);
-  if (!response) return jsonResponse(request, { error: "app_binding_unavailable" }, 503);
-  const appSha = String(response.headers.get(APP_SOURCE_HEADER) || "").trim().toLowerCase();
 
-  if (!SHA_RE.test(appSha)) {
-    return jsonResponse(request, {
-      error: "app_source_identity_missing",
-      public_source_sha: ownSha,
-      app_source_sha: appSha || null,
-    }, 502);
-  }
-  if (appSha !== ownSha) {
-    return jsonResponse(request, {
-      error: "mixed_source_sha",
-      public_source_sha: ownSha,
-      app_source_sha: appSha,
-    }, 409);
-  }
+  const response = await fetchApp(request, env, forwarded, integrity.previewOrigin);
+  if (!response) return jsonResponse(request, { error: "app_binding_unavailable" }, 503);
 
   const headers = new Headers(response.headers);
-  if (previewOrigin) {
+  if (integrity.previewOrigin) {
     const location = headers.get("location");
     if (location) {
       let redirectTarget;
       try {
-        redirectTarget = new URL(location, previewOrigin);
+        redirectTarget = new URL(location, integrity.previewOrigin);
       } catch {
         redirectTarget = null;
       }
-      if (redirectTarget?.origin === previewOrigin) {
+      if (redirectTarget?.origin === integrity.previewOrigin) {
         redirectTarget.protocol = incoming.protocol;
         redirectTarget.host = incoming.host;
         headers.set("location", redirectTarget.toString());
@@ -232,9 +213,10 @@ async function delegateAppOwned(request, env) {
   } else {
     rewriteDelegatedLocation(headers, incoming);
   }
+
   headers.set("x-gacha-public-plane", "a6-front-door");
-  headers.set("x-gacha-app-source-sha", appSha);
-  headers.set("x-gacha-app-transport", previewOrigin ? "preview-http" : "service-binding");
+  headers.set("x-gacha-app-source-sha", integrity.appSha);
+  headers.set("x-gacha-app-transport", integrity.previewOrigin ? "preview-http" : "service-binding");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
