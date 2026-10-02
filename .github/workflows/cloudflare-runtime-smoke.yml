@@ -366,6 +366,116 @@ jobs:
           echo 'Review/admin unauthenticated mutation boundary: HTTP 401' >> "$GITHUB_STEP_SUMMARY"
           echo 'Ingest unauthenticated boundary: HTTP 401; authorized path is code-pinned to HTTP 410/GitHub Actions.' >> "$GITHUB_STEP_SUMMARY"
 
+      - name: A6 exact-head App parity acceptance without transient retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          get_once() {
+            local name="$1"
+            local path="$2"
+            local expected="$3"
+            local needle="${4:-}"
+            local body="$tmp/${name}.body"
+            local headers="$tmp/${name}.headers"
+            local code
+            code="$(curl --silent --show-error --max-time 60 --dump-header "$headers" --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
+            [[ "$code" == "$expected" ]] || {
+              echo "A6 ${name}: HTTP ${code}, expected ${expected}" >&2
+              head -c 1200 "$body" >&2 || true
+              exit 1
+            }
+            if [[ -n "$needle" ]]; then
+              grep -Fq "$needle" "$body" || {
+                echo "A6 ${name}: missing marker ${needle}" >&2
+                exit 1
+              }
+            fi
+            echo "A6 ${name}: HTTP ${code}" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          category='%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3'
+          brand='%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4'
+          franchise='%E3%82%B5%E3%83%B3%E3%83%AA%E3%82%AA%E3%82%AD%E3%83%A3%E3%83%A9%E3%82%AF%E3%82%BF%E3%83%BC%E3%82%BA'
+          encoded_slug='tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
+
+          get_once ranking '/ranking' 200
+          get_once ranking_series '/ranking/series' 200
+          get_once ranking_upcoming '/ranking/upcoming' 200
+          get_once ranking_upcoming_series '/ranking/upcoming/series' 200
+          get_once stock '/stock' 200
+          get_once restocks '/restocks' 200
+          get_once favorites '/favorites' 200
+          get_once categories '/categories' 200
+          get_once category "/categories/${category}" 200
+          get_once brands '/brands' 200
+          get_once brand "/brands/${brand}" 200
+          get_once franchises '/franchises' 200
+          get_once franchise "/franchises/${franchise}" 200
+          get_once guides '/guides' 200
+          get_once guide_market '/guides/market-price' 200
+          get_once guide_price '/guides/price-history' 200
+          get_once guide_stock '/guides/stock-restock' 200
+          get_once guide_forecast '/guides/forecast-ranking' 200
+          get_once privacy '/privacy' 200
+          get_once terms '/terms' 200
+          get_once disclaimer '/disclaimer' 200
+          get_once affiliate '/affiliate-disclosure' 200
+          get_once operator '/operator' 200
+          get_once contact '/contact' 200
+          get_once schedule_oct '/schedule?month=2026-10' 200 '2026-10'
+          get_once public_stock '/api/public-stock' 200 '"rows"'
+          get_once public_variants "/api/public-variants?ids=${encoded_slug}" 200
+          get_once public_discovery "/api/public-discovery?type=category&name=${category}&page=1" 200
+          get_once public_discovery_invalid '/api/public-discovery?type=invalid&name=x&page=1' 400
+          get_once review '/review' 200 'Review access'
+          get_once unknown '/__a6-unknown-route' 404
+          get_once internal '/__public-data/v1/series' 404
+          get_once manifest '/manifest.webmanifest' 200
+          get_once logo '/brand/gacha-lens-logo.png' 200
+          get_once mark '/brand/gacha-lens-mark.png' 200
+
+          redirect_once() {
+            local name="$1"
+            local path="$2"
+            local location_suffix="$3"
+            local headers="$tmp/${name}.headers"
+            local code location
+            code="$(curl --silent --show-error --max-time 60 --output /dev/null --dump-header "$headers" --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
+            [[ "$code" == '308' ]] || { echo "A6 ${name}: HTTP ${code}, expected 308" >&2; exit 1; }
+            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+            [[ "$location" == *"$location_suffix" ]] || { echo "A6 ${name}: unexpected Location ${location:-missing}" >&2; exit 1; }
+            echo "A6 ${name}: 308 -> ${location}" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          redirect_once trends '/trends' '/ranking'
+          redirect_once ranking_legacy '/ranking?tab=upcoming&scope=series' '/ranking/upcoming/series'
+          redirect_once category_legacy "/categories/${category}?page=2" "/categories/${category}/page/2"
+          redirect_once brand_legacy "/brands/${brand}?page=2" "/brands/${brand}/page/2"
+          redirect_once franchise_legacy "/franchises/${franchise}?page=2" "/franchises/${franchise}/page/2"
+
+          for path in '/' '/series' '/ranking' '/favorites'; do
+            curl --silent --show-error --max-time 60 "${PREVIEW_URL}${path}" >> "$tmp/pages.html"
+          done
+          grep -Eo '(src|href)="(/_next/static/[^"?]+|/brand/[^"?]+|/manifest\.webmanifest)' "$tmp/pages.html" |
+            sed -E 's/^(src|href)="//' |
+            sort -u > "$tmp/assets.txt" || true
+
+          while IFS= read -r asset; do
+            [[ -n "$asset" ]] || continue
+            code="$(curl --silent --show-error --max-time 60 --output /dev/null --write-out '%{http_code}' "${PREVIEW_URL}${asset}")"
+            [[ "$code" == '200' || "$code" == '304' ]] || {
+              echo "A6 asset crawl failed: ${asset} -> HTTP ${code}" >&2
+              exit 1
+            }
+          done < "$tmp/assets.txt"
+
+          asset_count="$(wc -l < "$tmp/assets.txt" | tr -d ' ')"
+          echo "A6 same-origin asset crawl: ${asset_count} referenced assets, 0 unexpected failures" >> "$GITHUB_STEP_SUMMARY"
+          echo 'A6 no-retry App route/query/API/static acceptance: PASS' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Compare security-header coverage with current Production
         shell: bash
         run: |
