@@ -284,12 +284,12 @@ test("A6 immutable Preview bridge is workers.dev-only, host-restricted, and exac
         url: url.toString(),
         override: request.headers.get("x-gacha-a6-app-preview-origin"),
       });
+      if (url.pathname === "/api/runtime-diagnostics/release-source") {
+        return Response.json({ source_sha: SHA });
+      }
       return new Response("<!doctype html><h1>Preview App</h1>", {
         status: 200,
-        headers: {
-          "content-type": "text/html; charset=utf-8",
-          "x-gacha-source-sha": SHA,
-        },
+        headers: { "content-type": "text/html; charset=utf-8" },
       });
     };
 
@@ -301,9 +301,10 @@ test("A6 immutable Preview bridge is workers.dev-only, host-restricted, and exac
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("x-gacha-app-source-sha"), SHA);
     assert.equal(response.headers.get("x-gacha-app-transport"), "preview-http");
-    assert.equal(externalCalls.length, 1);
-    assert.equal(externalCalls[0].url, "https://exact-gacha-lens.senpingxingzuo.workers.dev/ranking");
-    assert.equal(externalCalls[0].override, null);
+    assert.equal(externalCalls.length, 2);
+    assert.equal(externalCalls[0].url, "https://exact-gacha-lens.senpingxingzuo.workers.dev/api/runtime-diagnostics/release-source");
+    assert.equal(externalCalls[1].url, "https://exact-gacha-lens.senpingxingzuo.workers.dev/ranking");
+    assert.equal(externalCalls.every((call) => call.override === null), true);
     assert.deepEqual(app.calls, []);
 
     const invalid = await built.worker.fetch(new Request(
@@ -312,7 +313,7 @@ test("A6 immutable Preview bridge is workers.dev-only, host-restricted, and exac
     ), { APP: app.binding });
     assert.equal(invalid.status, 409);
     assert.equal((await invalid.json()).error, "mixed_source_sha");
-    assert.equal(externalCalls.length, 1);
+    assert.equal(externalCalls.length, 2);
 
     const production = binding();
     const productionResponse = await built.worker.fetch(new Request(
@@ -321,9 +322,11 @@ test("A6 immutable Preview bridge is workers.dev-only, host-restricted, and exac
     ), { APP: production.binding });
     assert.equal(productionResponse.status, 200);
     assert.equal(productionResponse.headers.get("x-gacha-app-transport"), "service-binding");
-    assert.equal(externalCalls.length, 1);
-    assert.equal(production.calls.length, 1);
-    assert.equal(production.calls[0].path, "/ranking");
+    assert.equal(externalCalls.length, 2);
+    assert.deepEqual(production.calls.map((call) => call.path), [
+      "/api/runtime-diagnostics/release-source",
+      "/ranking",
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
     fs.rmSync(built.temp, { recursive: true, force: true });
@@ -342,7 +345,7 @@ test("A6 rewrites only internal same-origin redirects back to the incoming publi
   }
 });
 
-test("mixed or missing App source identity fails closed before delegated content is exposed", async () => {
+test("mixed App source identity fails closed and delegated response headers are not trusted as identity", async () => {
   const built = await builtWorker();
   try {
     const mixed = binding({ sourceSha: OTHER_SHA });
@@ -350,10 +353,14 @@ test("mixed or missing App source identity fails closed before delegated content
     assert.equal(mixedResponse.status, 409);
     assert.equal((await mixedResponse.json()).error, "mixed_source_sha");
 
-    const missing = binding({ omitSourceHeader: true });
-    const missingResponse = await built.worker.fetch(new Request("https://public.example/ranking"), { APP: missing.binding });
-    assert.equal(missingResponse.status, 502);
-    assert.equal((await missingResponse.json()).error, "app_source_identity_missing");
+    const noResponseHeader = binding({ omitSourceHeader: true });
+    const response = await built.worker.fetch(new Request("https://public.example/ranking"), { APP: noResponseHeader.binding });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-gacha-app-source-sha"), SHA);
+    assert.deepEqual(noResponseHeader.calls.map((call) => call.path), [
+      "/api/runtime-diagnostics/release-source",
+      "/ranking",
+    ]);
   } finally {
     fs.rmSync(built.temp, { recursive: true, force: true });
   }
