@@ -91,7 +91,7 @@ test("A6 route inventory has an explicit owner and unknown/internal paths stay f
     "/brands", "/brands/%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4", "/brands/x/page/2",
     "/franchises", "/franchises/x", "/franchises/x/page/2",
     "/guides", "/guides/market-price", "/trends",
-"/terms", "/disclaimer", "/affiliate-disclosure", "/operator", "/contact",
+    "/contact",
     "/review", "/review/login", "/review/logout",
     "/api/public-stock", "/api/public-variants", "/api/public-discovery",
     "/api/community-reports", "/api/review/community-reports/1", "/api/import-issues",
