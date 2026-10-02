@@ -181,10 +181,6 @@ function rewriteDelegatedLocation(headers, incoming) {
 async function delegateAppOwned(request, env) {
   const ownSha = releaseSourceSha();
   if (!ownSha) return jsonResponse(request, { error: "public_source_identity_unavailable" }, 503);
-  if (!env?.APP || typeof env.APP.fetch !== "function") {
-    return jsonResponse(request, { error: "app_binding_unavailable" }, 503);
-  }
-
   const incoming = new URL(request.url);
   const previewOrigin = validatedAppPreviewOrigin(request);
   if (!previewOrigin && (!env?.APP || typeof env.APP.fetch !== "function")) {
