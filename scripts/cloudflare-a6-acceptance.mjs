@@ -102,6 +102,7 @@ export async function runA6Acceptance({
   assert.match(appOrigin, /^https:\/\//);
   assert.match(targetSha, /^[0-9a-f]{40}$/);
 
+  const appPreviewOrigin = new URL(appOrigin).origin;
   const summary = {
     passes: [],
     publicRequests: 0,
@@ -118,6 +119,7 @@ export async function runA6Acceptance({
       ...options,
       headers: {
         "cache-control": "no-cache",
+        ...(kind === "public" ? { "x-gacha-a6-app-preview-origin": appPreviewOrigin } : {}),
         ...(options.headers || {}),
       },
     });
@@ -152,6 +154,7 @@ export async function runA6Acceptance({
     if (delegated) {
       assert.equal(response.headers.get("x-gacha-public-plane"), "a6-front-door", `${path} missing A6 front-door marker`);
       assert.equal(response.headers.get("x-gacha-app-source-sha"), targetSha, `${path} missing exact App SHA`);
+      assert.equal(response.headers.get("x-gacha-app-transport"), "preview-http", `${path} did not use immutable App Preview`);
     }
     return response;
   };
