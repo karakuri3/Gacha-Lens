@@ -108,8 +108,16 @@ async function schedule(env, url) {
     limit,
     offset,
   });
-  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) params.release_month = `eq.${month}`;
-  else params.release_date = `gte.${new Date().toISOString().slice(0, 10)}`;
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    const [yearText, monthText] = month.split("-");
+    const year = Number(yearText);
+    const monthNumber = Number(monthText);
+    const nextYear = monthNumber === 12 ? year + 1 : year;
+    const nextMonth = monthNumber === 12 ? 1 : monthNumber + 1;
+    const start = `${yearText}-${monthText}-01`;
+    const end = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
+    params.or = `(and(release_date.gte.${start},release_date.lt.${end}),and(release_date.is.null,release_month.eq.${monthNumber}月),and(release_date.is.null,release_month.eq.${month}))`;
+  } else params.release_date = `gte.${new Date().toISOString().slice(0, 10)}`;
   return rest(env, "series", params);
 }
 
