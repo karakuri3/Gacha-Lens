@@ -75,9 +75,10 @@ test("public documents render in Public Worker and never proxy same document pat
         assert.match(body, /BreadcrumbList/);
       }
       const calls = app.calls.slice(before);
-      assert.ok(calls.length >= 1);
-      assert.ok(calls.every((call) => call.path.startsWith("/__public-data/v1/")), JSON.stringify(calls));
-      assert.ok(calls.every((call) => call.path !== route));
+      assert.ok(calls.length >= 2);
+      assert.equal(calls[0].path, "/api/runtime-diagnostics/release-source");
+      assert.ok(calls.slice(1).every((call) => call.path.startsWith("/__public-data/v1/")), JSON.stringify(calls));
+      assert.ok(calls.every((call) => call.path !== new URL(route, "https://preview.example").pathname));
     }
   } finally {
     fs.rmSync(built.temp, { recursive:true, force:true });
@@ -160,7 +161,9 @@ test("schedule canonicalizes bare and invalid query forms without invoking App S
     const bare = await built.worker.fetch(new Request("https://preview.example/schedule"), { APP:app.binding });
     assert.equal(bare.status, 308);
     assert.match(bare.headers.get("location") || "", /\/schedule\?month=\d{4}-\d{2}$/);
-    assert.equal(app.calls.length, 0);
+    assert.deepEqual(app.calls.map((call) => call.path), ["/api/runtime-diagnostics/release-source"]);
+    assert.equal(app.calls.some((call) => call.path === "/__public-data/v1/schedule"), false);
+    assert.equal(app.calls.some((call) => call.path === "/schedule"), false);
   } finally {
     fs.rmSync(built.temp, { recursive:true, force:true });
   }
