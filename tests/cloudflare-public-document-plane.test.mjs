@@ -98,10 +98,12 @@ test("A6 route inventory explicitly owns the old App public surface and assets",
   for (const route of APP_OWNED_EXACT_PATHS) assert.equal(classifyPublicRoute(route), "app-owned", route);
 
   const prefixExamples = {
+    "/series/": "/series/group/example",
     "/categories/": "/categories/example/page/2",
     "/brands/": "/brands/example/page/2",
     "/franchises/": "/franchises/example/page/2",
     "/guides/": "/guides/forecast-ranking",
+    "/variant-sitemap/": "/variant-sitemap/1",
     "/api/review/": "/api/review/community-reports/1",
     "/api/ingest/": "/api/ingest/official",
     "/_next/": "/_next/static/chunks/app.js",
@@ -187,21 +189,12 @@ test("A6 acceptance contract exhausts every App page and route handler source", 
     "app/variant-sitemap/[page]/route.js",
   ]);
 
-  const publicSamples = [
+  const ownedSamples = [
     "/",
     "/series",
     "/series/variant",
     "/series/group/parent",
     "/schedule",
-    "/robots.txt",
-    "/sitemap.xml",
-    "/series-sitemap.xml",
-    "/variant-sitemap.xml",
-    "/variant-sitemap/1",
-  ];
-  for (const route of publicSamples) assert.equal(classifyPublicRoute(route), "public-document", route);
-
-  const appSamples = [
     "/ranking",
     "/stock",
     "/restocks",
@@ -230,8 +223,11 @@ test("A6 acceptance contract exhausts every App page and route handler source", 
     "/api/public-variants",
     "/api/review/community-reports/1",
     "/api/runtime-diagnostics/variant-detail",
+    "/series-sitemap.xml",
+    "/variant-sitemap.xml",
+    "/variant-sitemap/1",
   ];
-  for (const route of appSamples) assert.equal(classifyPublicRoute(route), "app-owned", route);
+  for (const route of ownedSamples) assert.equal(classifyPublicRoute(route), "app-owned", route);
   assert.equal(classifyPublicRoute("/supabase-series"), "explicitly-rejected");
 });
 
@@ -240,7 +236,9 @@ test("A6 front door delegates pages, queries, APIs, and static assets with exact
   try {
     const app = binding();
     const cases = [
+      ["GET", "/", null],
       ["GET", "/series?q=test&page=2", null],
+      ["GET", "/schedule?month=2026-10", null],
       ["GET", "/ranking?tab=upcoming&scope=series", null],
       ["GET", "/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3?page=2", null],
       ["GET", "/api/public-stock", null],
