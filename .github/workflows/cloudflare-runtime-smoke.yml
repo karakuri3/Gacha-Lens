@@ -607,8 +607,8 @@ jobs:
             }
 
             plane="$(awk 'BEGIN{IGNORECASE=1} /^x-gacha-public-plane:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
-            [[ "$plane" == 'a6-front-door' ]] || {
-              echo "${pass} ${name} did not execute through the A6 front door: ${plane:-missing}" >&2
+            [[ "$plane" == 'phase-a3' ]] || {
+              echo "${pass} ${name} did not execute on the lightweight Public document plane: ${plane:-missing}" >&2
               exit 1
             }
 
