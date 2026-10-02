@@ -161,7 +161,7 @@ test("A6 mixed SHA fails closed before delegated public routes or assets", async
   const built = await builtWorker();
   try {
     const app = appBinding({ sourceSha: OTHER_SHA });
-    for (const route of ["/ranking", "/api/public-stock", "/_next/static/css/app.css"]) {
+    for (const route of ["/", "/schedule?month=2026-10", "/variant-sitemap.xml", "/ranking", "/api/public-stock", "/_next/static/css/app.css"]) {
       const before = app.calls.length;
       const response = await built.worker.fetch(new Request(`https://preview.example${route}`), { APP: app.binding });
       assert.equal(response.status, 409, route);
