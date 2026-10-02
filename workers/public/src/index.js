@@ -116,6 +116,18 @@ async function delegateAppOwned(request, env) {
   return env.APP.fetch(forwarded);
 }
 
+function publicDocumentNeedsApp(pathname) {
+  return pathname === "/"
+    || pathname === "/series"
+    || pathname === "/schedule"
+    || pathname === "/sitemap.xml"
+    || pathname === "/series-sitemap.xml"
+    || pathname === "/variant-sitemap.xml"
+    || /^\/variant-sitemap\/[1-9]\d*$/.test(pathname)
+    || /^\/series\/[^/]+$/.test(pathname)
+    || /^\/series\/group\/[^/]+$/.test(pathname);
+}
+
 async function publicDiagnostic(request, env, pathname) {
   const guard = methodGuard(request);
   if (guard) return guard;
@@ -154,6 +166,10 @@ export default {
     if (ownership === "public-document") {
       const guard = methodGuard(request);
       if (guard) return guard;
+      if (publicDocumentNeedsApp(url.pathname)) {
+        const integrity = await assertAppExactSha(request, env);
+        if (!integrity.ok) return integrity.response;
+      }
       try {
         const response = await renderPublicDocument(request, env);
         return response ?? jsonResponse(request, { error: "public_document_route_unimplemented" }, 500);
