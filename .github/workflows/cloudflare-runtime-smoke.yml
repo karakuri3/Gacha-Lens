@@ -10,6 +10,7 @@ on:
       - "worker/**"
       - "workers/public/**"
       - "scripts/build-public-worker.mjs"
+      - "scripts/cloudflare-a6-acceptance.mjs"
       - "jsconfig.json"
       - "next.config.mjs"
       - "package.json"
