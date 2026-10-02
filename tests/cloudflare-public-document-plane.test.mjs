@@ -83,6 +83,16 @@ function binding({ sourceSha = SHA, omitSourceHeader = false } = {}) {
   };
 }
 
+function walkFiles(root) {
+  const files = [];
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const target = path.join(root, entry.name);
+    if (entry.isDirectory()) files.push(...walkFiles(target));
+    else files.push(target);
+  }
+  return files;
+}
+
 test("A6 route inventory explicitly owns the old App public surface and assets", () => {
   for (const route of PUBLIC_DIAGNOSTIC_PATHS) assert.equal(classifyPublicRoute(route), "public-diagnostic", route);
   for (const route of APP_OWNED_EXACT_PATHS) assert.equal(classifyPublicRoute(route), "app-owned", route);
@@ -112,6 +122,113 @@ test("A6 route inventory explicitly owns the old App public surface and assets",
   ]) {
     assert.equal(classifyPublicRoute(rejected), "explicitly-rejected", rejected);
   }
+});
+
+test("A6 acceptance contract exhausts every App page and route handler source", () => {
+  const appRoot = path.join(process.cwd(), "app");
+  const pageFiles = walkFiles(appRoot)
+    .filter((file) => /[/\\]page\.js$/.test(file))
+    .map((file) => path.relative(process.cwd(), file).replaceAll("\\", "/"))
+    .sort();
+
+  assert.deepEqual(pageFiles, [
+    "app/affiliate-disclosure/page.js",
+    "app/brands/[name]/page.js",
+    "app/brands/[name]/page/[page]/page.js",
+    "app/brands/page.js",
+    "app/categories/[name]/page.js",
+    "app/categories/[name]/page/[page]/page.js",
+    "app/categories/page.js",
+    "app/contact/page.js",
+    "app/disclaimer/page.js",
+    "app/favorites/page.js",
+    "app/franchises/[name]/page.js",
+    "app/franchises/[name]/page/[page]/page.js",
+    "app/franchises/page.js",
+    "app/guides/[slug]/page.js",
+    "app/guides/page.js",
+    "app/operator/page.js",
+    "app/page.js",
+    "app/privacy/page.js",
+    "app/ranking/page.js",
+    "app/ranking/series/page.js",
+    "app/ranking/upcoming/page.js",
+    "app/ranking/upcoming/series/page.js",
+    "app/restocks/page.js",
+    "app/review/page.js",
+    "app/schedule/page.js",
+    "app/series/[slug]/page.js",
+    "app/series/group/[slug]/page.js",
+    "app/series/page.js",
+    "app/stock/page.js",
+    "app/supabase-series/page.js",
+    "app/terms/page.js",
+    "app/trends/page.js",
+  ]);
+
+  const routeFiles = walkFiles(appRoot)
+    .filter((file) => /[/\\]route\.js$/.test(file))
+    .map((file) => path.relative(process.cwd(), file).replaceAll("\\", "/"))
+    .sort();
+
+  assert.deepEqual(routeFiles, [
+    "app/api/community-reports/route.js",
+    "app/api/import-issues/route.js",
+    "app/api/ingest/[task]/route.js",
+    "app/api/ops-health/route.js",
+    "app/api/outbound-clicks/route.js",
+    "app/api/public-discovery/route.js",
+    "app/api/public-stock/route.js",
+    "app/api/public-variants/route.js",
+    "app/api/review/community-reports/[id]/route.js",
+    "app/api/runtime-diagnostics/variant-detail/route.js",
+    "app/review/login/route.js",
+    "app/review/logout/route.js",
+    "app/series-sitemap.xml/route.js",
+    "app/variant-sitemap.xml/route.js",
+    "app/variant-sitemap/[page]/route.js",
+  ]);
+
+  const ownedSamples = [
+    "/",
+    "/series",
+    "/series/variant",
+    "/series/group/parent",
+    "/schedule",
+    "/ranking",
+    "/stock",
+    "/restocks",
+    "/favorites",
+    "/categories",
+    "/categories/name/page/2",
+    "/brands/name/page/2",
+    "/franchises/name/page/2",
+    "/guides/slug",
+    "/privacy",
+    "/terms",
+    "/disclaimer",
+    "/affiliate-disclosure",
+    "/operator",
+    "/contact",
+    "/review",
+    "/review/login",
+    "/review/logout",
+    "/api/community-reports",
+    "/api/import-issues",
+    "/api/ingest/all",
+    "/api/ops-health",
+    "/api/outbound-clicks",
+    "/api/public-discovery",
+    "/api/public-stock",
+    "/api/public-variants",
+    "/api/review/community-reports/1",
+    "/api/runtime-diagnostics/variant-detail",
+    "/series-sitemap.xml",
+    "/variant-sitemap.xml",
+    "/variant-sitemap/1",
+  ];
+  for (const route of ownedSamples) assert.equal(classifyPublicRoute(route), "app-owned", route);
+  assert.equal(classifyPublicRoute("/supabase-series"), "explicitly-rejected");
 });
 
 test("A6 front door delegates pages, queries, APIs, and static assets with exact SHA proof", async () => {
