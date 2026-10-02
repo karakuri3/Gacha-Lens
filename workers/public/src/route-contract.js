@@ -15,9 +15,32 @@ export const PUBLIC_DOCUMENT_EXACT_PATHS = Object.freeze([
 ]);
 
 export const APP_OWNED_EXACT_PATHS = Object.freeze([
+  "/ranking",
+  "/ranking/series",
+  "/ranking/upcoming",
+  "/ranking/upcoming/series",
+  "/stock",
+  "/restocks",
+  "/favorites",
+  "/categories",
+  "/brands",
+  "/franchises",
+  "/guides",
+  "/trends",
+  "/privacy",
+  "/terms",
+  "/disclaimer",
+  "/affiliate-disclosure",
+  "/operator",
+  "/contact",
+  "/manifest.webmanifest",
+  "/favicon.ico",
   "/review",
   "/review/login",
   "/review/logout",
+  "/api/public-stock",
+  "/api/public-variants",
+  "/api/public-discovery",
   "/api/community-reports",
   "/api/import-issues",
   "/api/ops-health",
@@ -26,6 +49,13 @@ export const APP_OWNED_EXACT_PATHS = Object.freeze([
 ]);
 
 export const APP_OWNED_PREFIXES = Object.freeze([
+  "/categories/",
+  "/brands/",
+  "/franchises/",
+  "/guides/",
+  "/_next/static/",
+  "/_next/image",
+  "/brand/",
   "/api/review/",
   "/api/ingest/",
 ]);
