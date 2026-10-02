@@ -393,7 +393,7 @@ jobs:
 
   exact-head-public-runtime:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       TARGET_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -678,6 +678,101 @@ jobs:
             echo '### A6 full-parity acceptance'
             echo '```json'
             cat /tmp/a6-acceptance.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install pinned A6 hydration browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPS="$RUNNER_TEMP/gachalens-a6-browser"
+          mkdir -p "$DEPS"
+          cd "$DEPS"
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-audit --no-fund playwright@1.55.0
+          "$DEPS/node_modules/.bin/playwright" install --with-deps chromium
+          echo "A6_BROWSER_DEPS=$DEPS" >> "$GITHUB_ENV"
+
+      - name: Prove CSS JS API and React hydration through Public Preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/a6-hydration.cjs" <<'NODE'
+          const { chromium } = require(process.env.A6_BROWSER_DEPS + '/node_modules/playwright');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const failures = [];
+            try {
+              const publicOrigin = new URL(process.env.PUBLIC_PREVIEW_URL).origin;
+              const context = await browser.newContext({
+                extraHTTPHeaders: {
+                  'x-gacha-a6-app-preview-origin': new URL(process.env.APP_PREVIEW_URL).origin,
+                },
+              });
+              const page = await context.newPage();
+
+              page.on('pageerror', (error) => failures.push(`pageerror: ${error.message}`));
+              page.on('requestfailed', (request) => {
+                if (request.url().startsWith(publicOrigin)) {
+                  failures.push(`requestfailed: ${request.method()} ${request.url()} ${request.failure()?.errorText || ''}`);
+                }
+              });
+              page.on('response', (response) => {
+                const status = response.status();
+                if (response.url().startsWith(publicOrigin) && [429, 500, 502, 503, 504].includes(status)) {
+                  failures.push(`HTTP ${status}: ${response.url()}`);
+                }
+              });
+
+              const response = await page.goto(`${publicOrigin}/stock?q=a6`, { waitUntil: 'networkidle', timeout: 90_000 });
+              if (!response || response.status() !== 200) {
+                throw new Error(`stock navigation returned ${response?.status() ?? 'no response'}`);
+              }
+
+              await page.locator('h1').filter({ hasText: '在庫目撃情報' }).waitFor({ timeout: 30_000 });
+              const input = page.locator('input[name="q"]');
+              await input.waitFor({ state: 'visible', timeout: 30_000 });
+              await page.waitForFunction(() => document.querySelector('input[name="q"]')?.value === 'a6', null, { timeout: 30_000 });
+
+              const failureText = await page.getByText('在庫目撃情報を取得できません。時間をおいて再度お試しください。').count();
+              if (failureText) throw new Error('stock client API entered error state');
+
+              const resources = await page.evaluate(() => performance.getEntriesByType('resource').map((entry) => entry.name));
+              if (!resources.some((url) => url.includes('/_next/static/') && /\.js(?:\?|$)/.test(url))) {
+                throw new Error('no Next JavaScript resource loaded');
+              }
+              if (!resources.some((url) => url.includes('/_next/static/') && /\.css(?:\?|$)/.test(url))) {
+                throw new Error('no Next CSS resource loaded');
+              }
+
+              await input.fill('a6-hydrated');
+              if (await input.inputValue() !== 'a6-hydrated') {
+                throw new Error('React-controlled stock filter did not accept hydrated input');
+              }
+
+              if (failures.length) throw new Error(failures.join('\n'));
+              console.log(JSON.stringify({
+                ok: true,
+                path: '/stock?q=a6',
+                next_js: resources.filter((url) => url.includes('/_next/static/') && /\.js(?:\?|$)/.test(url)).length,
+                next_css: resources.filter((url) => url.includes('/_next/static/') && /\.css(?:\?|$)/.test(url)).length,
+                hydration: 'controlled-input-updated',
+              }));
+            } finally {
+              await browser.close();
+            }
+          })().catch((error) => {
+            console.error(error?.stack || error);
+            process.exit(1);
+          });
+          NODE
+
+          node "$RUNNER_TEMP/a6-hydration.cjs" | tee /tmp/a6-hydration.json
+          {
+            echo '### A6 browser hydration'
+            echo '```json'
+            cat /tmp/a6-hydration.json
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
