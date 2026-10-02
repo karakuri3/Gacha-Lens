@@ -77,6 +77,43 @@ test("18 global request cap exceeded fails closed",async()=>{
   const audit=await fetchOfficialSourceUniverseAudit({fetchImpl:fixtureFetch({qualiaRootProducts:Array.from({length:40},(_,i)=>1000+i)}),requestDelayMs:0,retryLimit:0,globalHardCap:20}); assert.equal(audit.completeness_known,false); assert.match(audit.blocking_reasons.join(","),/request_cap/);
 });
 
+
+test("global hard cap cannot be expanded above 150",async()=>{
+  for (const globalHardCap of [151,200]) {
+    const audit=await fetchOfficialSourceUniverseAudit({fetchImpl:fixtureFetch(),requestDelayMs:0,retryLimit:0,globalHardCap});
+    assert.equal(audit.request_budget.global_hard_cap,150);
+    assert.ok(audit.request_budget.actual_attempts<=150);
+  }
+});
+
+test("retryLimit=2 is clamped to one retry per logical request",async()=>{
+  const attemptsByUrl=new Map();
+  const audit=await fetchOfficialSourceUniverseAudit({
+    fetchImpl:async(url)=>{ attemptsByUrl.set(url,(attemptsByUrl.get(url)||0)+1); return response("",500); },
+    requestDelayMs:0,
+    retryLimit:2,
+    globalHardCap:150,
+  });
+  assert.equal(audit.request_budget.actual_attempts,4);
+  assert.deepEqual([...attemptsByUrl.values()].sort((a,b)=>a-b),[2,2]);
+  assert.ok([...attemptsByUrl.values()].every((attempts)=>attempts<=2));
+});
+
+test("default pacing applies between successful requests without changing budget accounting",async()=>{
+  const sleeps=[];
+  let requests=0;
+  const fixture=fixtureFetch();
+  const audit=await fetchOfficialSourceUniverseAudit({
+    fetchImpl:async(url,init)=>{ requests+=1; return fixture(url,init); },
+    sleepImpl:async(ms)=>{ sleeps.push(ms); },
+    retryLimit:0,
+    globalHardCap:100,
+  });
+  assert.equal(audit.request_budget.actual_attempts,requests);
+  assert.equal(sleeps.length,Math.max(0,requests-1));
+  assert.ok(sleeps.every((ms)=>ms===750));
+});
+
 test("Qualia category navigation discovers reviewed classes from root",()=>assert.deepEqual(parseQualiaCategoryNavigation(qCats).map(x=>x.category_id),[12,13,14,15,16,17,18,19]));
 
 test("complete small fixture proves both provider universes with zero writes",async()=>{
