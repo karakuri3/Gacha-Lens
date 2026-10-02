@@ -1,11 +1,11 @@
 import { classifyPublicRoute, PUBLIC_DIAGNOSTIC_PATHS } from "./route-contract.js";
-import { renderPublicDocument } from "./document-renderer.js";
 
 // Phase A3 exact-head Preview verification anchor v4; no runtime behavior change.
 const RELEASE_SOURCE_SHA = "__GACHA_RELEASE_SOURCE_SHA__";
 const SHA_RE = /^[0-9a-f]{40}$/;
 const APP_RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
 const APP_REPRESENTATIVE_PATH = "/review";
+const APP_SOURCE_HEADER = "x-gacha-source-sha";
 const INTERNAL_ORIGIN = "https://gacha-lens.internal";
 
 function releaseSourceSha() {
@@ -107,13 +107,58 @@ async function appDelegationDiagnostic(request, env) {
   }, representativeOk ? 200 : 502);
 }
 
+function rewriteDelegatedLocation(headers, incoming) {
+  const location = headers.get("location");
+  if (!location) return;
+  let target;
+  try {
+    target = new URL(location, INTERNAL_ORIGIN);
+  } catch {
+    return;
+  }
+  if (target.origin !== INTERNAL_ORIGIN) return;
+  target.protocol = incoming.protocol;
+  target.host = incoming.host;
+  headers.set("location", target.toString());
+}
+
 async function delegateAppOwned(request, env) {
-  const integrity = await assertAppExactSha(request, env);
-  if (!integrity.ok) return integrity.response;
+  const ownSha = releaseSourceSha();
+  if (!ownSha) return jsonResponse(request, { error: "public_source_identity_unavailable" }, 503);
+  if (!env?.APP || typeof env.APP.fetch !== "function") {
+    return jsonResponse(request, { error: "app_binding_unavailable" }, 503);
+  }
+
   const incoming = new URL(request.url);
   const target = new URL(incoming.pathname + incoming.search, INTERNAL_ORIGIN);
   const forwarded = new Request(target, request);
-  return env.APP.fetch(forwarded);
+  const response = await env.APP.fetch(forwarded);
+  const appSha = String(response.headers.get(APP_SOURCE_HEADER) || "").trim().toLowerCase();
+
+  if (!SHA_RE.test(appSha)) {
+    return jsonResponse(request, {
+      error: "app_source_identity_missing",
+      public_source_sha: ownSha,
+      app_source_sha: appSha || null,
+    }, 502);
+  }
+  if (appSha !== ownSha) {
+    return jsonResponse(request, {
+      error: "mixed_source_sha",
+      public_source_sha: ownSha,
+      app_source_sha: appSha,
+    }, 409);
+  }
+
+  const headers = new Headers(response.headers);
+  rewriteDelegatedLocation(headers, incoming);
+  headers.set("x-gacha-public-plane", "a6-front-door");
+  headers.set("x-gacha-app-source-sha", appSha);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 async function publicDiagnostic(request, env, pathname) {
@@ -129,8 +174,8 @@ async function publicDiagnostic(request, env, pathname) {
       plane: "public",
       source_sha: sourceSha,
       app_binding: "APP",
-      route_contract: "phase-a3-public-documents",
-      public_document_runtime: "lightweight-renderer",
+      route_contract: "a6-full-parity",
+      public_document_runtime: "exact-sha-app-front-door",
     }, sourceSha ? 200 : 503);
   }
   return appDelegationDiagnostic(request, env);
@@ -141,28 +186,8 @@ export default {
     const url = new URL(request.url);
     const ownership = classifyPublicRoute(url.pathname);
 
-    // Preserve the full interactive catalog contract without turning the canonical
-    // no-query public document into a catch-all App proxy.
-    if (url.pathname === "/series" && url.searchParams.size > 0) {
-      return delegateAppOwned(request, env);
-    }
-
     if (ownership === "public-diagnostic" && PUBLIC_DIAGNOSTIC_PATHS.includes(url.pathname)) {
       return publicDiagnostic(request, env, url.pathname);
-    }
-
-    if (ownership === "public-document") {
-      const guard = methodGuard(request);
-      if (guard) return guard;
-      try {
-        const response = await renderPublicDocument(request, env);
-        return response ?? jsonResponse(request, { error: "public_document_route_unimplemented" }, 500);
-      } catch (error) {
-        return jsonResponse(request, {
-          error: "public_document_unavailable",
-          detail: String(error?.message ?? error),
-        }, 503);
-      }
     }
 
     if (ownership === "app-owned") {
