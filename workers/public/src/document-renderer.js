@@ -269,15 +269,39 @@ async function renderSeriesSitemap(request, env) {
   const urls = [];
   for (let page = 0; page < MAX_SERIES_SITEMAP_PAGES; page += 1) {
     const rows = await readData(env, "/__public-data/v1/sitemap-series", { limit: 1000, offset: page * 1000 });
-    urls.push(...rows.map((row) => sitemapUrl(`/series/${encodeURIComponent(row.slug)}`, row.updated_at)));
+    urls.push(...rows.map((row) => sitemapUrl(`/series/group/${encodeURIComponent(row.slug)}`, row.updated_at)));
     if (rows.length < 1000) break;
   }
   return xmlResponse(request, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`);
 }
 
+async function variantShardHasRows(env, page) {
+  const offset = (page - 1) * VARIANT_SITEMAP_PAGE_SIZE;
+  const rows = await readData(env, "/__public-data/v1/sitemap-variants", { limit: 1, offset });
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+async function discoverVariantSitemapPages(env) {
+  if (!(await variantShardHasRows(env, 1))) return 0;
+
+  let low = 1;
+  let high = 2;
+  while (await variantShardHasRows(env, high)) {
+    low = high;
+    high *= 2;
+    if (high > 131072) throw new Error("variant_sitemap_shard_bound_exceeded");
+  }
+
+  while (low + 1 < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (await variantShardHasRows(env, mid)) low = mid;
+    else high = mid;
+  }
+  return low;
+}
+
 async function renderVariantSitemapIndex(request, env) {
-  const counts = await readData(env, "/__public-data/v1/counts");
-  const pages = Math.max(1, Math.ceil(Number(counts.variants || 0) / VARIANT_SITEMAP_PAGE_SIZE));
+  const pages = await discoverVariantSitemapPages(env);
   const sitemaps = Array.from({ length: pages }, (_, index) => `<sitemap><loc>${escapeXml(canonical(`/variant-sitemap/${index + 1}`))}</loc></sitemap>`);
   return xmlResponse(request, `<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${sitemaps.join("")}</sitemapindex>`);
 }
@@ -285,6 +309,16 @@ async function renderVariantSitemapIndex(request, env) {
 async function renderVariantSitemapPage(request, env, page) {
   const offset = (page - 1) * VARIANT_SITEMAP_PAGE_SIZE;
   const rows = await readData(env, "/__public-data/v1/sitemap-variants", { limit: VARIANT_SITEMAP_PAGE_SIZE, offset });
+  if (!rows.length) {
+    return new Response(request.method === "HEAD" ? null : "Not Found", {
+      status: 404,
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "cache-control": "public, max-age=60",
+        "x-gacha-public-plane": "phase-a3",
+      },
+    });
+  }
   const urls = rows.map((row) => sitemapUrl(`/series/${encodeURIComponent(row.slug)}`, row.updated_at));
   return xmlResponse(request, `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`);
 }
