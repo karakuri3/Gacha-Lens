@@ -225,6 +225,11 @@ test("A6 sitemap closure is exact: parent namespace fixed and 59,095 variants em
 
     const outOfRange = await built.worker.fetch(new Request("https://preview.example/variant-sitemap/61"), { APP: app.binding });
     assert.equal(outOfRange.status, 404);
+
+    const beforeHuge = app.calls.length;
+    const hugeOutOfRange = await built.worker.fetch(new Request("https://preview.example/variant-sitemap/5001"), { APP: app.binding });
+    assert.equal(hugeOutOfRange.status, 404);
+    assert.equal(app.calls.length, beforeHuge, "absurd shard must fail closed before any data-plane read");
   } finally {
     fs.rmSync(built.temp, { recursive: true, force: true });
   }
