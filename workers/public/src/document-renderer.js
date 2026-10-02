@@ -276,8 +276,11 @@ async function renderSeriesSitemap(request, env) {
 }
 
 async function renderVariantSitemapIndex(request, env) {
-  const counts = await readData(env, "/__public-data/v1/counts");
-  const pages = Math.max(1, Math.ceil(Number(counts.variants || 0) / VARIANT_SITEMAP_PAGE_SIZE));
+  const shardDiscovery = await readData(env, "/__public-data/v1/sitemap-variant-shards");
+  const pages = Number(shardDiscovery.pages);
+  if (!Number.isInteger(pages) || pages < 1 || pages > 5000) {
+    throw new Error("public_data_variant_sitemap_shards_invalid");
+  }
   const sitemaps = Array.from({ length: pages }, (_, index) => `<sitemap><loc>${escapeXml(canonical(`/variant-sitemap/${index + 1}`))}</loc></sitemap>`);
   return xmlResponse(request, `<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${sitemaps.join("")}</sitemapindex>`);
 }
