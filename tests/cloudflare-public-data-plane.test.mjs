@@ -110,4 +110,13 @@ test("Public data plane source cannot regress to opaque-secret Bearer or global 
   assert.doesNotMatch(dataSource, /authorization:\s*`Bearer \$\{cfg\.key\}`/);
   assert.doesNotMatch(renderer, /\/__public-data\/v1\/counts/);
   assert.match(renderer, /\/__public-data\/v1\/sitemap-variant-shards/);
+
+  const nativeSitemap = fs.readFileSync(new URL("../lib/data/public-sitemap-identifiers.js", import.meta.url), "utf8");
+  const series = fs.readFileSync(new URL("../lib/series.js", import.meta.url), "utf8");
+  assert.doesNotMatch(nativeSitemap, /count:\s*["']exact["']/);
+  assert.doesNotMatch(nativeSitemap, /head:\s*true/);
+  assert.match(nativeSitemap, /fetchPublicVariantSitemapShardCount/);
+  assert.match(nativeSitemap, /\.range\(from, from\)/);
+  assert.match(series, /loadCachedPublicVariantSitemapShardCount/);
+  assert.doesNotMatch(series, /public-variant-sitemap-count/);
 });
