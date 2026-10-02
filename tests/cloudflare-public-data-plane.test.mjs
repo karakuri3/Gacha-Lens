@@ -22,8 +22,8 @@ test("current opaque Secret API key uses apikey and is never copied into Bearer"
   const calls = [];
   const originalFetch = globalThis.fetch;
   try {
-    globalThis.fetch = async (request) => {
-      calls.push(request);
+    globalThis.fetch = async (input, init = {}) => {
+      calls.push({ url: String(input), headers: new Headers(init.headers) });
       return Response.json([]);
     };
     const response = await handlePublicDocumentData(
@@ -56,15 +56,16 @@ test("variant sitemap shard discovery finds 60 non-empty shards for the accepted
   const calls = [];
   const originalFetch = globalThis.fetch;
   try {
-    globalThis.fetch = async (request) => {
-      const url = new URL(request.url);
+    globalThis.fetch = async (input, init = {}) => {
+      const url = new URL(String(input));
+      const headers = new Headers(init.headers);
       const offset = Number(url.searchParams.get("offset") || 0);
       calls.push({
         offset,
-        prefer: request.headers.get("prefer"),
-        range: request.headers.get("range"),
-        authorization: request.headers.get("authorization"),
-        apikey: request.headers.get("apikey"),
+        prefer: headers.get("prefer"),
+        range: headers.get("range"),
+        authorization: headers.get("authorization"),
+        apikey: headers.get("apikey"),
         url: url.toString(),
       });
       return Response.json(offset < 59095 ? [{ slug: `variant-${offset}` }] : []);
@@ -88,8 +89,8 @@ test("variant sitemap shard discovery finds 60 non-empty shards for the accepted
 test("internal shard-discovery endpoint returns exact non-empty shard count without count headers", async () => {
   const originalFetch = globalThis.fetch;
   try {
-    globalThis.fetch = async (request) => {
-      const offset = Number(new URL(request.url).searchParams.get("offset") || 0);
+    globalThis.fetch = async (input) => {
+      const offset = Number(new URL(String(input)).searchParams.get("offset") || 0);
       return Response.json(offset < 59095 ? [{ slug: "x" }] : []);
     };
     const response = await handlePublicDocumentData(
