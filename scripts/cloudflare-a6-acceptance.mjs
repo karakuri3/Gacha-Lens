@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import process from "node:process";
+import { classifyPublicRoute } from "../workers/public/src/route-contract.js";
 
 const UNEXPECTED_FAILURES = new Set([429, 500, 502, 503, 504]);
 const DEFAULT_CONCURRENCY = 24;
@@ -149,12 +150,19 @@ export async function runA6Acceptance({
     assert.equal(response.headers.get("x-gacha-source-sha"), targetSha);
   };
 
-  const publicRequest = async (path, options = {}, { delegated = true } = {}) => {
+  const publicRequest = async (path, options = {}) => {
     const response = await call(publicOrigin, path, options);
+    const route = new URL(path, "https://gachalens.com");
+    const ownership = classifyPublicRoute(route.pathname);
+    const delegated = ownership === "app-owned"
+      || (route.pathname === "/series" && route.searchParams.size > 0);
+
     if (delegated) {
       assert.equal(response.headers.get("x-gacha-public-plane"), "a6-front-door", `${path} missing A6 front-door marker`);
       assert.equal(response.headers.get("x-gacha-app-source-sha"), targetSha, `${path} missing exact App SHA`);
       assert.equal(response.headers.get("x-gacha-app-transport"), "preview-http", `${path} did not use immutable App Preview`);
+    } else if (ownership === "public-document") {
+      assert.equal(response.headers.get("x-gacha-public-plane"), "phase-a3", `${path} did not execute on lightweight Public document plane`);
     }
     return response;
   };
