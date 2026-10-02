@@ -5,6 +5,7 @@ const SITE_ORIGIN = "https://gachalens.com";
 const DATA_ORIGIN = "https://gacha-lens.internal";
 const MAX_SERIES_SITEMAP_PAGES = 20;
 const VARIANT_SITEMAP_PAGE_SIZE = 1000;
+const MAX_VARIANT_SITEMAP_PAGES = 1000;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -307,6 +308,16 @@ async function renderVariantSitemapIndex(request, env) {
 }
 
 async function renderVariantSitemapPage(request, env, page) {
+  if (page > MAX_VARIANT_SITEMAP_PAGES) {
+    return new Response(request.method === "HEAD" ? null : "Not Found", {
+      status: 404,
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "cache-control": "public, max-age=60",
+        "x-gacha-public-plane": "phase-a3",
+      },
+    });
+  }
   const offset = (page - 1) * VARIANT_SITEMAP_PAGE_SIZE;
   const rows = await readData(env, "/__public-data/v1/sitemap-variants", { limit: VARIANT_SITEMAP_PAGE_SIZE, offset });
   if (!rows.length) {
