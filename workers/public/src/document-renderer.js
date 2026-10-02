@@ -385,6 +385,88 @@ function renderRobots(request) {
   return textResponse(request, `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /review/\nDisallow: /supabase-series\nSitemap: ${canonical("/sitemap.xml")}\nSitemap: ${canonical("/series-sitemap.xml")}\nSitemap: ${canonical("/variant-sitemap.xml")}\nHost: ${canonical("/")}\n`);
 }
 
+const STATIC_LEGAL_PAGES = Object.freeze({
+  "/privacy": {
+    title: "プライバシーポリシー | Gacha Lens",
+    heading: "プライバシーポリシー",
+    description: "Gacha Lensにおける利用情報、投稿情報、外部送信、保存期間などの取り扱いを説明します。",
+    lead: "サービス上で扱う情報と、その利用目的を明示します。",
+    sections: [
+      ["1. 取得する情報", "当サイトは、閲覧時の一般的なアクセスログ、エラー情報、端末・ブラウザに関する情報を、ホスティング事業者等を通じて取得する場合があります。販売先リンクの利用状況や、投稿された価格・在庫情報等をサービス改善・確認のために取り扱います。"],
+      ["2. 利用目的", "商品情報、価格傾向、在庫・再入荷情報の提供と品質改善、不正利用や障害の検知、お問い合わせ対応等に利用します。"],
+      ["3. 外部サービスとCookie等", "ホスティング、データベース、アクセス解析、広告、アフィリエイト等の外部サービスを利用する場合があります。第三者広告を有効化する場合は、対象地域の同意要件と本ポリシーを確認します。"],
+      ["4. 保存・安全管理", "取得した情報は利用目的に必要な範囲で保存し、アクセス制限、権限分離、ログ監査等の合理的な安全管理措置を講じます。"],
+      ["5. 開示・削除等", "ご本人に関する情報の開示、訂正、削除その他のご相談は、お問い合わせ窓口からご連絡ください。"],
+      ["6. 改定", "法令、利用サービス、提供機能の変更に応じて本ポリシーを改定することがあります。"],
+    ],
+  },
+  "/terms": {
+    title: "利用規約 | Gacha Lens",
+    heading: "利用規約",
+    description: "Gacha Lensの利用条件、禁止事項、投稿情報の扱いなどを定めます。",
+    lead: "Gacha Lensをご利用いただく際の条件です。",
+    sections: [
+      ["1. 適用", "本規約は、Gacha Lensが提供するウェブサイトおよび関連機能の利用に適用されます。"],
+      ["2. 提供情報", "掲載する価格、発売、在庫、再入荷、注目度等は参考情報であり、正確性、完全性、最新性、商品の入手可能性を保証するものではありません。"],
+      ["3. 禁止事項", "法令または公序良俗に反する行為、権利侵害、虚偽投稿、過度な負荷、不正取得・改変、アクセス制御の回避等を禁止します。"],
+      ["4. 投稿情報", "利用者は投稿に必要な権利を有し、内容が正確であることを確認してください。"],
+      ["5. サービスの変更・停止", "保守、障害、外部サービスの仕様変更その他の事情により、機能を変更または停止する場合があります。"],
+      ["6. 知的財産権", "商品名、画像、商標等の権利は各権利者に帰属します。"],
+      ["7. 準拠法", "本規約は日本法に準拠します。"],
+    ],
+  },
+  "/disclaimer": {
+    title: "免責事項 | Gacha Lens",
+    heading: "免責事項",
+    description: "Gacha Lensが掲載する価格、発売予定、在庫、予測情報等に関する免責事項です。",
+    lead: "掲載情報は購入・売却を保証するものではありません。",
+    sections: [
+      ["参考情報としての提供", "価格、出品・成約件数、在庫、再入荷、発売予定、ランキング、予測スコア等は、取得時点のデータに基づく参考情報です。"],
+      ["取引・購入の判断", "当サイトは商品の販売者、買取業者、投資助言業者ではありません。公式情報と販売先の表示をご確認ください。"],
+      ["発売前予測", "発売前の期待度や注目度は予測であり、将来の価格、人気、希少性、入手難度を保証しません。"],
+      ["外部サイト", "外部サイトの内容、在庫、価格、取引、安全性について当サイトは保証しません。"],
+      ["権利関係", "Gacha Lensは非公式の情報サービスです。各メーカー、作品、販売事業者その他の権利者とは、明示がある場合を除き提携・承認関係にありません。"],
+    ],
+  },
+  "/affiliate-disclosure": {
+    title: "広告・アフィリエイトについて | Gacha Lens",
+    heading: "広告・アフィリエイトについて",
+    description: "Gacha Lensの広告掲載、アフィリエイトリンク、ランキングの独立性について説明します。",
+    lead: "広告の有無と商品評価を分離して運営します。",
+    sections: [
+      ["アフィリエイト広告", "商品検索や販売先へのリンクにアフィリエイト広告を利用する場合があります。"],
+      ["ランキングと予測の独立性", "ランキング、注目度、価格情報、発売前予測は、アフィリエイト報酬の有無や料率を評価要素に含めません。"],
+      ["販売先リンク", "各販売先の価格、在庫、送料、ポイント、取引条件はリンク先でご確認ください。"],
+      ["Amazonアソシエイト", "Amazonアソシエイト・プログラムを有効にした場合、Gacha LensはAmazonのアソシエイトとして適格販売により収入を得ます。"],
+    ],
+  },
+  "/operator": {
+    title: "運営情報 | Gacha Lens",
+    heading: "運営情報",
+    description: "Gacha Lensの運営方針、情報源、訂正方針、お問い合わせ窓口をご案内します。",
+    lead: "ガチャの情報を、探しやすく比較しやすい形で届けます。",
+    sections: [
+      ["サービス", "サービス名: Gacha Lens / 運営: Gacha Lens 運営事務局 / 提供内容: ガチャの発売、価格動向、在庫・再入荷、トレンド情報"],
+      ["編集・掲載方針", "公式情報を商品マスタの基準とし、市場情報や利用者報告は商品・単品との対応を確認して掲載します。"],
+      ["訂正方針", "誤った商品情報等を確認した場合は、根拠を確認したうえで訂正します。修正依頼はお問い合わせからお送りください。"],
+      ["非公式サービス", "当サイトは各メーカー、作品、販売事業者の公式サイトではありません。"],
+    ],
+  },
+});
+
+function renderStaticLegalPage(request, pathname) {
+  const page = STATIC_LEGAL_PAGES[pathname];
+  if (!page) return null;
+  const sections = page.sections.map(([title, text]) => `<section><h2>${escapeHtml(title)}</h2><p>${escapeHtml(text)}</p></section>`).join("");
+  const body = `<article><h1>${escapeHtml(page.heading)}</h1><p>${escapeHtml(page.lead)}</p>${sections}</article>`;
+  return htmlResponse(request, htmlDocument({
+    title: page.title,
+    description: page.description,
+    pathname,
+    body,
+  }), 200, 86400);
+}
+
 export async function renderPublicDocument(request, env) {
   if (!["GET", "HEAD"].includes(request.method)) return null;
   const url = new URL(request.url);
@@ -392,6 +474,7 @@ export async function renderPublicDocument(request, env) {
   if (url.pathname === "/series") return renderSeries(request, env);
   if (url.pathname === "/schedule") return renderSchedule(request, env, url);
   if (url.pathname === "/robots.txt") return renderRobots(request);
+  if (STATIC_LEGAL_PAGES[url.pathname]) return renderStaticLegalPage(request, url.pathname);
   if (url.pathname === "/sitemap.xml") return renderRootSitemap(request, env);
   if (url.pathname === "/series-sitemap.xml") return renderSeriesSitemap(request, env);
   if (url.pathname === "/variant-sitemap.xml") return renderVariantSitemapIndex(request, env);
