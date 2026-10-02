@@ -60,4 +60,47 @@ test("11 Qualia same product multi-surface dedupe identity",()=>{
 test("12 Qualia archive_month alone establishes target membership",()=>{
   const c=classifyQualiaRecord({archiveMonths:["2026-10"],targetMonth:"2026-10"}); assert.equal(c.classification,"target_period"); assert.equal(c.classification_source,"archive_month");
 });
-test("13 Qualia null detail month retains target archive membership",()=>assert.equal(classifyQualiaRecord({archiveMonths:["2026-10"],detailReleaseMon
+test("13 Qualia null detail month retains target archive membership",()=>assert.equal(classifyQualiaRecord({archiveMonths:["2026-10"],detailReleaseMonth:null,targetMonth:"2026-10"}).classification,"target_period"));
+test("14 Qualia archive and detail month both unknown block classification",()=>assert.equal(classifyQualiaRecord({archiveMonths:[],detailReleaseMonth:null,targetMonth:"2026-10"}).classification,"undated"));
+test("15 Qualia category pagination exhaustion parser",()=>{
+  const body='<a href="/product/index/12/page:2?target=product">2</a><a href="/product/index/12/page/3/?target=product">3</a>'; const pages=parseQualiaCategoryPagination(body,"https://www.qualia-45.jp/product/index/12?target=product",12); assert.equal(pages.length,3); assert.ok(pages.some((url)=>url.includes("page:2")));
+});
+test("16 Qualia unvisited category page makes completeness false",async()=>{
+  const audit=await fetchOfficialSourceUniverseAudit({fetchImpl:fixtureFetch({categoryPage2:true,failCategoryPage2:true}),requestDelayMs:0,retryLimit:0,globalHardCap:100}); const q=audit.providers[1]; assert.equal(q.completeness_known,false); assert.match(q.blocking_reasons.join(","),/category_page_fetch_failed|unvisited/);
+});
+test("17 source drift snapshot hashes differ when content differs",async()=>{
+  const a=await fetchOfficialSourceUniverseAudit({fetchImpl:fixtureFetch({qualiaMonthIds:[2071,2073]}),requestDelayMs:0,retryLimit:0,globalHardCap:100});
+  const b=await fetchOfficialSourceUniverseAudit({fetchImpl:fixtureFetch({qualiaMonthIds:[2071,2073,2103]}),requestDelayMs:0,retryLimit:0,globalHardCap:100});
+  const sa=a.providers[1].source_surfaces.find(x=>x.surface==="month:2026-10"); const sb=b.providers[1].source_surfaces.find(x=>x.surface==="month:2026-10"); assert.notEqual(sa.content_identity,sb.content_identity);
+});
+test("18 global request cap exceeded fails closed",async()=>{
+  const audit=await fetchOfficialSourceUniverseAudit({fetchImpl:fixtureFetch({qualiaRootProducts:Array.from({length:40},(_,i)=>1000+i)}),requestDelayMs:0,retryLimit:0,globalHardCap:20}); assert.equal(audit.completeness_known,false); assert.match(audit.blocking_reasons.join(","),/request_cap/);
+});
+
+test("Qualia category navigation discovers reviewed classes from root",()=>assert.deepEqual(parseQualiaCategoryNavigation(qCats).map(x=>x.category_id),[12,13,14,15,16,17,18,19]));
+
+test("complete small fixture proves both provider universes with zero writes",async()=>{
+  const audit=await fetchOfficialSourceUniverseAudit({fetchImpl:fixtureFetch(),requestDelayMs:0,retryLimit:0,globalHardCap:100});
+  assert.equal(audit.database_writes,0); assert.equal(audit.provider_mutations,0); assert.equal(audit.f0_activations,0); assert.equal(audit.providers[0].completeness_known,true); assert.equal(audit.providers[1].completeness_known,true);
+});
+
+function fixtureFetch({failKitanArchive=false,kitanIds=["k-before","k-target"],qualiaRootProducts=[2071],qualiaMonthIds=[2071,2073],categoryPage2=false,failCategoryPage2=false}={}){
+  const root=`${kYears}${kList(...kitanIds.slice(0,1))}`;
+  const qroot=`${qMonths}${qCats}${qList(...qualiaRootProducts)}`;
+  return async(url)=>{
+    if(url===KROOT)return response(root);
+    if(url==="https://kitan.jp/product_age/2026/")return failKitanArchive?response("",500):response(kList(...kitanIds));
+    if(url.includes("kitan.jp/products/"))return response(detail(url.includes("target")?"2026-10":"2026-09"));
+    if(url===QROOT)return response(qroot);
+    if(url.includes("/product/search/ym:2026-10"))return response(qList(...qualiaMonthIds));
+    if(url.includes("/product/search/ym:2026-09"))return response("");
+    if(url.includes("/product/index/")){
+      if(url.includes("/page/2")||url.includes("/page:2"))return failCategoryPage2?response("",500):response(qList(2074));
+      const id=Number(url.match(/\/product\/index\/(\d+)/)?.[1]);
+      const pagination=categoryPage2&&id===12?'<a href="/product/index/12/page:2?target=product">2</a>':'';
+      return response(`${qList(...(id===12?[2073]:[]))}${pagination}`);
+    }
+    if(url.includes("/product/view/"))return response(detail(url.endsWith("2071")?"2026-10":"2026-09"));
+    return response("",404);
+  };
+}
