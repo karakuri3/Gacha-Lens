@@ -85,6 +85,8 @@ function xmlLocs(xml) {
 
 test("A6 route inventory has an explicit owner and unknown/internal paths stay fail-closed", () => {
   const appOwned = [
+    "/", "/series", "/schedule", "/series/group/parent", "/series/variant",
+    "/privacy", "/terms", "/disclaimer", "/affiliate-disclosure", "/operator",
     "/ranking", "/ranking/series", "/ranking/upcoming", "/ranking/upcoming/series",
     "/stock", "/restocks", "/favorites",
     "/categories", "/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3", "/categories/x/page/2",
@@ -102,8 +104,7 @@ test("A6 route inventory has an explicit owner and unknown/internal paths stay f
   for (const route of appOwned) assert.equal(classifyPublicRoute(route), "app-owned", route);
 
   for (const route of [
-    "/", "/series", "/schedule", "/privacy", "/terms", "/disclaimer", "/affiliate-disclosure", "/operator", "/robots.txt", "/sitemap.xml", "/series-sitemap.xml",
-    "/variant-sitemap.xml", "/variant-sitemap/1", "/series/group/parent", "/series/variant",
+    "/robots.txt", "/sitemap.xml", "/series-sitemap.xml", "/variant-sitemap.xml", "/variant-sitemap/1",
   ]) {
     assert.equal(classifyPublicRoute(route), "public-document", route);
   }
@@ -118,6 +119,17 @@ test("A6 delegation preserves query, pagination, redirects/API status surface an
   try {
     const app = appBinding();
     const routes = [
+      "/",
+      "/series",
+      "/series?q=test&page=2",
+      "/schedule?month=2026-10",
+      "/series/group/parent",
+      "/series/variant",
+      "/privacy",
+      "/terms",
+      "/disclaimer",
+      "/affiliate-disclosure",
+      "/operator",
       "/ranking?tab=upcoming&scope=series",
       "/categories/test?page=2",
       "/categories/test/page/2",
