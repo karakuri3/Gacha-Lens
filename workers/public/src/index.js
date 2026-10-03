@@ -113,19 +113,21 @@ async function delegateAppOwned(request, env) {
   const incoming = new URL(request.url);
   const target = new URL(incoming.pathname + incoming.search, INTERNAL_ORIGIN);
   const forwarded = new Request(target, request);
-  return env.APP.fetch(forwarded);
+  const response = await env.APP.fetch(forwarded);
+  const headers = new Headers(response.headers);
+  headers.set("x-gacha-public-plane", "phase-a3");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 function publicDocumentNeedsApp(pathname) {
-  return pathname === "/"
-    || pathname === "/series"
-    || pathname === "/schedule"
-    || pathname === "/sitemap.xml"
+  return pathname === "/sitemap.xml"
     || pathname === "/series-sitemap.xml"
     || pathname === "/variant-sitemap.xml"
-    || /^\/variant-sitemap\/[1-9]\d*$/.test(pathname)
-    || /^\/series\/[^/]+$/.test(pathname)
-    || /^\/series\/group\/[^/]+$/.test(pathname);
+    || /^\/variant-sitemap\/[1-9]\d*$/.test(pathname);
 }
 
 async function publicDiagnostic(request, env, pathname) {
@@ -141,8 +143,8 @@ async function publicDiagnostic(request, env, pathname) {
       plane: "public",
       source_sha: sourceSha,
       app_binding: "APP",
-      route_contract: "phase-a3-public-documents",
-      public_document_runtime: "lightweight-renderer",
+      route_contract: "a6-front-door-full-parity",
+      public_document_runtime: "sitemap-only-renderer",
     }, sourceSha ? 200 : 503);
   }
   return appDelegationDiagnostic(request, env);
@@ -153,11 +155,6 @@ export default {
     const url = new URL(request.url);
     const ownership = classifyPublicRoute(url.pathname);
 
-    // Preserve the full interactive catalog contract without turning the canonical
-    // no-query public document into a catch-all App proxy.
-    if (url.pathname === "/series" && url.searchParams.size > 0) {
-      return delegateAppOwned(request, env);
-    }
 
     if (ownership === "public-diagnostic" && PUBLIC_DIAGNOSTIC_PATHS.includes(url.pathname)) {
       return publicDiagnostic(request, env, url.pathname);
