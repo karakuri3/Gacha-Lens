@@ -5,21 +5,21 @@ export const PUBLIC_DIAGNOSTIC_PATHS = Object.freeze([
 ]);
 
 export const PUBLIC_DOCUMENT_EXACT_PATHS = Object.freeze([
-  "/",
-  "/series",
-  "/schedule",
   "/sitemap.xml",
   "/series-sitemap.xml",
   "/variant-sitemap.xml",
   "/robots.txt",
+]);
+
+export const APP_OWNED_EXACT_PATHS = Object.freeze([
+  "/",
+  "/series",
+  "/schedule",
   "/privacy",
   "/terms",
   "/disclaimer",
   "/affiliate-disclosure",
   "/operator",
-]);
-
-export const APP_OWNED_EXACT_PATHS = Object.freeze([
   "/ranking",
   "/ranking/series",
   "/ranking/upcoming",
@@ -49,6 +49,7 @@ export const APP_OWNED_EXACT_PATHS = Object.freeze([
 ]);
 
 export const APP_OWNED_PREFIXES = Object.freeze([
+  "/series/",
   "/categories/",
   "/brands/",
   "/franchises/",
@@ -63,8 +64,6 @@ export function classifyPublicRoute(pathname) {
   const path = String(pathname || "");
   if (PUBLIC_DIAGNOSTIC_PATHS.includes(path)) return "public-diagnostic";
   if (PUBLIC_DOCUMENT_EXACT_PATHS.includes(path)
-      || /^\/series\/[^/]+$/.test(path)
-      || /^\/series\/group\/[^/]+$/.test(path)
       || /^\/variant-sitemap\/[1-9]\d*$/.test(path)) {
     return "public-document";
   }
