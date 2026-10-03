@@ -141,13 +141,17 @@ test("write methods are rejected before any Service Binding call", async () => {
   }
 });
 
-test("route ownership matrix distinguishes public, conditional, app-owned, planned and rejected", () => {
+test("route ownership matrix preserves A6 front-door delegation and fail-closed boundaries", () => {
   for (const route of PUBLIC_BOOTSTRAP_OWNED_PATHS) assert.equal(classifyPhaseA2Route(route), "public-owned");
   assert.equal(classifyPhaseA2Route("/review"), "conditional");
   assert.equal(classifyPhaseA2Route("/review/login"), "app-owned");
   assert.equal(classifyPhaseA2Route("/api/review/community-reports/1"), "app-owned");
-  assert.equal(classifyPhaseA2Route("/series"), "planned-public");
-  assert.equal(classifyPhaseA2Route("/series/example"), "planned-public");
+  assert.equal(classifyPhaseA2Route("/"), "app-owned");
+  assert.equal(classifyPhaseA2Route("/series"), "app-owned");
+  assert.equal(classifyPhaseA2Route("/series/example"), "app-owned");
+  assert.equal(classifyPhaseA2Route("/schedule"), "app-owned");
+  assert.equal(classifyPhaseA2Route("/sitemap.xml"), "planned-public");
+  assert.equal(classifyPhaseA2Route("/variant-sitemap/1"), "planned-public");
   assert.equal(classifyPhaseA2Route("/api/arbitrary-proxy"), "explicitly-rejected");
 });
 

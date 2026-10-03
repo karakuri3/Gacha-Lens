@@ -5,9 +5,6 @@ export const PUBLIC_DIAGNOSTIC_PATHS = Object.freeze([
 ]);
 
 export const PUBLIC_DOCUMENT_EXACT_PATHS = Object.freeze([
-  "/",
-  "/series",
-  "/schedule",
   "/sitemap.xml",
   "/series-sitemap.xml",
   "/variant-sitemap.xml",
@@ -15,9 +12,35 @@ export const PUBLIC_DOCUMENT_EXACT_PATHS = Object.freeze([
 ]);
 
 export const APP_OWNED_EXACT_PATHS = Object.freeze([
+  "/",
+  "/series",
+  "/schedule",
+  "/privacy",
+  "/terms",
+  "/disclaimer",
+  "/affiliate-disclosure",
+  "/operator",
+  "/ranking",
+  "/ranking/series",
+  "/ranking/upcoming",
+  "/ranking/upcoming/series",
+  "/stock",
+  "/restocks",
+  "/favorites",
+  "/categories",
+  "/brands",
+  "/franchises",
+  "/guides",
+  "/trends",
+  "/contact",
+  "/manifest.webmanifest",
+  "/favicon.ico",
   "/review",
   "/review/login",
   "/review/logout",
+  "/api/public-stock",
+  "/api/public-variants",
+  "/api/public-discovery",
   "/api/community-reports",
   "/api/import-issues",
   "/api/ops-health",
@@ -26,6 +49,13 @@ export const APP_OWNED_EXACT_PATHS = Object.freeze([
 ]);
 
 export const APP_OWNED_PREFIXES = Object.freeze([
+  "/series/",
+  "/categories/",
+  "/brands/",
+  "/franchises/",
+  "/guides/",
+  "/_next/",
+  "/brand/",
   "/api/review/",
   "/api/ingest/",
 ]);
@@ -34,8 +64,6 @@ export function classifyPublicRoute(pathname) {
   const path = String(pathname || "");
   if (PUBLIC_DIAGNOSTIC_PATHS.includes(path)) return "public-diagnostic";
   if (PUBLIC_DOCUMENT_EXACT_PATHS.includes(path)
-      || /^\/series\/[^/]+$/.test(path)
-      || /^\/series\/group\/[^/]+$/.test(path)
       || /^\/variant-sitemap\/[1-9]\d*$/.test(path)) {
     return "public-document";
   }

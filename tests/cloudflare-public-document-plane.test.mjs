@@ -37,45 +37,41 @@ function binding() {
         if (url.pathname === "/__public-data/v1/variant-detail") return Response.json({ series:series[0], variant:variants[0] });
         if (url.pathname === "/__public-data/v1/sitemap-series") return Response.json([{ slug:"parent-1", updated_at:"2026-10-01T00:00:00Z" }]);
         if (url.pathname === "/__public-data/v1/schedule-months") return Response.json([{ id:"s1", release_date:"2026-10-01", release_month:"2026-10" }]);
-        if (url.pathname === "/__public-data/v1/sitemap-variants") return Response.json([{ slug:"variant-1", updated_at:"2026-10-01T00:00:00Z" }]);
-        if (url.pathname === "/__public-data/v1/counts") return Response.json({ series:1, variants:1 });
+        if (url.pathname === "/__public-data/v1/sitemap-variants") {
+          const offset = Number(url.searchParams.get("offset") || 0);
+          return Response.json(offset === 0 ? [{ slug:"variant-1", updated_at:"2026-10-01T00:00:00Z" }] : []);
+        }
         return new Response("not found", { status:404 });
       },
     },
   };
 }
 
-test("A3 ownership is explicit and unknown paths remain fail-closed", () => {
-  for (const route of ["/","/series","/schedule","/robots.txt","/sitemap.xml","/series-sitemap.xml","/variant-sitemap.xml","/variant-sitemap/1","/series/variant-1","/series/group/parent-1"]) {
+test("A6 ownership keeps only sitemap/robots documents Public and delegates consumer UX", () => {
+  for (const route of ["/robots.txt","/sitemap.xml","/series-sitemap.xml","/variant-sitemap.xml","/variant-sitemap/1"]) {
     assert.equal(classifyPublicRoute(route), "public-document", route);
   }
-  for (const route of ["/review","/review/login","/api/community-reports","/api/review/community-reports/1"]) {
+  for (const route of ["/","/series","/schedule","/series/variant-1","/series/group/parent-1","/privacy","/terms","/review","/review/login","/api/community-reports","/api/review/community-reports/1"]) {
     assert.equal(classifyPublicRoute(route), "app-owned", route);
   }
   assert.equal(classifyPublicRoute("/arbitrary"), "explicitly-rejected");
   assert.equal(classifyPublicRoute("/api/arbitrary"), "explicitly-rejected");
 });
 
-test("public documents render in Public Worker and never proxy same document path to App", async () => {
+test("consumer documents preserve full App UX through explicit exact-SHA delegation", async () => {
   const built = await worker();
   try {
     const app = binding();
-    for (const route of ["/","/series","/schedule?month=2026-10","/series/variant-1","/series/group/parent-1"]) {
+    for (const route of ["/","/series","/series?q=test","/schedule?month=2026-10","/series/variant-1","/series/group/parent-1","/privacy","/terms"]) {
       const before = app.calls.length;
       const response = await built.worker.fetch(new Request(`https://preview.example${route}`), { APP:app.binding });
-      assert.equal(response.status, 200, route);
-      assert.match(response.headers.get("content-type") || "", /text\/html/);
+      assert.equal(response.status, 404, route);
       assert.equal(response.headers.get("x-gacha-public-plane"), "phase-a3");
-      const body = await response.text();
-      assert.match(body, /<link rel="canonical"/);
-      if (route.startsWith("/series/")) {
-        assert.match(body, /application\/ld\+json/);
-        assert.match(body, /BreadcrumbList/);
-      }
       const calls = app.calls.slice(before);
-      assert.ok(calls.length >= 1);
-      assert.ok(calls.every((call) => call.path.startsWith("/__public-data/v1/")), JSON.stringify(calls));
-      assert.ok(calls.every((call) => call.path !== route));
+      assert.equal(calls[0].path, "/api/runtime-diagnostics/release-source");
+      assert.equal(calls[1].path, new URL(route, "https://preview.example").pathname);
+      assert.equal(calls[1].search, new URL(route, "https://preview.example").search);
+      assert.equal(calls.some((call) => call.path.startsWith("/__public-data/v1/")), false);
     }
   } finally {
     fs.rmSync(built.temp, { recursive:true, force:true });
@@ -104,7 +100,7 @@ test("robots and sitemap documents preserve canonical production origin", async 
     assert.doesNotMatch(rootText, /<sitemapindex/);
 
     const series = await built.worker.fetch(new Request("https://preview.example/series-sitemap.xml"), { APP:app.binding });
-    assert.match(await series.text(), /https:\/\/gachalens\.com\/series\/parent-1/);
+    assert.match(await series.text(), /https:\/\/gachalens\.com\/series\/group\/parent-1/);
 
     const variants = await built.worker.fetch(new Request("https://preview.example/variant-sitemap/1"), { APP:app.binding });
     assert.match(await variants.text(), /https:\/\/gachalens\.com\/series\/variant-1/);
@@ -135,7 +131,7 @@ test("public renderer source has no Next vinext React or Supabase client depende
   }
 });
 
-test("interactive series queries delegate explicitly while canonical series stays public-owned", async () => {
+test("series queries and canonical series share the same explicit App owner", async () => {
   const built = await worker();
   try {
     const app = binding();
@@ -151,14 +147,15 @@ test("interactive series queries delegate explicitly while canonical series stay
   }
 });
 
-test("schedule canonicalizes bare and invalid query forms without invoking App SSR", async () => {
+test("schedule query contract is delegated intact to App instead of reimplemented as bare HTML", async () => {
   const built = await worker();
   try {
     const app = binding();
-    const bare = await built.worker.fetch(new Request("https://preview.example/schedule"), { APP:app.binding });
-    assert.equal(bare.status, 308);
-    assert.match(bare.headers.get("location") || "", /\/schedule\?month=\d{4}-\d{2}$/);
-    assert.equal(app.calls.length, 0);
+    const response = await built.worker.fetch(new Request("https://preview.example/schedule?month=2026-10&page=2"), { APP:app.binding });
+    assert.equal(response.status, 404);
+    assert.deepEqual(app.calls.map((call) => call.path), ["/api/runtime-diagnostics/release-source", "/schedule"]);
+    assert.equal(app.calls[1].search, "?month=2026-10&page=2");
+    assert.equal(app.calls.some((call) => call.path === "/__public-data/v1/schedule"), false);
   } finally {
     fs.rmSync(built.temp, { recursive:true, force:true });
   }
