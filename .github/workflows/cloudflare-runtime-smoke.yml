@@ -705,7 +705,7 @@ jobs:
 
               series_detail_path="$(grep -Eo 'href="/series/group/[^"]+"' "$tmp/${pass}-series.body" | head -1 | sed -E 's/^href="([^"]+)"/\1/')"
               [[ -n "$series_detail_path" ]] || {
-                echo "${pass} series index did not expose a Public-owned parent-series detail link." >&2
+                echo "${pass} delegated series index did not expose a parent-series detail link." >&2
                 exit 1
               }
               request_public_document "$pass" series_detail "$series_detail_path" '<article><h1'
@@ -715,11 +715,6 @@ jobs:
             echo 'Public Preview binding points at a different App SHA; exact-head data-backed documents must fail closed with 409.' >> "$GITHUB_STEP_SUMMARY"
 
             static_routes=(
-              'privacy|/privacy|プライバシーポリシー'
-              'terms|/terms|利用規約'
-              'disclaimer|/disclaimer|免責事項'
-              'affiliate|/affiliate-disclosure|広告・アフィリエイトについて'
-              'operator|/operator|運営情報'
               'robots|/robots.txt|Sitemap: https://gachalens.com/sitemap.xml'
             )
             for pass in cold warm; do
@@ -727,7 +722,7 @@ jobs:
                 IFS='|' read -r name path needle <<<"$spec"
                 request_public_document "$pass" "$name" "$path" "$needle"
               done
-              for path in '/' '/series' '/schedule?month=2026-10' '/sitemap.xml' '/series-sitemap.xml' '/variant-sitemap.xml'; do
+              for path in '/' '/series' '/schedule?month=2026-10' '/privacy' '/terms' '/disclaimer' '/affiliate-disclosure' '/operator' '/ranking' '/api/public-stock' '/manifest.webmanifest' '/sitemap.xml' '/series-sitemap.xml' '/variant-sitemap.xml'; do
                 body="$tmp/${pass}-mixed.body"
                 code="$(curl --silent --show-error --max-time 60 --output "$body" --write-out '%{http_code}' "${PUBLIC_PREVIEW_URL}${path}")"
                 [[ "$code" == '409' ]] || {
