@@ -122,15 +122,33 @@ async function delegateAppOwned(request, env) {
   const forwarded = new Request(target, request);
   const response = await env.APP.fetch(forwarded);
 
-  const appSha = String(response.headers.get(APP_SOURCE_SHA_HEADER) || "").trim().toLowerCase();
+  let appSha = String(response.headers.get(APP_SOURCE_SHA_HEADER) || "").trim().toLowerCase();
   if (!SHA_RE.test(appSha)) {
-    return jsonResponse(request, {
-      ok: false,
-      public_source_sha: ownSha,
-      app_source_sha: null,
-      upstream_status: response.status,
-      error: "app_response_identity_unavailable",
-    }, 502);
+    // Cloudflare PR Previews bind to the Production App Worker. During a rollout
+    // that older App may not yet emit the response attestation header. Only in
+    // this missing-attestation case do one bounded identity lookup so mixed-SHA
+    // Preview traffic still fails closed as 409. Healthy same-SHA Production
+    // responses stay on the single-call fast path.
+    const fallbackIdentity = await readAppSourceSha(env);
+    if (!fallbackIdentity.ok) {
+      return jsonResponse(request, {
+        ok: false,
+        public_source_sha: ownSha,
+        app_source_sha: fallbackIdentity.sourceSha,
+        upstream_status: response.status,
+        error: "app_response_identity_unavailable",
+      }, 502);
+    }
+    appSha = fallbackIdentity.sourceSha;
+    if (appSha === ownSha) {
+      return jsonResponse(request, {
+        ok: false,
+        public_source_sha: ownSha,
+        app_source_sha: appSha,
+        upstream_status: response.status,
+        error: "app_response_attestation_missing",
+      }, 502);
+    }
   }
   if (appSha !== ownSha) {
     return jsonResponse(request, {
