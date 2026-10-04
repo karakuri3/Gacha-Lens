@@ -27,8 +27,24 @@ function appBinding({ sourceSha = SHA, totalSeries = 2500, totalVariants = 59095
       async fetch(request) {
         const url = new URL(request.url);
         const body = request.method === "GET" || request.method === "HEAD" ? "" : await request.clone().text();
-        calls.push({ path: url.pathname, search: url.search, method: request.method, body });
+        const expectedSha = request.headers.get("x-gacha-expected-app-source-sha");
+        calls.push({ path: url.pathname, search: url.search, method: request.method, body, expectedSha });
 
+        const stamp = (response) => {
+          const headers = new Headers(response.headers);
+          headers.set("x-gacha-app-source-sha", sourceSha);
+          return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers,
+          });
+        };
+
+        if (expectedSha && expectedSha !== sourceSha) {
+          return stamp(Response.json({ error: "mixed_source_sha", app_source_sha: sourceSha }, { status: 409 }));
+        }
+
+        return stamp(await (async () => {
         if (url.pathname === "/api/runtime-diagnostics/release-source") {
           return Response.json({ source_sha: sourceSha });
         }
@@ -74,6 +90,7 @@ function appBinding({ sourceSha = SHA, totalSeries = 2500, totalVariants = 59095
           return new Response("png", { status: 200, headers: { "content-type": "image/png" } });
         }
         return new Response("APP_OK", { status: 200, headers: { "content-type": "text/html" } });
+        })());
       },
     },
   };
@@ -210,6 +227,8 @@ test("A6 delegation preserves query, pagination, redirects/API status surface an
     const delegated = app.calls.filter((call) => call.path !== "/api/runtime-diagnostics/release-source");
     assert.ok(delegated.some((call) => call.path === "/ranking" && call.search === "?tab=upcoming&scope=series"));
     assert.ok(delegated.some((call) => call.path === "/categories/test" && call.search === "?page=2"));
+    assert.ok(delegated.every((call) => call.expectedSha === SHA), "every delegated app-owned request must carry the exact expected App SHA");
+    assert.equal(app.calls.some((call) => call.path === "/api/runtime-diagnostics/release-source"), false, "app-owned delegation must not spend a separate identity request");
   } finally {
     fs.rmSync(built.temp, { recursive: true, force: true });
   }
@@ -224,11 +243,44 @@ test("A6 mixed SHA fails closed before delegated public routes or assets", async
       const response = await built.worker.fetch(new Request(`https://preview.example${route}`), { APP: app.binding });
       assert.equal(response.status, 409, route);
       const newCalls = app.calls.slice(before);
-      assert.deepEqual(newCalls.map((call) => call.path), ["/api/runtime-diagnostics/release-source"]);
+      if (route === "/variant-sitemap.xml") {
+        assert.deepEqual(newCalls.map((call) => call.path), ["/api/runtime-diagnostics/release-source"]);
+      } else {
+        const expectedPath = new URL(`https://preview.example${route}`).pathname;
+        assert.deepEqual(newCalls.map((call) => call.path), [expectedPath]);
+        assert.equal(newCalls[0].expectedSha, SHA);
+      }
     }
   } finally {
     fs.rmSync(built.temp, { recursive: true, force: true });
   }
+});
+
+test("A8 app-owned delegation uses one Service Binding invocation and returns exact App identity", async () => {
+  const built = await builtWorker();
+  try {
+    const app = appBinding();
+    const response = await built.worker.fetch(new Request("https://preview.example/ranking"), { APP: app.binding });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-gacha-app-source-sha"), SHA);
+    assert.equal(response.headers.get("x-gacha-public-plane"), "phase-a3");
+    assert.deepEqual(app.calls.map((call) => call.path), ["/ranking"]);
+    assert.equal(app.calls[0].expectedSha, SHA);
+  } finally {
+    fs.rmSync(built.temp, { recursive: true, force: true });
+  }
+});
+
+test("A8 App entrypoint validates expected SHA before route/data work and stamps responses", () => {
+  const source = fs.readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
+  const fetchStart = source.indexOf("async fetch(request, env, ctx)");
+  const gate = source.indexOf("getExpectedSourceGateResponse(request)", fetchStart);
+  const data = source.indexOf("handlePublicDocumentData(request, env)", fetchStart);
+  const handler = source.indexOf("handler.fetch(request, env, ctx)", fetchStart);
+  assert.ok(fetchStart >= 0 && gate > fetchStart && gate < data && gate < handler);
+  assert.match(source, /x-gacha-expected-app-source-sha/);
+  assert.match(source, /x-gacha-app-source-sha/);
+  assert.match(source, /error: "mixed_source_sha"/);
 });
 
 test("A6 Secret API key header contract is apikey-only; legacy JWT Bearer is type-gated and failures do not leak credentials", async () => {
