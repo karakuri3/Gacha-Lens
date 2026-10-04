@@ -286,7 +286,7 @@ test("A6 public data source removes global exact-count dependency and mirrors pr
   assert.match(source, /MAX_OFFSET = 1_000_000/);
 });
 
-test("A6 released series ranking loader keeps parity while removing unused stock/restock/X fanout", () => {
+test("A6 released series ranking loader keeps parity with bounded count-free complete-set evidence", () => {
   const source = fs.readFileSync(new URL("../lib/data/supabase-gacha-repository.js", import.meta.url), "utf8");
   const start = source.indexOf("export async function fetchSupabaseReleasedSeriesSignalCatalog");
   const end = source.indexOf("\nexport async function ", start + 1);
@@ -294,8 +294,13 @@ test("A6 released series ranking loader keeps parity while removing unused stock
 
   assert.ok(start >= 0, "released series ranking loader must exist");
   assert.match(fn, /TABLE_MAP\.marketListings/);
-  assert.match(fn, /fetchRowsIn\(supabaseClient, TABLE_MAP\.variants/);
-  assert.match(fn, /fetchRowsIn\(supabaseClient, TABLE_MAP\.marketListings/);
+  assert.match(fn, /fetchRowsInWithoutCount\(/);
+  assert.match(fn, /TABLE_MAP\.variants/);
+  assert.match(fn, /\.eq\("listing_type", "complete_set"\)/);
+  assert.match(fn, /\.eq\("review_required", false\)/);
+  assert.match(fn, /\.gte\("last_observed_at", marketCutoff\)/);
+  assert.doesNotMatch(fn, /fetchRowsIn\(supabaseClient/);
+  assert.doesNotMatch(fn, /count:\s*"exact"/);
   assert.doesNotMatch(fn, /TABLE_MAP\.stockReports/);
   assert.doesNotMatch(fn, /TABLE_MAP\.restockEvents/);
   assert.doesNotMatch(fn, /TABLE_MAP\.xReactions/);
@@ -303,6 +308,14 @@ test("A6 released series ranking loader keeps parity while removing unused stock
   assert.match(fn, /xReactions:\s*\[\]/);
   assert.match(fn, /restockEvents:\s*\[\]/);
   assert.match(fn, /stockReports:\s*\[\]/);
+
+  const helperStart = source.indexOf("async function fetchRowsInWithoutCount");
+  const helperEnd = source.indexOf("\nasync function fetchRowsIn(", helperStart);
+  const helper = source.slice(helperStart, helperEnd > helperStart ? helperEnd : undefined);
+  assert.ok(helperStart >= 0, "count-free ranking helper must exist");
+  assert.match(helper, /\.range\(from, from \+ pageSize - 1\)/);
+  assert.match(helper, /if \(data\.length < pageSize\) break/);
+  assert.doesNotMatch(helper, /count:\s*"exact"/);
 });
 
 test("A6 series sitemap parent namespace is exact", async () => {
