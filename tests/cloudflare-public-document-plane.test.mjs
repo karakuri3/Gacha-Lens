@@ -8,6 +8,7 @@ import { buildPublicWorker } from "../scripts/build-public-worker.mjs";
 import { classifyPublicRoute } from "../workers/public/src/route-contract.js";
 
 const SHA = "1234567890abcdef1234567890abcdef12345678";
+const OTHER_SHA = "abcdef1234567890abcdef1234567890abcdef12";
 
 async function worker() {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "gacha-a3-public-"));
@@ -85,6 +86,58 @@ test("consumer documents preserve full App UX through explicit exact-SHA delegat
       assert.equal(calls[0].expectedSha, SHA);
       assert.equal(calls.some((call) => call.path.startsWith("/__public-data/v1/")), false);
     }
+  } finally {
+    fs.rmSync(built.temp, { recursive:true, force:true });
+  }
+});
+
+test("A8 read-only delegation maps an older mixed-SHA App to 409 without trusting its unstamped response", async () => {
+  const built = await worker();
+  try {
+    const calls = [];
+    const legacy = {
+      async fetch(request) {
+        const url = new URL(request.url);
+        calls.push(url.pathname);
+        if (url.pathname === "/api/runtime-diagnostics/release-source") {
+          return Response.json({ source_sha: OTHER_SHA });
+        }
+        return new Response("legacy app response", { status:200, headers:{ "content-type":"text/html" } });
+      },
+    };
+
+    const response = await built.worker.fetch(new Request("https://preview.example/series"), { APP:legacy });
+    assert.equal(response.status, 409);
+    assert.match(await response.text(), /mixed_source_sha/);
+    assert.deepEqual(calls, ["/series", "/api/runtime-diagnostics/release-source"]);
+  } finally {
+    fs.rmSync(built.temp, { recursive:true, force:true });
+  }
+});
+
+test("A8 mutation delegation checks legacy App identity before route work", async () => {
+  const built = await worker();
+  try {
+    const calls = [];
+    const legacy = {
+      async fetch(request) {
+        const url = new URL(request.url);
+        calls.push(url.pathname);
+        if (url.pathname === "/api/runtime-diagnostics/release-source") {
+          return Response.json({ source_sha: OTHER_SHA });
+        }
+        return new Response("must not execute", { status:200 });
+      },
+    };
+
+    const response = await built.worker.fetch(new Request("https://preview.example/api/community-reports", {
+      method:"POST",
+      headers:{ "content-type":"application/json" },
+      body:"{}",
+    }), { APP:legacy });
+    assert.equal(response.status, 409);
+    assert.match(await response.text(), /mixed_source_sha/);
+    assert.deepEqual(calls, ["/api/runtime-diagnostics/release-source"]);
   } finally {
     fs.rmSync(built.temp, { recursive:true, force:true });
   }

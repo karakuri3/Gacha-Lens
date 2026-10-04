@@ -1,7 +1,7 @@
 import { classifyPublicRoute, PUBLIC_DIAGNOSTIC_PATHS } from "./route-contract.js";
 import { renderPublicDocument } from "./document-renderer.js";
 
-// A8 exact-head dual-Worker build anchor v5; no runtime behavior change.
+// A8 rollout-compatibility dual-Worker build anchor v6; no runtime behavior change.
 const RELEASE_SOURCE_SHA = "__GACHA_RELEASE_SOURCE_SHA__";
 const SHA_RE = /^[0-9a-f]{40}$/;
 const APP_RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
@@ -123,6 +123,16 @@ async function delegateAppOwned(request, env) {
     }, 503);
   }
 
+  // Mutation-like requests must remain fail-closed before any App route work
+  // during a staggered rollout. Read-only GET/HEAD requests use the one-call
+  // in-band contract below and only fall back to identity lookup when talking
+  // to an older App version that does not stamp the response header.
+  const isReadOnly = request.method === "GET" || request.method === "HEAD";
+  if (!isReadOnly) {
+    const integrity = await assertAppExactSha(request, env);
+    if (!integrity.ok) return integrity.response;
+  }
+
   const incoming = new URL(request.url);
   const target = new URL(incoming.pathname + incoming.search, INTERNAL_ORIGIN);
   const forwardedHeaders = new Headers(request.headers);
@@ -138,6 +148,33 @@ async function delegateAppOwned(request, env) {
   const appSha = String(response.headers.get(APP_SOURCE_SHA_HEADER) || "").trim().toLowerCase();
 
   if (!SHA_RE.test(appSha)) {
+    if (isReadOnly) {
+      // Compatibility path for a Public Preview/new Public Worker bound to an
+      // older App Worker. The delegated request is read-only, so it is safe to
+      // discard the untrusted response and resolve the legacy identity after it.
+      try {
+        await response.body?.cancel();
+      } catch {
+        // Best-effort stream cleanup only; identity resolution remains fail-closed.
+      }
+      const legacyIdentity = await readAppSourceSha(env);
+      if (!legacyIdentity.ok) {
+        return jsonResponse(request, {
+          ok: false,
+          public_source_sha: ownSha,
+          app_source_sha: legacyIdentity.sourceSha,
+          error: legacyIdentity.error,
+        }, legacyIdentity.status);
+      }
+      if (legacyIdentity.sourceSha !== ownSha) {
+        return jsonResponse(request, {
+          ok: false,
+          public_source_sha: ownSha,
+          app_source_sha: legacyIdentity.sourceSha,
+          error: "mixed_source_sha",
+        }, 409);
+      }
+    }
     return jsonResponse(request, {
       ok: false,
       public_source_sha: ownSha,
