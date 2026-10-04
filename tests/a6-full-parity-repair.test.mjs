@@ -237,7 +237,7 @@ test("A6 mixed SHA fails closed before delegated public routes or assets", async
   const built = await builtWorker();
   try {
     const app = appBinding({ sourceSha: OTHER_SHA });
-    for (const route of ["/", "/schedule?month=2026-10", "/variant-sitemap.xml", "/ranking", "/api/public-stock", "/_next/static/css/app.css"]) {
+    for (const route of ["/", "/schedule?month=2026-10", "/ranking", "/api/public-stock", "/_next/static/css/app.css"]) {
       const before = app.calls.length;
       const response = await built.worker.fetch(new Request(`https://preview.example${route}`), { APP: app.binding });
       assert.equal(response.status, 409, route);
@@ -248,6 +248,15 @@ test("A6 mixed SHA fails closed before delegated public routes or assets", async
         "mixed-SHA app-owned request must use one attested upstream response, not a preflight call",
       );
     }
+
+    const beforeSitemap = app.calls.length;
+    const sitemap = await built.worker.fetch(new Request("https://preview.example/variant-sitemap.xml"), { APP: app.binding });
+    assert.equal(sitemap.status, 409);
+    assert.deepEqual(
+      app.calls.slice(beforeSitemap).map((call) => call.path),
+      ["/api/runtime-diagnostics/release-source"],
+      "Public-owned sitemap keeps its separate App identity preflight",
+    );
   } finally {
     fs.rmSync(built.temp, { recursive: true, force: true });
   }
@@ -290,7 +299,7 @@ test("A8 App worker source attests every delegated response with the exact relea
   const delegate = publicSource.slice(delegateStart, delegateEnd);
   assert.ok(delegateStart >= 0);
   assert.doesNotMatch(delegate, /assertAppExactSha/);
-  assert.equal((delegate.match(/env\.APP\.fetch/g) || []).length, 1);
+  assert.equal((delegate.match(/await env\.APP\.fetch/g) || []).length, 1);
   assert.match(delegate, /response\.headers\.get\(APP_SOURCE_SHA_HEADER\)/);
 });
 
