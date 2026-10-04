@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 import { buildPublicWorker } from "../scripts/build-public-worker.mjs";
-import { buildPublicDataHeaders } from "../worker/public-document-data.js";
+import { buildPublicDataHeaders, handlePublicDocumentData } from "../worker/public-document-data.js";
 import { classifyPublicRoute } from "../workers/public/src/route-contract.js";
 
 const SHA = "1234567890abcdef1234567890abcdef12345678";
@@ -81,6 +81,52 @@ function appBinding({ sourceSha = SHA, totalSeries = 2500, totalVariants = 59095
 
 function xmlLocs(xml) {
   return [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+}
+
+async function assertVariantShardClosure(totalVariants, expectedPages) {
+  const built = await builtWorker();
+  try {
+    const app = appBinding({ totalVariants });
+
+    const indexBodies = [];
+    for (const pass of ["first", "repeat"]) {
+      const response = await built.worker.fetch(new Request("https://preview.example/variant-sitemap.xml"), { APP: app.binding });
+      assert.equal(response.status, 200, `${pass} index`);
+      const body = await response.text();
+      indexBodies.push(body);
+      const shardLocs = xmlLocs(body);
+      assert.equal(shardLocs.length, expectedPages, `${pass} advertised shard count`);
+      assert.equal(new Set(shardLocs).size, shardLocs.length, `${pass} duplicate shard locs`);
+      assert.equal(body.includes("public_data_rest_series_401"), false, `${pass} must not contain legacy 401 signature`);
+      assert.equal(body.includes("public_data_count_variants_500"), false, `${pass} must not contain legacy count-500 signature`);
+    }
+    assert.equal(indexBodies[0], indexBodies[1], "first-pass and repeat index must be identical");
+
+    const union = [];
+    for (let page = 1; page <= expectedPages; page += 1) {
+      const response = await built.worker.fetch(new Request(`https://preview.example/variant-sitemap/${page}`), { APP: app.binding });
+      assert.equal(response.status, 200, `shard ${page}`);
+      union.push(...xmlLocs(await response.text()));
+    }
+
+    const next = await built.worker.fetch(new Request(`https://preview.example/variant-sitemap/${expectedPages + 1}`), { APP: app.binding });
+    assert.equal(next.status, 404, "first non-advertised shard must be empty/404");
+
+    assert.equal(union.length, totalVariants, "shard union must cover every eligible variant");
+    assert.equal(new Set(union).size, union.length, "duplicate variant URL count must be zero");
+    if (totalVariants > 0) {
+      assert.equal(union[0], "https://gachalens.com/series/variant-1");
+      assert.equal(union.at(-1), `https://gachalens.com/series/variant-${totalVariants}`);
+    }
+
+    const dataCalls = app.calls.filter((call) => call.path.startsWith("/__public-data/v1/"));
+    assert.equal(dataCalls.some((call) => call.path === "/__public-data/v1/counts"), false, "legacy global counts endpoint must never be called");
+    assert.equal(dataCalls.some((call) => /count=exact|count=planned|count=estimated/i.test(call.search)), false, "count semantics must never be smuggled into shard probes");
+
+    return { union, calls: app.calls };
+  } finally {
+    fs.rmSync(built.temp, { recursive: true, force: true });
+  }
 }
 
 test("A6 route inventory has an explicit owner and unknown/internal paths stay fail-closed", () => {
@@ -185,14 +231,39 @@ test("A6 mixed SHA fails closed before delegated public routes or assets", async
   }
 });
 
-test("A6 current Supabase Secret key is apikey-only while legacy JWT is explicitly type-gated", () => {
-  const secret = buildPublicDataHeaders("sb_secret_example");
-  assert.equal(secret.apikey, "sb_secret_example");
-  assert.equal("authorization" in secret, false);
+test("A6 Secret API key header contract is apikey-only; legacy JWT Bearer is type-gated and failures do not leak credentials", async () => {
+  const opaque = "sb_secret_fixture_only";
+  const secretHeaders = buildPublicDataHeaders(opaque);
+  assert.equal(secretHeaders.apikey, opaque);
+  assert.equal("authorization" in secretHeaders, false);
 
-  const jwt = buildPublicDataHeaders("aaa.bbb.ccc");
-  assert.equal(jwt.apikey, "aaa.bbb.ccc");
-  assert.equal(jwt.authorization, "Bearer aaa.bbb.ccc");
+  const jwt = "aaa.bbb.ccc";
+  const jwtHeaders = buildPublicDataHeaders(jwt);
+  assert.equal(jwtHeaders.apikey, jwt);
+  assert.equal(jwtHeaders.authorization, `Bearer ${jwt}`);
+
+  const originalFetch = globalThis.fetch;
+  let observedAuthorization = "unset";
+  try {
+    globalThis.fetch = async (_url, init = {}) => {
+      const headers = new Headers(init.headers);
+      assert.equal(headers.get("apikey"), opaque);
+      observedAuthorization = headers.get("authorization");
+      return new Response('{"message":"unauthorized"}', { status: 401, headers: { "content-type": "application/json" } });
+    };
+
+    const response = await handlePublicDocumentData(
+      new Request("https://gacha-lens.internal/__public-data/v1/series?released=true&limit=12"),
+      { NEXT_PUBLIC_SUPABASE_URL: "https://fixture.supabase.co", SUPABASE_SERVICE_ROLE_KEY: opaque },
+    );
+    assert.equal(response.status, 503);
+    assert.equal(observedAuthorization, null);
+    const snapshot = await response.text();
+    assert.match(snapshot, /public_data_rest_series_401/);
+    assert.equal(snapshot.includes(opaque), false, "credential must never appear in error snapshot/artifact");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("A6 public data source removes global exact-count dependency and mirrors production month matching", () => {
@@ -206,45 +277,52 @@ test("A6 public data source removes global exact-count dependency and mirrors pr
   assert.match(source, /MAX_OFFSET = 1_000_000/);
 });
 
-test("A6 sitemap closure is exact: parent namespace fixed and 59,095 variants emit 60 complete shards", async () => {
+test("A6 series sitemap parent namespace is exact", async () => {
   const built = await builtWorker();
   try {
     const app = appBinding();
-
     const seriesResponse = await built.worker.fetch(new Request("https://preview.example/series-sitemap.xml"), { APP: app.binding });
     assert.equal(seriesResponse.status, 200);
     const seriesLocs = xmlLocs(await seriesResponse.text());
     assert.equal(seriesLocs.length, 2500);
     assert.ok(seriesLocs.every((loc) => /^https:\/\/gachalens\.com\/series\/group\/parent-\d+$/.test(loc)));
     assert.equal(new Set(seriesLocs).size, seriesLocs.length);
+  } finally {
+    fs.rmSync(built.temp, { recursive: true, force: true });
+  }
+});
 
-    const indexResponse = await built.worker.fetch(new Request("https://preview.example/variant-sitemap.xml"), { APP: app.binding });
-    assert.equal(indexResponse.status, 200);
-    const shardLocs = xmlLocs(await indexResponse.text());
-    assert.equal(shardLocs.length, 60);
-    assert.equal(shardLocs[0], "https://gachalens.com/variant-sitemap/1");
-    assert.equal(shardLocs.at(-1), "https://gachalens.com/variant-sitemap/60");
+test("A6 variant sitemap current-like 59,095 fixture emits exactly 60 non-empty shards with complete duplicate-free union", async () => {
+  const { union } = await assertVariantShardClosure(59095, 60);
+  assert.equal(union.length, 59095);
+});
 
-    const allVariantLocs = [];
-    for (let page = 1; page <= 60; page += 1) {
-      const response = await built.worker.fetch(new Request(`https://preview.example/variant-sitemap/${page}`), { APP: app.binding });
-      assert.equal(response.status, 200, `shard ${page}`);
-      allVariantLocs.push(...xmlLocs(await response.text()));
-    }
-    assert.equal(allVariantLocs.length, 59095);
-    assert.equal(new Set(allVariantLocs).size, 59095);
-    assert.equal(allVariantLocs[0], "https://gachalens.com/series/variant-1");
-    assert.equal(allVariantLocs.at(-1), "https://gachalens.com/series/variant-59095");
+test("A6 variant sitemap exact-multiple boundary closes at the last non-empty shard", async () => {
+  await assertVariantShardClosure(1000, 1);
+});
 
-    const outOfRange = await built.worker.fetch(new Request("https://preview.example/variant-sitemap/61"), { APP: app.binding });
-    assert.equal(outOfRange.status, 404);
+test("A6 variant sitemap one-over boundary advertises the newly required shard", async () => {
+  await assertVariantShardClosure(1001, 2);
+});
 
+test("A6 variant sitemap final partial shard is retained without advertising an empty successor", async () => {
+  await assertVariantShardClosure(1999, 2);
+});
+
+test("A6 variant sitemap zero-variant fixture advertises zero shards and shard 1 is empty", async () => {
+  await assertVariantShardClosure(0, 0);
+});
+
+test("A6 absurd shard remains fail-closed before any data-plane read", async () => {
+  const built = await builtWorker();
+  try {
+    const app = appBinding();
     const beforeHuge = app.calls.length;
     const hugeOutOfRange = await built.worker.fetch(new Request("https://preview.example/variant-sitemap/5001"), { APP: app.binding });
     assert.equal(hugeOutOfRange.status, 404);
     const hugeCalls = app.calls.slice(beforeHuge);
     assert.deepEqual(hugeCalls.map((call) => call.path), ["/api/runtime-diagnostics/release-source"]);
-    assert.equal(hugeCalls.some((call) => call.path.startsWith("/__public-data/")), false, "absurd shard must fail closed before any data-plane read");
+    assert.equal(hugeCalls.some((call) => call.path.startsWith("/__public-data/")), false);
   } finally {
     fs.rmSync(built.temp, { recursive: true, force: true });
   }
