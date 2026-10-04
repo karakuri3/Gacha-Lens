@@ -9,8 +9,20 @@ const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const RELEASE_SOURCE_SHA = String(process.env.GACHA_RELEASE_SOURCE_SHA ?? "").trim().toLowerCase();
 const RELEASE_SOURCE_SHA_RE = /^[0-9a-f]{40}$/;
 const RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
+const APP_SOURCE_SHA_HEADER = "x-gacha-app-source-sha";
 // Release proof returns only this immutable Git SHA; runtime bindings and secrets are never returned.
 // Keeping the marker in the Worker entrypoint makes Preview and custom-domain identity fail closed at runtime.
+
+function withReleaseSourceSha(response) {
+  if (!response || !RELEASE_SOURCE_SHA_RE.test(RELEASE_SOURCE_SHA)) return response;
+  const headers = new Headers(response.headers);
+  headers.set(APP_SOURCE_SHA_HEADER, RELEASE_SOURCE_SHA);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
 
 function getReleaseSourceIdentityResponse(request) {
   const url = new URL(request.url);
@@ -267,25 +279,25 @@ async function canStoreResponse(response, policy) {
 export default {
   async fetch(request, env, ctx) {
     const publicDocumentData = await handlePublicDocumentData(request, env);
-    if (publicDocumentData) return publicDocumentData;
+    if (publicDocumentData) return withReleaseSourceSha(publicDocumentData);
 
     const releaseSourceIdentity = getReleaseSourceIdentityResponse(request);
-    if (releaseSourceIdentity) return releaseSourceIdentity;
+    if (releaseSourceIdentity) return withReleaseSourceSha(releaseSourceIdentity);
 
     const legacyCategoryRedirect = getLegacyCategoryDiscoveryPageRedirect(request);
-    if (legacyCategoryRedirect) return legacyCategoryRedirect;
+    if (legacyCategoryRedirect) return withReleaseSourceSha(legacyCategoryRedirect);
 
     const legacyDiscoveryFacetRedirect = getLegacyDiscoveryFacetPageRedirect(request);
-    if (legacyDiscoveryFacetRedirect) return legacyDiscoveryFacetRedirect;
+    if (legacyDiscoveryFacetRedirect) return withReleaseSourceSha(legacyDiscoveryFacetRedirect);
 
     const legacyRankingRedirect = getLegacyRankingRedirect(request);
-    if (legacyRankingRedirect) return legacyRankingRedirect;
+    if (legacyRankingRedirect) return withReleaseSourceSha(legacyRankingRedirect);
 
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
 
     if (!(await canStoreResponse(response, policy))) {
-      return response;
+      return withReleaseSourceSha(response);
     }
 
     const headers = new Headers(response.headers);
@@ -293,10 +305,10 @@ export default {
     headers.set("Cache-Tag", policy.cacheTag);
     headers.set("X-Gacha-Edge-Cache-Policy", policy.marker);
 
-    return new Response(response.body, {
+    return withReleaseSourceSha(new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers,
-    });
+    }));
   },
 };
