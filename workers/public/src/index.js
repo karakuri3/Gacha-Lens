@@ -1,7 +1,7 @@
 import { classifyPublicRoute, PUBLIC_DIAGNOSTIC_PATHS } from "./route-contract.js";
 import { renderPublicDocument } from "./document-renderer.js";
 
-// Phase A3 exact-head Preview verification anchor v4; no runtime behavior change.
+// A8 exact-head dual-Worker build anchor v5; no runtime behavior change.
 const RELEASE_SOURCE_SHA = "__GACHA_RELEASE_SOURCE_SHA__";
 const SHA_RE = /^[0-9a-f]{40}$/;
 const APP_RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
