@@ -154,7 +154,7 @@ jobs:
             local body="$tmp/${name}.body"
             local headers="$tmp/${name}.headers"
             local code
-            code="$(curl --silent --show-error --max-time 60 -H "Accept: ${BROWSER_ACCEPT}" --dump-header "$headers" --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
+            code="$(curl --silent --show-error --compressed --max-time 60 -H "Accept: ${BROWSER_ACCEPT}" --dump-header "$headers" --output "$body" --write-out '%{http_code}' "${PREVIEW_URL}${path}")"
             [[ "$code" == "$expected" ]] || {
               echo "A6 ${name}: HTTP ${code}, expected ${expected}" >&2
               head -c 1200 "$body" >&2 || true
@@ -261,7 +261,7 @@ jobs:
 
             for attempt in $(seq 1 6); do
               rc=0
-              code="$(curl --silent --show-error --location --max-time 90 \
+              code="$(curl --silent --show-error --compressed --location --max-time 90 \
                 -H "Accept: ${BROWSER_ACCEPT}" \
                 --dump-header "$headers" \
                 --output "$body" \
