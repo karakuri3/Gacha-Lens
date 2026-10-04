@@ -26,7 +26,17 @@ function binding() {
     binding: {
       async fetch(request) {
         const url = new URL(request.url);
-        calls.push({ path:url.pathname, search:url.search, method:request.method, cookie:request.headers.get("cookie") });
+        const expectedSha = request.headers.get("x-gacha-expected-app-source-sha");
+        calls.push({ path:url.pathname, search:url.search, method:request.method, cookie:request.headers.get("cookie"), expectedSha });
+        const stamp = (response) => {
+          const headers = new Headers(response.headers);
+          headers.set("x-gacha-app-source-sha", SHA);
+          return new Response(response.body, { status:response.status, statusText:response.statusText, headers });
+        };
+        if (expectedSha && expectedSha !== SHA) {
+          return stamp(Response.json({ error:"mixed_source_sha", app_source_sha:SHA }, { status:409 }));
+        }
+        return stamp(await (async () => {
         if (url.pathname === "/api/runtime-diagnostics/release-source") {
           return Response.json({ source_sha: SHA });
         }
@@ -42,6 +52,7 @@ function binding() {
           return Response.json(offset === 0 ? [{ slug:"variant-1", updated_at:"2026-10-01T00:00:00Z" }] : []);
         }
         return new Response("not found", { status:404 });
+        })());
       },
     },
   };
@@ -68,9 +79,10 @@ test("consumer documents preserve full App UX through explicit exact-SHA delegat
       assert.equal(response.status, 404, route);
       assert.equal(response.headers.get("x-gacha-public-plane"), "phase-a3");
       const calls = app.calls.slice(before);
-      assert.equal(calls[0].path, "/api/runtime-diagnostics/release-source");
-      assert.equal(calls[1].path, new URL(route, "https://preview.example").pathname);
-      assert.equal(calls[1].search, new URL(route, "https://preview.example").search);
+      assert.equal(calls.length, 1, route);
+      assert.equal(calls[0].path, new URL(route, "https://preview.example").pathname);
+      assert.equal(calls[0].search, new URL(route, "https://preview.example").search);
+      assert.equal(calls[0].expectedSha, SHA);
       assert.equal(calls.some((call) => call.path.startsWith("/__public-data/v1/")), false);
     }
   } finally {
@@ -117,8 +129,9 @@ test("app-owned routes keep credentials and require exact App SHA before delegat
       headers:{ cookie:"review_session=ok" },
     }), { APP:app.binding });
     assert.equal(response.status, 200);
-    assert.deepEqual(app.calls.map((call) => call.path), ["/api/runtime-diagnostics/release-source","/review"]);
-    assert.equal(app.calls[1].cookie, "review_session=ok");
+    assert.deepEqual(app.calls.map((call) => call.path), ["/review"]);
+    assert.equal(app.calls[0].cookie, "review_session=ok");
+    assert.equal(app.calls[0].expectedSha, SHA);
   } finally {
     fs.rmSync(built.temp, { recursive:true, force:true });
   }
@@ -139,9 +152,10 @@ test("series queries and canonical series share the same explicit App owner", as
       headers:{ cookie:"catalog_session=ok" },
     }), { APP:app.binding });
     assert.equal(response.status, 404);
-    assert.deepEqual(app.calls.map((call) => call.path), ["/api/runtime-diagnostics/release-source","/series"]);
-    assert.equal(app.calls[1].search, "?q=test");
-    assert.equal(app.calls[1].cookie, "catalog_session=ok");
+    assert.deepEqual(app.calls.map((call) => call.path), ["/series"]);
+    assert.equal(app.calls[0].search, "?q=test");
+    assert.equal(app.calls[0].cookie, "catalog_session=ok");
+    assert.equal(app.calls[0].expectedSha, SHA);
   } finally {
     fs.rmSync(built.temp, { recursive:true, force:true });
   }
@@ -153,8 +167,9 @@ test("schedule query contract is delegated intact to App instead of reimplemente
     const app = binding();
     const response = await built.worker.fetch(new Request("https://preview.example/schedule?month=2026-10&page=2"), { APP:app.binding });
     assert.equal(response.status, 404);
-    assert.deepEqual(app.calls.map((call) => call.path), ["/api/runtime-diagnostics/release-source", "/schedule"]);
-    assert.equal(app.calls[1].search, "?month=2026-10&page=2");
+    assert.deepEqual(app.calls.map((call) => call.path), ["/schedule"]);
+    assert.equal(app.calls[0].search, "?month=2026-10&page=2");
+    assert.equal(app.calls[0].expectedSha, SHA);
     assert.equal(app.calls.some((call) => call.path === "/__public-data/v1/schedule"), false);
   } finally {
     fs.rmSync(built.temp, { recursive:true, force:true });
