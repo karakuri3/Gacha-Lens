@@ -21,10 +21,8 @@ async function builtWorker() {
 
 function appBinding({ sourceSha = SHA, totalSeries = 2500, totalVariants = 59095 } = {}) {
   const calls = [];
-  return {
-    calls,
-    binding: {
-      async fetch(request) {
+  const rawBinding = {
+    async fetch(request) {
         const url = new URL(request.url);
         const body = request.method === "GET" || request.method === "HEAD" ? "" : await request.clone().text();
         calls.push({ path: url.pathname, search: url.search, method: request.method, body });
@@ -74,6 +72,21 @@ function appBinding({ sourceSha = SHA, totalSeries = 2500, totalVariants = 59095
           return new Response("png", { status: 200, headers: { "content-type": "image/png" } });
         }
         return new Response("APP_OK", { status: 200, headers: { "content-type": "text/html" } });
+    },
+  };
+
+  return {
+    calls,
+    binding: {
+      async fetch(request) {
+        const response = await rawBinding.fetch(request);
+        const headers = new Headers(response.headers);
+        headers.set("x-gacha-app-source-sha", sourceSha);
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        });
       },
     },
   };
@@ -210,6 +223,11 @@ test("A6 delegation preserves query, pagination, redirects/API status surface an
     const delegated = app.calls.filter((call) => call.path !== "/api/runtime-diagnostics/release-source");
     assert.ok(delegated.some((call) => call.path === "/ranking" && call.search === "?tab=upcoming&scope=series"));
     assert.ok(delegated.some((call) => call.path === "/categories/test" && call.search === "?page=2"));
+    assert.equal(
+      app.calls.some((call) => call.path === "/api/runtime-diagnostics/release-source"),
+      false,
+      "app-owned delegation must not spend a separate Service Binding call on source preflight",
+    );
   } finally {
     fs.rmSync(built.temp, { recursive: true, force: true });
   }
@@ -219,16 +237,100 @@ test("A6 mixed SHA fails closed before delegated public routes or assets", async
   const built = await builtWorker();
   try {
     const app = appBinding({ sourceSha: OTHER_SHA });
-    for (const route of ["/", "/schedule?month=2026-10", "/variant-sitemap.xml", "/ranking", "/api/public-stock", "/_next/static/css/app.css"]) {
+    for (const route of ["/", "/schedule?month=2026-10", "/ranking", "/api/public-stock", "/_next/static/css/app.css"]) {
       const before = app.calls.length;
       const response = await built.worker.fetch(new Request(`https://preview.example${route}`), { APP: app.binding });
       assert.equal(response.status, 409, route);
       const newCalls = app.calls.slice(before);
-      assert.deepEqual(newCalls.map((call) => call.path), ["/api/runtime-diagnostics/release-source"]);
+      assert.deepEqual(
+        newCalls.map((call) => call.path),
+        [new URL(route, "https://preview.example").pathname],
+        "mixed-SHA app-owned request must use one attested upstream response, not a preflight call",
+      );
     }
+
+    const beforeSitemap = app.calls.length;
+    const sitemap = await built.worker.fetch(new Request("https://preview.example/variant-sitemap.xml"), { APP: app.binding });
+    assert.equal(sitemap.status, 409);
+    assert.deepEqual(
+      app.calls.slice(beforeSitemap).map((call) => call.path),
+      ["/api/runtime-diagnostics/release-source"],
+      "Public-owned sitemap keeps its separate App identity preflight",
+    );
   } finally {
     fs.rmSync(built.temp, { recursive: true, force: true });
   }
+});
+
+test("A8 app-owned delegation fails closed when the actual App response has no source attestation", async () => {
+  const built = await builtWorker();
+  try {
+    const calls = [];
+    const binding = {
+      async fetch(request) {
+        const url = new URL(request.url);
+        calls.push(url.pathname);
+        return new Response("APP_OK", { status: 200, headers: { "content-type": "text/html" } });
+      },
+    };
+
+    const response = await built.worker.fetch(
+      new Request("https://preview.example/series?q=attestation"),
+      { APP: binding },
+    );
+    assert.equal(response.status, 502);
+    assert.deepEqual(calls, ["/series", "/api/runtime-diagnostics/release-source"]);
+    const payload = await response.json();
+    assert.equal(payload.error, "app_response_identity_unavailable");
+    assert.equal(payload.public_source_sha, SHA);
+    assert.equal(payload.app_source_sha, null);
+  } finally {
+    fs.rmSync(built.temp, { recursive: true, force: true });
+  }
+});
+
+test("A8 old mixed-SHA App without response attestation still fails closed as 409", async () => {
+  const built = await builtWorker();
+  try {
+    const calls = [];
+    const binding = {
+      async fetch(request) {
+        const url = new URL(request.url);
+        calls.push(url.pathname);
+        if (url.pathname === "/api/runtime-diagnostics/release-source") {
+          return Response.json({ source_sha: OTHER_SHA });
+        }
+        return new Response("OLD_APP", { status: 200, headers: { "content-type": "text/html" } });
+      },
+    };
+
+    const response = await built.worker.fetch(
+      new Request("https://preview.example/ranking"),
+      { APP: binding },
+    );
+    assert.equal(response.status, 409);
+    assert.deepEqual(calls, ["/ranking", "/api/runtime-diagnostics/release-source"]);
+    const payload = await response.json();
+    assert.equal(payload.error, "mixed_source_sha");
+    assert.equal(payload.public_source_sha, SHA);
+    assert.equal(payload.app_source_sha, OTHER_SHA);
+  } finally {
+    fs.rmSync(built.temp, { recursive: true, force: true });
+  }
+});
+
+test("A8 App worker source attests every delegated response with the exact release SHA", () => {
+  const appSource = fs.readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
+  const publicSource = fs.readFileSync(new URL("../workers/public/src/index.js", import.meta.url), "utf8");
+  assert.match(appSource, /x-gacha-app-source-sha/);
+  assert.match(appSource, /withReleaseSourceSha\(response\)/);
+  const delegateStart = publicSource.indexOf("async function delegateAppOwned");
+  const delegateEnd = publicSource.indexOf("\nfunction publicDocumentNeedsApp", delegateStart);
+  const delegate = publicSource.slice(delegateStart, delegateEnd);
+  assert.ok(delegateStart >= 0);
+  assert.doesNotMatch(delegate, /assertAppExactSha/);
+  assert.match(delegate, /response\.headers\.get\(APP_SOURCE_SHA_HEADER\)/);
+  assert.match(delegate, /if \(!SHA_RE\.test\(appSha\)\)[\s\S]*readAppSourceSha\(env\)/);
 });
 
 test("A6 Secret API key header contract is apikey-only; legacy JWT Bearer is type-gated and failures do not leak credentials", async () => {
@@ -284,6 +386,33 @@ test("A6 public data source removes global exact-count dependency and mirrors pr
   assert.match(source, /release_month\.eq\.\$\{monthNumber\}月/);
   assert.match(source, /release_month\.eq\.\$\{month\}/);
   assert.match(source, /MAX_OFFSET = 1_000_000/);
+});
+
+test("A7 released variant ranking loader is market-only, bounded, and count-free", () => {
+  const source = fs.readFileSync(new URL("../lib/data/supabase-gacha-repository.js", import.meta.url), "utf8");
+  const start = source.indexOf("export async function fetchSupabaseReleasedSignalCatalog");
+  const end = source.indexOf("\nexport async function ", start + 1);
+  const fn = source.slice(start, end > start ? end : undefined);
+
+  assert.ok(start >= 0, "released variant ranking loader must exist");
+  assert.match(fn, /TABLE_MAP\.marketListings/);
+  assert.match(fn, /variantListingTypes = \["single", "rare_single", "secret_single"\]/);
+  assert.match(fn, /\.select\("variant_id,matched_variant_id"\)/);
+  assert.match(fn, /\.eq\("review_required", false\)/);
+  assert.match(fn, /\.in\("listing_type", variantListingTypes\)/);
+  assert.match(fn, /\.gte\("last_observed_at", marketCutoff\)/);
+  assert.match(fn, /fetchRowsInWithoutCount\(/);
+  assert.match(fn, /"variant_id"/);
+  assert.match(fn, /"matched_variant_id"/);
+  assert.doesNotMatch(fn, /count:\s*"exact"/);
+  assert.doesNotMatch(fn, /TABLE_MAP\.stockReports/);
+  assert.doesNotMatch(fn, /TABLE_MAP\.restockEvents/);
+  assert.doesNotMatch(fn, /TABLE_MAP\.xReactions/);
+  assert.doesNotMatch(fn, /fetchSignalsForCatalog/);
+  assert.match(fn, /marketObservations:\s*\[\]/);
+  assert.match(fn, /xReactions:\s*\[\]/);
+  assert.match(fn, /restockEvents:\s*\[\]/);
+  assert.match(fn, /stockReports:\s*\[\]/);
 });
 
 test("A6 released series ranking loader keeps parity with bounded count-free complete-set evidence", () => {

@@ -7,6 +7,7 @@ const SHA_RE = /^[0-9a-f]{40}$/;
 const APP_RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
 const APP_REPRESENTATIVE_PATH = "/review";
 const INTERNAL_ORIGIN = "https://gacha-lens.internal";
+const APP_SOURCE_SHA_HEADER = "x-gacha-app-source-sha";
 
 function releaseSourceSha() {
   return SHA_RE.test(RELEASE_SOURCE_SHA) ? RELEASE_SOURCE_SHA : null;
@@ -108,14 +109,59 @@ async function appDelegationDiagnostic(request, env) {
 }
 
 async function delegateAppOwned(request, env) {
-  const integrity = await assertAppExactSha(request, env);
-  if (!integrity.ok) return integrity.response;
+  const ownSha = releaseSourceSha();
+  if (!ownSha) {
+    return jsonResponse(request, { error: "public_source_identity_unavailable" }, 503);
+  }
+  if (!env?.APP || typeof env.APP.fetch !== "function") {
+    return jsonResponse(request, { error: "app_binding_unavailable" }, 503);
+  }
+
   const incoming = new URL(request.url);
   const target = new URL(incoming.pathname + incoming.search, INTERNAL_ORIGIN);
   const forwarded = new Request(target, request);
   const response = await env.APP.fetch(forwarded);
+
+  let appSha = String(response.headers.get(APP_SOURCE_SHA_HEADER) || "").trim().toLowerCase();
+  if (!SHA_RE.test(appSha)) {
+    // Cloudflare PR Previews bind to the Production App Worker. During a rollout
+    // that older App may not yet emit the response attestation header. Only in
+    // this missing-attestation case do one bounded identity lookup so mixed-SHA
+    // Preview traffic still fails closed as 409. Healthy same-SHA Production
+    // responses stay on the single-call fast path.
+    const fallbackIdentity = await readAppSourceSha(env);
+    if (!fallbackIdentity.ok) {
+      return jsonResponse(request, {
+        ok: false,
+        public_source_sha: ownSha,
+        app_source_sha: fallbackIdentity.sourceSha,
+        upstream_status: response.status,
+        error: "app_response_identity_unavailable",
+      }, 502);
+    }
+    appSha = fallbackIdentity.sourceSha;
+    if (appSha === ownSha) {
+      return jsonResponse(request, {
+        ok: false,
+        public_source_sha: ownSha,
+        app_source_sha: appSha,
+        upstream_status: response.status,
+        error: "app_response_attestation_missing",
+      }, 502);
+    }
+  }
+  if (appSha !== ownSha) {
+    return jsonResponse(request, {
+      ok: false,
+      public_source_sha: ownSha,
+      app_source_sha: appSha,
+      upstream_status: response.status,
+      error: "mixed_source_sha",
+    }, 409);
+  }
+
   const headers = new Headers(response.headers);
-  headers.set("x-gacha-public-plane", "phase-a3");
+  headers.set("x-gacha-public-plane", "phase-a8-single-call");
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
