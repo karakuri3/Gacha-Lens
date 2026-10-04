@@ -21,8 +21,24 @@ function config(env) {
   return { base, key };
 }
 
-function isJwtCredential(key) {
-  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(String(key || ""));
+function decodeJwtSegment(segment) {
+  const value = String(segment || "").replace(/-/g, "+").replace(/_/g, "/");
+  const padded = value + "=".repeat((4 - (value.length % 4 || 4)) % 4);
+  return JSON.parse(atob(padded));
+}
+
+function isLegacyServiceRoleJwtCredential(key) {
+  const parts = String(key || "").split(".");
+  if (parts.length !== 3 || parts.some((part) => !/^[A-Za-z0-9_-]+$/.test(part))) return false;
+  try {
+    const header = decodeJwtSegment(parts[0]);
+    const payload = decodeJwtSegment(parts[1]);
+    return typeof header?.alg === "string"
+      && header.alg.length > 0
+      && payload?.role === "service_role";
+  } catch {
+    return false;
+  }
 }
 
 export function buildPublicDataHeaders(key, extra = {}) {
@@ -31,7 +47,7 @@ export function buildPublicDataHeaders(key, extra = {}) {
     accept: "application/json",
     ...extra,
   };
-  if (isJwtCredential(key)) headers.authorization = `Bearer ${key}`;
+  if (isLegacyServiceRoleJwtCredential(key)) headers.authorization = `Bearer ${key}`;
   return headers;
 }
 
