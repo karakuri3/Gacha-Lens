@@ -9,8 +9,57 @@ const PREVIEW_HOST_SUFFIX = ".workers.dev";
 const RELEASE_SOURCE_SHA = String(process.env.GACHA_RELEASE_SOURCE_SHA ?? "").trim().toLowerCase();
 const RELEASE_SOURCE_SHA_RE = /^[0-9a-f]{40}$/;
 const RELEASE_SOURCE_PATH = "/api/runtime-diagnostics/release-source";
+const EXPECTED_APP_SOURCE_SHA_HEADER = "x-gacha-expected-app-source-sha";
+const APP_SOURCE_SHA_HEADER = "x-gacha-app-source-sha";
 // Release proof returns only this immutable Git SHA; runtime bindings and secrets are never returned.
 // Keeping the marker in the Worker entrypoint makes Preview and custom-domain identity fail closed at runtime.
+
+function currentReleaseSourceSha() {
+  return RELEASE_SOURCE_SHA_RE.test(RELEASE_SOURCE_SHA) ? RELEASE_SOURCE_SHA : null;
+}
+
+function withAppSourceSha(response) {
+  if (!(response instanceof Response)) return response;
+  const sourceSha = currentReleaseSourceSha();
+  if (!sourceSha) return response;
+  const headers = new Headers(response.headers);
+  headers.set(APP_SOURCE_SHA_HEADER, sourceSha);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function getExpectedSourceGateResponse(request) {
+  const expected = String(request.headers.get(EXPECTED_APP_SOURCE_SHA_HEADER) ?? "").trim().toLowerCase();
+  if (!expected) return null;
+
+  const actual = currentReleaseSourceSha();
+  const headers = new Headers({
+    "Cache-Control": "no-store, max-age=0",
+    "Content-Type": "application/json; charset=utf-8",
+  });
+  if (actual) headers.set(APP_SOURCE_SHA_HEADER, actual);
+
+  if (!actual) {
+    return new Response(JSON.stringify({
+      ok: false,
+      app_source_sha: null,
+      error: "app_source_identity_unavailable",
+    }), { status: 503, headers });
+  }
+
+  if (!RELEASE_SOURCE_SHA_RE.test(expected) || expected !== actual) {
+    return new Response(JSON.stringify({
+      ok: false,
+      app_source_sha: actual,
+      error: "mixed_source_sha",
+    }), { status: 409, headers });
+  }
+
+  return null;
+}
 
 function getReleaseSourceIdentityResponse(request) {
   const url = new URL(request.url);
@@ -28,7 +77,7 @@ function getReleaseSourceIdentityResponse(request) {
     });
   }
 
-  const sourceSha = RELEASE_SOURCE_SHA_RE.test(RELEASE_SOURCE_SHA) ? RELEASE_SOURCE_SHA : null;
+  const sourceSha = currentReleaseSourceSha();
   return new Response(request.method === "HEAD" ? null : JSON.stringify({ source_sha: sourceSha }), {
     status: sourceSha ? 200 : 503,
     headers,
@@ -266,26 +315,29 @@ async function canStoreResponse(response, policy) {
 
 export default {
   async fetch(request, env, ctx) {
+    const sourceGate = getExpectedSourceGateResponse(request);
+    if (sourceGate) return sourceGate;
+
     const publicDocumentData = await handlePublicDocumentData(request, env);
-    if (publicDocumentData) return publicDocumentData;
+    if (publicDocumentData) return withAppSourceSha(publicDocumentData);
 
     const releaseSourceIdentity = getReleaseSourceIdentityResponse(request);
-    if (releaseSourceIdentity) return releaseSourceIdentity;
+    if (releaseSourceIdentity) return withAppSourceSha(releaseSourceIdentity);
 
     const legacyCategoryRedirect = getLegacyCategoryDiscoveryPageRedirect(request);
-    if (legacyCategoryRedirect) return legacyCategoryRedirect;
+    if (legacyCategoryRedirect) return withAppSourceSha(legacyCategoryRedirect);
 
     const legacyDiscoveryFacetRedirect = getLegacyDiscoveryFacetPageRedirect(request);
-    if (legacyDiscoveryFacetRedirect) return legacyDiscoveryFacetRedirect;
+    if (legacyDiscoveryFacetRedirect) return withAppSourceSha(legacyDiscoveryFacetRedirect);
 
     const legacyRankingRedirect = getLegacyRankingRedirect(request);
-    if (legacyRankingRedirect) return legacyRankingRedirect;
+    if (legacyRankingRedirect) return withAppSourceSha(legacyRankingRedirect);
 
     const policy = getEdgeCachePolicy(request);
     const response = await handler.fetch(request, env, ctx);
 
     if (!(await canStoreResponse(response, policy))) {
-      return response;
+      return withAppSourceSha(response);
     }
 
     const headers = new Headers(response.headers);
@@ -293,10 +345,10 @@ export default {
     headers.set("Cache-Tag", policy.cacheTag);
     headers.set("X-Gacha-Edge-Cache-Policy", policy.marker);
 
-    return new Response(response.body, {
+    return withAppSourceSha(new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers,
-    });
+    }));
   },
 };
