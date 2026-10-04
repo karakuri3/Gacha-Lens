@@ -286,6 +286,25 @@ test("A6 public data source removes global exact-count dependency and mirrors pr
   assert.match(source, /MAX_OFFSET = 1_000_000/);
 });
 
+test("A6 released series ranking loader keeps parity while removing unused stock/restock/X fanout", () => {
+  const source = fs.readFileSync(new URL("../lib/data/supabase-gacha-repository.js", import.meta.url), "utf8");
+  const start = source.indexOf("export async function fetchSupabaseReleasedSeriesSignalCatalog");
+  const end = source.indexOf("\nexport async function ", start + 1);
+  const fn = source.slice(start, end > start ? end : undefined);
+
+  assert.ok(start >= 0, "released series ranking loader must exist");
+  assert.match(fn, /TABLE_MAP\.marketListings/);
+  assert.match(fn, /fetchRowsIn\(supabaseClient, TABLE_MAP\.variants/);
+  assert.match(fn, /fetchRowsIn\(supabaseClient, TABLE_MAP\.marketListings/);
+  assert.doesNotMatch(fn, /TABLE_MAP\.stockReports/);
+  assert.doesNotMatch(fn, /TABLE_MAP\.restockEvents/);
+  assert.doesNotMatch(fn, /TABLE_MAP\.xReactions/);
+  assert.doesNotMatch(fn, /fetchSignalsForCatalog/);
+  assert.match(fn, /xReactions:\s*\[\]/);
+  assert.match(fn, /restockEvents:\s*\[\]/);
+  assert.match(fn, /stockReports:\s*\[\]/);
+});
+
 test("A6 series sitemap parent namespace is exact", async () => {
   const built = await builtWorker();
   try {
