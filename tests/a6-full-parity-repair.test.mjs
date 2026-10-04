@@ -286,6 +286,33 @@ test("A6 public data source removes global exact-count dependency and mirrors pr
   assert.match(source, /MAX_OFFSET = 1_000_000/);
 });
 
+test("A7 released variant ranking loader is market-only, bounded, and count-free", () => {
+  const source = fs.readFileSync(new URL("../lib/data/supabase-gacha-repository.js", import.meta.url), "utf8");
+  const start = source.indexOf("export async function fetchSupabaseReleasedSignalCatalog");
+  const end = source.indexOf("\nexport async function ", start + 1);
+  const fn = source.slice(start, end > start ? end : undefined);
+
+  assert.ok(start >= 0, "released variant ranking loader must exist");
+  assert.match(fn, /TABLE_MAP\.marketListings/);
+  assert.match(fn, /variantListingTypes = \["single", "rare_single", "secret_single"\]/);
+  assert.match(fn, /\.select\("variant_id,matched_variant_id"\)/);
+  assert.match(fn, /\.eq\("review_required", false\)/);
+  assert.match(fn, /\.in\("listing_type", variantListingTypes\)/);
+  assert.match(fn, /\.gte\("last_observed_at", marketCutoff\)/);
+  assert.match(fn, /fetchRowsInWithoutCount\(/);
+  assert.match(fn, /"variant_id"/);
+  assert.match(fn, /"matched_variant_id"/);
+  assert.doesNotMatch(fn, /count:\s*"exact"/);
+  assert.doesNotMatch(fn, /TABLE_MAP\.stockReports/);
+  assert.doesNotMatch(fn, /TABLE_MAP\.restockEvents/);
+  assert.doesNotMatch(fn, /TABLE_MAP\.xReactions/);
+  assert.doesNotMatch(fn, /fetchSignalsForCatalog/);
+  assert.match(fn, /marketObservations:\s*\[\]/);
+  assert.match(fn, /xReactions:\s*\[\]/);
+  assert.match(fn, /restockEvents:\s*\[\]/);
+  assert.match(fn, /stockReports:\s*\[\]/);
+});
+
 test("A6 released series ranking loader keeps parity with bounded count-free complete-set evidence", () => {
   const source = fs.readFileSync(new URL("../lib/data/supabase-gacha-repository.js", import.meta.url), "utf8");
   const start = source.indexOf("export async function fetchSupabaseReleasedSeriesSignalCatalog");
