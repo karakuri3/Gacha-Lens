@@ -21,10 +21,8 @@ async function builtWorker() {
 
 function appBinding({ sourceSha = SHA, totalSeries = 2500, totalVariants = 59095 } = {}) {
   const calls = [];
-  return {
-    calls,
-    binding: {
-      async fetch(request) {
+  const rawBinding = {
+    async fetch(request) {
         const url = new URL(request.url);
         const body = request.method === "GET" || request.method === "HEAD" ? "" : await request.clone().text();
         calls.push({ path: url.pathname, search: url.search, method: request.method, body });
@@ -74,6 +72,21 @@ function appBinding({ sourceSha = SHA, totalSeries = 2500, totalVariants = 59095
           return new Response("png", { status: 200, headers: { "content-type": "image/png" } });
         }
         return new Response("APP_OK", { status: 200, headers: { "content-type": "text/html" } });
+    },
+  };
+
+  return {
+    calls,
+    binding: {
+      async fetch(request) {
+        const response = await rawBinding.fetch(request);
+        const headers = new Headers(response.headers);
+        headers.set("x-gacha-app-source-sha", sourceSha);
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        });
       },
     },
   };
@@ -210,6 +223,11 @@ test("A6 delegation preserves query, pagination, redirects/API status surface an
     const delegated = app.calls.filter((call) => call.path !== "/api/runtime-diagnostics/release-source");
     assert.ok(delegated.some((call) => call.path === "/ranking" && call.search === "?tab=upcoming&scope=series"));
     assert.ok(delegated.some((call) => call.path === "/categories/test" && call.search === "?page=2"));
+    assert.equal(
+      app.calls.some((call) => call.path === "/api/runtime-diagnostics/release-source"),
+      false,
+      "app-owned delegation must not spend a separate Service Binding call on source preflight",
+    );
   } finally {
     fs.rmSync(built.temp, { recursive: true, force: true });
   }
@@ -224,11 +242,56 @@ test("A6 mixed SHA fails closed before delegated public routes or assets", async
       const response = await built.worker.fetch(new Request(`https://preview.example${route}`), { APP: app.binding });
       assert.equal(response.status, 409, route);
       const newCalls = app.calls.slice(before);
-      assert.deepEqual(newCalls.map((call) => call.path), ["/api/runtime-diagnostics/release-source"]);
+      assert.deepEqual(
+        newCalls.map((call) => call.path),
+        [new URL(route, "https://preview.example").pathname],
+        "mixed-SHA app-owned request must use one attested upstream response, not a preflight call",
+      );
     }
   } finally {
     fs.rmSync(built.temp, { recursive: true, force: true });
   }
+});
+
+test("A8 app-owned delegation fails closed when the actual App response has no source attestation", async () => {
+  const built = await builtWorker();
+  try {
+    const calls = [];
+    const binding = {
+      async fetch(request) {
+        const url = new URL(request.url);
+        calls.push(url.pathname);
+        return new Response("APP_OK", { status: 200, headers: { "content-type": "text/html" } });
+      },
+    };
+
+    const response = await built.worker.fetch(
+      new Request("https://preview.example/series?q=attestation"),
+      { APP: binding },
+    );
+    assert.equal(response.status, 502);
+    assert.deepEqual(calls, ["/series"]);
+    const payload = await response.json();
+    assert.equal(payload.error, "app_response_identity_unavailable");
+    assert.equal(payload.public_source_sha, SHA);
+    assert.equal(payload.app_source_sha, null);
+  } finally {
+    fs.rmSync(built.temp, { recursive: true, force: true });
+  }
+});
+
+test("A8 App worker source attests every delegated response with the exact release SHA", () => {
+  const appSource = fs.readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
+  const publicSource = fs.readFileSync(new URL("../workers/public/src/index.js", import.meta.url), "utf8");
+  assert.match(appSource, /x-gacha-app-source-sha/);
+  assert.match(appSource, /withReleaseSourceSha\(response\)/);
+  const delegateStart = publicSource.indexOf("async function delegateAppOwned");
+  const delegateEnd = publicSource.indexOf("\nfunction publicDocumentNeedsApp", delegateStart);
+  const delegate = publicSource.slice(delegateStart, delegateEnd);
+  assert.ok(delegateStart >= 0);
+  assert.doesNotMatch(delegate, /assertAppExactSha/);
+  assert.equal((delegate.match(/env\.APP\.fetch/g) || []).length, 1);
+  assert.match(delegate, /response\.headers\.get\(APP_SOURCE_SHA_HEADER\)/);
 });
 
 test("A6 Secret API key header contract is apikey-only; legacy JWT Bearer is type-gated and failures do not leak credentials", async () => {
