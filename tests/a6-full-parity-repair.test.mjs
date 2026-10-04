@@ -279,11 +279,41 @@ test("A8 app-owned delegation fails closed when the actual App response has no s
       { APP: binding },
     );
     assert.equal(response.status, 502);
-    assert.deepEqual(calls, ["/series"]);
+    assert.deepEqual(calls, ["/series", "/api/runtime-diagnostics/release-source"]);
     const payload = await response.json();
     assert.equal(payload.error, "app_response_identity_unavailable");
     assert.equal(payload.public_source_sha, SHA);
     assert.equal(payload.app_source_sha, null);
+  } finally {
+    fs.rmSync(built.temp, { recursive: true, force: true });
+  }
+});
+
+test("A8 old mixed-SHA App without response attestation still fails closed as 409", async () => {
+  const built = await builtWorker();
+  try {
+    const calls = [];
+    const binding = {
+      async fetch(request) {
+        const url = new URL(request.url);
+        calls.push(url.pathname);
+        if (url.pathname === "/api/runtime-diagnostics/release-source") {
+          return Response.json({ source_sha: OTHER_SHA });
+        }
+        return new Response("OLD_APP", { status: 200, headers: { "content-type": "text/html" } });
+      },
+    };
+
+    const response = await built.worker.fetch(
+      new Request("https://preview.example/ranking"),
+      { APP: binding },
+    );
+    assert.equal(response.status, 409);
+    assert.deepEqual(calls, ["/ranking", "/api/runtime-diagnostics/release-source"]);
+    const payload = await response.json();
+    assert.equal(payload.error, "mixed_source_sha");
+    assert.equal(payload.public_source_sha, SHA);
+    assert.equal(payload.app_source_sha, OTHER_SHA);
   } finally {
     fs.rmSync(built.temp, { recursive: true, force: true });
   }
@@ -299,8 +329,8 @@ test("A8 App worker source attests every delegated response with the exact relea
   const delegate = publicSource.slice(delegateStart, delegateEnd);
   assert.ok(delegateStart >= 0);
   assert.doesNotMatch(delegate, /assertAppExactSha/);
-  assert.equal((delegate.match(/await env\.APP\.fetch/g) || []).length, 1);
   assert.match(delegate, /response\.headers\.get\(APP_SOURCE_SHA_HEADER\)/);
+  assert.match(delegate, /if \(!SHA_RE\.test\(appSha\)\)[\s\S]*readAppSourceSha\(env\)/);
 });
 
 test("A6 Secret API key header contract is apikey-only; legacy JWT Bearer is type-gated and failures do not leak credentials", async () => {
