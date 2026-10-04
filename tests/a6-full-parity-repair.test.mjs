@@ -237,10 +237,16 @@ test("A6 Secret API key header contract is apikey-only; legacy JWT Bearer is typ
   assert.equal(secretHeaders.apikey, opaque);
   assert.equal("authorization" in secretHeaders, false);
 
-  const jwt = "aaa.bbb.ccc";
+  const encode = (value) => Buffer.from(JSON.stringify(value))
+    .toString("base64url");
+  const jwt = `${encode({ alg: "HS256", typ: "JWT" })}.${encode({ role: "service_role", ref: "fixture" })}.signature`;
   const jwtHeaders = buildPublicDataHeaders(jwt);
   assert.equal(jwtHeaders.apikey, jwt);
   assert.equal(jwtHeaders.authorization, `Bearer ${jwt}`);
+
+  const dottedOpaque = buildPublicDataHeaders("opaque.with.dots");
+  assert.equal(dottedOpaque.apikey, "opaque.with.dots");
+  assert.equal("authorization" in dottedOpaque, false);
 
   const originalFetch = globalThis.fetch;
   let observedAuthorization = "unset";
@@ -268,9 +274,12 @@ test("A6 Secret API key header contract is apikey-only; legacy JWT Bearer is typ
 
 test("A6 public data source removes global exact-count dependency and mirrors production month matching", () => {
   const source = fs.readFileSync(new URL("../worker/public-document-data.js", import.meta.url), "utf8");
-  assert.doesNotMatch(source, /prefer\s*:\s*["']count=exact["']/i);
+  assert.doesNotMatch(source, /prefer\s*:\s*["']count=(?:exact|planned|estimated)["']/i);
+  assert.doesNotMatch(source, /count=(?:exact|planned|estimated)/i);
   assert.doesNotMatch(source, /PATH_PREFIX}counts/);
   assert.doesNotMatch(source, /authorization:\s*`Bearer \$\{cfg\.key\}`/);
+  assert.equal((source.match(/buildPublicDataHeaders\(cfg\.key/g) || []).length, 1, "all raw REST reads must share one header construction path");
+  assert.match(source, /async function sitemapVariants[\s\S]*return rest\(env, "variants"/);
   assert.match(source, /release_date\.gte\.\$\{start\}/);
   assert.match(source, /release_month\.eq\.\$\{monthNumber\}月/);
   assert.match(source, /release_month\.eq\.\$\{month\}/);
