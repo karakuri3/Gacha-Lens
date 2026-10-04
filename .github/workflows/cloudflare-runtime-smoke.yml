@@ -302,16 +302,6 @@ jobs:
             done
           }
 
-          edge_policy() {
-            local name="$1"
-            awk 'BEGIN{IGNORECASE=1} /^x-gacha-edge-cache-policy:/ {gsub("\r", ""); print $2; exit}' "$tmp/${name}.headers"
-          }
-
-          cf_cache_status() {
-            local name="$1"
-            awk 'BEGIN{IGNORECASE=1} /^cf-cache-status:/ {gsub("\r", ""); print $2; exit}' "$tmp/${name}.headers"
-          }
-
           encoded_slug='tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
           product_path="/series/${encoded_slug}"
           category_path='/categories/%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3'
@@ -357,41 +347,7 @@ jobs:
             exit 1
           }
 
-          for name in product_1 product_2 product_3; do
-            [[ "$(edge_policy "$name")" == 'series-detail-300-v2' ]] || {
-              echo "$name is missing series-detail edge-cache policy" >&2
-              exit 1
-            }
-          done
-
-          for name in categories brands franchises; do
-            [[ "$(edge_policy "$name")" == 'discovery-index-300-v2' ]] || {
-              echo "$name is missing bounded discovery-index edge-cache policy" >&2
-              exit 1
-            }
-          done
-
-          for name in series category_detail brand_detail franchise_detail; do
-            [[ "$(edge_policy "$name")" == 'discovery-document-300-v2' ]] || {
-              echo "$name is missing discovery-document edge-cache policy" >&2
-              exit 1
-            }
-          done
-
-          for name in home restocks stock schedule guides; do
-            [[ "$(edge_policy "$name")" == 'public-document-120-v1' ]] || {
-              echo "$name is missing public document edge-cache policy" >&2
-              exit 1
-            }
-          done
-
-          for name in robots sitemap series_sitemap variant_sitemap variant_sitemap_shard; do
-            [[ "$(edge_policy "$name")" == 'public-sitemap-86400-v1' ]] || {
-              echo "$name is missing public sitemap edge-cache policy" >&2
-              exit 1
-            }
-          done
-
+          echo 'Edge-cache policy/HIT semantics are enforced by the separate exact-head Cloudflare cache proof workflow.' >> "$GITHUB_STEP_SUMMARY"
 
           invalid_variant_shard_code=''
           for attempt in $(seq 1 6); do
@@ -417,47 +373,6 @@ jobs:
             exit 1
           }
           echo 'Out-of-range variant sitemap shard boundary: HTTP 404' >> "$GITHUB_STEP_SUMMARY"
-
-          [[ -z "$(edge_policy catalog_search)" ]] || {
-            echo 'Query/search variant unexpectedly received a shared edge-cache policy.' >&2
-            exit 1
-          }
-          [[ -z "$(edge_policy stock_query)" ]] || {
-            echo 'Stock query variant unexpectedly received a shared edge-cache policy.' >&2
-            exit 1
-          }
-
-          request_get categories_warm '/categories' 'カテゴリから探す'
-          request_get series_warm '/series' 'ガチャ一覧'
-          request_get category_detail_warm "$category_path" 'ガシャポン'
-          request_get brand_detail_warm "$brand_path" 'バンダイ'
-          request_get franchise_detail_warm "$franchise_path" 'サンリオキャラクターズ'
-          request_get restocks_warm '/restocks'
-          request_get series_sitemap_warm '/series-sitemap.xml'
-
-          for name in categories_warm series_warm category_detail_warm brand_detail_warm franchise_detail_warm series_sitemap_warm; do
-            cf_status="$(cf_cache_status "$name")"
-            case "$cf_status" in
-              MISS|HIT|STALE)
-                echo "$name edge cache observation: $cf_status; exact-head HIT convergence is enforced by Cloudflare cache proof." >> "$GITHUB_STEP_SUMMARY"
-                ;;
-              *)
-                echo "$name had unexpected cache status ${cf_status:-none}" >&2
-                exit 1
-                ;;
-            esac
-          done
-
-          restocks_status="$(cf_cache_status restocks_warm)"
-          case "$restocks_status" in
-            MISS|HIT|STALE)
-              echo "restocks_warm edge cache observation: $restocks_status; bounded origin path already verified HTTP 200." >> "$GITHUB_STEP_SUMMARY"
-              ;;
-            *)
-              echo "restocks_warm had unexpected cache status ${restocks_status:-none}" >&2
-              exit 1
-              ;;
-          esac
 
           review_code="$(curl --silent --show-error --max-time 60 --output "$tmp/review-post.body" --write-out '%{http_code}' -X POST -H "Origin: ${PREVIEW_URL}" -H 'Content-Type: application/x-www-form-urlencoded' --data 'decision=approved' "${PREVIEW_URL}/api/review/community-reports/runtime-smoke-nonexistent")"
           [[ "$review_code" == "401" ]] || { echo "Unauthenticated review mutation returned $review_code, expected 401" >&2; exit 1; }
