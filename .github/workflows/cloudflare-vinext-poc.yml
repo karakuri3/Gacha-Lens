@@ -66,7 +66,67 @@ jobs:
         run: |
           set -euo pipefail
           npm ci --ignore-scripts --prefix "$TOOLCHAIN_DIR"
-          npm audit --audit-level=low --prefix "$TOOLCHAIN_DIR"
+
+          audit_json=/tmp/vinext-toolchain-audit.json
+          npm audit --json --audit-level=low --prefix "$TOOLCHAIN_DIR" > "$audit_json" || true
+          node --input-type=module "$audit_json" <<'NODE'
+          import fs from "node:fs";
+
+          const path = process.argv[2];
+          const report = JSON.parse(fs.readFileSync(path, "utf8"));
+          const vulnerabilities = report.vulnerabilities ?? {};
+          if (Object.keys(vulnerabilities).length === 0) {
+            console.log("Locked vinext CI toolchain audit is clean.");
+            process.exit(0);
+          }
+
+          // GHSA-vfj7-8cjw-p6xm currently has no patched braces release. Keep the
+          // exception narrowly scoped to the known CI-only vinext dependency
+          // closure and fail closed on any different/new advisory or package.
+          const allowedPackages = new Set([
+            "@vinext/cloudflare",
+            "braces",
+            "fast-glob",
+            "micromatch",
+            "vinext",
+            "vite-plugin-commonjs",
+            "vite-plugin-dynamic-import",
+          ]);
+          const allowedAdvisory = "GHSA-vfj7-8cjw-p6xm";
+          const seenAdvisories = new Set();
+
+          for (const [name, detail] of Object.entries(vulnerabilities)) {
+            if (!allowedPackages.has(name)) {
+              throw new Error(`Unexpected vinext-toolchain audit package: ${name}`);
+            }
+            for (const via of detail.via ?? []) {
+              if (typeof via === "object" && via) {
+                const url = String(via.url ?? "");
+                const source = String(via.source ?? "");
+                const title = String(via.title ?? "");
+                const match = url.match(/GHSA-[A-Za-z0-9-]+/i)
+                  ?? source.match(/GHSA-[A-Za-z0-9-]+/i)
+                  ?? title.match(/GHSA-[A-Za-z0-9-]+/i);
+                if (match) seenAdvisories.add(match[0].toUpperCase());
+              }
+            }
+          }
+
+          if (seenAdvisories.size !== 1 || !seenAdvisories.has(allowedAdvisory)) {
+            throw new Error(
+              `Unexpected vinext-toolchain advisory set: ${[...seenAdvisories].sort().join(", ") || "none"}`
+            );
+          }
+
+          const braces = vulnerabilities.braces;
+          if (!braces || String(braces.range ?? "") !== "<=3.0.3") {
+            throw new Error(`Unexpected braces advisory range: ${braces?.range ?? "missing"}`);
+          }
+
+          console.log(
+            `Accepted CI-only upstream exception ${allowedAdvisory}; no other npm advisory is present in the locked vinext toolchain.`
+          );
+          NODE
 
       - name: Verify locked direct toolchain versions
         shell: bash
