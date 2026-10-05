@@ -117,9 +117,9 @@ test("released variant ranking page alone selects the lean runtime path", () => 
 
 test("lean released ranking projection preserves completed-sale and active-listing truth", () => {
   const listings = [
-    marketListing({ id: "sold-1", price: 600, status: "sold", sold_at: "2026-09-20T00:00:00.000Z", last_observed_at: "2026-09-20T00:00:00.000Z" }),
-    marketListing({ id: "sold-2", price: 700, status: "sold", sold_at: "2026-09-25T00:00:00.000Z", last_observed_at: "2026-09-25T00:00:00.000Z" }),
-    marketListing({ id: "sold-3", price: 800, status: "sold", sold_at: "2026-10-01T00:00:00.000Z", last_observed_at: "2026-10-01T00:00:00.000Z" }),
+    marketListing({ id: "sold-1", price: 600, status: "sold", sold_at: "2026-09-20T00:00:00.000Z", last_observed_at: "2026-09-20T00:00:00.000Z", source_url: "https://example.com/item/sold-1" }),
+    marketListing({ id: "sold-2", price: 700, status: "sold", sold_at: "2026-09-25T00:00:00.000Z", last_observed_at: "2026-09-25T00:00:00.000Z", source_url: "https://example.com/item/sold-2" }),
+    marketListing({ id: "sold-3", price: 800, status: "sold", sold_at: "2026-10-01T00:00:00.000Z", last_observed_at: "2026-10-01T00:00:00.000Z", source_url: "https://example.com/item/sold-3" }),
     marketListing({ id: "active-1", price: 900, source: "shop-a", source_url: "https://example.com/item/a" }),
     marketListing({ id: "active-2", price: 950, source: "shop-b", source_url: "https://example.com/item/b" }),
   ];
