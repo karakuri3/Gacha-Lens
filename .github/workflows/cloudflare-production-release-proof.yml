@@ -20,6 +20,7 @@ jobs:
     env:
       TARGET_SHA: ${{ github.sha }}
       PRODUCTION_URL: https://gachalens.com
+      PUBLIC_PRODUCTION_URL: https://gacha-lens-public.senpingxingzuo.workers.dev
       BROWSER_ACCEPT: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
     steps:
       - name: Checkout exact main SHA
@@ -198,3 +199,272 @@ jobs:
           }
           echo 'Production security/cache headers: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo 'Vercel status is intentionally not consulted; Cloudflare is the Production authority.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: A7 same-SHA Public front-door no-retry proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          # Deployment convergence may be polled. Once identities match, every A7
+          # acceptance request below is single-attempt: no transient retry masking.
+          ready='false'
+          for attempt in $(seq 1 40); do
+            source_body="$tmp/public-source.json"
+            delegation_body="$tmp/public-delegation.json"
+            source_rc=0
+            delegation_rc=0
+            source_code="$(curl --silent --show-error --max-time 30 --output "$source_body" --write-out '%{http_code}' "${PUBLIC_PRODUCTION_URL}/api/runtime-diagnostics/release-source?_a7_deploy=${attempt}")" || source_rc=$?
+            delegation_code="$(curl --silent --show-error --max-time 30 --output "$delegation_body" --write-out '%{http_code}' "${PUBLIC_PRODUCTION_URL}/api/runtime-diagnostics/app-delegation?_a7_deploy=${attempt}")" || delegation_rc=$?
+            source_code="${source_code:-000}"
+            delegation_code="${delegation_code:-000}"
+            public_sha="$(jq -r '.source_sha // ""' < "$source_body" 2>/dev/null || true)"
+            delegated_public_sha="$(jq -r '.public_source_sha // ""' < "$delegation_body" 2>/dev/null || true)"
+            delegated_app_sha="$(jq -r '.app_source_sha // ""' < "$delegation_body" 2>/dev/null || true)"
+            delegation_ok="$(jq -r '.ok // false' < "$delegation_body" 2>/dev/null || true)"
+
+            if [[ "$source_rc" == '0' && "$delegation_rc" == '0' \
+              && "$source_code" == '200' && "$delegation_code" == '200' \
+              && "$public_sha" == "$TARGET_SHA" \
+              && "$delegated_public_sha" == "$TARGET_SHA" \
+              && "$delegated_app_sha" == "$TARGET_SHA" \
+              && "$delegation_ok" == 'true' ]]; then
+              ready='true'
+              break
+            fi
+
+            echo "A7 waiting for same-SHA Public/App Production convergence (attempt ${attempt}/40): public=${public_sha:-none} app=${delegated_app_sha:-none} source_http=${source_code} delegation_http=${delegation_code}" >> "$GITHUB_STEP_SUMMARY"
+            if [[ "$attempt" -lt 40 ]]; then sleep 15; fi
+          done
+
+          [[ "$ready" == 'true' ]] || {
+            echo "A7 same-SHA Public/App Production convergence failed." >&2
+            cat "$source_body" >&2 || true
+            cat "$delegation_body" >&2 || true
+            exit 1
+          }
+
+          echo "A7 Public/App exact same SHA: ${TARGET_SHA}" >> "$GITHUB_STEP_SUMMARY"
+
+          with_probe() {
+            local path="$1"
+            local probe="$2"
+            if [[ "$path" == *'?'* ]]; then
+              printf '%s&_a7=%s' "$path" "$probe"
+            else
+              printf '%s?_a7=%s' "$path" "$probe"
+            fi
+          }
+
+          request_once() {
+            local name="$1"
+            local path="$2"
+            local expected="$3"
+            local needle="${4:-}"
+            local body="$tmp/${name}.body"
+            local headers="$tmp/${name}.headers"
+            local rc=0
+            local code
+            code="$(curl --silent --show-error --compressed --max-time 90 \
+              -H "Accept: ${BROWSER_ACCEPT}" \
+              -H 'Cache-Control: no-cache' \
+              --dump-header "$headers" \
+              --output "$body" \
+              --write-out '%{http_code}' \
+              "${PUBLIC_PRODUCTION_URL}${path}")" || rc=$?
+            code="${code:-000}"
+            [[ "$rc" == '0' && "$code" == "$expected" ]] || {
+              echo "A7 ${name}: rc=${rc} HTTP ${code}, expected ${expected}" >&2
+              head -c 1600 "$body" >&2 || true
+              exit 1
+            }
+            if [[ -n "$needle" ]]; then
+              grep -Fq "$needle" "$body" || {
+                echo "A7 ${name}: missing marker ${needle}" >&2
+                exit 1
+              }
+            fi
+            echo "A7 ${name}: HTTP ${code}" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          redirect_once() {
+            local name="$1"
+            local path="$2"
+            local suffix="$3"
+            local body="$tmp/${name}.body"
+            local headers="$tmp/${name}.headers"
+            local rc=0
+            local code location
+            code="$(curl --silent --show-error --max-time 60 --output "$body" --dump-header "$headers" --write-out '%{http_code}' "${PUBLIC_PRODUCTION_URL}${path}")" || rc=$?
+            code="${code:-000}"
+            [[ "$rc" == '0' && "$code" == '308' ]] || {
+              echo "A7 ${name}: rc=${rc} HTTP ${code}, expected 308" >&2
+              exit 1
+            }
+            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub("\r", ""); print; exit}' "$headers")"
+            [[ "$location" == *"$suffix" ]] || {
+              echo "A7 ${name}: unexpected Location ${location:-missing}" >&2
+              exit 1
+            }
+            echo "A7 ${name}: 308 -> ${location}" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          category='%E3%82%AC%E3%82%B7%E3%83%A3%E3%83%9D%E3%83%B3'
+          brand='%E3%83%90%E3%83%B3%E3%83%80%E3%82%A4'
+          franchise='%E3%82%B5%E3%83%B3%E3%83%AA%E3%82%AA%E3%82%AD%E3%83%A3%E3%83%A9%E3%82%AF%E3%82%BF%E3%83%BC%E3%82%BA'
+          encoded_slug='tarts-y901096-%E3%83%87%E3%82%A3%E3%82%BA%E3%83%8B%E3%83%BC-%E3%83%9E%E3%83%AA%E3%83%BC'
+
+          for pass in cold repeat; do
+            request_once "${pass}_home" "$(with_probe '/' "$pass")" 200 'Gacha Lens'
+            request_once "${pass}_series" "$(with_probe '/series' "$pass")" 200 'ガチャ一覧'
+            request_once "${pass}_schedule" "$(with_probe '/schedule?month=2026-10' "$pass")" 200 '2026-10'
+            request_once "${pass}_ranking" "$(with_probe '/ranking' "$pass")" 200 'ランキング'
+            request_once "${pass}_ranking_series" "$(with_probe '/ranking/series' "$pass")" 200 'ランキング'
+            request_once "${pass}_ranking_upcoming" "$(with_probe '/ranking/upcoming' "$pass")" 200 'ランキング'
+            request_once "${pass}_ranking_upcoming_series" "$(with_probe '/ranking/upcoming/series' "$pass")" 200 'ランキング'
+            request_once "${pass}_stock" "$(with_probe '/stock' "$pass")" 200 '在庫'
+            request_once "${pass}_restocks" "$(with_probe '/restocks' "$pass")" 200 '再'
+            request_once "${pass}_favorites" "$(with_probe '/favorites' "$pass")" 200 'お気に入り'
+            request_once "${pass}_categories" "$(with_probe '/categories' "$pass")" 200 'カテゴリ'
+            request_once "${pass}_category" "$(with_probe "/categories/${category}" "$pass")" 200 'ガシャポン'
+            request_once "${pass}_brands" "$(with_probe '/brands' "$pass")" 200 'ブランド'
+            request_once "${pass}_brand" "$(with_probe "/brands/${brand}" "$pass")" 200 'バンダイ'
+            request_once "${pass}_franchises" "$(with_probe '/franchises' "$pass")" 200 'シリーズ'
+            request_once "${pass}_franchise" "$(with_probe "/franchises/${franchise}" "$pass")" 200 'サンリオ'
+            request_once "${pass}_guides" "$(with_probe '/guides' "$pass")" 200 'ガイド'
+            request_once "${pass}_privacy" "$(with_probe '/privacy' "$pass")" 200 'プライバシー'
+            request_once "${pass}_terms" "$(with_probe '/terms' "$pass")" 200 '利用規約'
+            request_once "${pass}_disclaimer" "$(with_probe '/disclaimer' "$pass")" 200 '免責'
+            request_once "${pass}_affiliate" "$(with_probe '/affiliate-disclosure' "$pass")" 200 'アフィリエイト'
+            request_once "${pass}_operator" "$(with_probe '/operator' "$pass")" 200 '運営'
+            request_once "${pass}_contact" "$(with_probe '/contact' "$pass")" 200 'お問い合わせ'
+            request_once "${pass}_review" "$(with_probe '/review' "$pass")" 200 'Review access'
+            request_once "${pass}_public_stock" "$(with_probe '/api/public-stock' "$pass")" 200 '"rows"'
+            request_once "${pass}_public_variants" "$(with_probe "/api/public-variants?ids=${encoded_slug}" "$pass")" 200
+            request_once "${pass}_public_discovery" "$(with_probe "/api/public-discovery?type=category&name=${category}&page=1" "$pass")" 200
+            request_once "${pass}_public_discovery_invalid" "$(with_probe '/api/public-discovery?type=invalid&name=x&page=1' "$pass")" 400
+            request_once "${pass}_manifest" "$(with_probe '/manifest.webmanifest' "$pass")" 200 'Gacha Lens'
+            request_once "${pass}_logo" "$(with_probe '/brand/gacha-lens-logo.png' "$pass")" 200
+            request_once "${pass}_mark" "$(with_probe '/brand/gacha-lens-mark.png' "$pass")" 200
+            request_once "${pass}_robots" "$(with_probe '/robots.txt' "$pass")" 200 'Sitemap: https://gachalens.com/sitemap.xml'
+            request_once "${pass}_sitemap" "$(with_probe '/sitemap.xml' "$pass")" 200 '<urlset'
+            request_once "${pass}_series_sitemap" "$(with_probe '/series-sitemap.xml' "$pass")" 200 'https://gachalens.com/series/group/'
+            request_once "${pass}_variant_sitemap" "$(with_probe '/variant-sitemap.xml' "$pass")" 200 '<sitemapindex'
+          done
+
+          request_once unknown '/__a7-unknown-route' 404 'route_not_owned_by_public_bootstrap'
+          request_once internal '/__public-data/v1/series' 404 'route_not_owned_by_public_bootstrap'
+          redirect_once trends '/trends' '/ranking'
+          redirect_once ranking_legacy '/ranking?tab=upcoming&scope=series' '/ranking/upcoming/series'
+          redirect_once category_legacy "/categories/${category}?page=2" "/categories/${category}/page/2"
+          redirect_once brand_legacy "/brands/${brand}?page=2" "/brands/${brand}/page/2"
+          redirect_once franchise_legacy "/franchises/${franchise}?page=2" "/franchises/${franchise}/page/2"
+
+          cat "$tmp/cold_home.body" "$tmp/cold_series.body" "$tmp/cold_ranking.body" "$tmp/cold_favorites.body" > "$tmp/app-pages.html"
+          grep -Eo '(src|href)="(/_next/static/[^"]+|/brand/[^"]+|/manifest\.webmanifest)' "$tmp/app-pages.html" |
+            sed -E 's/^(src|href)="//' | sort -u > "$tmp/assets.txt" || true
+          [[ -s "$tmp/assets.txt" ]] || {
+            echo 'A7 delegated App pages exposed no same-origin assets.' >&2
+            exit 1
+          }
+          asset_count=0
+          while IFS= read -r asset; do
+            [[ -n "$asset" ]] || continue
+            body="$tmp/asset-${asset_count}.body"
+            rc=0
+            code="$(curl --silent --show-error --max-time 60 --output "$body" --write-out '%{http_code}' "${PUBLIC_PRODUCTION_URL}${asset}")" || rc=$?
+            code="${code:-000}"
+            [[ "$rc" == '0' && ( "$code" == '200' || "$code" == '304' ) ]] || {
+              echo "A7 asset ${asset}: rc=${rc} HTTP ${code}" >&2
+              exit 1
+            }
+            asset_count=$((asset_count + 1))
+          done < "$tmp/assets.txt"
+          echo "A7 same-origin asset crawl: ${asset_count} assets, 0 failures" >> "$GITHUB_STEP_SUMMARY"
+
+          node --input-type=module "$tmp/repeat_series_sitemap.body" "$tmp/series-paths.txt" <<'NODE'
+          import fs from 'node:fs';
+          const [input, output] = process.argv.slice(2);
+          const xml = fs.readFileSync(input, 'utf8');
+          const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+          if (!locs.length) throw new Error('series sitemap is empty');
+          if (locs.some((loc) => !loc.startsWith('https://gachalens.com/series/group/'))) throw new Error('series sitemap contains a non-parent namespace');
+          if (new Set(locs).size !== locs.length) throw new Error('series sitemap contains duplicate locs');
+          const samples = [locs[0], locs[Math.floor(locs.length / 2)], locs.at(-1)];
+          fs.writeFileSync(output, [...new Set(samples)].map((url) => new URL(url).pathname).join('\n') + '\n');
+          console.log(`series sitemap locs=${locs.length}, namespace=parent-only, duplicates=0`);
+          NODE
+          sample_index=0
+          while IFS= read -r path; do
+            [[ -n "$path" ]] || continue
+            request_once "series_sample_${sample_index}" "$(with_probe "$path" "series-${sample_index}")" 200
+            sample_index=$((sample_index + 1))
+          done < "$tmp/series-paths.txt"
+
+          node --input-type=module "$tmp/repeat_sitemap.body" "$tmp/root-paths.txt" <<'NODE'
+          import fs from 'node:fs';
+          const [input, output] = process.argv.slice(2);
+          const xml = fs.readFileSync(input, 'utf8');
+          const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+          if (!locs.length) throw new Error('root sitemap is empty');
+          if (new Set(locs).size !== locs.length) throw new Error('root sitemap contains duplicate locs');
+          const paths = locs.map((url) => {
+            const parsed = new URL(url);
+            if (parsed.origin !== 'https://gachalens.com') throw new Error(`unexpected sitemap origin: ${parsed.origin}`);
+            return parsed.pathname + parsed.search;
+          });
+          fs.writeFileSync(output, paths.join('\n') + '\n');
+          console.log(`root sitemap locs=${locs.length}, duplicates=0`);
+          NODE
+          root_index=0
+          while IFS= read -r path; do
+            [[ -n "$path" ]] || continue
+            request_once "root_loc_${root_index}" "$(with_probe "$path" "root-${root_index}")" 200
+            root_index=$((root_index + 1))
+          done < "$tmp/root-paths.txt"
+          echo "A7 root sitemap live loc closure: ${root_index} locs HTTP 200" >> "$GITHUB_STEP_SUMMARY"
+
+          node --input-type=module "$tmp/repeat_variant_sitemap.body" "$tmp/variant-shards.txt" <<'NODE'
+          import fs from 'node:fs';
+          const [input, output] = process.argv.slice(2);
+          const xml = fs.readFileSync(input, 'utf8');
+          const rows = [...xml.matchAll(/<loc>https:\/\/gachalens\.com(\/variant-sitemap\/(\d+))<\/loc>/g)]
+            .map((m) => ({ path: m[1], page: Number(m[2]) }));
+          if (!rows.length) throw new Error('variant sitemap advertises zero shards');
+          rows.sort((a, b) => a.page - b.page);
+          for (let i = 0; i < rows.length; i += 1) {
+            if (rows[i].page !== i + 1) throw new Error(`variant shard gap at ${i + 1}`);
+          }
+          if (new Set(rows.map((row) => row.path)).size !== rows.length) throw new Error('duplicate variant shard loc');
+          fs.writeFileSync(output, rows.map((row) => row.path).join('\n') + '\n');
+          console.log(`variant sitemap shards=${rows.length}, contiguous=true, duplicates=0`);
+          NODE
+          : > "$tmp/variant-union.xml"
+          last_shard=0
+          while IFS= read -r path; do
+            [[ -n "$path" ]] || continue
+            last_shard=$((last_shard + 1))
+            request_once "variant_shard_${last_shard}" "$(with_probe "$path" "shard-${last_shard}")" 200 '<urlset'
+            cat "$tmp/variant_shard_${last_shard}.body" >> "$tmp/variant-union.xml"
+          done < "$tmp/variant-shards.txt"
+          next_shard=$((last_shard + 1))
+          request_once variant_shard_next "/variant-sitemap/${next_shard}?_a7=next" 404 'Not Found'
+
+          node --input-type=module "$tmp/variant-union.xml" <<'NODE'
+          import fs from 'node:fs';
+          const xml = fs.readFileSync(process.argv[2], 'utf8');
+          const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+          if (!locs.length) throw new Error('variant sitemap union is empty');
+          if (locs.some((loc) => !loc.startsWith('https://gachalens.com/series/'))) throw new Error('variant sitemap escaped /series namespace');
+          if (new Set(locs).size !== locs.length) throw new Error('variant sitemap union contains duplicates');
+          console.log(`variant sitemap union locs=${locs.length}, duplicates=0`);
+          NODE
+
+          if grep -R -a -E 'public_data_rest_series_401|public_data_count_variants_500|public_document_unavailable|Exceeded CPU Time Limits|HTTP (429|500|502|503|504)' "$tmp" >/dev/null 2>&1; then
+            echo 'A7 observed a forbidden Public runtime failure signature.' >&2
+            grep -R -a -E 'public_data_rest_series_401|public_data_count_variants_500|public_document_unavailable|Exceeded CPU Time Limits|HTTP (429|500|502|503|504)' "$tmp" | head -40 >&2 || true
+            exit 1
+          fi
+
+          echo 'A7 same-SHA Public front-door no-retry acceptance: PASS' >> "$GITHUB_STEP_SUMMARY"
