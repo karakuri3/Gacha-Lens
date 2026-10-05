@@ -1,6 +1,6 @@
 import DocumentLink from "@/components/DocumentLink";
 import ProductImage from "@/components/ProductImage";
-import { getRankingSeries } from "@/lib/series";
+import { getRankingSeries, getReleasedVariantRankingSeries } from "@/lib/series";
 import { seriesHref, variantHref } from "@/lib/variant-url";
 import { buildActiveListingWatchEvidence } from "@/lib/domain/market-evidence";
 import { rankingPath } from "@/lib/domain/ranking-routes";
@@ -18,7 +18,9 @@ const tabs = [
 ];
 
 export default async function RankingPageContent({ tab = "released", scope = "variant" }) {
-  const series = await getRankingSeries(tab, scope);
+  const series = tab === "released" && scope === "variant"
+    ? await getReleasedVariantRankingSeries()
+    : await getRankingSeries(tab, scope);
   const now = new Date();
 
   const sorted = series
