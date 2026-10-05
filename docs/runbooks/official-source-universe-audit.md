@@ -45,3 +45,27 @@ node scripts/official-source-universe-audit.mjs \
 ```
 
 The command is report-only. Do not use it to update schema-v6, set `unsupported_source_universe_known=true`, run Kitan/Qualia canaries, activate F0, change schedules/caps, deploy, or write Production data.
+
+
+## Undated blocker disposition follow-up
+
+The one-time full universe authorization that produced the preserved Phase 2D artifact is consumed. Do not rerun the full universe audit under that authorization.
+
+The Kitan false product was caused by accepting generic `href` values under `/products/<segment>/`. The blocker-disposition rule now accepts only canonical product-detail anchors, requires exactly one product path segment with no query/hash, and rejects known WordPress pseudo-route segments such as `feed`, `embed`, and `trackback`.
+
+The seven unresolved Qualia IDs remain fail-closed unless official release evidence is observed. Repository fixtures prove the normal official field shape only: a `dt/dd` definition-list field labeled `発売日`, normalized for HTML entities/whitespace and parsed as `YYYY年M月(D日)`. Existing code/fixtures do not establish a release date/month for IDs `1266, 1813, 1814, 1817, 2065, 2068, 2069`, so ID ordering, category-only membership, and absence from month archives must not be used as release inference.
+
+A future HQ-approved targeted diagnostic can inspect exactly these seven canonical URLs and nothing else:
+
+```bash
+node scripts/official-source-universe-audit.mjs \
+  --mode=qualia-undated-blockers \
+  --target-month=2026-10 \
+  --global-hard-cap=14 \
+  --retrieval-plane=network_capable_read_only \
+  --output-dir=/tmp/gacha-qualia-undated-blocker-diagnostic
+```
+
+**Do not run that command without a new HQ network approval.** The targeted contract has exactly seven URLs, no root/month/category/lineup discovery, a maximum of one retry, default 750ms pacing, and an absolute 14-attempt cap. It performs zero database writes, provider mutations, F0 activations, and lineup requests.
+
+Its sanitized artifact stores only: source product ID, canonical URL, HTTP outcome, SHA-256 content identity, observed official field labels, sanitized `発売日` value, parsed release date/month, structured `releaseDate` evidence if present, canonical/OG URL signals, a classification candidate, and an exact unresolved reason. Raw HTML, cookies, credentials, secrets, and unsanitized response bodies are not retained.
