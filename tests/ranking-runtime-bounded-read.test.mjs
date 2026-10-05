@@ -94,9 +94,11 @@ test("released variant ranking loader is market-only, count-free, and variant-sc
   assert.match(loader, /\.from\(TABLE_MAP\.marketListings\)/);
   assert.match(loader, /\.eq\("review_required", false\)/);
   assert.match(loader, /\.gte\("last_observed_at", marketCutoff\)/);
-  assert.match(loader, /fetchRowsInWithoutCount/);
-  assert.match(loader, /"variant_id"/);
+  assert.match(loader, /fetchRowsInWithoutCountBoundedStrict/);
+  assert.match(loader, /"series_id"/);
+  assert.match(loader, /maxPagesPerBatch:\s*2/);
   assert.doesNotMatch(loader, /count:\s*"exact"/);
+  assert.doesNotMatch(loader, /fetchRowsInWithoutCount\(/);
   assert.doesNotMatch(loader, /fetchSignalsForCatalog/);
   assert.doesNotMatch(loader, /\.from\(TABLE_MAP\.stockReports\)/);
   assert.doesNotMatch(loader, /\.from\(TABLE_MAP\.restockEvents\)/);
