@@ -5,6 +5,8 @@ import {
   classifyQualiaRecord,
   countQualiaDuplicateMonthLinks,
   fetchOfficialSourceUniverseAudit,
+  fetchQualiaUndatedBlockerDiagnostic,
+  inspectQualiaDetailReleaseEvidence,
   parseKitanProductLinks,
   parseKitanYearNavigation,
   parseQualiaCategoryNavigation,
@@ -31,6 +33,20 @@ test("3 Kitan target archive full classification",()=>{
 });
 test("4 Kitan undated blocker",()=>assert.equal(classifyKitanRecord({archiveYear:2026,targetMonth:"2026-10"}).classification,"undated"));
 test("Kitan root-only detail uses detail month rather than inventing archive year",()=>{ const c=classifyKitanRecord({archiveYear:null,detailReleaseMonth:"2026-10",targetMonth:"2026-10"}); assert.equal(c.classification,"target_period"); assert.equal(c.classification_source,"detail_release_month"); assert.equal(c.archive_year,null); });
+test("Kitan detail-link contract rejects WordPress pseudo-routes, nested routes, query, and hash",()=>{
+  const body=[
+    '<a href="/products/real_product/">real</a>',
+    '<link rel="alternate" type="application/rss+xml" href="/products/feed/">',
+    '<a href="/products/feed/">feed anchor</a>',
+    '<a href="/products/group/child/">nested</a>',
+    '<a href="/products/query/?preview=1">query</a>',
+    '<a href="/products/hash/#preview">hash</a>',
+  ].join("");
+  assert.deepEqual(parseKitanProductLinks(body,KROOT),[
+    {source_product_id:"real_product",official_url:"https://kitan.jp/products/real_product/"},
+  ]);
+});
+
 test("5 Kitan root/archive drift is observable",()=>{
   const root=new Set(parseKitanProductLinks(kList("a","b"),KROOT).map(x=>x.official_url)); const archive=new Set(parseKitanProductLinks(kList("b","c"),"https://kitan.jp/product_age/2026/").map(x=>x.official_url));
   assert.deepEqual([...root].filter(x=>!archive.has(x)).length,1);
@@ -62,6 +78,86 @@ test("12 Qualia archive_month alone establishes target membership",()=>{
 });
 test("13 Qualia null detail month retains target archive membership",()=>assert.equal(classifyQualiaRecord({archiveMonths:["2026-10"],detailReleaseMonth:null,targetMonth:"2026-10"}).classification,"target_period"));
 test("14 Qualia archive and detail month both unknown block classification",()=>assert.equal(classifyQualiaRecord({archiveMonths:[],detailReleaseMonth:null,targetMonth:"2026-10"}).classification,"undated"));
+test("Qualia detail forensic parser matches the existing official field shape without inference",()=>{
+  const html='<link rel="canonical" href="https://www.qualia-45.jp/product/view/1266"><meta property="og:url" content="https://www.qualia-45.jp/product/view/1266"><dl><dt> 発売日&nbsp; </dt><dd> 2025年&nbsp;7月 </dd></dl>';
+  const evidence=inspectQualiaDetailReleaseEvidence(html,"https://www.qualia-45.jp/product/view/1266");
+  assert.equal(evidence.release_date_field_present,true);
+  assert.equal(evidence.sanitized_release_date_field_value,"2025年 7月");
+  assert.equal(evidence.parsed_release_date,null);
+  assert.equal(evidence.parsed_release_month,"2025-07");
+  assert.equal(evidence.release_evidence_source,"official_field:発売日");
+  assert.equal(evidence.structured_metadata_official_date_evidence,false);
+  assert.equal(evidence.canonical_meta_signals.canonical_matches_requested,true);
+  assert.equal(evidence.canonical_meta_signals.og_url_matches_requested,true);
+  assert.equal(evidence.exact_unresolved_reason,null);
+});
+
+test("Qualia structured releaseDate is captured as sanitized diagnostic evidence only",()=>{
+  const html='<script type="application/ld+json">{"@type":"Product","releaseDate":"2025-06-15","description":"do-not-retain"}</script>';
+  const evidence=inspectQualiaDetailReleaseEvidence(html,"https://www.qualia-45.jp/product/view/1813");
+  assert.equal(evidence.release_date_field_present,false);
+  assert.equal(evidence.structured_metadata_official_date_evidence,true);
+  assert.equal(evidence.structured_metadata_release_date_value,"2025-06-15");
+  assert.equal(evidence.parsed_release_date,"2025-06-15");
+  assert.equal(evidence.parsed_release_month,"2025-06");
+  assert.equal(evidence.release_evidence_source,"structured_metadata:releaseDate");
+  assert.equal(evidence.exact_unresolved_reason,null);
+  assert.equal(JSON.stringify(evidence).includes("do-not-retain"),false);
+});
+
+test("targeted Qualia blocker diagnostic is exact-seven, sanitized, bounded, and makes no lineup requests",async()=>{
+  const calls=[];
+  const sleeps=[];
+  const fetchImpl=async(url)=>{
+    calls.push(url);
+    const id=url.split("/").at(-1);
+    if(id==="1266") return response('<link rel="canonical" href="'+url+'"><dl><dt>発売日</dt><dd>2025年7月</dd></dl>');
+    if(id==="1813") return response('<dl><dt>発売日</dt><dd>未定</dd></dl>');
+    return response('<dl><dt>商品名</dt><dd>fixture-'+id+'</dd></dl>');
+  };
+  const diagnostic=await fetchQualiaUndatedBlockerDiagnostic({fetchImpl,sleepImpl:async(ms)=>sleeps.push(ms)});
+  assert.deepEqual(calls,[
+    "https://www.qualia-45.jp/product/view/1266",
+    "https://www.qualia-45.jp/product/view/1813",
+    "https://www.qualia-45.jp/product/view/1814",
+    "https://www.qualia-45.jp/product/view/1817",
+    "https://www.qualia-45.jp/product/view/2065",
+    "https://www.qualia-45.jp/product/view/2068",
+    "https://www.qualia-45.jp/product/view/2069",
+  ]);
+  assert.equal(diagnostic.target_count,7);
+  assert.equal(diagnostic.request_budget.global_hard_cap,14);
+  assert.equal(diagnostic.request_budget.actual_attempts,7);
+  assert.equal(diagnostic.request_budget.retry_limit,1);
+  assert.equal(diagnostic.request_budget.request_delay_ms,750);
+  assert.equal(diagnostic.lineup_requests,0);
+  assert.equal(diagnostic.database_writes,0);
+  assert.equal(diagnostic.provider_mutations,0);
+  assert.equal(diagnostic.f0_activations,0);
+  assert.equal(diagnostic.raw_html_retained,false);
+  assert.deepEqual(sleeps,[750,750,750,750,750,750]);
+  assert.equal(diagnostic.records[0].classification_candidate.classification,"before_target");
+  assert.equal(diagnostic.records[0].exact_unresolved_reason,null);
+  assert.equal(diagnostic.records[1].exact_unresolved_reason,"qualia_blocker_release_field_unparseable");
+  assert.deepEqual(diagnostic.unresolved_ids,["1813","1814","1817","2065","2068","2069"]);
+  const serialized=JSON.stringify(diagnostic);
+  assert.equal(serialized.includes("fixture-1814"),false);
+  assert.equal(serialized.includes("<dl>"),false);
+});
+
+test("targeted Qualia blocker diagnostic cannot expand beyond fourteen attempts or one retry",async()=>{
+  const diagnostic=await fetchQualiaUndatedBlockerDiagnostic({
+    fetchImpl:async()=>response("",500),
+    sleepImpl:async()=>{},
+    globalHardCap:150,
+    retryLimit:2,
+  });
+  assert.equal(diagnostic.request_budget.global_hard_cap,14);
+  assert.equal(diagnostic.request_budget.retry_limit,1);
+  assert.equal(diagnostic.request_budget.actual_attempts,14);
+  assert.ok(diagnostic.records.every((record)=>record.http_outcome.attempts<=2));
+});
+
 test("15 Qualia category pagination exhaustion parser",()=>{
   const body='<a href="/product/index/12/page:2?target=product">2</a><a href="/product/index/12/page/3/?target=product">3</a>'; const pages=parseQualiaCategoryPagination(body,"https://www.qualia-45.jp/product/index/12?target=product",12); assert.equal(pages.length,3); assert.ok(pages.some((url)=>url.includes("page:2")));
 });
