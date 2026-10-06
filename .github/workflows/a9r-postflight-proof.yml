@@ -1,0 +1,261 @@
+name: A9R durable post-merge proof
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      expected_main_sha:
+        description: Exact 40-character lowercase main SHA approved for the post-merge proof
+        required: true
+        type: string
+      confirmation:
+        description: Must equal APPROVE_A9R_POST_MERGE_PROOF
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact pull request head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused A9R fixtures
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          node --check scripts/a9r-postflight-evidence.mjs
+          node --test tests/a9r-postflight-evidence.test.mjs tests/a9r-postflight-workflow.test.mjs
+
+      - name: Run full Node test suite
+        run: npm test
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Verify diff whitespace against base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
+
+  post-merge-proof:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      APP_ORIGIN: https://gacha-lens.senpingxingzuo.workers.dev
+      PUBLIC_ORIGIN: https://gacha-lens-public.senpingxingzuo.workers.dev
+      A9R_OUT: ${{ runner.temp }}/gacha-a9r-post-merge
+      HTTP_TIMEOUT_MS: "20000"
+      RETRY_COUNT: "0"
+    steps:
+      - name: Initialize controller artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$A9R_OUT"/{app-first,app-repeat,public-first,public-repeat}
+          for pass in app-first app-repeat public-first public-repeat; do
+            printf '%s\n' '{"result":"NOT_RUN"}' > "$A9R_OUT/$pass/NOT_RUN.json"
+          done
+          jq -n \
+            --arg expected_sha "$EXPECTED_MAIN_SHA" \
+            '{
+              expected_sha: $expected_sha,
+              checked_out_sha: null,
+              fresh_main_sha: null,
+              checked_out_branch: null,
+              dispatch_ref: null,
+              confirmation_result: false,
+              preflight_result: "NOT_RUN",
+              app_first_exit: "NOT_RUN",
+              app_repeat_exit: "NOT_RUN",
+              public_first_exit: "NOT_RUN",
+              public_repeat_exit: "NOT_RUN",
+              overall: "FAIL",
+              retry: 0,
+              timeout_ms: 20000
+            }' > "$A9R_OUT/controller-status.json"
+
+      - name: Check out dispatch ref
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Atomic preflight before any Production request
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          expected="$EXPECTED_MAIN_SHA"
+          checked_branch="$(git branch --show-current)"
+          checked_sha="$(git rev-parse HEAD)"
+          dispatch_ref="${GITHUB_REF_NAME:-}"
+
+          git fetch --no-tags origin main --depth=1
+          fresh_main_sha="$(git rev-parse origin/main)"
+
+          confirmation_ok=false
+          if [[ "$CONFIRMATION" == "APPROVE_A9R_POST_MERGE_PROOF" ]]; then
+            confirmation_ok=true
+          fi
+
+          preflight_ok=true
+          [[ "$expected" =~ ^[0-9a-f]{40}$ ]] || preflight_ok=false
+          [[ "$dispatch_ref" == "main" ]] || preflight_ok=false
+          [[ "$checked_branch" == "main" ]] || preflight_ok=false
+          [[ "$checked_sha" == "$expected" ]] || preflight_ok=false
+          [[ "$fresh_main_sha" == "$expected" ]] || preflight_ok=false
+          [[ "$confirmation_ok" == "true" ]] || preflight_ok=false
+
+          tmp="$A9R_OUT/controller-status.json.tmp"
+          jq \
+            --arg checked "$checked_sha" \
+            --arg fresh "$fresh_main_sha" \
+            --arg branch "$checked_branch" \
+            --arg dispatch_ref "$dispatch_ref" \
+            --argjson confirmation_result "$confirmation_ok" \
+            --arg preflight_result "$([[ "$preflight_ok" == "true" ]] && echo PASS || echo FAIL)" \
+            '.checked_out_sha = $checked
+             | .fresh_main_sha = $fresh
+             | .checked_out_branch = $branch
+             | .dispatch_ref = $dispatch_ref
+             | .confirmation_result = $confirmation_result
+             | .preflight_result = $preflight_result' \
+            "$A9R_OUT/controller-status.json" > "$tmp"
+          mv "$tmp" "$A9R_OUT/controller-status.json"
+
+          if [[ "$preflight_ok" != "true" ]]; then
+            echo "A9R atomic preflight failed before Production requests." >&2
+            exit 1
+          fi
+
+      - name: Set up Node.js for read-only harness
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Run App first and immediate repeat
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          rm -f "$A9R_OUT/app-first/NOT_RUN.json" "$A9R_OUT/app-repeat/NOT_RUN.json"
+
+          app_first_rc=0
+          node scripts/a9r-postflight-evidence.mjs \
+            --origin "$APP_ORIGIN" \
+            --surface app \
+            --expected-sha "$EXPECTED_MAIN_SHA" \
+            --output-dir "$A9R_OUT/app-first" \
+            --only release_source,ranking || app_first_rc=$?
+
+          app_repeat_rc=0
+          node scripts/a9r-postflight-evidence.mjs \
+            --origin "$APP_ORIGIN" \
+            --surface app \
+            --expected-sha "$EXPECTED_MAIN_SHA" \
+            --output-dir "$A9R_OUT/app-repeat" \
+            --only release_source,ranking || app_repeat_rc=$?
+
+          tmp="$A9R_OUT/controller-status.json.tmp"
+          jq \
+            --argjson first "$app_first_rc" \
+            --argjson repeat "$app_repeat_rc" \
+            '.app_first_exit = $first
+             | .app_repeat_exit = $repeat
+             | .overall = (if ($first == 0 and $repeat == 0) then "RUNNING" else "FAIL" end)' \
+            "$A9R_OUT/controller-status.json" > "$tmp"
+          mv "$tmp" "$A9R_OUT/controller-status.json"
+
+          if [[ "$app_first_rc" -ne 0 || "$app_repeat_rc" -ne 0 ]]; then
+            echo "App proof failed; Public requests remain NOT_RUN." >&2
+            exit 1
+          fi
+
+      - name: Run Public full matrix first and immediate repeat
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          rm -f "$A9R_OUT/public-first/NOT_RUN.json" "$A9R_OUT/public-repeat/NOT_RUN.json"
+
+          public_first_rc=0
+          node scripts/a9r-postflight-evidence.mjs \
+            --origin "$PUBLIC_ORIGIN" \
+            --surface public \
+            --expected-sha "$EXPECTED_MAIN_SHA" \
+            --output-dir "$A9R_OUT/public-first" || public_first_rc=$?
+
+          public_repeat_rc=0
+          node scripts/a9r-postflight-evidence.mjs \
+            --origin "$PUBLIC_ORIGIN" \
+            --surface public \
+            --expected-sha "$EXPECTED_MAIN_SHA" \
+            --output-dir "$A9R_OUT/public-repeat" || public_repeat_rc=$?
+
+          overall=FAIL
+          if [[ "$public_first_rc" -eq 0 && "$public_repeat_rc" -eq 0 ]]; then
+            overall=PASS
+          fi
+
+          tmp="$A9R_OUT/controller-status.json.tmp"
+          jq \
+            --argjson first "$public_first_rc" \
+            --argjson repeat "$public_repeat_rc" \
+            --arg overall "$overall" \
+            '.public_first_exit = $first
+             | .public_repeat_exit = $repeat
+             | .overall = $overall' \
+            "$A9R_OUT/controller-status.json" > "$tmp"
+          mv "$tmp" "$A9R_OUT/controller-status.json"
+
+          if [[ "$overall" != "PASS" ]]; then
+            exit 1
+          fi
+
+      - name: Upload A9R post-merge evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a9r-post-merge-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gacha-a9r-post-merge
+          if-no-files-found: error
+
+      - name: Enforce controller verdict
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$A9R_OUT/controller-status.json"
+          test "$(jq -r '.retry' "$A9R_OUT/controller-status.json")" = "0"
+          test "$(jq -r '.timeout_ms' "$A9R_OUT/controller-status.json")" = "20000"
+          test "$(jq -r '.overall' "$A9R_OUT/controller-status.json")" = "PASS"
