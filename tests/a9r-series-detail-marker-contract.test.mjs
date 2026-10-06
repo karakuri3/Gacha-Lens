@@ -22,7 +22,7 @@ test("A9R series_detail uses the App-owned primary-heading marker without changi
 
   const seriesDetail = ASSERTIONS[5];
   assert.equal(seriesDetail.marker, "<h1");
-  assert.equal(seriesDetail.expectedStatus, 200);
+  assert.equal(seriesDetail.status, 200);
   assert.equal(seriesDetail.canonical, true);
   assert.equal(seriesDetail.owner, "app");
 
