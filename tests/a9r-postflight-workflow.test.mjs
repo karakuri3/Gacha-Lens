@@ -41,6 +41,25 @@ test("dispatch execution has exactly two App passes and two Public passes", () =
   assert.match(workflow, /public_first_rc=0[\s\S]*public_repeat_rc=0/);
 });
 
+
+test("dispatch artifact path is runner-runtime derived before initialization", () => {
+  const dispatchStart = workflow.indexOf("\n  post-merge-proof:");
+  assert.ok(dispatchStart > 0);
+  const dispatch = workflow.slice(dispatchStart);
+  const envStart = dispatch.indexOf("\n    env:");
+  const stepsStart = dispatch.indexOf("\n    steps:");
+  assert.ok(envStart > 0 && stepsStart > envStart);
+  const jobEnv = dispatch.slice(envStart, stepsStart);
+  assert.doesNotMatch(jobEnv, /\$\{\{\s*runner\./, "runner context must not appear in post-merge-proof job-level env");
+  assert.doesNotMatch(jobEnv, /A9R_OUT:/, "A9R_OUT must not be assigned in job-level env");
+
+  const pathStep = dispatch.indexOf("- name: Establish controller artifact path");
+  const initStep = dispatch.indexOf("- name: Initialize controller artifact");
+  assert.ok(pathStep > stepsStart && initStep > pathStep, "runtime path must be established before artifact initialization");
+  assert.match(dispatch.slice(pathStep, initStep), /echo "A9R_OUT=\$\{RUNNER_TEMP\}\/gacha-a9r-post-merge" >> "\$GITHUB_ENV"/);
+  assert.match(dispatch, /path: \$\{\{ runner\.temp \}\}\/gacha-a9r-post-merge/);
+});
+
 test("controller artifact and immutable proof settings are explicit", () => {
   for (const name of ["app-first", "app-repeat", "public-first", "public-repeat", "controller-status.json"]) {
     assert.ok(workflow.includes(name), `missing ${name}`);
