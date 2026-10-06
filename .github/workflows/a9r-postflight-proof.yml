@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - main
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       expected_main_sha:
@@ -65,12 +67,13 @@ jobs:
           git diff --check "origin/${GITHUB_BASE_REF}...HEAD"
 
   post-merge-proof:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'issue_comment'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
-      CONFIRMATION: ${{ inputs.confirmation }}
+      DISPATCH_EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+      DISPATCH_CONFIRMATION: ${{ inputs.confirmation }}
+      REPOSITORY_OWNER: ${{ github.repository_owner }}
       APP_ORIGIN: https://gacha-lens.senpingxingzuo.workers.dev
       PUBLIC_ORIGIN: https://gacha-lens-public.senpingxingzuo.workers.dev
       HTTP_TIMEOUT_MS: "20000"
@@ -82,6 +85,74 @@ jobs:
           set -euo pipefail
           echo "A9R_OUT=${RUNNER_TEMP}/gacha-a9r-post-merge" >> "$GITHUB_ENV"
 
+      - name: Normalize authorized trigger
+        shell: bash
+        env:
+          COMMENT_ACTION: ${{ github.event.action }}
+          COMMENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_AUTHOR_LOGIN: ${{ github.event.comment.user.login }}
+          COMMENT_AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+
+          trigger_kind="${GITHUB_EVENT_NAME:-}"
+          issue_number=""
+          comment_author_login=""
+          comment_author_association=""
+          comment_actor_login=""
+          parsed_expected_sha=""
+          expected_main_sha=""
+          confirmation=""
+          comment_grammar_result="NOT_APPLICABLE"
+          trigger_contract_ok=false
+
+          case "$trigger_kind" in
+            workflow_dispatch)
+              expected_main_sha="$DISPATCH_EXPECTED_MAIN_SHA"
+              confirmation="$DISPATCH_CONFIRMATION"
+              trigger_contract_ok=true
+              ;;
+            issue_comment)
+              issue_number="${COMMENT_ISSUE_NUMBER:-}"
+              comment_author_login="${COMMENT_AUTHOR_LOGIN:-}"
+              comment_author_association="${COMMENT_AUTHOR_ASSOCIATION:-}"
+              comment_actor_login="${GITHUB_ACTOR:-}"
+              comment_grammar_result="FAIL"
+              command_re='^/a9r-post-merge ([0-9a-f]{40}) APPROVE_A9R_POST_MERGE_PROOF$'
+
+              if [[ "${COMMENT_BODY:-}" =~ $command_re ]]; then
+                parsed_expected_sha="${BASH_REMATCH[1]}"
+                expected_main_sha="$parsed_expected_sha"
+                confirmation="APPROVE_A9R_POST_MERGE_PROOF"
+                comment_grammar_result="PASS"
+              fi
+
+              if [[ "${COMMENT_ACTION:-}" == "created" \
+                    && "$issue_number" == "430" \
+                    && "$comment_actor_login" == "$REPOSITORY_OWNER" \
+                    && "$comment_author_login" == "$REPOSITORY_OWNER" \
+                    && "$comment_author_association" == "OWNER" \
+                    && "$comment_grammar_result" == "PASS" ]]; then
+                trigger_contract_ok=true
+              fi
+              ;;
+          esac
+
+          {
+            echo "TRIGGER_KIND=$trigger_kind"
+            echo "EXPECTED_MAIN_SHA=$expected_main_sha"
+            echo "CONFIRMATION=$confirmation"
+            echo "ISSUE_NUMBER=$issue_number"
+            echo "COMMENT_ACTION_NORMALIZED=${COMMENT_ACTION:-}"
+            echo "COMMENT_ACTOR_LOGIN=$comment_actor_login"
+            echo "COMMENT_AUTHOR_LOGIN=$comment_author_login"
+            echo "COMMENT_AUTHOR_ASSOCIATION=$comment_author_association"
+            echo "PARSED_EXPECTED_SHA=$parsed_expected_sha"
+            echo "COMMENT_GRAMMAR_RESULT=$comment_grammar_result"
+            echo "TRIGGER_CONTRACT_OK=$trigger_contract_ok"
+          } >> "$GITHUB_ENV"
+
       - name: Initialize controller artifact
         shell: bash
         run: |
@@ -91,8 +162,18 @@ jobs:
             printf '%s\n' '{"result":"NOT_RUN"}' > "$A9R_OUT/$pass/NOT_RUN.json"
           done
           jq -n \
+            --arg trigger_kind "$TRIGGER_KIND" \
+            --arg issue_number "$ISSUE_NUMBER" \
+            --arg comment_author_login "$COMMENT_AUTHOR_LOGIN" \
+            --arg comment_author_association "$COMMENT_AUTHOR_ASSOCIATION" \
+            --arg parsed_expected_sha "$PARSED_EXPECTED_SHA" \
             --arg expected_sha "$EXPECTED_MAIN_SHA" \
             '{
+              trigger_kind: $trigger_kind,
+              issue_number: (if $issue_number == "" then null else ($issue_number | tonumber) end),
+              comment_author_login: (if $comment_author_login == "" then null else $comment_author_login end),
+              comment_author_association: (if $comment_author_association == "" then null else $comment_author_association end),
+              parsed_expected_sha: (if $parsed_expected_sha == "" then null else $parsed_expected_sha end),
               expected_sha: $expected_sha,
               checked_out_sha: null,
               fresh_main_sha: null,
@@ -109,9 +190,33 @@ jobs:
               timeout_ms: 20000
             }' > "$A9R_OUT/controller-status.json"
 
-      - name: Check out dispatch ref
+      - name: Validate normalized trigger contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          [[ "$TRIGGER_CONTRACT_OK" == "true" ]] || {
+            echo "A9R trigger contract rejected before checkout and before Production requests." >&2
+            exit 1
+          }
+
+          if [[ "$TRIGGER_KIND" == "issue_comment" ]]; then
+            [[ "$COMMENT_ACTION_NORMALIZED" == "created" ]]
+            [[ "$ISSUE_NUMBER" == "430" ]]
+            [[ "$COMMENT_ACTOR_LOGIN" == "$REPOSITORY_OWNER" ]]
+            [[ "$COMMENT_AUTHOR_LOGIN" == "$REPOSITORY_OWNER" ]]
+            [[ "$COMMENT_AUTHOR_ASSOCIATION" == "OWNER" ]]
+            [[ "$COMMENT_GRAMMAR_RESULT" == "PASS" ]]
+            [[ "$PARSED_EXPECTED_SHA" == "$EXPECTED_MAIN_SHA" ]]
+          elif [[ "$TRIGGER_KIND" != "workflow_dispatch" ]]; then
+            echo "Unsupported A9R trigger kind." >&2
+            exit 1
+          fi
+
+      - name: Check out trigger ref
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -121,6 +226,7 @@ jobs:
           set -euo pipefail
 
           expected="$EXPECTED_MAIN_SHA"
+          trigger_kind="$TRIGGER_KIND"
           checked_branch="$(git branch --show-current)"
           checked_sha="$(git rev-parse HEAD)"
           dispatch_ref="${GITHUB_REF_NAME:-}"
@@ -134,12 +240,25 @@ jobs:
           fi
 
           preflight_ok=true
+          [[ "$TRIGGER_CONTRACT_OK" == "true" ]] || preflight_ok=false
           [[ "$expected" =~ ^[0-9a-f]{40}$ ]] || preflight_ok=false
           [[ "$dispatch_ref" == "main" ]] || preflight_ok=false
           [[ "$checked_branch" == "main" ]] || preflight_ok=false
           [[ "$checked_sha" == "$expected" ]] || preflight_ok=false
           [[ "$fresh_main_sha" == "$expected" ]] || preflight_ok=false
           [[ "$confirmation_ok" == "true" ]] || preflight_ok=false
+
+          if [[ "$trigger_kind" == "issue_comment" ]]; then
+            [[ "$COMMENT_ACTION_NORMALIZED" == "created" ]] || preflight_ok=false
+            [[ "$ISSUE_NUMBER" == "430" ]] || preflight_ok=false
+            [[ "$COMMENT_ACTOR_LOGIN" == "$REPOSITORY_OWNER" ]] || preflight_ok=false
+            [[ "$COMMENT_AUTHOR_LOGIN" == "$REPOSITORY_OWNER" ]] || preflight_ok=false
+            [[ "$COMMENT_AUTHOR_ASSOCIATION" == "OWNER" ]] || preflight_ok=false
+            [[ "$COMMENT_GRAMMAR_RESULT" == "PASS" ]] || preflight_ok=false
+            [[ "$PARSED_EXPECTED_SHA" == "$expected" ]] || preflight_ok=false
+          elif [[ "$trigger_kind" != "workflow_dispatch" ]]; then
+            preflight_ok=false
+          fi
 
           tmp="$A9R_OUT/controller-status.json.tmp"
           jq \
