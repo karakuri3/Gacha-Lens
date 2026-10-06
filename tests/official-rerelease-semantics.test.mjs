@@ -9,7 +9,9 @@ import {
 } from "../lib/domain/official-rerelease.js";
 import {
   assertLegacyOfficialRecordsSafe,
+  loadExistingRealVariantCatalogStrict,
   loadExistingRealVariantSeriesIdsStrict,
+  resolveLegacyOfficialVariantImage,
 } from "../lib/domain/official-upsert-safety.js";
 import {
   isSeriesLevelRestockEvent,
@@ -141,6 +143,40 @@ test("legacy official upsert fails closed on catalog read errors and rerelease r
   );
   const record = parseOfficialDetailDocument(fixture("gashapon-rerelease-detail.html"), detailUrl).record;
   assert.throws(() => assertLegacyOfficialRecordsSafe([record]), /cannot persist rerelease semantics/);
+});
+
+test("legacy official catalog preserves only existing real variant image provenance", async () => {
+  let request = null;
+  const catalog = await loadExistingRealVariantCatalogStrict(async (table, options) => {
+    request = { table, options };
+    return [
+      { id: "variant-a", series_id: "series-a", image: "https://images.example/variant-a.jpg" },
+      { id: "variant-b", series_id: "series-a", image: null },
+      { id: "variant-c", series_id: "series-c", image: "   " },
+    ];
+  });
+
+  assert.deepEqual(request, {
+    table: "variants",
+    options: {
+      select: "id,series_id,image",
+      params: { variant_type: "neq.provisional" },
+    },
+  });
+  assert.deepEqual([...catalog.seriesIds].sort(), ["series-a", "series-c"]);
+  assert.deepEqual([...catalog.imageById.entries()], [
+    ["variant-a", "https://images.example/variant-a.jpg"],
+  ]);
+});
+
+test("legacy official image resolution never invents parent artwork", () => {
+  const existing = "https://images.example/existing-variant.jpg";
+  assert.equal(resolveLegacyOfficialVariantImage({}, existing), existing);
+  assert.equal(
+    resolveLegacyOfficialVariantImage({ image_url: "https://images.example/fresh-variant.jpg" }, existing),
+    "https://images.example/fresh-variant.jpg",
+  );
+  assert.equal(resolveLegacyOfficialVariantImage({}, null), null);
 });
 
 test("series-level official rerelease presentation uses the series URL without pretending to be a variant", () => {
