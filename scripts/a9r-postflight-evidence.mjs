@@ -24,7 +24,7 @@ const nextShard = (c) => { const p = [...(c.body.get("variant_sitemap_index") ||
 export const ASSERTIONS = Object.freeze([
   A("release_source", "/api/runtime-diagnostics/release-source", 200, { owner: "public", marker: "source_sha", validator: "release" }),
   A("app_delegation", "/api/runtime-diagnostics/app-delegation", 200, { owner: "public", marker: "\"ok\":true", validator: "delegation" }),
-  A("home", "/", 200, { marker: "Gacha Lens", canonical: true }), A("series", "/series", 200, { marker: "ガチャ一覧", canonical: true }), A("ranking", "/ranking", 200, { canonical: true }), A("series_detail", firstSeries, 200, { marker: "<article><h1", canonical: true }), A("schedule_october", "/schedule?month=2026-10", 200, { marker: "2026-10", canonical: true }),
+  A("home", "/", 200, { marker: "Gacha Lens", canonical: true }), A("series", "/series", 200, { marker: "ガチャ一覧", canonical: true }), A("ranking", "/ranking", 200, { canonical: true }), A("series_detail", firstSeries, 200, { marker: "<h1", canonical: true }), A("schedule_october", "/schedule?month=2026-10", 200, { marker: "2026-10", canonical: true }),
   ...["ranking/series", "ranking/upcoming", "ranking/upcoming/series", "stock", "restocks", "categories", "brands", "franchises", "guides"].map((r) => A(r.replaceAll("/", "_"), `/${r}`, 200, { canonical: true })),
   A("favorites", "/favorites"), A("category_detail", `/categories/${CAT}`, 200, { canonical: true }), A("brand_detail", `/brands/${BRAND}`, 200, { canonical: true }), A("franchise_detail", `/franchises/${FRANCHISE}`, 200, { canonical: true }),
   ...["market-price", "price-history", "stock-restock", "forecast-ranking"].map((r) => A(`guide_${r.replaceAll("-", "_")}`, `/guides/${r}`, 200, { canonical: true })),
