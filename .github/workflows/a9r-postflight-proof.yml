@@ -73,10 +73,15 @@ jobs:
       CONFIRMATION: ${{ inputs.confirmation }}
       APP_ORIGIN: https://gacha-lens.senpingxingzuo.workers.dev
       PUBLIC_ORIGIN: https://gacha-lens-public.senpingxingzuo.workers.dev
-      A9R_OUT: ${{ runner.temp }}/gacha-a9r-post-merge
       HTTP_TIMEOUT_MS: "20000"
       RETRY_COUNT: "0"
     steps:
+      - name: Establish controller artifact path
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "A9R_OUT=${RUNNER_TEMP}/gacha-a9r-post-merge" >> "$GITHUB_ENV"
+
       - name: Initialize controller artifact
         shell: bash
         run: |
