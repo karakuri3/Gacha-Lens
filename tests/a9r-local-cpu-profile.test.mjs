@@ -32,6 +32,12 @@ test("CDP parser rejects startup-only empty samples and computes function-level 
  assert.equal(result.sample_count,3);
  assert.equal(result.sampled_cpu_ms,3);
  assert.equal(result.top_functions[0].name,"render");
+ const nested=analyze({nodes:[
+  {id:1,callFrame:{functionName:"outer"},children:[2]},
+  {id:2,callFrame:{functionName:"inner"},children:[]}
+ ],samples:[2,2],timeDeltas:[1000,1000]});
+ assert.equal(nested.top_functions.find(x=>x.name==="inner").self_samples,2);
+ assert.equal(nested.top_functions.find(x=>x.name==="inner").total_samples,2);
 });
 test("profiler workflow is PR-only, local-only, pinned and bounded",()=>{
  assert.match(workflow,/on:\n  pull_request:/);
@@ -44,6 +50,7 @@ test("profiler workflow is PR-only, local-only, pinned and bounded",()=>{
  assert.match(workflow,/vinext" build/);
  assert.match(workflow,/dev --local --config dist\/server\/wrangler\.json/);
  assert.match(workflow,/--inspector-port 9230/);
+ assert.match(workflow,/LOCAL_WORKER_PROFILE_ITERATION_\$\{current_iteration\}_PASS/);
  assert.match(workflow,/127\.0\.0\.1:8788/);
  assert.match(workflow,/actions\/upload-artifact@v4/);
  assert.match(workflow,/if: always\(\)/);

@@ -158,7 +158,7 @@ jobs:
             kill "$worker_pid" 2>/dev/null || true
             wait "$worker_pid" 2>/dev/null || true
             worker_pid=''
-            echo "LOCAL_WORKER_PROFILE_ITERATION_$current_iteration_PASS"
+            echo "LOCAL_WORKER_PROFILE_ITERATION_${current_iteration}_PASS"
           done
           stage='three_run_summary'
           node scripts/a9r-local-cpu-profile.mjs summarize

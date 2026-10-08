@@ -80,12 +80,13 @@ export function analyze(profile){
  assert.ok(profile&&profile.nodes?.length>0,"missing nodes");
  assert.ok(profile.samples?.length>0,"missing request samples");
  const nodes=new Map(profile.nodes.map(n=>[n.id,n]));
+ const parentById=new Map();for(const node of profile.nodes)for(const child of node.children||[])parentById.set(child,node.id);
  const count=new Map();for(const id of profile.samples)count.set(id,(count.get(id)||0)+1);
  const totalMicroseconds=(profile.timeDeltas||[]).reduce((a,b)=>a+b,0);
  const top=profile.nodes.filter(n=>count.has(n.id)&&n.callFrame?.functionName&&!/^\(idle\)|^\(program\)|^\(root\)/.test(n.callFrame.functionName))
   .sort((a,b)=>(count.get(b.id)||0)-(count.get(a.id)||0)).slice(0,40)
   .map(n=>{let sum=0;for(const sample of profile.samples){let cursor=sample,seen=new Set();
-   while(cursor&&!seen.has(cursor)){seen.add(cursor);if(cursor===n.id){sum++;break;}cursor=nodes.get(cursor)?.parent;}}
+   while(cursor&&!seen.has(cursor)){seen.add(cursor);if(cursor===n.id){sum++;break;}cursor=parentById.get(cursor);}}
    return {name:n.callFrame.functionName,url:n.callFrame.url||"",self_samples:count.get(n.id),total_samples:sum,
     self_sampled_ms:totalMicroseconds*count.get(n.id)/profile.samples.length/1000,
     total_sampled_ms:totalMicroseconds*sum/profile.samples.length/1000};});
