@@ -6,6 +6,9 @@ on:
       - ".github/workflows/a9r-local-cpu-profiler.yml"
       - "scripts/a9r-local-cpu-profile.mjs"
       - "tests/a9r-local-cpu-profile.test.mjs"
+      - "lib/domain/listing-classifier.js"
+      - "tests/a9r-normalize-equivalence.test.mjs"
+      - "tests/fixtures/a9r-listing-classifier-baseline.js"
 
 permissions:
   contents: read
@@ -33,6 +36,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - name: Set up Node 24
         uses: actions/setup-node@v7
         with:
@@ -58,6 +62,14 @@ jobs:
           }
           console.log('PINNED_TOOLCHAIN_PASS',process.version);
           NODE
+      - name: Classifier A/B, full tests, lint and PR diff check
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/a9r-normalize-equivalence.test.mjs tests/a9r-local-cpu-profile.test.mjs tests/ranking-truthfulness.test.mjs
+          npm test
+          npm run lint
+          git diff --check "${{ github.event.pull_request.base.sha }}" HEAD
       - name: Link toolchain and build local-only Vinext Worker
         shell: bash
         run: |
