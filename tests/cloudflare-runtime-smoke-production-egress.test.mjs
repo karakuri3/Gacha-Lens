@@ -83,3 +83,12 @@ test("Public SEO pinned contracts and SHA 409 fail-closed behavior are retained"
   assert.match(publicJob, /== '409'/);
   assert.doesNotMatch(publicJob, /production_code|production_canonical|production_headers/);
 });
+
+test("Preview redirects are bounded to the exact Preview origin", () => {
+  assert.doesNotMatch(appJob, /curl[^\n]*--location/);
+  assert.match(appJob, /unsafe cross-origin redirect blocked/);
+  assert.match(appJob, /redirect_path="\$\{location/);
+  assert.match(appJob, /"\$\{PREVIEW_URL\}\$\{redirect_path\}"/);
+  assert.match(appJob, /"\$location" != \/\/\*/);
+  assert.doesNotMatch(appJob, /curl[^\n]*https?:\/\/gachalens\.com/);
+});

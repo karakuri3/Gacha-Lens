@@ -272,6 +272,29 @@ jobs:
                 "${PREVIEW_URL}${path}")" || rc=$?
               code="${code:-000}"
 
+              # Follow only a bounded SAME-ORIGIN redirect, never an external URL.
+              # Transport-layer redirect following is prohibited; cross-origin Locations fail closed.
+              if [[ "$rc" == '0' && ( "$code" == '307' || "$code" == '308' ) ]]; then
+                location="$(awk 'tolower($1) == "location:" { $1=""; sub(/^[[:space:]]*/, ""); gsub("\r", ""); print; exit }' "$headers")"
+                redirect_path=''
+                if [[ "$location" == "${PREVIEW_URL}/"* ]]; then
+                  redirect_path="${location#"${PREVIEW_URL}"}"
+                elif [[ "$location" == /* && "$location" != //* ]]; then
+                  redirect_path="$location"
+                else
+                  echo "$name unsafe cross-origin redirect blocked (HTTP $code)." >&2
+                  exit 1
+                fi
+                rc=0
+                code="$(curl --silent --show-error --compressed --max-time 90 \
+                  -H "Accept: ${BROWSER_ACCEPT}" \
+                  --dump-header "$headers" \
+                  --output "$body" \
+                  --write-out '%{http_code}' \
+                  "${PREVIEW_URL}${redirect_path}")" || rc=$?
+                code="${code:-000}"
+              fi
+
               if [[ "$rc" == "0" && "$code" == "200" ]]; then
                 if [[ -n "$needle" ]] && ! grep -Fq "$needle" "$body"; then
                   echo "$name did not contain required marker: $needle" >&2
