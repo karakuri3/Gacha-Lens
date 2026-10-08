@@ -19,7 +19,7 @@ export function assertFixture(f){
  assert.equal(f.listings.filter(x=>x.sold_at||x.status==="sold").length,0);
 }
 
-const SUPPORTED_FIELDS=new Set(["select","id","series_id","variant_id","review_required","last_observed_at","order","offset","limit","or","released","release_date","parent.is_released","parent.release_date","release_parent_true.is_released","release_parent_not_true.or","release_parent_past.release_date","release_parent_future_or_null.or","release_parent_true","release_parent_not_true","release_parent_past","release_parent_future_or_null"]);
+const SUPPORTED_FIELDS=new Set(["select","id","series_id","variant_id","slug","name","variant_type","review_required","last_observed_at","order","offset","limit","or","released","release_date","parent.is_released","parent.release_date","release_parent_true.is_released","release_parent_not_true.or","release_parent_past.release_date","release_parent_future_or_null.or","release_parent_true","release_parent_not_true","release_parent_past","release_parent_future_or_null"]);
 const ALIASES=["release_parent_true","release_parent_not_true","release_parent_past","release_parent_future_or_null"];
 export function fixtureResponse(url,f,{range}={}){
  const u=new URL(url,"http://"+HOST+":"+FIXTURE_PORT);
@@ -33,15 +33,18 @@ export function fixtureResponse(url,f,{range}={}){
  const kind=table==="market_listings"?(select==="variant_id"?"candidate":"market_hydration"):table==="variants"?"variant_hydration":"series_hydration";
  if(kind==="candidate"&&!select.startsWith("variant_id"))return {status:400,body:{message:"invalid candidate selection"},kind:"unsupported"};
  if(kind==="variant_hydration"&&!select.includes("parent:series!inner("))return {status:400,body:{message:"missing parent hydration"},kind:"unsupported"};
- for(const field of ["id","series_id","variant_id"]){
+ for(const field of ["id","series_id","variant_id","slug","name"]){
   const value=u.searchParams.get(field);
   if(!value)continue;
   if(value.startsWith("in.(")&&value.endsWith(")")){
    const ids=value.slice(4,-1).split(",");
    rows=rows.filter(row=>ids.includes(String(row[field])));
   }else if(value==="not.is.null"){rows=rows.filter(row=>row[field]!=null);}
+  else if(value==="neq."){rows=rows.filter(row=>row[field]!=="" && row[field]!=null);}
   else return {status:400,body:{message:"unsupported identity predicate"},kind:"unsupported"};
  }
+ const variantType=u.searchParams.get("variant_type");
+ if(variantType){if(variantType!=="neq.provisional")return {status:400,body:{message:"unsupported variant type"},kind:"unsupported"};rows=rows.filter(row=>row.variant_type!=="provisional");}
  const review=u.searchParams.get("review_required");
  if(review){if(review!=="eq.false")return {status:400,body:{message:"unsupported review predicate"},kind:"unsupported"};rows=rows.filter(row=>row.review_required===false);}
  const cutoff=u.searchParams.get("last_observed_at");
@@ -69,7 +72,7 @@ function blankAccounting(){return {calls:[],candidateIds:new Set(),variantIds:ne
 export function accountingSnapshot(account){
  const totals={candidate:{requests:0,rows:0},variant_hydration:{requests:0,rows:0},series_hydration:{requests:0,rows:0},market_hydration:{requests:0,rows:0,active_rows:0,sold_rows:0},unsupported:{requests:0,rows:0}};
  for(const call of account.calls){totals[call.kind].requests++;totals[call.kind].rows+=call.rows; if(call.kind==="market_hydration"){totals.market_hydration.active_rows+=call.active;totals.market_hydration.sold_rows+=call.sold;}}
- return {total_requests:account.calls.length,...totals,unique:{candidate_variant_ids:account.candidateIds.size,hydrated_variants:account.variantIds.size,hydrated_parent_series:account.seriesIds.size,hydrated_market_listings:account.marketIds.size,hydrated_active_listings:account.activeIds.size,hydrated_sold_listings:account.soldIds.size}};
+ return {total_requests:account.calls.length,...totals,unsupported_reasons:[...new Set(account.calls.filter(c=>c.kind==="unsupported").map(c=>c.reason||"unknown"))],unique:{candidate_variant_ids:account.candidateIds.size,hydrated_variants:account.variantIds.size,hydrated_parent_series:account.seriesIds.size,hydrated_market_listings:account.marketIds.size,hydrated_active_listings:account.activeIds.size,hydrated_sold_listings:account.soldIds.size}};
 }
 export function assertRankingFidelity(a,{enforce=true}={}){
  assert.equal(a.unsupported.requests,0,"UNSUPPORTED_FIXTURE_QUERY");
@@ -91,7 +94,7 @@ export function serveFixture(){
   if(req.url==="/__fixture__/accounting"){res.writeHead(200,{"content-type":"application/json"});res.end(JSON.stringify(accountingSnapshot(account)));return;}
   const v=fixtureResponse(req.url||"",f,{range:req.headers.range?.startsWith("0-")?req.headers.range:undefined});
   const records=v.records||[];
-  account.calls.push({kind:v.kind,rows:records.length,active:records.filter(x=>x.status==="active").length,sold:records.filter(x=>x.status==="sold"||x.sold_at).length});
+  account.calls.push({kind:v.kind,reason:v.kind==="unsupported"?v.body.message:null,rows:records.length,active:records.filter(x=>x.status==="active").length,sold:records.filter(x=>x.status==="sold"||x.sold_at).length});
   if(v.kind==="candidate")for(const r of records)account.candidateIds.add(r.variant_id);
   if(v.kind==="variant_hydration")for(const r of records){account.variantIds.add(r.id);if(r.parent?.id)account.seriesIds.add(r.parent.id);}
   if(v.kind==="market_hydration")for(const r of records){account.marketIds.add(r.id);if(r.status==="active")account.activeIds.add(r.id);if(r.status==="sold"||r.sold_at)account.soldIds.add(r.id);}
