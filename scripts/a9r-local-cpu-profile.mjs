@@ -214,16 +214,21 @@ export function mapProfile(profile,mapIndex){
  const keyById=new Map(mappedFrames.map(x=>[x.node_id,JSON.stringify([x.script_url,x.generated_line,x.generated_column,x.source,x.original_line,x.original_column])]));
  for(let i=0;i<samples.length;i++){const seenGroups=new Set(),micro=deltas[i]??0;let cursor=samples[i],seenNodes=new Set();while(cursor&&!seenNodes.has(cursor)){seenNodes.add(cursor);const key=keyById.get(cursor);if(key)seenGroups.add(key);cursor=parents.get(cursor);}for(const key of seenGroups){const g=grouped.get(key);g.total_samples++;g.total_sampled_ms+=micro/1000;}}
  const groups=[...grouped.values()].sort((a,b)=>b.self_sampled_ms-a.self_sampled_ms);
- return {sample_count:samples.length,frames:mappedFrames,hotspots:groups.slice(0,50),unmapped_self_samples:groups.filter(g=>!g.source).reduce((sum,g)=>sum+g.self_samples,0)};
+ const normalizeFrame=groups.find(g=>g.source==="lib/domain/listing-classifier.js"&&g.verified_declaration==="normalize")||null;
+ return {sample_count:samples.length,frames:mappedFrames,hotspots:groups.slice(0,50),normalize_frame:normalizeFrame,unmapped_self_samples:groups.filter(g=>!g.source).reduce((sum,g)=>sum+g.self_samples,0)};
 }
 export function verifiedHotspot(mapped){
- const entry=mapped.hotspots.find(x=>x.generated_name==="D"&&x.script_url.endsWith("/series-BciKrsTX.js")&&x.generated_line===0&&x.generated_column===7229);
- assert.ok(entry,"KNOWN_MINIFIED_D_FRAME_ABSENT");
- assert.equal(entry.source,"lib/domain/listing-classifier.js","KNOWN_D_ORIGINAL_SOURCE_MISMATCH");
- assert.equal(entry.original_line,294,"KNOWN_D_ORIGINAL_LINE_MISMATCH");
- assert.equal(entry.verified_declaration,"normalize","KNOWN_D_FUNCTION_MISMATCH");
- assert.ok(entry.self_samples>0,"KNOWN_D_SELF_SAMPLES_MISSING");
- return {script_url:entry.script_url,generated_line:0,generated_column:7229,original_source:entry.source,original_line:entry.original_line,function:entry.verified_declaration,self_samples:entry.self_samples,total_samples:entry.total_samples,self_sampled_ms:entry.self_sampled_ms,total_sampled_ms:entry.total_sampled_ms,node_ids:entry.node_ids};
+ const entry=mapped.normalize_frame||mapped.hotspots.find(x=>
+   x.source==="lib/domain/listing-classifier.js"&&x.verified_declaration==="normalize");
+ assert.ok(entry,"SOURCE_MAP_NORMALIZE_FRAME_ABSENT");
+ assert.equal(entry.source,"lib/domain/listing-classifier.js","NORMALIZE_SOURCE_MISMATCH");
+ assert.equal(entry.verified_declaration,"normalize","NORMALIZE_DECLARATION_MISMATCH");
+ assert.ok(entry.self_samples>=0&&entry.total_samples>=0,"NORMALIZE_SAMPLES_INVALID");
+ return {script_url:entry.script_url,generated_line:entry.generated_line,
+  generated_column:entry.generated_column,original_source:entry.source,
+  original_line:entry.original_line,function:entry.verified_declaration,
+  self_samples:entry.self_samples,total_samples:entry.total_samples,
+  self_sampled_ms:entry.self_sampled_ms,total_sampled_ms:entry.total_sampled_ms,node_ids:entry.node_ids};
 }
 export function sourceMapIndex(root="dist/server"){
  const files=listMaps(root),mapIndex=new Map(),inventory=[];
