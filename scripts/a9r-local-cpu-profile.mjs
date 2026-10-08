@@ -49,10 +49,12 @@ export function fixtureResponse(url,f,{range}={}){
  if(review){if(review!=="eq.false")return {status:400,body:{message:"unsupported review predicate"},kind:"unsupported"};rows=rows.filter(row=>row.review_required===false);}
  const cutoff=u.searchParams.get("last_observed_at");
  if(cutoff){if(!cutoff.startsWith("gte.")||!Number.isFinite(Date.parse(cutoff.slice(4))))return {status:400,body:{message:"unsupported timestamp predicate"},kind:"unsupported"};rows=rows.filter(row=>Date.parse(row.last_observed_at)>=Date.parse(cutoff.slice(4)));}
- const effective=u.searchParams.get("or");
- if(effective){
-  if(table!=="variants"||!effective.includes("released.eq.true")||!effective.includes("release_parent_true"))return {status:400,body:{message:"unsupported release logic"},kind:"unsupported"};
-  rows=rows.filter(row=>row.released===true);
+ const expressions=u.searchParams.getAll("or");
+ for(const expression of expressions){
+  if(table!=="variants")return {status:400,body:{message:"unsupported release logic"},kind:"unsupported"};
+  if(expression==="variant_type.is.null,variant_type.neq.provisional"){rows=rows.filter(row=>row.variant_type==null||row.variant_type!=="provisional");continue;}
+  if(expression.includes("released.eq.true")&&expression.includes("release_parent_true.not.is.null")){rows=rows.filter(row=>row.released===true);continue;}
+  return {status:400,body:{message:"unsupported release logic"},kind:"unsupported"};
  }
  const releaseFlags=["release_parent_true.is_released","release_parent_not_true.or","release_parent_past.release_date","release_parent_future_or_null.or"];
  for(const field of releaseFlags){const val=u.searchParams.get(field);if(val&&!/^(eq\.true|lte\.\d{4}-\d{2}-\d{2}|\(is_released\.eq\.false,is_released\.is\.null\)|\(release_date\.gt\.\d{4}-\d{2}-\d{2},release_date\.is\.null\))$/.test(val))return {status:400,body:{message:"unsupported relation predicate"},kind:"unsupported"};}
