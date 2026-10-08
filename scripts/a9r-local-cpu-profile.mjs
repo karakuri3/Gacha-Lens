@@ -50,7 +50,8 @@ export function fixtureResponse(url,f,{range}={}){
  const cutoff=u.searchParams.get("last_observed_at");
  if(cutoff){if(!cutoff.startsWith("gte.")||!Number.isFinite(Date.parse(cutoff.slice(4))))return {status:400,body:{message:"unsupported timestamp predicate"},kind:"unsupported"};rows=rows.filter(row=>Date.parse(row.last_observed_at)>=Date.parse(cutoff.slice(4)));}
  const expressions=u.searchParams.getAll("or");
- for(const expression of expressions){
+ for(const rawExpression of expressions){
+  const expression=rawExpression.startsWith("(")&&rawExpression.endsWith(")")?rawExpression.slice(1,-1):rawExpression;
   if(table!=="variants")return {status:400,body:{message:"unsupported release logic"},kind:"unsupported"};
   if(expression==="variant_type.is.null,variant_type.neq.provisional"){rows=rows.filter(row=>row.variant_type==null||row.variant_type!=="provisional");continue;}
   if(expression.includes("released.eq.true")&&expression.includes("release_parent_true.not.is.null")){rows=rows.filter(row=>row.released===true);continue;}
