@@ -1,4 +1,4 @@
-import { IMPORT_ISSUE_TYPES, LISTING_TYPES, MARKET_REVIEW_TYPES } from "./gacha-schema.js";
+import { IMPORT_ISSUE_TYPES, LISTING_TYPES, MARKET_REVIEW_TYPES } from "../../lib/domain/gacha-schema.js";
 
 const TYPE_RULES = [
   {
@@ -53,13 +53,6 @@ const TITLE_ALIASES = [
   { aliases: ["パンどろぼうへんしん", "へんしんだ"], names: ["パンどろぼう（へんしん）"] },
   { aliases: ["パンどろぼうやい"], names: ["パンどろぼう（やい）"] },
 ];
-
-// Catalog-independent constants only; no cross-request mutable catalog cache.
-const NORMALIZED_TITLE_ALIASES = TITLE_ALIASES.map((entry) => ({
-  names: entry.names.map(normalize),
-  aliases: entry.aliases.map(normalize),
-  joinedNames: entry.names.join(" "),
-}));
 
 export function classifyListingTitle(title = "") {
   return classifyListingTitleDetailed(title).listing_type;
@@ -171,20 +164,13 @@ export function resolveVariantFromListing(rawListing = {}, catalog = {}) {
 export function resolveVariantsFromListing(rawListing = {}, catalog = {}, options = {}) {
   const variants = catalog.variants ?? [];
   const title = normalize(expandAliases(rawListing.title || rawListing.name || ""));
-  // First matching parent wins, matching Array.find even with duplicate IDs.
-  // Lifetime is one classification call, so catalog edits cannot create stale matches.
-  const parentIndex = new Map();
-  for (const parent of catalog.series ?? []) {
-    if (!parentIndex.has(parent.id)) parentIndex.set(parent.id, parent);
-  }
-  const lookupOptions = { ...options, parentIndex };
   const explicitId = rawListing.variant_id || rawListing.variantId;
   if (explicitId) {
     const explicit = variants.find((variant) => variant.id === explicitId || variant.slug === explicitId);
     const additional = variants.filter((variant) => {
       if (variant.id === explicit?.id) return false;
-      if (!options.allowFranchiseVariant && isFranchiseNameVariant(variant, catalog, parentIndex) && !franchiseVariantAppearsExplicitly(variant, title)) return false;
-      return variantMatchesTitle(variant, title, catalog, lookupOptions);
+      if (!options.allowFranchiseVariant && isFranchiseNameVariant(variant, catalog) && !franchiseVariantAppearsExplicitly(variant, title)) return false;
+      return variantMatchesTitle(variant, title, catalog, options);
     });
     return explicit ? dedupeById([explicit, ...additional]) : dedupeById(additional);
   }
@@ -192,8 +178,8 @@ export function resolveVariantsFromListing(rawListing = {}, catalog = {}, option
   if (!title) return [];
 
   const matched = variants.filter((variant) => {
-    if (!options.allowFranchiseVariant && isFranchiseNameVariant(variant, catalog, parentIndex) && !franchiseVariantAppearsExplicitly(variant, title)) return false;
-    return variantMatchesTitle(variant, title, catalog, lookupOptions);
+    if (!options.allowFranchiseVariant && isFranchiseNameVariant(variant, catalog) && !franchiseVariantAppearsExplicitly(variant, title)) return false;
+    return variantMatchesTitle(variant, title, catalog, options);
   });
   return dedupeById(matched);
 }
@@ -240,19 +226,14 @@ function getSeriesMatchTerms(series, title) {
 
 function getVariantTerms(variant, catalog = {}, options = {}) {
   const base = [variant.name, variant.variant_name, variant.slug];
-  const normalizedName = normalize(variant.name || variant.variant_name);
-  const aliases = NORMALIZED_TITLE_ALIASES.filter((entry) =>
-    entry.names.some((name) => name === normalizedName)
-  ).flatMap((entry) => entry.aliases);
-  const parent = options.parentIndex
-    ? options.parentIndex.get(variant.series_id)
-    : (catalog.series ?? []).find((series) => series.id === variant.series_id);
-  // Preserve term ordering and duplicates: they are part of matched_keywords evidence.
-  const terms = [...base.filter(Boolean).map(normalize), ...aliases].filter(Boolean);
-  if (parent && !options.allowFranchiseVariant && normalizedName &&
-      (normalizedName === normalize(parent.franchise) || normalizedName === normalize(parent.name))) {
+  const aliases = TITLE_ALIASES.filter((entry) => entry.names.some((name) => normalize(name) === normalize(variant.name || variant.variant_name))).flatMap((entry) => entry.aliases);
+  const parent = (catalog.series ?? []).find((series) => series.id === variant.series_id);
+  const terms = [...base, ...aliases].filter(Boolean).map(normalize).filter(Boolean);
+
+  if (parent && isFranchiseNameVariant(variant, catalog) && !options.allowFranchiseVariant) {
     return terms.filter((term) => term !== normalize(parent.franchise) && term !== normalize(parent.name));
   }
+
   return terms;
 }
 
@@ -265,10 +246,8 @@ function shouldAllowFranchiseVariantForSingle(value = "") {
   return hasSingleKeyword(value);
 }
 
-function isFranchiseNameVariant(variant, catalog = {}, parentIndex = null) {
-  const parent = parentIndex
-    ? parentIndex.get(variant.series_id)
-    : (catalog.series ?? []).find((series) => series.id === variant.series_id);
+function isFranchiseNameVariant(variant, catalog = {}) {
+  const parent = (catalog.series ?? []).find((series) => series.id === variant.series_id);
   if (!parent) return false;
   const variantName = normalize(variant.name || variant.variant_name);
   return Boolean(variantName && (variantName === normalize(parent.franchise) || variantName === normalize(parent.name)));
@@ -288,12 +267,10 @@ function getSeriesTerms(series = {}) {
 
 function expandAliases(value = "") {
   let expanded = String(value);
-  let normalizedExpanded = normalize(expanded);
-  for (const entry of NORMALIZED_TITLE_ALIASES) {
+  for (const entry of TITLE_ALIASES) {
     for (const alias of entry.aliases) {
-      if (normalizedExpanded.includes(alias)) {
-        expanded += ` ${entry.joinedNames}`;
-        normalizedExpanded = normalize(expanded);
+      if (normalize(expanded).includes(normalize(alias))) {
+        expanded += ` ${entry.names.join(" ")}`;
       }
     }
   }
