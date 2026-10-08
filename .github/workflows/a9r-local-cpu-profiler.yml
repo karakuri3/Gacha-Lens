@@ -93,7 +93,25 @@ jobs:
           for(const kv of cfg.kv_namespaces??[]) if(kv.binding==='VINEXT_KV_CACHE'&&!kv.id)kv.id='00000000000000000000000000000000';
           fs.writeFileSync(file,JSON.stringify(cfg,null,2)+'\n');
           NODE
+          # Transient profiling-only Vite config mutation; never committed or deployed.
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const configs=['vite.config.ts','vite.config.mts','vite.config.mjs','vite.config.js'].filter(p=>fs.existsSync(p));
+          if(configs.length!==1)throw Error('PROFILER_CONFIG_DISCOVERY_FAILED');
+          const file=configs[0],source=fs.readFileSync(file,'utf8');
+          if(!source.includes('export default defineConfig({'))throw Error('PROFILER_CONFIG_INJECTION_UNSUPPORTED');
+          const modified=source.replace('export default defineConfig({','export default defineConfig({\n  build: { sourcemap: true },\n  environments: { rsc: { build: { sourcemap: true } }, ssr: { build: { sourcemap: true } } },');
+          fs.writeFileSync(file,modified);
+          console.log('PROFILING_ONLY_VITE_SOURCEMAPS_CONFIGURED');
+          NODE
           "$TOOLCHAIN_DIR/node_modules/.bin/vinext" build > /tmp/a9r-vinext-build.log
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const root='dist/server';let total=0,series=0,ssr=0;
+          const walk=d=>{if(!fs.existsSync(d))return;for(const item of fs.readdirSync(d,{withFileTypes:true})){const p=d+'/'+item.name;if(item.isDirectory())walk(p);else if(p.endsWith('.js.map')){total++;if(item.name.startsWith('series-'))series++;if(p.includes('/ssr/'))ssr++;}}};
+          walk(root);console.log('PROFILE_SOURCE_MAP_COUNTS',JSON.stringify({total,series,ssr}));
+          if(!series||!ssr)throw Error('PROFILE_SOURCE_MAP_MISSING_CRITICAL_BUNDLES');
+          NODE
           if grep -Fq 'Upgrading React for RSC compatibility' /tmp/a9r-vinext-build.log; then
             echo 'Vinext attempted live dependency resolution'; exit 1
           fi
@@ -142,7 +160,8 @@ jobs:
           trap cleanup EXIT
           for current_iteration in 1 2 3; do
             stage="workerd_local_start_$current_iteration"
-            "$wrangler" dev --local --config dist/server/wrangler.json --ip 127.0.0.1 --port 8787 --inspector-port 9230 > "/tmp/a9r-workerd-$current_iteration.log" 2>&1 &
+            rm -rf "/tmp/a9r-profiler-cache-${current_iteration}"
+            "$wrangler" dev --local --config dist/server/wrangler.json --ip 127.0.0.1 --port 8787 --inspector-port 9230 --persist-to "/tmp/a9r-profiler-cache-${current_iteration}" > "/tmp/a9r-workerd-$current_iteration.log" 2>&1 &
             worker_pid=$!
             ready=false
             for n in $(seq 1 45); do

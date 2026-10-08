@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import {SHAPE,makeFixture,assertFixture,fixtureResponse,analyze} from "../scripts/a9r-local-cpu-profile.mjs";
+import {SHAPE,makeFixture,assertFixture,fixtureResponse,analyze,originalPosition,mapProfile,accountingSnapshot,assertRankingFidelity} from "../scripts/a9r-local-cpu-profile.mjs";
 
 const workflow=fs.readFileSync(new URL("../.github/workflows/a9r-local-cpu-profiler.yml",import.meta.url),"utf8");
 const script=fs.readFileSync(new URL("../scripts/a9r-local-cpu-profile.mjs",import.meta.url),"utf8");
@@ -62,4 +62,34 @@ test("profiler workflow is PR-only, local-only, pinned and bounded",()=>{
  assert.match(script,/Profiler\.start/);
  assert.match(script,/Profiler\.stop/);
  assert.match(script,/\/ranking/);
+});
+
+test("source map zero-based CDP coordinates map to one-based original lines without guessing",()=>{
+ const map={version:3,sources:["lib/series.js"],names:["verified"],mappings:"AAAA,CAACA;AACA"};
+ assert.deepEqual(originalPosition(map,0,1),{source:"lib/series.js",line:1,column:1,name:"verified"});
+ assert.equal(originalPosition(map,0,-1),null);
+ assert.equal(originalPosition(map,7,0),null);
+ const profile={nodes:[{id:1,callFrame:{functionName:"D",url:"series-test.js",lineNumber:0,columnNumber:1},children:[2]},{id:2,callFrame:{functionName:"D",url:"series-test.js",lineNumber:0,columnNumber:1}}],samples:[2,2,1],timeDeltas:[1000,2000,3000]};
+ const result=mapProfile(profile,new Map([["series-test.js",[{path:"/tmp/series-test.js.map",map}]]]));
+ assert.equal(result.hotspots[0].self_samples,3);
+ assert.equal(result.hotspots[0].total_samples,3);
+ assert.equal(result.hotspots[0].self_sampled_ms,6);
+ assert.equal(result.hotspots[0].total_sampled_ms,6);
+});
+test("sanitized fixture counters distinguish candidate/variant/market and reject unsupported query",()=>{
+ const f=makeFixture();
+ assert.equal(fixtureResponse("/rest/v1/variants?unrecognized=eq.1",f).status,400);
+ assert.equal(fixtureResponse("/rest/v1/variants?select=*",f).status,400);
+ const v=fixtureResponse("/rest/v1/variants?id=in.(v0,v1)&select=id,parent:series!inner(id)",f);
+ assert.equal(v.status,200);assert.equal(v.records.length,2);
+ const account={calls:[{kind:"candidate",rows:241,active:66,sold:0}],candidateIds:new Set(f.variants.map(v=>v.id)),variantIds:new Set(),seriesIds:new Set(),marketIds:new Set(),activeIds:new Set(),soldIds:new Set()};
+ assert.equal(accountingSnapshot(account).candidate.rows,241);
+ assert.throws(()=>assertRankingFidelity(accountingSnapshot(account)),/VARIANT_HYDRATION_MISSING/);
+});
+test("local-only build sources and per-run KV persistence stay isolated",()=>{
+ assert.match(workflow,/PROFILING_ONLY_VITE_SOURCEMAPS_CONFIGURED/);
+ assert.match(workflow,/PROFILE_SOURCE_MAP_MISSING_CRITICAL_BUNDLES/);
+ assert.match(workflow,/--persist-to "\/tmp\/a9r-profiler-cache-\$\{current_iteration\}"/);
+ assert.match(script,/SOURCE_MAP_HOTSPOT_UNMAPPED/);
+ assert.match(script,/WATCH_30_CARDS_NOT_RENDERED/);
 });
