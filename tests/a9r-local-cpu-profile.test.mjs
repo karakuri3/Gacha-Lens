@@ -18,7 +18,7 @@ test("fixture REST mock preserves actual ranking candidate/variant/market hydrat
  const candidate=fixtureResponse("/rest/v1/market_listings?select=variant_id&limit=1000",f);
  assert.equal(candidate.status,200);
  assert.equal(candidate.body.length,241);
- const variants=fixtureResponse("/rest/v1/variants?id=in.(v0,v1,v2)&select=*",f);
+ const variants=fixtureResponse("/rest/v1/variants?id=in.(v0,v1,v2)&select=id,parent:series!inner(id)",f);
  assert.equal(variants.body.length,3);
  assert.ok(variants.body[0].parent);
  const markets=fixtureResponse("/rest/v1/market_listings?series_id=in.(s0,s1)&select=*",f);
