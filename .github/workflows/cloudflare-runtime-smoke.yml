@@ -1,7 +1,6 @@
 name: Cloudflare runtime smoke
 
 on:
-  workflow_dispatch:
   pull_request:
     paths:
       - "app/**"
@@ -41,6 +40,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+
+      - name: Enforce PR Production HTTP egress guard
+        shell: bash
+        run: node --test tests/cloudflare-runtime-smoke-production-egress.test.mjs
 
       - name: Resolve exact-head Cloudflare Preview
         shell: bash
@@ -261,7 +264,7 @@ jobs:
 
             for attempt in $(seq 1 6); do
               rc=0
-              code="$(curl --silent --show-error --compressed --location --max-time 90 \
+              code="$(curl --silent --show-error --compressed --max-time 90 \
                 -H "Accept: ${BROWSER_ACCEPT}" \
                 --dump-header "$headers" \
                 --output "$body" \
@@ -386,29 +389,33 @@ jobs:
           echo 'Review/admin unauthenticated mutation boundary: HTTP 401' >> "$GITHUB_STEP_SUMMARY"
           echo 'Ingest unauthenticated boundary: HTTP 401; authorized path is code-pinned to HTTP 410/GitHub Actions.' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Compare security-header coverage with current Production
+      - name: Check repository-required security headers on exact-head App Preview
         shell: bash
         run: |
           set -euo pipefail
           preview_headers="$(mktemp)"
-          production_headers="$(mktemp)"
-          trap 'rm -f "$preview_headers" "$production_headers"' EXIT
-          curl --silent --show-error --max-time 60 --output /dev/null --dump-header "$preview_headers" "${PREVIEW_URL}/"
-          curl --silent --show-error --max-time 60 --output /dev/null --dump-header "$production_headers" 'https://gachalens.com/'
+          trap 'rm -f "$preview_headers"' EXIT
+          code="$(curl --silent --show-error --max-time 60 --output /dev/null --dump-header "$preview_headers" --write-out '%{http_code}' "${PREVIEW_URL}/")"
+          [[ "$code" == '200' ]] || { echo "App Preview security-header HTTP $code; expected 200." >&2; exit 1; }
 
-          missing=0
-          for header in strict-transport-security x-content-type-options x-frame-options referrer-policy content-security-policy permissions-policy; do
-            if grep -qi "^${header}:" "$production_headers"; then
-              if grep -qi "^${header}:" "$preview_headers"; then
-                echo "Security header preserved: ${header}" >> "$GITHUB_STEP_SUMMARY"
-              else
-                echo "Preview is missing Production security header: ${header}" >&2
-                missing=1
-              fi
+          # next.config.mjs defines HSTS for every App path. Fail closed on its exact max-age contract.
+          hsts="$(awk 'tolower($1) == "strict-transport-security:" { $1=""; sub(/^[[:space:]]*/, ""); gsub("\r", ""); print; exit }' "$preview_headers")"
+          [[ -n "$hsts" ]] && grep -Eiq '(^|[;[:space:]])max-age=63072000([;[:space:]]|$)' <<<"$hsts" || {
+            echo "App Preview missing required Strict-Transport-Security max-age=63072000: ${hsts:-none}" >&2
+            exit 1
+          }
+          echo 'App Preview required Strict-Transport-Security max-age=63072000: PASS (repository contract)' >> "$GITHUB_STEP_SUMMARY"
+
+          # These five were historically conditional on a live Production response,
+          # but are not declared required in next.config.mjs. Never assert Production parity.
+          for header in x-content-type-options x-frame-options referrer-policy content-security-policy permissions-policy; do
+            if grep -qi "^${header}:" "$preview_headers"; then
+              echo "App Preview ${header}: OBSERVED (Production parity NOT_RUN)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "App Preview ${header}: NOT_REQUIRED_BY_REPOSITORY (Production parity NOT_RUN)" >> "$GITHUB_STEP_SUMMARY"
             fi
           done
-          [[ "$missing" == "0" ]]
-          echo 'Security-header presence is equivalent to or broader than current Production for the audited header set.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'App security-header live Production parity: NOT_RUN (PR egress prohibited).' >> "$GITHUB_STEP_SUMMARY"
 
 
   exact-head-public-runtime:
@@ -422,6 +429,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+
+      - name: Enforce PR Production HTTP egress guard
+        shell: bash
+        run: node --test tests/cloudflare-runtime-smoke-production-egress.test.mjs
 
       - name: Resolve exact-head Cloudflare Public Preview
         shell: bash
@@ -662,58 +673,56 @@ jobs:
             exit 1
           fi
 
-      - name: Audit Public Preview SEO and discovery semantics against current Production
+      - name: Audit exact-head Public Preview SEO against pinned repository contracts
         shell: bash
         run: |
           set -euo pipefail
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
+          echo 'Public SEO live Production parity: NOT_RUN (PR egress prohibited).' >> "$GITHUB_STEP_SUMMARY"
 
           if [[ "${PUBLIC_APP_SHA_MATCH:-}" != 'true' ]]; then
-            echo 'Public SEO parity audit deferred: immutable Public Preview correctly fails closed because its live Service Binding App SHA differs from the PR SHA; same-SHA behavior is covered by local exact-head Service Binding proof.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Public data-backed SEO: NOT_RUN — Public/App SHA mismatch correctly fails closed with HTTP 409; same-SHA proof is handled by local Service Binding CI.' >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
           compare_canonical() {
             local name="$1"
             local path="$2"
-            local preview="$tmp/${name}.preview"
-            local production="$tmp/${name}.production"
-
-            curl --fail --silent --show-error --max-time 60 -H 'Accept: text/html' "${PUBLIC_PREVIEW_URL}${path}" > "$preview"
-            curl --fail --silent --show-error --max-time 60 -H 'Accept: text/html' "https://gachalens.com${path}" > "$production"
-
-            local preview_canonical production_canonical
-            preview_canonical="$(grep -Eo '<link rel="canonical" href="[^"]+"' "$preview" | head -1 | sed -E 's/.*href="([^"]+)"/\1/')"
-            production_canonical="$(grep -Eo '<link rel="canonical" href="[^"]+"' "$production" | head -1 | sed -E 's/.*href="([^"]+)"/\1/')"
-
-            preview_canonical_normalized="${preview_canonical%/}"
-            production_canonical_normalized="${production_canonical%/}"
-            [[ -n "$preview_canonical" && "$preview_canonical_normalized" == "$production_canonical_normalized" ]] || {
-              echo "${name} canonical mismatch: Public=${preview_canonical:-missing}; Production=${production_canonical:-missing}" >&2
+            local expected="$3"
+            local body="$tmp/${name}.preview"
+            local code canonical
+            code="$(curl --silent --show-error --max-time 60 -H 'Accept: text/html' --output "$body" --write-out '%{http_code}' "${PUBLIC_PREVIEW_URL}${path}")"
+            [[ "$code" == '200' ]] || { echo "${name}: Preview HTTP ${code}, expected 200" >&2; exit 1; }
+            canonical="$(grep -Eo '<link rel="canonical" href="[^"]+"' "$body" | head -1 | sed -E 's/.*href="([^"]+)"/\1/')"
+            [[ -n "$canonical" && "${canonical%/}" == "${expected%/}" ]] || {
+              echo "${name}: Preview canonical ${canonical:-missing}; pinned expected ${expected}" >&2
               exit 1
             }
-            grep -Fq '<meta name="description"' "$preview" || { echo "${name} Public HTML missing description." >&2; exit 1; }
-            grep -Fq '<h1' "$preview" || { echo "${name} Public HTML missing primary heading." >&2; exit 1; }
-            ! grep -Fq 'noindex' "$preview" || { echo "${name} Public HTML unexpectedly contains noindex." >&2; exit 1; }
-            echo "${name}: canonical parity ${preview_canonical}; indexable HTML semantics preserved." >> "$GITHUB_STEP_SUMMARY"
+            grep -Fq '<meta name="description"' "$body" || { echo "${name}: missing description" >&2; exit 1; }
+            grep -Fq '<h1' "$body" || { echo "${name}: missing primary heading" >&2; exit 1; }
+            ! grep -Fqi 'noindex' "$body" || { echo "${name}: unexpected noindex" >&2; exit 1; }
+            echo "${name}: pinned canonical ${expected}, indexable HTML HTTP 200: PASS" >> "$GITHUB_STEP_SUMMARY"
           }
 
-          compare_canonical home '/'
-          compare_canonical series '/series'
-          compare_canonical schedule '/schedule?month=2026-10'
+          compare_canonical home '/' 'https://gachalens.com/'
+          compare_canonical series '/series' 'https://gachalens.com/series'
+          compare_canonical schedule '/schedule?month=2026-10' 'https://gachalens.com/schedule?month=2026-10'
 
-          curl --fail --silent --show-error --max-time 60 -H 'Accept: text/html' "${PUBLIC_PREVIEW_URL}/series" > "$tmp/series-for-detail"
+          series_code="$(curl --silent --show-error --max-time 60 -H 'Accept: text/html' --output "$tmp/series-for-detail" --write-out '%{http_code}' "${PUBLIC_PREVIEW_URL}/series")"
+          [[ "$series_code" == '200' ]] || { echo "Series index HTTP ${series_code}, expected 200" >&2; exit 1; }
           series_detail_path="$(grep -Eo 'href="/series/group/[^"]+"' "$tmp/series-for-detail" | head -1 | sed -E 's/^href="([^"]+)"/\1/')"
-          [[ -n "$series_detail_path" ]] || {
-            echo 'Public series index did not expose a parent-series detail for parity audit.' >&2
+          [[ "$series_detail_path" =~ ^/series/group/[a-zA-Z0-9%._~-]+$ ]] || {
+            echo "Series index exposed invalid parent-series route: ${series_detail_path:-missing}" >&2
             exit 1
           }
-          compare_canonical series_detail "$series_detail_path"
+          compare_canonical series_detail "$series_detail_path" "https://gachalens.com${series_detail_path}"
 
-          curl --fail --silent --show-error --max-time 60 "${PUBLIC_PREVIEW_URL}/robots.txt" > "$tmp/robots.preview"
-          curl --fail --silent --show-error --max-time 60 'https://gachalens.com/robots.txt' > "$tmp/robots.production"
+          robots_code="$(curl --silent --show-error --max-time 60 --output "$tmp/robots.preview" --write-out '%{http_code}' "${PUBLIC_PREVIEW_URL}/robots.txt")"
+          [[ "$robots_code" == '200' ]] || { echo "Public robots HTTP ${robots_code}, expected 200" >&2; exit 1; }
           for directive in \
+            'User-agent: *' \
+            'Allow: /' \
             'Disallow: /api/' \
             'Disallow: /review/' \
             'Disallow: /supabase-series' \
@@ -721,22 +730,23 @@ jobs:
             'Sitemap: https://gachalens.com/series-sitemap.xml' \
             'Sitemap: https://gachalens.com/variant-sitemap.xml' \
             'Host: https://gachalens.com/'; do
-            grep -Fq "$directive" "$tmp/robots.preview" || { echo "Public robots missing: $directive" >&2; exit 1; }
-            grep -Fq "$directive" "$tmp/robots.production" || { echo "Production robots baseline missing: $directive" >&2; exit 1; }
+            grep -Fxq "$directive" "$tmp/robots.preview" || { echo "Public robots missing pinned directive: $directive" >&2; exit 1; }
           done
+          echo 'Public robots HTTP 200 and all pinned disallow/sitemap/host directives: PASS' >> "$GITHUB_STEP_SUMMARY"
 
-          for path in /sitemap.xml /series-sitemap.xml /variant-sitemap.xml; do
-            preview_code="$(curl --silent --show-error --max-time 60 --output "$tmp/preview-sitemap" --write-out '%{http_code}' "${PUBLIC_PREVIEW_URL}${path}")"
-            production_code="$(curl --silent --show-error --max-time 60 --output "$tmp/production-sitemap" --write-out '%{http_code}' "https://gachalens.com${path}")"
-            [[ "$preview_code" == '200' && "$production_code" == '200' ]] || {
-              echo "Sitemap status mismatch on ${path}: Public=${preview_code}; Production=${production_code}" >&2
-              exit 1
-            }
-            grep -Fq 'https://gachalens.com/' "$tmp/preview-sitemap" || { echo "Public sitemap ${path} escaped canonical origin." >&2; exit 1; }
-            echo "${path}: Public/Production HTTP 200 and canonical gachalens.com origin preserved." >> "$GITHUB_STEP_SUMMARY"
+          for spec in \
+            'root|/sitemap.xml|<urlset|<loc>https://gachalens.com/' \
+            'series|/series-sitemap.xml|<urlset|<loc>https://gachalens.com/series/group/' \
+            'variant|/variant-sitemap.xml|<sitemapindex|<loc>https://gachalens.com/variant-sitemap/1</loc>'; do
+            IFS='|' read -r name path element canonical_marker <<<"$spec"
+            body="$tmp/${name}-sitemap.preview"
+            code="$(curl --silent --show-error --max-time 60 --output "$body" --write-out '%{http_code}' "${PUBLIC_PREVIEW_URL}${path}")"
+            [[ "$code" == '200' ]] || { echo "Public ${path} HTTP ${code}, expected 200" >&2; exit 1; }
+            grep -Fq "$element" "$body" || { echo "Public ${path} missing pinned XML element" >&2; exit 1; }
+            grep -Fq "$canonical_marker" "$body" || { echo "Public ${path} missing pinned canonical origin/path" >&2; exit 1; }
+            echo "Public ${path}: HTTP 200 + pinned canonical XML: PASS" >> "$GITHUB_STEP_SUMMARY"
           done
-
-          echo 'Robots directives and sitemap/canonical meaning preserved relative to current Production.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Public Preview pinned SEO contract: PASS; Production parity: NOT_RUN.' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Prove bootstrap route boundary
         shell: bash
