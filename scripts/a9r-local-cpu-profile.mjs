@@ -51,15 +51,20 @@ async function inspectorUrl(){
  }
  throw Error("INSPECTOR_UNAVAILABLE: no CDP websocket on localhost:9230");
 }
-export function connectCDP(url){
+export async function connectCDP(rawUrl){
+ const url=new URL(rawUrl);
+ if(url.protocol!=="ws:"||!["localhost","127.0.0.1"].includes(url.hostname)||url.port!==String(INSPECTOR))throw Error("NON_LOCAL_INSPECTOR_REFUSED");
+ url.hostname=HOST;
+ const {default:WS}=await import("../.github/vinext-toolchain/node_modules/ws/index.js");
  return new Promise((resolve,reject)=>{
-  const socket=new WebSocket(url);let id=0;const pending=new Map();
-  const timer=setTimeout(()=>reject(Error("INSPECTOR_WS_TIMEOUT")),5000);
-  socket.addEventListener("error",()=>{clearTimeout(timer);reject(Error("INSPECTOR_WS_ERROR"));},{once:true});
-  socket.addEventListener("open",()=>{
+  const socket=new WS(url.href,{origin:"http://"+HOST+":"+INSPECTOR,handshakeTimeout:5000});
+  let id=0;const pending=new Map();
+  const timer=setTimeout(()=>reject(Error("INSPECTOR_WS_TIMEOUT")),6000);
+  socket.on("error",error=>{clearTimeout(timer);reject(Error("INSPECTOR_WS_ERROR "+String(error?.message||"unknown").slice(0,200)));});
+  socket.on("open",()=>{
    clearTimeout(timer);
-   socket.addEventListener("message",event=>{
-    let obj;try{obj=JSON.parse(String(event.data));}catch{return;}
+   socket.on("message",event=>{
+    let obj;try{obj=JSON.parse(String(event));}catch{return;}
     if(!pending.has(obj.id))return;const p=pending.get(obj.id);pending.delete(obj.id);
     obj.error?p.reject(Error("CDP "+p.method+" "+JSON.stringify(obj.error))):p.resolve(obj.result||{});
    });
@@ -68,7 +73,7 @@ export function connectCDP(url){
     pending.set(key,{method,resolve:v=>{clearTimeout(wait);resolve(v);},reject:e=>{clearTimeout(wait);reject(e);}});
     socket.send(JSON.stringify({id:key,method,params}));
    }),close:()=>socket.close()});
-  },{once:true});
+  });
  });
 }
 export function analyze(profile){
