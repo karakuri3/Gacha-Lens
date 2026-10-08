@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import {SHAPE,makeFixture,assertFixture,fixtureResponse,analyze,originalPosition,mapProfile,accountingSnapshot,assertRankingFidelity} from "../scripts/a9r-local-cpu-profile.mjs";
+import {SHAPE,makeFixture,assertFixture,fixtureResponse,analyze,originalPosition,mapProfile,accountingSnapshot,assertRankingFidelity,verifiedHotspot} from "../scripts/a9r-local-cpu-profile.mjs";
 
 const workflow=fs.readFileSync(new URL("../.github/workflows/a9r-local-cpu-profiler.yml",import.meta.url),"utf8");
 const script=fs.readFileSync(new URL("../scripts/a9r-local-cpu-profile.mjs",import.meta.url),"utf8");
@@ -92,4 +92,29 @@ test("local-only build sources and per-run KV persistence stay isolated",()=>{
  assert.match(workflow,/--persist-to "\/tmp\/a9r-profiler-cache-\$\{current_iteration\}"/);
  assert.match(script,/SOURCE_MAP_HOTSPOT_UNMAPPED/);
  assert.match(script,/WATCH_30_CARDS_NOT_RENDERED/);
+});
+
+test("known historical series-D call frame must map to verified classifier normalize declaration",()=>{
+ const known={generated_name:"D",script_url:"file:///test/series-BciKrsTX.js",generated_line:0,generated_column:7229,
+  source:"lib/domain/listing-classifier.js",original_line:294,verified_declaration:"normalize",
+  self_samples:5,total_samples:8,self_sampled_ms:5,total_sampled_ms:8,node_ids:[1,2]};
+ assert.equal(verifiedHotspot({hotspots:[known]}).function,"normalize");
+ assert.throws(()=>verifiedHotspot({hotspots:[{...known,source:"lib/series.js"}]}),/KNOWN_D_ORIGINAL_SOURCE_MISMATCH/);
+ assert.throws(()=>verifiedHotspot({hotspots:[]}),/KNOWN_MINIFIED_D_FRAME_ABSENT/);
+});
+test("PostgREST parenthesized, repeated OR clauses are validated rather than ignored",()=>{
+ const params=new URLSearchParams();
+ params.set("select","id,parent:series!inner(id)");
+ params.set("id","in.(v0,v1,v2)");
+ params.append("or","(variant_type.is.null,variant_type.neq.provisional)");
+ params.append("or","(released.eq.true,and(released.eq.false,release_date.lte.2026-10-09),and(released.is.null,release_parent_true.not.is.null))");
+ const r=fixtureResponse("/rest/v1/variants?"+params,makeFixture());
+ assert.equal(r.status,200);assert.equal(r.body.length,3);
+ params.append("or","(unsupported.eq.true)");
+ assert.equal(fixtureResponse("/rest/v1/variants?"+params,makeFixture()).status,400);
+});
+test("local independent RSC probe runs after CPU captures, not inside sampled work",()=>{
+ assert.match(script,/async function probeLocalRsc/);
+ assert.match(script,/profiled:false,after_cold_and_repeat:true/);
+ assert.match(script,/local_rsc_median_bytes/);
 });

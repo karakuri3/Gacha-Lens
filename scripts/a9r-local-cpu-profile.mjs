@@ -216,6 +216,15 @@ export function mapProfile(profile,mapIndex){
  const groups=[...grouped.values()].sort((a,b)=>b.self_sampled_ms-a.self_sampled_ms);
  return {sample_count:samples.length,frames:mappedFrames,hotspots:groups.slice(0,50),unmapped_self_samples:groups.filter(g=>!g.source).reduce((sum,g)=>sum+g.self_samples,0)};
 }
+export function verifiedHotspot(mapped){
+ const entry=mapped.hotspots.find(x=>x.generated_name==="D"&&x.script_url.endsWith("/series-BciKrsTX.js")&&x.generated_line===0&&x.generated_column===7229);
+ assert.ok(entry,"KNOWN_MINIFIED_D_FRAME_ABSENT");
+ assert.equal(entry.source,"lib/domain/listing-classifier.js","KNOWN_D_ORIGINAL_SOURCE_MISMATCH");
+ assert.equal(entry.original_line,294,"KNOWN_D_ORIGINAL_LINE_MISMATCH");
+ assert.equal(entry.verified_declaration,"normalize","KNOWN_D_FUNCTION_MISMATCH");
+ assert.ok(entry.self_samples>0,"KNOWN_D_SELF_SAMPLES_MISSING");
+ return {script_url:entry.script_url,generated_line:0,generated_column:7229,original_source:entry.source,original_line:entry.original_line,function:entry.verified_declaration,self_samples:entry.self_samples,total_samples:entry.total_samples,self_sampled_ms:entry.self_sampled_ms,total_sampled_ms:entry.total_sampled_ms,node_ids:entry.node_ids};
+}
 export function sourceMapIndex(root="dist/server"){
  const files=listMaps(root),mapIndex=new Map(),inventory=[];
  for(const file of files){const parsed=JSON.parse(fs.readFileSync(file,"utf8"));const base=path.basename(file).replace(/\.map$/,"");if(!mapIndex.has(base))mapIndex.set(base,[]);mapIndex.get(base).push({path:file,map:parsed});inventory.push({script:base,sources:parsed.sources?.length||0});}
@@ -232,10 +241,11 @@ async function capture(client,label,iteration){
  finally{var wall=performance.now()-start;}
  const p=(await client.send("Profiler.stop")).profile;
  const detail=analyze(p),mapped=mapProfile(p,sourceMapIndex().mapIndex);
+ const knownHotspot=label==="phase1"?null:verifiedHotspot(mapped);
  const accounting=await (await fetch("http://"+HOST+":"+FIXTURE_PORT+"/__fixture__/accounting")).json();
  const html=new TextDecoder().decode(raw),watchCards=(html.match(/<span class="tag tag--signal">出品中<\/span>/g)||[]).length;
  const truth={sold_ranked_zero:/現在、成約価格として確認できるデータがありません/.test(html),active_distinct_from_sold:/出品中の価格は順位に使いません/.test(html),watch_cards_html:watchCards,watch_max_30:watchCards<=30,fabricated_rank:/(?:class="rank-medal|class="card rank-row")/.test(html)};
- const data={phase:label,iteration,http_status:res.status,html_bytes:raw.byteLength,bytes:raw.byteLength,wall_ms:wall,source_map_inventory:sourceMapIndex().inventory,...detail,source_attribution:{sample_count:mapped.sample_count,unmapped_self_samples:mapped.unmapped_self_samples,hotspots:mapped.hotspots},fixture_accounting:accounting,ui_truth:truth};
+ const data={phase:label,iteration,http_status:res.status,html_bytes:raw.byteLength,bytes:raw.byteLength,wall_ms:wall,source_map_inventory:sourceMapIndex().inventory,...detail,source_attribution:{sample_count:mapped.sample_count,unmapped_self_samples:mapped.unmapped_self_samples,verified_hotspot:knownHotspot,hotspots:mapped.hotspots},fixture_accounting:accounting,ui_truth:truth};
  const filename=path.join(OUT,label+"-"+iteration);
  fs.writeFileSync(filename+".cpuprofile",JSON.stringify(p));
  fs.writeFileSync(filename+".mapped-callframes.json",JSON.stringify({sample_count:mapped.sample_count,frames:mapped.frames,hotspots:mapped.hotspots},null,2));
@@ -254,6 +264,18 @@ async function capture(client,label,iteration){
  }
  return data;
 }
+export async function probeLocalRsc(iteration){
+ const response=await fetch("http://"+HOST+":"+PORT+"/ranking?_rsc=a9r-local-profiling",{
+  headers:{"rsc":"1","accept":"text/x-component","cache-control":"no-cache"},
+  signal:AbortSignal.timeout(20000)});
+ const bytes=(await response.arrayBuffer()).byteLength;
+ const contentType=(response.headers.get("content-type")||"").split(";")[0].toLowerCase();
+ const result={iteration,local_only:true,profiled:false,after_cold_and_repeat:true,
+  http_status:response.status,content_type:contentType,bytes,
+  rsc_verified:response.status===200&&contentType==="text/x-component"};
+ fs.writeFileSync(path.join(OUT,"rsc-"+iteration+".json"),JSON.stringify(result,null,2));
+ return result;
+}
 export async function run(){
  fs.mkdirSync(OUT,{recursive:true});
  const iteration=Number(process.argv.find(x=>x.startsWith("--iteration="))?.split("=")[1]||1);
@@ -266,21 +288,28 @@ export async function run(){
   } else assert.ok(fs.existsSync(path.join(OUT,"phase1-pass.json")),"PHASE1_NOT_PROVEN");
   const cold=await capture(client,"cold",iteration);
   const repeat=await capture(client,"repeat",iteration);
+  const rsc=await probeLocalRsc(iteration);
   console.log(JSON.stringify({iteration,cold_samples:cold.sample_count,repeat_samples:repeat.sample_count,
-   cold_bytes:cold.bytes,repeat_bytes:repeat.bytes}));
+   cold_bytes:cold.bytes,repeat_bytes:repeat.bytes,rsc_bytes:rsc.rsc_verified?rsc.bytes:null}));
  } finally {client.close();}
 }
 export function summarize(){
  const sort=x=>[...x].sort((a,b)=>a-b);
- const median=x=>sort(x)[1];let cold=[],repeat=[];
+ const median=x=>sort(x)[1];let cold=[],repeat=[],rsc=[];
  for(let i=1;i<=3;i++){
   cold.push(JSON.parse(fs.readFileSync(path.join(OUT,"cold-"+i+".json"))));
   repeat.push(JSON.parse(fs.readFileSync(path.join(OUT,"repeat-"+i+".json"))));
+  rsc.push(JSON.parse(fs.readFileSync(path.join(OUT,"rsc-"+i+".json"))));
  }
  const report={status:"PASS",fixture:SHAPE,runs:3,cache_cold_definition:"new local workerd process and isolated --persist-to path; build-time caches still possible",cold_median_sampled_cpu_ms:median(cold.map(x=>x.sampled_cpu_ms)),
   repeat_median_sampled_cpu_ms:median(repeat.map(x=>x.sampled_cpu_ms)),
   cold_median_bytes:median(cold.map(x=>x.bytes)),repeat_median_bytes:median(repeat.map(x=>x.bytes)),
   cold_median_samples:median(cold.map(x=>x.sample_count)),repeat_median_samples:median(repeat.map(x=>x.sample_count)),
+  cold_median_hotspot_self_ms:median(cold.map(x=>x.source_attribution.verified_hotspot.self_sampled_ms)),
+  cold_median_hotspot_total_ms:median(cold.map(x=>x.source_attribution.verified_hotspot.total_sampled_ms)),
+  repeat_median_hotspot_self_ms:median(repeat.map(x=>x.source_attribution.verified_hotspot.self_sampled_ms)),
+  repeat_median_hotspot_total_ms:median(repeat.map(x=>x.source_attribution.verified_hotspot.total_sampled_ms)),
+  local_rsc_median_bytes:rsc.every(x=>x.rsc_verified)?median(rsc.map(x=>x.bytes)):null,local_rsc_probe:rsc,
   cold,repeat,warning:"Not evidence of passing Cloudflare Free 10ms budget"};
  fs.writeFileSync(path.join(OUT,"profile-summary.json"),JSON.stringify(report,null,2));
  console.log(JSON.stringify({cold_median_sampled_cpu_ms:report.cold_median_sampled_cpu_ms,repeat_median_sampled_cpu_ms:report.repeat_median_sampled_cpu_ms}));
