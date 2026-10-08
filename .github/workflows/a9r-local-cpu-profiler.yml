@@ -1,0 +1,173 @@
+name: A9R local workerd CPU profiler feasibility
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/a9r-local-cpu-profiler.yml"
+      - "scripts/a9r-local-cpu-profile.mjs"
+      - "tests/a9r-local-cpu-profile.test.mjs"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a9r-local-cpu-profiler-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  local-profiler:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TOOLCHAIN_DIR: .github/vinext-toolchain
+      PROFILE_OUT_DIR: cpu-profile-evidence
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:8788
+      SUPABASE_URL: http://127.0.0.1:8788
+      SUPABASE_SERVICE_ROLE_KEY: synthetic-ci-not-a-real-credential
+      GACHA_DATA_SOURCE: supabase
+      WORKERS_CI_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Set up Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Focused profiler harness tests
+        run: node --test tests/a9r-local-cpu-profile.test.mjs
+      - name: Install original app and pinned CI toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm ci --ignore-scripts --prefix "$TOOLCHAIN_DIR"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const app=JSON.parse(fs.readFileSync('package.json','utf8'));
+          const tool=JSON.parse(fs.readFileSync('.github/vinext-toolchain/package.json','utf8'));
+          if(app.dependencies.react!==app.dependencies['react-dom']||app.dependencies.react!==tool.dependencies['react-server-dom-webpack']) throw Error('React/RSC mismatch');
+          if(tool.dependencies.wrangler!=='4.131.1'||tool.dependencies.vinext!=='1.0.0-beta.8') throw Error('Toolchain drift');
+          for(const [name,version] of Object.entries(tool.dependencies)) {
+            const actual=JSON.parse(fs.readFileSync('.github/vinext-toolchain/node_modules/'+name+'/package.json','utf8')).version;
+            if(actual!==version)throw Error('Locked toolchain mismatch: '+name);
+          }
+          console.log('PINNED_TOOLCHAIN_PASS',process.version);
+          NODE
+      - name: Link toolchain and build local-only Vinext Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum package-lock.json > /tmp/root-package-lock.sha
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const app=JSON.parse(fs.readFileSync('package.json','utf8'));
+          const tool=JSON.parse(fs.readFileSync('.github/vinext-toolchain/package.json','utf8'));
+          app.devDependencies={...app.devDependencies,...tool.dependencies};
+          fs.writeFileSync('package.json',JSON.stringify(app,null,2)+'\n');
+          NODE
+          link_pkg() {
+            local name="$1"
+            mkdir -p "$(dirname "node_modules/$name")"
+            rm -rf "node_modules/$name"
+            ln -s "$PWD/$TOOLCHAIN_DIR/node_modules/$name" "node_modules/$name"
+          }
+          for pkg in vinext @vinext/cloudflare react-server-dom-webpack vite @vitejs/plugin-react @vitejs/plugin-rsc @cloudflare/vite-plugin wrangler; do
+            link_pkg "$pkg"
+          done
+          "$TOOLCHAIN_DIR/node_modules/.bin/vinext" check
+          "$TOOLCHAIN_DIR/node_modules/.bin/vinext" init --skip-check --platform=cloudflare --data-cache=kv --image-optimization=cloudflare-images > /tmp/a9r-vinext-init.log
+          if grep -Eq 'Installing dependencies:|Installing devDependencies:|Upgrading dependencies:' /tmp/a9r-vinext-init.log; then
+            echo 'Unexpected dependency resolution'; exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const file='wrangler.jsonc';
+          const cfg=JSON.parse(fs.readFileSync(file,'utf8'));
+          cfg.name='a9r-local-profiler-only';
+          cfg.workers_dev=false;cfg.preview_urls=false;
+          for(const kv of cfg.kv_namespaces??[]) if(kv.binding==='VINEXT_KV_CACHE'&&!kv.id)kv.id='00000000000000000000000000000000';
+          fs.writeFileSync(file,JSON.stringify(cfg,null,2)+'\n');
+          NODE
+          "$TOOLCHAIN_DIR/node_modules/.bin/vinext" build > /tmp/a9r-vinext-build.log
+          if grep -Fq 'Upgrading React for RSC compatibility' /tmp/a9r-vinext-build.log; then
+            echo 'Vinext attempted live dependency resolution'; exit 1
+          fi
+          sha256sum -c /tmp/root-package-lock.sha
+          git diff --exit-code -- package-lock.json
+          test -f dist/server/wrangler.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const file='dist/server/wrangler.json';
+          const cfg=JSON.parse(fs.readFileSync(file,'utf8'));
+          cfg.name='a9r-local-profiler-only';
+          cfg.workers_dev=false;cfg.preview_urls=false;
+          cfg.compatibility_date='2026-09-18';
+          cfg.vars={...(cfg.vars||{}),GACHA_DATA_SOURCE:'supabase',
+            NEXT_PUBLIC_SUPABASE_URL:'http://127.0.0.1:8788',
+            SUPABASE_URL:'http://127.0.0.1:8788',
+            SUPABASE_SERVICE_ROLE_KEY:'synthetic-ci-not-a-real-credential'};
+          fs.writeFileSync(file,JSON.stringify(cfg,null,2)+'\n');
+          NODE
+      - name: Prove local inspector and request-time CPU profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$PROFILE_OUT_DIR"
+          stage='inspector_option_check'
+          current_iteration=0
+          on_fail() {
+            code=$?
+            printf '{"status":"FAIL","stage":"%s","iteration":%s,"exit_code":%s}\n' "$stage" "$current_iteration" "$code" > "$PROFILE_OUT_DIR/first-blocker.json"
+            exit "$code"
+          }
+          trap on_fail ERR
+          wrangler="$TOOLCHAIN_DIR/node_modules/.bin/wrangler"
+          "$wrangler" --version | tee "$PROFILE_OUT_DIR/wrangler-version.txt"
+          "$wrangler" dev --help > "$PROFILE_OUT_DIR/wrangler-dev-help.txt"
+          grep -Fq -- '--inspector-port' "$PROFILE_OUT_DIR/wrangler-dev-help.txt"
+          grep -Fq -- '--local' "$PROFILE_OUT_DIR/wrangler-dev-help.txt"
+          stage='local_fixture_server'
+          node scripts/a9r-local-cpu-profile.mjs serve > /tmp/a9r-fixture.log 2>&1 &
+          fixture_pid=$!
+          worker_pid=''
+          cleanup() {
+            if [[ -n "$worker_pid" ]]; then kill "$worker_pid" 2>/dev/null || true; wait "$worker_pid" 2>/dev/null || true; fi
+            kill "$fixture_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for current_iteration in 1 2 3; do
+            stage="workerd_local_start_$current_iteration"
+            "$wrangler" dev --local --config dist/server/wrangler.json --ip 127.0.0.1 --port 8787 --inspector-port 9230 > "/tmp/a9r-workerd-$current_iteration.log" 2>&1 &
+            worker_pid=$!
+            ready=false
+            for n in $(seq 1 45); do
+              if curl -fsS --max-time 1 http://127.0.0.1:8787/api/runtime-diagnostics/release-source > /tmp/a9r-local-release.json 2>/dev/null; then
+                ready=true; break
+              fi
+              if ! kill -0 "$worker_pid" 2>/dev/null; then break; fi
+              sleep 1
+            done
+            [[ "$ready" == true ]] || { echo "Local workerd not ready"; tail -60 "/tmp/a9r-workerd-$current_iteration.log"; exit 1; }
+            stage="cdp_request_profile_$current_iteration"
+            node scripts/a9r-local-cpu-profile.mjs profile "--iteration=$current_iteration"
+            kill "$worker_pid" 2>/dev/null || true
+            wait "$worker_pid" 2>/dev/null || true
+            worker_pid=''
+            echo "LOCAL_WORKER_PROFILE_ITERATION_$current_iteration_PASS"
+          done
+          stage='three_run_summary'
+          node scripts/a9r-local-cpu-profile.mjs summarize
+          echo "PASS" > "$PROFILE_OUT_DIR/controller-status.txt"
+      - name: Preserve sanitized profiling evidence on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a9r-local-cpu-profile-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          path: cpu-profile-evidence/
+          if-no-files-found: warn
+          retention-days: 14
