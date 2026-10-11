@@ -93,6 +93,8 @@ test("approved target binding fails closed if any target is no longer review-saf
     (value) => { value.catalog.variants[0].variant_type = "provisional"; },
     (value) => { value.catalog.variants[0].source_type = "other"; },
     (value) => { value.catalog.series[0].official_url = ""; },
+    (value) => { value.plan.selected.find((entry) => entry.variantId === "variant-1").released = false; },
+    (value) => { value.plan.selected.find((entry) => entry.variantId === "variant-1").priority = 2; },
     (value) => { value.plan.selected.find((entry) => entry.variantId === "variant-1").eligibleListingCount = 1; },
     (value) => { value.plan.selected.find((entry) => entry.variantId === "variant-1").coverageState = "near_listing_guide"; },
   ]) {
