@@ -99,8 +99,8 @@ test("known historical series-D call frame must map to verified classifier norma
   source:"lib/domain/listing-classifier.js",original_line:294,verified_declaration:"normalize",
   self_samples:5,total_samples:8,self_sampled_ms:5,total_sampled_ms:8,node_ids:[1,2]};
  assert.equal(verifiedHotspot({hotspots:[known]}).function,"normalize");
- assert.throws(()=>verifiedHotspot({hotspots:[{...known,source:"lib/series.js"}]}),/KNOWN_D_ORIGINAL_SOURCE_MISMATCH/);
- assert.throws(()=>verifiedHotspot({hotspots:[]}),/KNOWN_MINIFIED_D_FRAME_ABSENT/);
+ assert.throws(()=>verifiedHotspot({hotspots:[{...known,source:"lib/series.js"}]}),/SOURCE_MAP_NORMALIZE_FRAME_ABSENT/);
+ assert.throws(()=>verifiedHotspot({hotspots:[]}),/SOURCE_MAP_NORMALIZE_FRAME_ABSENT/);
 });
 test("PostgREST parenthesized, repeated OR clauses are validated rather than ignored",()=>{
  const params=new URLSearchParams();
