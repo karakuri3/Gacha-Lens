@@ -1,0 +1,165 @@
+name: C0-C final local fixture readiness Flight feasibility
+on:
+  pull_request:
+    paths:
+      - 'experiments/a9r-c0/**'
+      - 'tests/a9r-c0-*.test.mjs'
+      - '.github/workflows/a9r-c0-local-feasibility.yml'
+permissions:
+  contents: read
+concurrency:
+  group: c0-local-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+jobs:
+  local-only:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      C0_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+      C0_NEXT_ORIGIN: http://127.0.0.1:3011
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Exact head and local-only code safety
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$C0_SOURCE_SHA"
+          if grep -RE 'https?://(gachalens\.com|gacha-lens\.senpingxingzuo\.workers\.dev|gacha-lens-public\.senpingxingzuo\.workers\.dev)' experiments/a9r-c0 tests/a9r-c0-*.test.mjs; then
+            echo 'Non-local Production HTTP destination present in C0 files' >&2; exit 1
+          fi
+      - name: Install existing locked root and workerd toolchains
+        id: install
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm ci --ignore-scripts --prefix .github/vinext-toolchain
+      - name: Frozen C0 contracts and 90d/30d/JST tests
+        id: focused
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/a9r-c0-*.test.mjs
+      - name: Make clean separate checkout and explicitly hashed fixture overlay
+        id: overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p experiments/a9r-c0/artifacts
+          echo "C0_RENDER_ROOT=$RUNNER_TEMP/c0-renderer" >> "$GITHUB_ENV"
+          git worktree add --detach "$RUNNER_TEMP/c0-renderer" "$C0_SOURCE_SHA"
+          C0_RENDER_ROOT="$RUNNER_TEMP/c0-renderer" node experiments/a9r-c0/overlay.mjs
+          # Keep Next/Turbopack dependencies physically inside the disposable project root.
+          cp -a "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/c0-renderer/node_modules"
+          test "$(realpath "$RUNNER_TEMP/c0-renderer/node_modules/next/package.json")" = "$RUNNER_TEMP/c0-renderer/node_modules/next/package.json"
+          test "$(git rev-parse HEAD)" = "$C0_SOURCE_SHA"
+          git diff --exit-code -- worker/index.js workers/public app components lib
+      - name: Start isolated Next with bounded HTTP/TCP/process diagnostics
+        id: next
+        env:
+          WORKERS_CI_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node experiments/a9r-c0/readiness.mjs
+      - name: Identify existing Chromium browser (no download or extra packages)
+        id: chrome
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="$(command -v google-chrome-stable || command -v google-chrome || command -v chromium || true)"
+          test -n "$bin"
+          echo "C0_CHROME_BIN=$bin" >> "$GITHUB_ENV"
+          "$bin" --version
+      - name: Browser-grounded Next Link, prefetch, history and two genuine Flight states
+        id: browser
+        if: steps.chrome.outcome == 'success' && steps.next.outcome == 'success'
+        continue-on-error: true
+        run: node experiments/a9r-c0/browser-capture.mjs
+      - name: Capture fixture-proven Next HTML and exact browser Flight bytes
+        id: capture
+        if: steps.browser.outcome == 'success'
+        continue-on-error: true
+        run: node experiments/a9r-c0/capture.mjs
+      - name: Measure real local dual workerd gate after genuine provenance
+        id: workerd
+        if: steps.capture.outcome == 'success'
+        continue-on-error: true
+        run: node experiments/a9r-c0/probe-workerd.mjs
+      - name: Report immutable 52 A9R assertion coverage without external A9R
+        id: a9r_coverage
+        if: always()
+        run: node experiments/a9r-c0/coverage.mjs
+      - name: Record sanitized local failure disposition
+        if: always()
+        shell: bash
+        env:
+          BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+          CAPTURE_OUTCOME: ${{ steps.capture.outcome }}
+          WORKERD_OUTCOME: ${{ steps.workerd.outcome }}
+          OVERLAY_OUTCOME: ${{ steps.overlay.outcome }}
+          NEXT_OUTCOME: ${{ steps.next.outcome }}
+        run: |
+          set -euo pipefail
+          mkdir -p experiments/a9r-c0/artifacts
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const dir='experiments/a9r-c0/artifacts';
+          const read=name=>{try{return JSON.parse(fs.readFileSync(dir+'/'+name,'utf8'))}catch{return null}};
+          const r=read('readiness-report.json');
+          const classification=r?.first_fatal?.category||r?.classification||'STEP_DID_NOT_PRODUCE_DIAGNOSTICS';
+          const result={schema:'gacha.c0.disposition.v3',classification,
+            overlay:process.env.OVERLAY_OUTCOME,next:process.env.NEXT_OUTCOME,
+            browser:process.env.BROWSER_OUTCOME,capture:process.env.CAPTURE_OUTCOME,
+            workerd:process.env.WORKERD_OUTCOME,
+            billable_cloudflare_cpu:'NOT_PROVEN'};
+          fs.writeFileSync(dir+'/disposition.json',JSON.stringify(result,null,2)+'\n');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            'C0-C first cause: '+classification+'; overlay='+result.overlay+
+            '; next='+result.next+'; browser='+result.browser+'; capture='+result.capture+
+            '; workerd='+result.workerd+'\n');
+          NODE
+      - name: Upload evidence even on failed browser or Worker gate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c0-c-local-${{ github.event.pull_request.head.sha }}
+          path: experiments/a9r-c0/artifacts/*.json
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Enforce required gate outcomes after artifact upload
+        if: always()
+        shell: bash
+        env:
+          SOURCE: ${{ steps.source.outcome }}
+          INSTALL: ${{ steps.install.outcome }}
+          FOCUSED: ${{ steps.focused.outcome }}
+          OVERLAY: ${{ steps.overlay.outcome }}
+          NEXT: ${{ steps.next.outcome }}
+          CHROME: ${{ steps.chrome.outcome }}
+          BROWSER: ${{ steps.browser.outcome }}
+          CAPTURE: ${{ steps.capture.outcome }}
+          WORKERD: ${{ steps.workerd.outcome }}
+          COVERAGE: ${{ steps.a9r_coverage.outcome }}
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff --exit-code -- worker/index.js workers/public app components lib
+          for gate in "$SOURCE" "$INSTALL" "$FOCUSED" "$OVERLAY" "$NEXT" "$CHROME" "$BROWSER" "$CAPTURE" "$WORKERD" "$COVERAGE"; do
+            if [[ "$gate" != success ]]; then
+              echo "C0-C local required evidence gate incomplete: $gate (NO production authorization)" >&2
+              exit 1
+            fi
+          done
+          echo "C0-C local diagnostic PASS only. Cloudflare Free billable CPU remains NOT_PROVEN." >> "$GITHUB_STEP_SUMMARY"
