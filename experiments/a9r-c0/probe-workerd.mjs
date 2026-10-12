@@ -30,13 +30,14 @@ try {
   else {
     report.startup_ms=performance.now()-began;
     const manifest=JSON.parse(fs.readFileSync(out+'/__c0_private/manifest','utf8'));
+    const legit=manifest.rsc_requests||[];
     const tasks=[
-      ['cold_html','/ranking',{'accept':'text/html'}],
-      ['repeat_html','/ranking',{'accept':'text/html'}],
-      ['nocache_html','/ranking',{'accept':'text/html','cache-control':'no-cache'}],
-      ['rsc','/ranking?_rsc=c0a',{rsc:'1','next-router-state-tree':manifest.rsc_request.state,accept:'text/x-component'}],
-      ['rsc_wrong_state','/ranking?_rsc=c0a',{rsc:'1','next-router-state-tree':'wrong',accept:'text/x-component'}],
-      ['legacy_308','/ranking?tab=upcoming&scope=series',{'accept':'text/html'}],
+      ['cold_html','/ranking',{accept:'text/html'}],
+      ['repeat_html','/ranking',{accept:'text/html'}],
+      ['nocache_html','/ranking',{accept:'text/html','cache-control':'no-cache'}],
+      ...legit.map((x,i)=>['rsc_'+i,x.request_url,{...x.headers,accept:'text/x-component'}]),
+      ...(legit.length?[['rsc_wrong_state',legit[0].request_url,{...legit[0].headers,'next-router-state-tree':'unrecognized-router-state'}]]:[]),
+      ['legacy_308','/ranking?tab=upcoming&scope=series',{accept:'text/html'}],
       ['bypass_attempt','/__c0_private/html',{}],
     ];
     for(const [label,url,headers] of tasks)for(let repeat=1;repeat<=3;repeat++){
@@ -48,11 +49,19 @@ try {
         report.requests.push({label,repeat,http_status:response.status,bytes:body.length,content_type:(response.headers.get('content-type')||'').split(';')[0],location:response.headers.get('location'),wall_ms:Number((performance.now()-start).toFixed(3)),server_timing:response.headers.get('server-timing'),failure_class:reason});
       }catch{report.requests.push({label,repeat,error:'localhost_fetch_failed'})}
     }
-    // Fixture provenance is known to be unproven; 503 is required, never 200.
-    const docs=report.requests.filter(x=>['cold_html','repeat_html','nocache_html','rsc'].includes(x.label));
-    report.fail_closed=docs.length===12&&docs.every(x=>x.http_status===503&&x.failure_class==='fixture_provenance_unproven');
-    report.asset_bypass_blocked=report.requests.filter(x=>x.label==='bypass_attempt').every(x=>x.http_status===404);
-    report.status=report.fail_closed&&report.asset_bypass_blocked?'SIMULATED_GUARD_PASS_NOT_PROVEN':'FAIL';
+    const positives=report.requests.filter(x=>['cold_html','repeat_html','nocache_html'].includes(x.label)||x.label.startsWith('rsc_')&&x.label!=='rsc_wrong_state');
+    const negatives=report.requests.filter(x=>['rsc_wrong_state','legacy_308','bypass_attempt'].includes(x.label));
+    const good=positives.length===(3+legit.length)*3&&positives.every(x=>x.http_status===200&&x.bytes>0&&
+       (x.label.startsWith('rsc_')?x.content_type==='text/x-component':x.content_type==='text/html'));
+    const bad=negatives.length===9&&negatives.every(x=>x.label==='rsc_wrong_state'?x.http_status===503:
+      x.label==='legacy_308'?x.http_status===308&&x.location?.endsWith('/ranking/upcoming/series'):x.http_status===404);
+    report.status=good&&bad?'PASS':'FAIL';
+    report.startup_import_self_sampled_cpu_ms=null;
+    report.public_self_sampled_cpu_ms=null;
+    report.app_self_sampled_cpu_ms=null;
+    report.idle_cpu_ms=null;
+    report.cpu_attribution='server-timing and wall are durations, not sampled/billable CPU';
+
   }
 } finally {
   child.kill('SIGTERM');await pause(250);
@@ -60,3 +69,5 @@ try {
   fs.writeFileSync(out+'/workerd-report.json',JSON.stringify(report,null,2)+'\n');
   console.log(JSON.stringify(report));
 }
+
+if(report.status!=='PASS')process.exitCode=2;

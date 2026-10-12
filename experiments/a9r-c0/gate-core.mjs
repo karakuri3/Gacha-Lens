@@ -25,17 +25,27 @@ export function decide({request,manifest,appSha,trustedRevision,nowMs}) {
   if (manifest.metrics?.sold_count!==0||manifest.metrics?.ranked_count!==0||manifest.metrics?.watch_count>30||manifest.metrics?.sold_and_active_separated!==true) return {status:503,reason:'ranking_truth_mismatch'};
   const isRsc=request.headers.get('rsc')==='1'||request.headers.has('next-router-state-tree')||request.headers.has('next-router-prefetch')||url.searchParams.has('_rsc');
   if (!isRsc&&url.search!=='') return {status:503,reason:'unsupported_query'};
-  const asset=isRsc?manifest.assets?.rsc:manifest.assets?.html;
-  if (!asset||!HASH.test(asset.sha256||'')||!Number.isSafeInteger(asset.bytes)||asset.bytes<=0||!/^\/__c0_private\/[a-z0-9-]+$/.test(asset.path||'')) return {status:503,reason:'invalid_asset'};
+  let asset=manifest.assets?.html;
   if (isRsc) {
-    const requestInfo=manifest.rsc_request||{};
-    if (request.headers.get('rsc')!=='1'||url.searchParams.size!==1||url.searchParams.get('_rsc')!==requestInfo.query||
-      (request.headers.get('next-router-state-tree')||'')!==requestInfo.state||
-      (request.headers.get('next-router-prefetch')||'')!==requestInfo.prefetch||
-      (request.headers.get('next-router-segment-prefetch')||'')!==requestInfo.segment||
-      (request.headers.get('next-url')||'')!==requestInfo.next_url) return {status:503,reason:'unsupported_rsc_router_state'};
-    if (asset.content_type!=='text/x-component') return {status:503,reason:'rsc_type_mismatch'};
-  } else if (asset.content_type!=='text/html') return {status:503,reason:'html_type_mismatch'};
+    const names=['rsc','next-router-state-tree','next-router-prefetch','next-router-segment-prefetch','next-url'];
+    if (request.headers.get('rsc')!=='1'||!url.searchParams.has('_rsc'))return {status:503,reason:'unsupported_rsc_router_state'};
+    if(Array.isArray(manifest.rsc_requests)) {
+      const matches=manifest.rsc_requests.filter(x=>x.request_url===url.pathname+url.search&&names.every(k=>(request.headers.get(k)||'')===(x.headers?.[k]||'')));
+      if(matches.length!==1)return {status:503,reason:'unsupported_rsc_router_state'};
+      asset=matches[0].asset;
+    } else {
+      const r=manifest.rsc_request||{};
+      if(url.searchParams.size!==1||url.searchParams.get('_rsc')!==r.query||
+        (request.headers.get('next-router-state-tree')||'')!==r.state||
+        (request.headers.get('next-router-prefetch')||'')!==r.prefetch||
+        (request.headers.get('next-router-segment-prefetch')||'')!==r.segment||
+        (request.headers.get('next-url')||'')!==r.next_url)return {status:503,reason:'unsupported_rsc_router_state'};
+      asset=manifest.assets?.rsc;
+    }
+  }
+  if (!asset||!HASH.test(asset.sha256||'')||!Number.isSafeInteger(asset.bytes)||asset.bytes<=0||!/^\/__c0_private\/[a-z0-9-]+$/.test(asset.path||'')) return {status:503,reason:'invalid_asset'};
+  if (isRsc&&asset.content_type!=='text/x-component')return {status:503,reason:'rsc_type_mismatch'};
+  if (!isRsc&&asset.content_type!=='text/html')return {status:503,reason:'html_type_mismatch'};
   return {status:200,kind:isRsc?'rsc':'html',asset};
 }
 export async function sha256Hex(buffer) {
