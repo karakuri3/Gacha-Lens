@@ -6,11 +6,11 @@ export function decide({request,manifest,appSha,trustedRevision,nowMs}) {
   const url=new URL(request.url);
   if (!['GET','HEAD'].includes(request.method)) return {status:405,reason:'method_not_allowed'};
   if (url.pathname!==RANKING_PATH) return {status:404,reason:'not_app_owned_ranking'};
-  if (url.search==='?tab=upcoming&scope=series') return {status:308,location:'/ranking/upcoming/series'};
-  if (url.searchParams.has('tab') || url.searchParams.has('scope')) return {status:308,location:'/ranking'};
   const expected=request.headers.get('x-gacha-expected-app-source-sha');
   if (!SHA.test(appSha||'') || !SHA.test(expected||'')) return {status:503,reason:'identity_missing'};
   if (expected!==appSha) return {status:409,reason:'mixed_source_sha'};
+  if (url.search==='?tab=upcoming&scope=series') return {status:308,location:'/ranking/upcoming/series'};
+  if (url.searchParams.has('tab') || url.searchParams.has('scope')) return {status:308,location:'/ranking'};
   if (request.headers.has('cookie')||request.headers.has('authorization')) return {status:503,reason:'personal_request'};
   if (!manifest) return {status:503,reason:'snapshot_missing'};
   if (!SHA.test(manifest.source_sha||'') || manifest.source_sha!==appSha) return {status:409,reason:'snapshot_source_sha_mismatch'};
