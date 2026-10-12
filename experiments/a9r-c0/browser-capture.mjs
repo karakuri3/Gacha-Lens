@@ -21,7 +21,7 @@ function send(method,params={},sid=session){return new Promise((resolve,reject)=
 function onMsg(data){
  const msg=JSON.parse(String(data));
  if(msg.id&&pending.has(msg.id)){const p=pending.get(msg.id);pending.delete(msg.id);if(msg.error)p.reject(Error('cdp_command_failed_'+String(msg.error.code)));else p.resolve(msg.result);return}
- if(msg.method==='Runtime.exceptionThrown'){const d=msg.params?.exceptionDetails||{};report.exceptions.push({category:'browser_exception',text_class:String(d.text||'').slice(0,100)});return}
+ if(msg.method==='Runtime.exceptionThrown'){const d=msg.params?.exceptionDetails||{};report.exceptions.push({category:'browser_exception',text_class:/SyntaxError/i.test(d.text||'')?'SYNTAX':/TypeError/i.test(d.text||'')?'TYPE':'UNKNOWN'});return}
  if(msg.method==='Network.requestWillBeSent'){
   const d=msg.params||{},req=d.request||{},u=new URL(req.url);
   if(u.origin!==origin||u.pathname!=='/ranking')return;

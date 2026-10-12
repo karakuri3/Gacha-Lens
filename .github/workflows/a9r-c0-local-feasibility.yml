@@ -1,4 +1,4 @@
-name: C0-B genuine-fixture local Flight feasibility
+name: C0-C final local fixture readiness Flight feasibility
 on:
   pull_request:
     paths:
@@ -59,22 +59,19 @@ jobs:
           echo "C0_RENDER_ROOT=$RUNNER_TEMP/c0-renderer" >> "$GITHUB_ENV"
           git worktree add --detach "$RUNNER_TEMP/c0-renderer" "$C0_SOURCE_SHA"
           C0_RENDER_ROOT="$RUNNER_TEMP/c0-renderer" node experiments/a9r-c0/overlay.mjs
-          ln -s "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/c0-renderer/node_modules"
+          # Keep Next/Turbopack dependencies physically inside the disposable project root.
+          cp -a "$GITHUB_WORKSPACE/node_modules" "$RUNNER_TEMP/c0-renderer/node_modules"
+          test "$(realpath "$RUNNER_TEMP/c0-renderer/node_modules/next/package.json")" = "$RUNNER_TEMP/c0-renderer/node_modules/next/package.json"
           test "$(git rev-parse HEAD)" = "$C0_SOURCE_SHA"
           git diff --exit-code -- worker/index.js workers/public app components lib
-      - name: Start genuine Next renderer from disposable overlay only
+      - name: Start isolated Next with bounded HTTP/TCP/process diagnostics
         id: next
+        env:
+          WORKERS_CI_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: |
           set -euo pipefail
-          (cd "$C0_RENDER_ROOT" && GACHA_DATA_SOURCE=sample node_modules/.bin/next dev --hostname 127.0.0.1 --port 3011) > "$RUNNER_TEMP/c0-next.log" 2>&1 &
-          echo "$!" > "$RUNNER_TEMP/c0-next.pid"
-          ready=false
-          for i in $(seq 1 80); do
-            if curl --silent --fail --max-time 3 http://127.0.0.1:3011/ranking > /dev/null; then ready=true; break; fi
-            sleep 2
-          done
-          if [[ "$ready" != true ]]; then echo 'Local actual Next renderer failed to start' >&2; exit 2; fi
+          node experiments/a9r-c0/readiness.mjs
       - name: Identify existing Chromium browser (no download or extra packages)
         id: chrome
         continue-on-error: true
@@ -104,7 +101,7 @@ jobs:
         id: a9r_coverage
         if: always()
         run: node experiments/a9r-c0/coverage.mjs
-      - name: Record sanitized local failure category and disposition
+      - name: Record sanitized local failure disposition
         if: always()
         shell: bash
         env:
@@ -114,27 +111,31 @@ jobs:
           OVERLAY_OUTCOME: ${{ steps.overlay.outcome }}
           NEXT_OUTCOME: ${{ steps.next.outcome }}
         run: |
+          set -euo pipefail
           mkdir -p experiments/a9r-c0/artifacts
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
-          const path=process.env.RUNNER_TEMP+'/c0-next.log';
-          const text=fs.existsSync(path)?fs.readFileSync(path,'utf8'):'';
-          const lines=text.split('\n');
-          const categories=lines.filter(x=>/\b(?:Error|TypeError|ReferenceError|SyntaxError|AggregateError):/.test(x))
-            .slice(0,5).map(x=>({
-              category:(x.match(/\b(?:Error|TypeError|ReferenceError|SyntaxError|AggregateError):/)||['unclassified'])[0],
-              source:(x.match(/\b(?:app|components|lib|node_modules\/next)\/[A-Za-z0-9_./[\]-]+\.(?:js|jsx|ts|tsx):\d+(?::\d+)?/)||[null])[0]
-            }));
-          fs.writeFileSync('experiments/a9r-c0/artifacts/next-local-error-classification.json',JSON.stringify({local_only:true,categories},null,2)+'\n');
+          const dir='experiments/a9r-c0/artifacts';
+          const read=name=>{try{return JSON.parse(fs.readFileSync(dir+'/'+name,'utf8'))}catch{return null}};
+          const r=read('readiness-report.json');
+          const classification=r?.first_fatal?.category||r?.classification||'STEP_DID_NOT_PRODUCE_DIAGNOSTICS';
+          const result={schema:'gacha.c0.disposition.v3',classification,
+            overlay:process.env.OVERLAY_OUTCOME,next:process.env.NEXT_OUTCOME,
+            browser:process.env.BROWSER_OUTCOME,capture:process.env.CAPTURE_OUTCOME,
+            workerd:process.env.WORKERD_OUTCOME,
+            billable_cloudflare_cpu:'NOT_PROVEN'};
+          fs.writeFileSync(dir+'/disposition.json',JSON.stringify(result,null,2)+'\n');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            'C0-C first cause: '+classification+'; overlay='+result.overlay+
+            '; next='+result.next+'; browser='+result.browser+'; capture='+result.capture+
+            '; workerd='+result.workerd+'\n');
           NODE
-          printf '{"classification":"NOT_PROVEN_UNLESS_ALL_REQUIRED_GATES_PASS","overlay":"%s","next":"%s","browser":"%s","capture":"%s","workerd":"%s","billable_cloudflare_cpu":"NOT_PROVEN"}\n' "$OVERLAY_OUTCOME" "$NEXT_OUTCOME" "$BROWSER_OUTCOME" "$CAPTURE_OUTCOME" "$WORKERD_OUTCOME" > experiments/a9r-c0/artifacts/disposition.json
-          echo "C0-B local: overlay=$OVERLAY_OUTCOME browser=$BROWSER_OUTCOME capture=$CAPTURE_OUTCOME workerd=$WORKERD_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload evidence even on failed browser or Worker gate
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: c0-b-local-${{ github.event.pull_request.head.sha }}
-          path: experiments/a9r-c0/artifacts/
+          name: c0-c-local-${{ github.event.pull_request.head.sha }}
+          path: experiments/a9r-c0/artifacts/*.json
           retention-days: 7
           if-no-files-found: warn
       - name: Enforce required gate outcomes after artifact upload
@@ -157,8 +158,8 @@ jobs:
           git diff --exit-code -- worker/index.js workers/public app components lib
           for gate in "$SOURCE" "$INSTALL" "$FOCUSED" "$OVERLAY" "$NEXT" "$CHROME" "$BROWSER" "$CAPTURE" "$WORKERD" "$COVERAGE"; do
             if [[ "$gate" != success ]]; then
-              echo "C0-B local required evidence gate incomplete: $gate (NO production authorization)" >&2
+              echo "C0-C local required evidence gate incomplete: $gate (NO production authorization)" >&2
               exit 1
             fi
           done
-          echo "C0-B local diagnostic PASS only. Cloudflare Free billable CPU remains NOT_PROVEN." >> "$GITHUB_STEP_SUMMARY"
+          echo "C0-C local diagnostic PASS only. Cloudflare Free billable CPU remains NOT_PROVEN." >> "$GITHUB_STEP_SUMMARY"

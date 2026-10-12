@@ -12,8 +12,20 @@ const report={schema:'gacha.c0.capture.v2',immutable_git_source_sha:source,overl
 try{
  const overlay=JSON.parse(fs.readFileSync(path.join(out,'overlay-provenance.json'),'utf8'));
  const browser=JSON.parse(fs.readFileSync(path.join(out,'browser-report.json'),'utf8'));
+ const readiness=JSON.parse(fs.readFileSync(path.join(out,'readiness-report.json'),'utf8'));
  const fixture=makeFixture(),fingerprint=digest(JSON.stringify(fixture));
- if(overlay.original_git_commit!==source||overlay.fixture_sha256!==fingerprint||overlay.overlay_is_modified_worktree!==true||browser.error||browser.direct_document?.watch_cards!==30||browser.transitions.length!==2)throw Error('renderer_browser_fixture_provenance_not_established');
+ if(overlay.immutable_git_commit!==source||overlay.fixture_sha256!==fingerprint||
+    overlay.overlay_is_modified_worktree!==true||
+    overlay.modified_paths?.length!==2||
+    !overlay.modified_paths.includes('lib/data/official-input.js')||
+    !overlay.modified_paths.includes('lib/data/mock-gacha-records.js')||
+    overlay.source_path_contract?.official_has_input!==false||
+    !overlay.files?.['lib/data/mock-gacha-records.js']?.overlay_sha256||
+    !overlay.files?.['lib/data/official-input.js']?.overlay_sha256||
+    readiness.source_identity?.next_config_sha!==source||
+    readiness.classification!=='HTTP_200_RENDERER_REACHABLE'||
+    browser.error||browser.direct_document?.watch_cards!==30||browser.transitions.length!==2)
+    throw Error('renderer_browser_fixture_provenance_not_established');
  const res=await fetch(origin+'/ranking',{headers:{accept:'text/html','cache-control':'no-cache'},redirect:'manual',signal:AbortSignal.timeout(20000)});
  const bytes=Buffer.from(await res.arrayBuffer()),type=res.headers.get('content-type')||'';
  const html=bytes.toString('utf8');
@@ -37,7 +49,7 @@ try{
  if(now>=evidenceExpiry)throw Error('fixture_evidence_expired');
  const deadline=now+300000;
  const metrics={series_count:123,variant_count:237,listing_count:241,active_count:66,sold_count:0,ranked_count:0,watch_count:30,sold_and_active_separated:true};
- const manifest={schema:'gacha.c0.local.v1',source_sha:source,data_revision:REVISION,complete:true,expected_routes:['/ranking','/ranking/series','/ranking/upcoming','/ranking/upcoming/series'],prototype_routes:['/ranking'],generated_at_ms:now,fresh_until_ms:Math.min(nextMidnight,evidenceExpiry,deadline),next_jst_midnight_ms:nextMidnight,next_evidence_expiry_ms:evidenceExpiry,update_sla_deadline_ms:deadline,metrics,provenance:{actual_next_response:true,actual_page_dataset:REVISION,fixture_binding_proven:true,overlay_sha256:overlay.overlay_blob_sha256,fixture_sha256:fingerprint,modified_worktree:true},assets:{html:{path:'/__c0_private/html',bytes:bytes.length,sha256:digest(bytes),content_type:'text/html'}},rsc_requests:[]};
+ const manifest={schema:'gacha.c0.local.v1',source_sha:source,data_revision:REVISION,complete:true,expected_routes:['/ranking','/ranking/series','/ranking/upcoming','/ranking/upcoming/series'],prototype_routes:['/ranking'],generated_at_ms:now,fresh_until_ms:Math.min(nextMidnight,evidenceExpiry,deadline),next_jst_midnight_ms:nextMidnight,next_evidence_expiry_ms:evidenceExpiry,update_sla_deadline_ms:deadline,metrics,provenance:{actual_next_response:true,actual_page_dataset:REVISION,fixture_binding_proven:true,overlay_sha256:overlay.files['lib/data/mock-gacha-records.js'].overlay_sha256,official_input_overlay_sha256:overlay.files['lib/data/official-input.js'].overlay_sha256,fixture_sha256:fingerprint,modified_worktree:true},assets:{html:{path:'/__c0_private/html',bytes:bytes.length,sha256:digest(bytes),content_type:'text/html'}},rsc_requests:[]};
  for(const x of selections)manifest.rsc_requests.push({request_url:x.url,headers:x.headers,asset:{path:x.asset,bytes:x.bytes,sha256:x.sha256,content_type:x.content_type}});
  fs.writeFileSync(path.join(privateDir,'manifest'),JSON.stringify(manifest));
  report.rsc=selections.map(x=>({request_url:x.url,sha256:x.sha256,bytes:x.bytes,content_type:x.content_type,real_browser:true}));

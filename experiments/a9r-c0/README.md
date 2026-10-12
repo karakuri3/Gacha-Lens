@@ -1,21 +1,23 @@
-# C0-B localhost-only genuine fixture / Next Flight experiment
+# C0-C final scoped localhost feasibility attempt
 
-Authorization: #430 comment `6117690581`. Existing Draft PR #517 only. This experiment is **not Production integration**, not a deploy and not an A9R 52/52 release proof.
+**HQ #430 comment 6117993425 — one amendment, one push, one natural PR CI. DO NOT MERGE.**
 
-## Provenance
-The GitHub checkout stays byte-for-byte unchanged for all existing Production `app/**`, `lib/**`, `components/**`, Workers and configs. The C0 workflow creates a **separate detached disposable Git worktree** within the GitHub runner temporary directory and patches **only that copy** of `lib/data/mock-gacha-records.js` to import the exact `experiments/a9r-c0/synthetic-fixture.mjs`. `overlay-provenance.json` identifies the original commit SHA, original/mock overlay SHA256 and fixture JSON SHA256, plus an explicit `modified_worktree:true` flag. Its output must never be called the unmodified original source version.
+Production App/Public/runtime, public A9R definition and existing data files **remain untouched in Git**.
 
-Synthetic fixture counts are 237 variants, 123 series, 241 listings, 66 active, 0 sold. The real sample-data renderer is started in the disposable worktree, not the pristine checkout. The capture gate inspects actual Next HTML and Chrome-rendered data; merely writing counts into a manifest never proves identity.
+## Disposable renderer / immutable identity
+The CI creates a detached Git worktree under the runner's temp directory. Within that temporary worktree **only**, `overlay.mjs` replaces:
+- `lib/data/mock-gacha-records.js` with the exact 237 variants / 123 series / 241 listings / active 66 / sold 0 `synthetic-fixture.mjs`;
+- `lib/data/official-input.js` with explicitly empty official product/schedule arrays, making `hasOfficialInput()` false. This selects `getMockRecords()` from `lib/series.js`; it is not a real data-provider action.
 
-## Genuine browser requests
-Existing browser binary from the ubuntu runner is used without new packages, with Chrome DevTools Protocol over localhost. Direct document, Next Link from home and series, client navigation, browser Back/Forward, two distinct *observed* Flight router states and real Flight response bodies are required. A bootstrap-only 81-byte response is insufficient; flight must contain ranking data and have a distinct router fingerprint. **Any HTTP 500 or invalid normal navigation fails the capture**; sanitized local Next error categories are stored in the artifact. No hand-authored Router state or mock RSC is used.
+The pristine checkout's official and mock files are never modified. The overlay evidence records original SHA256 and modified SHA256 for **both** files, fixture SHA256 and revision. `immutable_git_commit` refers to the Git checkout, not the modified renderer worktree: the two identities must never be equated.
 
-## Local Worker gate
-Only after genuine renderer + browser capture passes can the local locked Wrangler workerd run the Public→App Service Binding with Worker-first static assets. Gate requires exact source SHA, trusted fixture revision, overlay data provenance, 90d/30d/JST-bounded freshness, exact Flight request fingerprint, immutable content hashes, and no unauthorized fallback. Unsupported state fails closed, but full browser compatibility is not proved by that alone.
+The runner uses an independent physical copy of `node_modules` inside the temporary Next project root, instead of the earlier out-of-root symlink. Next gets `WORKERS_CI_COMMIT_SHA` pinned to the PR head; `readiness.mjs` validates the value exposed by `next.config.mjs` as `GACHA_RELEASE_SOURCE_SHA`. This tests the config contract and **does not** by itself prove an identical unmodified Production build.
 
-Code-only pure function tests retain the signed-off fail-closed behavior. Real local workerd CPU attribution and Cloudflare billable Free 10ms are **NOT_PROVEN** unless independent instrumentation is available. Timing headers are wall duration, *not billable CPU*.
+## First-failure safety
+`readiness.mjs` runs the actual local Next dev renderer and records bounded, sanitized child spawn/exit/signal, TCP connect/refuse, HTTP status including 000, curl rc 7/22/28/52/56, coarse timing, server phase and allowlisted error class + repository-relative source line. **It does not preserve the raw Next log or any HTTP response body in artifacts.** It stops at the first fatal response or a bounded startup deadline; a bare 200 is only renderer reachability, not full fixture proof.
 
-## Failure evidence
-The C0-only workflow uploads artifacts and then **returns a failing CI conclusion** if any required capture, workerd or browser stage is unsuccessful. It does not rerun A9R, standing release proof, or deploy. C0 counts only inspected `/ranking`, and reports all 52 unchanged A9R assertions with individually classified LOCAL PASS, SIMULATED, NOT_RUN or FAIL. No 52/52 PASS claim.
+After a successful readiness check, unmodified `browser-capture.mjs` performs real Chromium CDP Next Link/prefetch/history requests, and `capture.mjs` verifies actual fixture-bound Next HTML and non-bootstrap Flight. Any failed browser state fails the experiment. Only then does isolated local workerd perform Public→App gated asset probes. CPU figures in server-timing are wall-time, not Cloudflare billable CPU.
 
-All work stops at the first natural C0-B CI evidence set. Further amendments, retries and pushes require a fresh HQ scope.
+Artifact upload is restricted to top-level diagnostic JSON (not raw HTML/Flight/assets or temp stdout/stderr). A final C0-only CI step fails if **any** required stage failed or was skipped. No manual workflow dispatch/rerun/Production calls. A9R's 52 assertion definitions and order remain unchanged; untested assertions remain NOT_RUN.
+
+**After this one natural run, failure means STOP and HQ should switch architecture proof path; no further #517 retries under this authorization.**
