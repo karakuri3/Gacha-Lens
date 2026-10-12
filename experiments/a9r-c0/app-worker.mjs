@@ -6,6 +6,10 @@ export default {async fetch(request,env){
   const url=new URL(request.url),sha=env.C0_SOURCE_SHA,start=performance.now();
   if(url.pathname==='/api/runtime-diagnostics/release-source')return Response.json({source_sha:sha},{status:SH.test(sha||'')?200:503,headers:{'cache-control':'no-store'}});
   if(url.pathname!=='/ranking')return err(404,'route_not_owned',sha);
+  // Match the original App gate ordering: source identity before manifest/redirect.
+  const expected=request.headers.get('x-gacha-expected-app-source-sha');
+  if(!SH.test(sha||'')||!SH.test(expected||''))return err(503,'identity_missing',sha);
+  if(expected!==sha)return err(409,'mixed_source_sha',sha);
   let manifest;
   try{const r=await env.ASSETS.fetch(new Request(new URL('/__c0_private/manifest',request.url)));if(!r.ok)return err(503,'manifest_missing',sha);manifest=await r.json()}catch{return err(503,'manifest_unreadable',sha)}
   const outcome=decide({request,manifest,appSha:sha,trustedRevision:env.C0_TRUSTED_REVISION,nowMs:Date.now()});
