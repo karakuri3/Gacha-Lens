@@ -1,0 +1,50 @@
+name: Gacha Official Rerelease Recovery Read-Only Audit
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  official-rerelease-recovery-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      INGESTION_WRITE_DISABLED: "true"
+      MARKET_BACKFILL_WRITE_DISABLED: "true"
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify exact current main revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA"
+      - name: Run read-only rerelease recovery audit
+        run: >-
+          npm run official:rerelease-recovery-audit --
+          --output-dir=${{ runner.temp }}/gacha-official-rerelease-recovery-audit
+          --expected-main-sha=${{ github.sha }}
+          --run-id=${{ github.run_id }}
+      - name: Upload sanitized rerelease recovery audit
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-rerelease-recovery-audit-${{ github.run_id }}
+          path: ${{ runner.temp }}/gacha-official-rerelease-recovery-audit
+          if-no-files-found: error
+          retention-days: 14

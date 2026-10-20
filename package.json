@@ -16,6 +16,7 @@
     "official:source-expansion-diagnostic": "node scripts/official-source-expansion-diagnostic.mjs",
     "official:bounded-write": "node scripts/official-bounded-write.mjs",
     "official:bounded-auto": "node scripts/official-bounded-auto.mjs",
+    "official:rerelease-recovery-audit": "node scripts/official-rerelease-recovery-audit.mjs",
     "official:kitan-readiness-audit": "node scripts/official-kitan-readiness-audit.mjs",
     "official:kitan-bounded-canary": "node scripts/official-kitan-bounded-canary.mjs",
     "official:kitan-bounded-auto": "node scripts/official-kitan-bounded-auto.mjs",
