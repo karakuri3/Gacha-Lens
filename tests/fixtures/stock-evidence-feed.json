@@ -1,0 +1,16 @@
+{
+  "stockReportsRaw": [
+    {
+      "id": "series-stock",
+      "series_id": "series-alpha",
+      "provider_product_id": "P-100",
+      "jan_code": "4580000000001",
+      "shop_code": "SHOP-1",
+      "status": "in_stock",
+      "text": "Alpha Collection Red 在庫あり",
+      "source_url": "https://provider.example/stores/SHOP-1/products/P-100",
+      "reported_at": "2026-10-02T01:55:00+09:00",
+      "source_type": "official_site"
+    }
+  ]
+}
