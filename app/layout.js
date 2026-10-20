@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import AppSidebar from "@/components/AppSidebar";
 import Footer from "@/components/Footer";
 import StructuredData from "@/components/StructuredData";
+import IntentPrefetchBoundary from "@/components/IntentPrefetchBoundary";
 import {
   DEFAULT_OG_IMAGE,
   SITE_DESCRIPTION,
@@ -90,10 +91,10 @@ export default function RootLayout({ children }) {
         <Header />
         <div className="app-frame">
           <AppSidebar />
-          <div className="app-content">
+          <IntentPrefetchBoundary className="app-content">
             {children}
             <Footer />
-          </div>
+          </IntentPrefetchBoundary>
         </div>
       </body>
     </html>
