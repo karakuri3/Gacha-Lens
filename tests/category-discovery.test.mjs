@@ -146,15 +146,15 @@ test("category database filtering remains exact while URL names remain normalize
   assert.match(categorySource, /rawValues\.size === 1/);
 });
 
-test("categories index is parent-series-first while filtered catalog URLs stay noindex", () => {
+test("categories index is parent-series-first while catalog filter options stay DB-free", () => {
   const categories = source("app/categories/page.js");
   const catalog = source("app/series/page.js");
   assert.match(categories, /getPublicDiscoveryFacets/);
   assert.doesNotMatch(categories, /getParentSeriesCategoryCatalog/);
   assert.match(categories, /categoryDiscoveryHref/);
   assert.match(categories, /series_count/);
-  assert.match(catalog, /getParentSeriesCategoryCatalog/);
-  assert.doesNotMatch(catalog, /getCategoryCatalog/);
+  assert.match(catalog, /STATIC_CATEGORY_FACETS/);
+  assert.doesNotMatch(catalog, /getParentSeriesCategoryCatalog|getCategoryCatalog/);
   assert.match(catalog, /noIndex: Boolean\(query\.q \|\| query\.category\)/);
   assert.match(catalog, /query\.q \|\| query\.category \? \{ index: false, follow: true \}/);
 });

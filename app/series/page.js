@@ -1,6 +1,6 @@
 import Link from "next/link";
 import SeriesCard from "@/components/SeriesCard";
-import { getParentSeriesCategoryCatalog, getParentSeriesCatalogPage, getRankingSeries, getSeriesCatalogPage } from "@/lib/series";
+import { getParentSeriesCatalogPage, getRankingSeries, getSeriesCatalogPage } from "@/lib/series";
 import { isCirculatingItem, opportunityScore, watchScore } from "@/lib/domain/public-display-clean";
 import {
   buildCatalogHref,
@@ -10,6 +10,7 @@ import {
   parseCatalogQuery,
   recordMatchesCatalogQuery,
 } from "@/lib/domain/catalog-query";
+import { STATIC_CATEGORY_FACETS } from "@/lib/domain/category-static-manifest";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
@@ -47,13 +48,13 @@ export default async function SeriesPage({ searchParams }) {
   const query = parseCatalogQuery(await searchParams);
   const useSignalCatalog = Boolean(query.legacyMode);
   const signalMode = query.release === "upcoming" ? "upcoming" : "released";
-  const [signalItems, catalogPage, categories] = await Promise.all([
+  const [signalItems, catalogPage] = await Promise.all([
     useSignalCatalog ? getRankingSeries(signalMode, query.scope) : Promise.resolve([]),
     useSignalCatalog
       ? Promise.resolve(null)
       : (query.scope === "series" ? getParentSeriesCatalogPage : getSeriesCatalogPage)({ ...query, pageSize: PAGE_SIZE }),
-    getParentSeriesCategoryCatalog(),
   ]);
+  const categories = STATIC_CATEGORY_FACETS;
 
   const filtered = catalogPage
     ? catalogPage.items
