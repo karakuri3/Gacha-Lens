@@ -6,7 +6,7 @@ import {
   formatReleaseCoverageReadinessMarkdown,
 } from "../scripts/lib/release-coverage-readiness.mjs";
 
-const seriesPlan = (input) => ({ count_unit: "series", ...input });
+const seriesPlan = (input) => ({ count_unit: "series", unsupported_source_universe_known: true, ...input });
 const providerGap = (bandai, tarts) => ({
   bandai_gashapon: bandai,
   takaratomy_arts: tarts,
@@ -80,7 +80,7 @@ test("architecture gap wins while future discovery is tracked separately from th
     ],
   }));
 
-  assert.equal(report.schema_version, 4);
+  assert.equal(report.schema_version, 6);
   assert.equal(report.verdict, "COVERAGE_ARCHITECTURE_EXPANSION_REQUIRED");
   assert.equal(report.totals.current_lane_missing, 20);
   assert.equal(report.totals.future_discovery_missing, 18);
@@ -294,6 +294,116 @@ test("complete coverage is ready", () => {
   assert.deepEqual(report.workstreams, []);
 });
 
+test("operational planning exposes shortfall classes, projected runs/days, SLO result, and bottleneck", () => {
+  const report = buildReleaseCoverageReadinessReport(seriesPlan({
+    planning_month: "2026-09",
+    current_lane_enabled: true,
+    current_lane_runs_per_day: 1,
+    freshness_slo_days: 7,
+    parser_health: { status: "fresh", blocking_findings: 0 },
+    months: [{
+      month: "2026-09",
+      catalog_count: 88,
+      reference_count: 100,
+      current_lane_missing: 12,
+      current_lane_missing_by_provider: providerGap(12, 0),
+    }],
+  }));
+
+  assert.equal(report.totals.coverage_ratio, 0.88);
+  assert.equal(report.totals.shortfall, 12);
+  assert.equal(report.totals.stale_supported_shortfall, 12);
+  assert.equal(report.totals.unsupported_source_shortfall, 0);
+  assert.equal(report.totals.projected_catchup_runs, 6);
+  assert.equal(report.totals.projected_catchup_days, 6);
+  assert.equal(report.totals.effective_projected_catchup_days, 6);
+  assert.equal(report.totals.current_lane_can_meet_requested_slo, true);
+  assert.equal(report.totals.bottleneck_reason, null);
+  assert.equal(report.months[0].runs_to_current_lane_catchup_at_current_cap, 6);
+  assert.equal(report.months[0].stale_supported_shortfall, 12);
+});
+
+test("disabled current lane fails operational SLO without changing reviewed caps", () => {
+  const report = buildReleaseCoverageReadinessReport(seriesPlan({
+    planning_month: "2026-09",
+    current_lane_enabled: false,
+    parser_health: { status: "fresh", blocking_findings: 0 },
+    months: [{
+      month: "2026-09",
+      catalog_count: 96,
+      reference_count: 100,
+      current_lane_missing: 4,
+      current_lane_missing_by_provider: providerGap(2, 2),
+    }],
+  }));
+
+  assert.equal(report.assumptions.current_lane_daily_series_cap, 4);
+  assert.equal(report.assumptions.current_lane_runs_per_day, 1);
+  assert.deepEqual(report.assumptions.current_lane_provider_daily_caps, providerGap(2, 2));
+  assert.equal(report.totals.projected_catchup_runs, 1);
+  assert.equal(report.totals.projected_catchup_days, 1);
+  assert.equal(report.totals.effective_projected_catchup_days, null);
+  assert.equal(report.totals.current_lane_can_meet_requested_slo, false);
+  assert.equal(report.totals.bottleneck_reason, "current_lane_disabled");
+});
+
+test("parser health is explicit, fail-closed, and participates in operational SLO", () => {
+  const stale = buildReleaseCoverageReadinessReport(seriesPlan({
+    planning_month: "2026-09",
+    current_lane_enabled: true,
+    parser_health: { status: "stale", blocking_findings: 0 },
+    months: [{ month: "2026-09", catalog_count: 100, reference_count: 100 }],
+  }));
+  assert.equal(stale.totals.current_lane_can_meet_requested_slo, false);
+  assert.equal(stale.totals.bottleneck_reason, "parser_health_evidence_not_fresh");
+
+  const blocked = buildReleaseCoverageReadinessReport(seriesPlan({
+    planning_month: "2026-09",
+    current_lane_enabled: true,
+    parser_health: { status: "fresh", blocking_findings: 2 },
+    months: [{ month: "2026-09", catalog_count: 100, reference_count: 100 }],
+  }));
+  assert.equal(blocked.totals.current_lane_can_meet_requested_slo, false);
+  assert.equal(blocked.totals.bottleneck_reason, "parser_health_blocking_findings");
+
+  const missing = buildReleaseCoverageReadinessReport(seriesPlan({
+    planning_month: "2026-09",
+    current_lane_enabled: true,
+    months: [{ month: "2026-09", catalog_count: 100, reference_count: 100 }],
+  }));
+  assert.deepEqual(missing.parser_health, { status: "missing", blocking_findings: 0 });
+  assert.equal(missing.totals.current_lane_can_meet_requested_slo, false);
+});
+
+test("current automatic run frequency is pinned to the reviewed daily lane", () => {
+  assert.throws(() => buildReleaseCoverageReadinessReport(seriesPlan({
+    planning_month: "2026-09",
+    current_lane_runs_per_day: 2,
+    months: [{ month: "2026-09", catalog_count: 10, reference_count: 10 }],
+  })), /current_lane_runs_per_day must match current reviewed frequency 1/);
+});
+
+test("unknown unsupported-source universe fails closed instead of fabricating zero missing", () => {
+  const report = buildReleaseCoverageReadinessReport({
+    count_unit: "series",
+    planning_month: "2026-10",
+    current_lane_enabled: true,
+    parser_health: { status: "fresh", blocking_findings: 0 },
+    months: [{ month: "2026-10", catalog_count: 21, reference_count: 21 }],
+  });
+
+  assert.equal(report.assumptions.unsupported_source_universe_known, false);
+  assert.equal(report.totals.unsupported_source_missing, null);
+  assert.equal(report.totals.unsupported_source_shortfall, null);
+  assert.equal(report.totals.current_lane_can_meet_requested_slo, false);
+  assert.equal(report.months[0].current_lane_can_close_full_gap, false);
+  assert.equal(report.months[0].meets_freshness_slo, false);
+  assert.equal(report.totals.bottleneck_reason, "unsupported_source_universe_unknown");
+  assert.equal(report.verdict, "PROVIDER_UNIVERSE_EVIDENCE_REQUIRED");
+  assert.deepEqual(report.workstreams, ["PROVIDER_UNIVERSE_DISCOVERY_REQUIRED"]);
+  assert.match(formatReleaseCoverageReadinessMarkdown(report), /Unsupported-source missing: \*\*unknown\*\*/);
+});
+
 test("unclassified reference shortfall fails closed as architecture expansion", () => {
   const report = buildReleaseCoverageReadinessReport(seriesPlan({
     planning_month: "2026-09",
@@ -346,6 +456,9 @@ test("markdown keeps count unit, coverage, safety, and workstream evidence visib
   assert.match(markdown, /COVERAGE_ARCHITECTURE_EXPANSION_REQUIRED/);
   assert.match(markdown, /Count unit: \*\*series\*\*/);
   assert.match(markdown, /\| 2026-09 \| current \| 5 \| 10 \| 50\.0% \|/);
+  assert.match(markdown, /Shortfall: \*\*7\*\*/);
+  assert.match(markdown, /Stale-supported shortfall: \*\*5\*\*/);
+  assert.match(markdown, /Unsupported-source shortfall: \*\*2\*\*/);
   assert.match(markdown, /Current-lane missing: \*\*2\*\*/);
   assert.match(markdown, /Future-discovery missing: \*\*2\*\*/);
   assert.match(markdown, /Separate-lane missing: \*\*1\*\*/);
