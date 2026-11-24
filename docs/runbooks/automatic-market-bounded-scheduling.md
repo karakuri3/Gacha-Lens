@@ -48,3 +48,36 @@ Durable `ingestion_runs` are the only authoritative throttle history for
 market-bounded runs. `rollout_throttled` and
 `rollout_daily_budget_exhausted` are successful, zero-write no-ops; they do not
 create a fresh throttle timestamp. All other safety failures remain fail-closed.
+
+## Practical throughput budget (2026-11)
+
+The display rule in `lib/domain/market-evidence.js` needs at least three distinct
+active listings per variant observed within 30 days. The original once-per-day,
+two-row policy could not reach or maintain that, so `market-bounded` now uses:
+
+| Field | Before | Now |
+|---|---|---|
+| `priority` | `1` | `all` (priority 1 -> 5 order; variants one listing short of the guide come first) |
+| `minimum_interval_minutes` | 720 | 40 (with the `17,47` schedule this allows at most one run per hour) |
+| `max_runs_per_24_hours` | 1 | 24 |
+| `max_selected_variants` / `limit` | 5 | 5 (unchanged) |
+| `max_persistence_candidates` / `max_listing_writes` / `max_observation_writes` | 2 | 10 |
+| `max_review_required_writes` | 0 | 0 (unchanged) |
+
+`market-shadow` keeps its once-per-day 720-minute throttle and only changes to
+`priority=all` so the simulation exercises the same variant order.
+
+Daily ceiling: 24 runs x 5 variants = 120 variant searches, at most
+24 x 10 = 240 listing writes and 240 observation writes. Per run the request
+budget is unchanged: at most 5 root queries x 3 attempts per provider plus one
+affiliate request per root, paced at 1.2 s (Rakuten) and 1.0 s (Yahoo!
+Shopping), i.e. roughly 40 planned requests per run and about 960 per day
+across both providers before retries.
+
+Scheduled bounded runs now record `selected_variant_ids` in their durable
+`ingestion_runs` summary so the 24-hour per-variant collection cooldown applies,
+and the variant tie-break rotation bucket changes hourly so runs that persist
+nothing do not re-query the same variants all day.
+
+Any policy edit changes the policy digest, so the approval string must be
+recomputed from the merged `main` before arming.

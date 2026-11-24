@@ -100,7 +100,7 @@ async function persist() {
       listingRows: rows.listingRows,
       observationRows: rows.observationRows,
       durableRunId,
-      buildDurableRunRow: (operations) => durableRunRow({ id: durableRunId, workflow, plan, rows, outcome: { operations }, status: "succeeded" }),
+      buildDurableRunRow: (operations) => durableRunRow({ id: durableRunId, workflow, plan, rows, outcome: { operations }, status: "succeeded", selectedVariantIds: auditedVariantIds(audit) }),
       store,
     });
     const result = buildMarketBoundedResult({
@@ -150,7 +150,7 @@ async function productionCounts() {
   return Object.fromEntries([...tables, "review_required"].map((key, index) => [key, values[index]]));
 }
 
-function durableRunRow({ id, workflow, plan, rows, outcome, status, reasonCode = null }) {
+function durableRunRow({ id, workflow, plan, rows, outcome, status, reasonCode = null, selectedVariantIds = [] }) {
   const stableTime = plan?.generated_at ?? new Date(0).toISOString();
   return {
     id,
@@ -163,6 +163,9 @@ function durableRunRow({ id, workflow, plan, rows, outcome, status, reasonCode =
     summary: {
       rollout_stage: "market-bounded",
       rollout_policy_digest: plan?.policy_digest ?? null,
+      // Read by extractMarketCollectionAttempts so the per-variant collection
+      // cooldown also applies to scheduled bounded runs.
+      selected_variant_ids: selectedVariantIds,
       bounded_persistence_enabled: true,
       bounded_approval_valid: true,
       audit_digest: plan?.audit_digest ?? null,
@@ -199,6 +202,10 @@ function workflowIdentity() {
 }
 
 function inFilter(ids) { return `in.(${ids.map((id) => `\"${String(id).replaceAll('"', '\\"')}\"`).join(",")})`; }
+function auditedVariantIds(audit) {
+  const entries = Array.isArray(audit?.selection?.selected_variants) ? audit.selection.selected_variants : [];
+  return [...new Set(entries.map((entry) => String(entry?.variant_id ?? "").trim()).filter(Boolean))].sort();
+}
 function operationSummary(entries = []) { return Object.fromEntries(["insert", "update", "unchanged"].map((name) => [name, entries.filter((entry) => entry.operation === name).length])); }
 function emptyRollback() { return { attempted: false, verified: false, listings_deleted: 0, observations_deleted: 0, listings_restored: 0, observations_restored: 0 }; }
 function boundedError(reasonCode) { const error = new Error(reasonCode); error.reason_code = reasonCode; error.category = "safety_gate"; return error; }

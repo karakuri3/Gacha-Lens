@@ -148,10 +148,13 @@ test("prewrite rejects evidence associated only through matched_variant_id", () 
   assert.throws(() => assertP3BoundedSeedPrewrite({ rows, variantListings: [{ id: "legacy", matched_variant_id: rows.listingRows[0].variant_id }] }));
 });
 
-test("generic P1 persistence remains hard-capped at exactly two while explicit P3 policy permits five", () => {
-  assert.equal(MARKET_BOUNDED_PERSISTENCE_HARD_CAP, 2);
+test("generic P1 persistence remains hard-capped at exactly ten while explicit P3 policy permits five", () => {
+  assert.equal(MARKET_BOUNDED_PERSISTENCE_HARD_CAP, 10);
   const rows = buildP3BoundedSeedRows({ candidates: Array.from({ length: 5 }, (_, index) => candidate(index + 1)), workflow: { run_id: "123", head_sha: sha } });
-  assert.throws(() => planMarketBoundedOperations({ listingRows: rows.listingRows, observationRows: rows.observationRows }));
+  const oversizedListings = [...rows.listingRows, ...rows.listingRows, rows.listingRows[0]];
+  const oversizedObservations = [...rows.observationRows, ...rows.observationRows, rows.observationRows[0]];
+  assert.equal(oversizedListings.length, 11);
+  assert.throws(() => planMarketBoundedOperations({ listingRows: oversizedListings, observationRows: oversizedObservations }));
   assert.equal(planMarketBoundedOperations({ listingRows: rows.listingRows, observationRows: rows.observationRows, persistencePolicy: MARKET_BOUNDED_PERSISTENCE_POLICIES.p3_seed_v1 }).listings.length, 5);
 });
 
@@ -182,7 +185,7 @@ for (const [label, seed] of [
   assert.equal(store.calls.length, 0);
 });
 
-test("P1 retains unchanged semantics while keeping the two-row cap", () => {
+test("P1 retains unchanged semantics while keeping the ten-row cap", () => {
   const rows = buildP3BoundedSeedRows({ candidates: [candidate(1), candidate(2)], workflow: { run_id: "123", head_sha: sha } });
   const operations = planMarketBoundedOperations({
     listingRows: rows.listingRows,
@@ -192,7 +195,7 @@ test("P1 retains unchanged semantics while keeping the two-row cap", () => {
   });
   assert.deepEqual(operations.listings.map((entry) => entry.operation), ["unchanged", "unchanged"]);
   assert.deepEqual(operations.observations.map((entry) => entry.operation), ["unchanged", "unchanged"]);
-  assert.equal(MARKET_BOUNDED_PERSISTENCE_HARD_CAP, 2);
+  assert.equal(MARKET_BOUNDED_PERSISTENCE_HARD_CAP, 10);
 });
 
 test("success and failure result artifacts are sanitized", () => {
