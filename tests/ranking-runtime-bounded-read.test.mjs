@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { registerHooks } from "node:module";
 import path from "node:path";
-import test from "node:test";
+import test, { mock } from "node:test";
 import { pathToFileURL } from "node:url";
+
+// Fixture timestamps are fixed (Sep–Oct 2026); pin "now" so the 30/90-day
+// evidence windows do not make these tests fail as real time passes.
+mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-10T00:00:00.000Z") });
 
 const root = process.cwd();
 const serverOnlyModule = pathToFileURL(path.join(root, "node_modules/next/dist/compiled/server-only/empty.js")).href;
