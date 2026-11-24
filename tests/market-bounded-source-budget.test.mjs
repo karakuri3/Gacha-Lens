@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildMarketBoundedFetcherOptions,
   resolveMarketBoundedProviderResultLimit,
+  scheduledBoundedRotationOptions,
 } from "../lib/domain/market-bounded-source-budget.js";
 
 test("market-bounded provider result limit keeps every discovery plan within candidate budget", () => {
@@ -76,4 +77,22 @@ test("bounded source budgeting fails closed on invalid budget inputs", () => {
     discoveryRequests: 14,
     maxCandidates: 0,
   }), /nonnegative discovery request count/);
+});
+
+test("scheduled market-bounded runs rotate the variant tie-break bucket hourly", () => {
+  const env = { AUTOMATIC_INGESTION_ROLLOUT_STAGE: "market-bounded", GITHUB_EVENT_NAME: "schedule" };
+  const first = scheduledBoundedRotationOptions({}, env, new Date("2026-11-24T01:17:00.000Z"));
+  const sameHour = scheduledBoundedRotationOptions({}, env, new Date("2026-11-24T01:47:00.000Z"));
+  const nextHour = scheduledBoundedRotationOptions({}, env, new Date("2026-11-24T02:17:00.000Z"));
+  assert.deepEqual(first, { rotationKey: "market-bounded-hourly:2026-11-24T01" });
+  assert.deepEqual(sameHour, first);
+  assert.notDeepEqual(nextHour, first);
+});
+
+test("hourly rotation is limited to scheduled market-bounded runs", () => {
+  const now = new Date("2026-11-24T01:17:00.000Z");
+  assert.deepEqual(scheduledBoundedRotationOptions({}, { AUTOMATIC_INGESTION_ROLLOUT_STAGE: "market-shadow", GITHUB_EVENT_NAME: "schedule" }, now), {});
+  assert.deepEqual(scheduledBoundedRotationOptions({}, { FIXED_ROLLOUT_STAGE: "market-bounded", GITHUB_EVENT_NAME: "workflow_dispatch" }, now), {});
+  assert.deepEqual(scheduledBoundedRotationOptions({}, {}, now), {});
+  assert.deepEqual(scheduledBoundedRotationOptions({ readOnlySeedAudit: true }, { AUTOMATIC_INGESTION_ROLLOUT_STAGE: "market-bounded", GITHUB_EVENT_NAME: "schedule" }, now), {});
 });

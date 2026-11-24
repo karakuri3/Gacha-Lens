@@ -32,7 +32,7 @@ Workflow enablement alone grants nothing. Phase 6-C creates or changes none of t
 
 ## Market shadow
 
-The fixed shadow contract is `task=market`, `mode=dry-run`, `limit=5`, `priority=1`, `release=released`, `source_scope=planner-apis`, and `execute_sources=true`. It reuses the sanitized market candidate audit and request diagnostics. Listings, observations, import issues, `ingestion_runs`, cleanup, migrations, canary writes, and normal writes remain prohibited.
+The fixed shadow contract is `task=market`, `mode=dry-run`, `limit=5`, `priority=all`, `release=released`, `source_scope=planner-apis`, and `execute_sources=true`. It reuses the sanitized market candidate audit and request diagnostics. Listings, observations, import issues, `ingestion_runs`, cleanup, migrations, canary writes, and normal writes remain prohibited.
 
 Shadow output predicts `would_write` values. These values are neither candidate approval nor permission to persist data.
 
@@ -48,9 +48,9 @@ Human-reviewed canary rules remain unchanged and are not reused as automatic app
 
 ## Budget
 
-The bounded policy keeps discovery, independent safety, and persistence selection as separate states. It permits at most five selected variants, 40 total audited candidates, 20 independently safe candidates, two persistence-selected candidates, two listing writes, two observation writes, and zero review-required writes. Exceeding any budget rejects the whole plan.
+The bounded policy keeps discovery, independent safety, and persistence selection as separate states. It permits at most five selected variants, 40 total audited candidates, 20 independently safe candidates, ten persistence-selected candidates, ten listing writes, ten observation writes, and zero review-required writes per run (raised from two in the 2026-11 practical-throughput change; see automatic-market-bounded-scheduling.md). Exceeding any budget rejects the whole plan.
 
-The persistence selector is deterministic, diversity-first, and cross-run coverage aware. A read-only snapshot of existing bounded observations ranks never-persisted variants first, then the least-recently persisted variant. Candidate coverage within a selected variant follows the same never/oldest rule, after which the Phase 8-A.3 order remains explicit target-label evidence, exact parent evidence, required discriminator evidence, confidence descending, then candidate key ascending. It still selects one independently safe candidate per distinct variant before a second pass. Provider delivery order, candidate input order, price, and commercial configuration do not affect selection. Independently safe candidates beyond the two-row persistence capacity remain visible as `bounded_selection_capacity`; they are not relabeled as review-required.
+The persistence selector is deterministic, diversity-first, and cross-run coverage aware. A read-only snapshot of existing bounded observations ranks never-persisted variants first, then the least-recently persisted variant. Candidate coverage within a selected variant follows the same never/oldest rule, after which the Phase 8-A.3 order remains explicit target-label evidence, exact parent evidence, required discriminator evidence, confidence descending, then candidate key ascending. It still selects one independently safe candidate per distinct variant before a second pass. Provider delivery order, candidate input order, price, and commercial configuration do not affect selection. Independently safe candidates beyond the ten-row persistence capacity remain visible as `bounded_selection_capacity`; they are not relabeled as review-required.
 
 The coverage snapshot is derived from `market_listing_observations.raw.automatic_rollout` without a schema change. Planning binds its canonical digest into the bounded plan. Preview and persistence fetch the history again and require exact snapshot and selection equality, so concurrent coverage changes fail closed before writes. Malformed markers, duplicate persistence events, candidate/listing-to-variant conflicts, and unavailable history also fail closed.
 

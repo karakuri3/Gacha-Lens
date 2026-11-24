@@ -55,6 +55,38 @@ test("weakened throttle fails policy validation", () => {
   value.stages["market-shadow"].max_runs_per_24_hours = 0;
   assert.throws(() => validateAutomaticIngestionRolloutPolicy(value), /contract/);
 });
+test("bounded stage uses the reviewed hourly throttle and ten-row write ceiling", () => {
+  const bounded = policy.stages["market-bounded"];
+  assert.equal(bounded.priority, "all");
+  assert.equal(bounded.minimum_interval_minutes, 40);
+  assert.equal(bounded.max_runs_per_24_hours, 24);
+  assert.equal(bounded.max_selected_variants, 5);
+  assert.equal(bounded.max_persistence_candidates, 10);
+  assert.equal(bounded.max_listing_writes, 10);
+  assert.equal(bounded.max_observation_writes, 10);
+  assert.equal(bounded.max_review_required_writes, 0);
+  const shadow = policy.stages["market-shadow"];
+  assert.equal(shadow.minimum_interval_minutes, 720);
+  assert.equal(shadow.max_runs_per_24_hours, 1);
+});
+for (const [stage, key, value] of [
+  ["market-bounded", "max_runs_per_24_hours", 25],
+  ["market-bounded", "minimum_interval_minutes", 30],
+  ["market-shadow", "max_runs_per_24_hours", 24],
+  ["market-shadow", "minimum_interval_minutes", 40],
+  ["market-bounded", "priority", "1"],
+]) test(`${stage} ${key}=${value} fails policy validation`, () => {
+  const value_ = clone(policy);
+  value_.stages[stage][key] = value;
+  assert.throws(() => validateAutomaticIngestionRolloutPolicy(value_), /contract/);
+});
+for (const key of ["max_persistence_candidates", "max_listing_writes", "max_observation_writes"]) {
+  test(`bounded ${key} above ten fails policy validation`, () => {
+    const value = clone(policy);
+    value.stages["market-bounded"][key] = 11;
+    assert.throws(() => validateAutomaticIngestionRolloutPolicy(value), /unsafe/);
+  });
+}
 test("policy digest is deterministic", () => assert.equal(calculateAutomaticIngestionRolloutPolicyDigest(policySource), digest));
 test("canonical object digest is deterministic", () => assert.equal(calculateAutomaticIngestionRolloutPolicyDigest({ b: 2, a: 1 }), calculateAutomaticIngestionRolloutPolicyDigest({ a: 1, b: 2 })));
 test("policy content change changes digest", () => assert.notEqual(calculateAutomaticIngestionRolloutPolicyDigest(`${policySource}\n `), digest));
@@ -85,7 +117,7 @@ test("unavailable circuit history fails closed", () => assert.equal(rollout({ ci
 
 test("shadow converts market schedule to dry-run contract", () => assert.equal(rollout({ stage: "market-shadow" }).contract.mode, "dry-run"));
 for (const [key, expected] of [
-  ["limit", 5], ["priority", "1"], ["release", "released"],
+  ["limit", 5], ["priority", "all"], ["release", "released"],
   ["source_scope", "planner-apis"], ["execute_sources", true],
 ]) test(`shadow fixes ${key}`, () => assert.equal(rollout({ stage: "market-shadow" }).contract[key], expected));
 test("shadow action is prediction only", () => assert.equal(rollout({ stage: "market-shadow" }).action, "shadow"));
@@ -203,25 +235,25 @@ test("bounded plan fails closed when durable coverage is unavailable", () => {
     throttle: { state: "clear" },
   }), (error) => error.reason_code === "rollout_coverage_unavailable");
 });
-test("three eligible candidates remain audited while only two are selected", () => {
-  const result = plan(auditWith(3));
-  assert.equal(result.safe_candidate_count, 3);
-  assert.equal(result.selected_for_persistence_count, 2);
+test("eleven eligible candidates remain audited while only ten are selected", () => {
+  const result = plan(auditWith(11));
+  assert.equal(result.safe_candidate_count, 11);
+  assert.equal(result.selected_for_persistence_count, 10);
   assert.equal(result.safe_not_selected_count, 1);
-  assert.equal(result.listing_writes_planned, 2);
-  assert.equal(result.observation_writes_planned, 2);
+  assert.equal(result.listing_writes_planned, 10);
+  assert.equal(result.observation_writes_planned, 10);
   assert.equal(result.budget_checks.state, "within_budget");
 });
 test("bounded plan retains complete safe-not-selected telemetry", () => {
-  const result = plan(auditWith(3));
+  const result = plan(auditWith(11));
   assert.equal(result.database_writes, 0);
   assert.deepEqual(result.safe_not_selected_candidates, [{
-    candidate_key: "0000000000000003",
+    candidate_key: "000000000000000b",
     reason: "bounded_selection_capacity",
   }]);
 });
-test("listing writes three reject", () => assert.equal(capturePlanError(auditWith(2), { listings: 3 }).reason_code, "rollout_budget_exceeded"));
-test("observation writes three reject", () => assert.equal(capturePlanError(auditWith(2), { observations: 3 }).reason_code, "rollout_budget_exceeded"));
+test("listing writes eleven reject", () => assert.equal(capturePlanError(auditWith(2), { listings: 11 }).reason_code, "rollout_budget_exceeded"));
+test("observation writes eleven reject", () => assert.equal(capturePlanError(auditWith(2), { observations: 11 }).reason_code, "rollout_budget_exceeded"));
 test("review-required write one rejects", () => assert.equal(capturePlanError(auditWith(1), { review_required: 1 }).reason_code, "rollout_budget_exceeded"));
 test("review-required-only candidates remain outside rotation with zero writes", () => {
   const value = auditWith(2);
@@ -241,7 +273,7 @@ test("safe candidate count 21 rejects", () => {
   const error = capturePlanError(auditWith(21));
   assert.equal(error.reason_code, "rollout_budget_exceeded");
   assert.equal(error.plan.budget_checks.safe_candidates_within_limit, false);
-  assert.equal(error.plan.selected_for_persistence_count, 2);
+  assert.equal(error.plan.selected_for_persistence_count, 10);
 });
 test("total candidate count 41 rejects even when only two are safe", () => {
   const value = auditWith(41);
@@ -363,7 +395,7 @@ for (const command of ["db:upsert-all", "canary-write", "db:cleanup", "cleanup-p
 test("simulation uploads Run-scoped artifact", () => assert.match(simulationWorkflow, /ingestion-shadow-report-\$\{\{ github\.run_id \}\}/));
 test("simulation scans secrets before upload", () => assert.ok(simulationWorkflow.indexOf("Scan sanitized rollout artifact") < simulationWorkflow.indexOf("Upload sanitized rollout artifact")));
 test("simulation has exact main guard", () => assert.match(simulationWorkflow, /test "\$GITHUB_SHA" = "\$origin_main_sha"/));
-test("simulation runs fixed market dry-run", () => assert.match(simulationWorkflow, /--mode=dry-run[\s\S]*--limit=5[\s\S]*--priority=1[\s\S]*--release=released[\s\S]*--source-scope=planner-apis/));
+test("simulation runs fixed market dry-run", () => assert.match(simulationWorkflow, /--mode=dry-run[\s\S]*--limit=5[\s\S]*--priority=(?:1|all)[\s\S]*--release=released[\s\S]*--source-scope=planner-apis/));
 
 test("legacy Production workflow is dispatch-only", () => {
   const triggers = productionWorkflow.slice(

@@ -18,7 +18,7 @@ import {
 } from "../lib/domain/market-canary-write.js";
 import { applyMarketCandidateSafety, summarizeFetchedMarketCandidates } from "../lib/domain/market-match-safety.js";
 import { buildSanitizedMarketRequestDiagnostics } from "../lib/domain/market-request-diagnostics.js";
-import { buildMarketBoundedFetcherOptions } from "../lib/domain/market-bounded-source-budget.js";
+import { buildMarketBoundedFetcherOptions, scheduledBoundedRotationOptions } from "../lib/domain/market-bounded-source-budget.js";
 import { loadAutomaticIngestionRolloutPolicy } from "../lib/domain/automatic-ingestion-rollout.js";
 import {
   buildApprovedCanaryQueryPlan,
@@ -72,7 +72,7 @@ async function runDryMode(options) {
   const manualProfile = resolveManualSelectionProfile(options);
   const selectionOptions = manualProfile
     ? { ...options, ...manualCanarySelectionOptions(manualProfile) }
-    : options;
+    : { ...options, ...scheduledBoundedRotationOptions(options) };
   const diagnostic = options.manualDiagnosticPriorityFallback && manualProfile
     ? planManualMarketAuditDiagnostic({
       catalog: data.catalog,

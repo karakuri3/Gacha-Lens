@@ -76,7 +76,7 @@ test("P3 v2 auto markers are distinct, deterministic, and preserve manual defaul
 });
 
 test("P3 v2 auto retains cap isolation, insert-only policy, scan, and artifact gating", () => {
-  assert.equal(MARKET_BOUNDED_PERSISTENCE_HARD_CAP, 2); assert.equal(P3_BOUNDED_SEED_HARD_CAP, 5); assert.equal(P3_BOUNDED_SEED_V2_HARD_CAP, 25);
+  assert.equal(MARKET_BOUNDED_PERSISTENCE_HARD_CAP, 10); assert.equal(P3_BOUNDED_SEED_HARD_CAP, 5); assert.equal(P3_BOUNDED_SEED_V2_HARD_CAP, 25);
   assert.match(sharedRunner, /persistP3BoundedSeedV2/); assert.match(workflow, /if: \$\{\{ always\(\) && steps\.gate\.outputs\.execute == 'true' \}\}/);
   assert.match(workflow, /steps\.scan\.outcome == 'success'/); assert.match(workflow, /market-p3-bounded-seed-v2-auto-result/);
 });

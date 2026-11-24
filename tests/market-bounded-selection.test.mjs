@@ -16,10 +16,10 @@ const selection = [1, 2, 3, 4, 5].map((index) => ({
   series_id: `series-${index}`,
 }));
 
-test("hard persistence ceiling remains two", () => {
-  assert.equal(MARKET_BOUNDED_PERSISTENCE_HARD_CAP, 2);
+test("hard persistence ceiling remains ten", () => {
+  assert.equal(MARKET_BOUNDED_PERSISTENCE_HARD_CAP, 10);
   assert.throws(() => selectDeterministicMarketPersistenceCandidates({
-    candidates: [], selectedVariants: selection, capacity: 3,
+    candidates: [], selectedVariants: selection, capacity: 11,
   }), /capacity/);
 });
 
@@ -82,7 +82,7 @@ test("candidate targets outside the audited selection fail closed", () => {
   assert.throws(() => select([safe("0000000000000001", 9)]), /outside/);
 });
 
-test("Run 31930988966 sanitized replay audits 32 and selects two diverse safe candidates", () => {
+test("Run 31930988966 sanitized replay audits 32 and selects ten diverse safe candidates", () => {
   const audit = productionReplayAudit();
   const result = replayPlan(audit);
   assert.deepEqual({
@@ -97,11 +97,16 @@ test("Run 31930988966 sanitized replay audits 32 and selects two diverse safe ca
     reviewWrites: result.review_required_writes_planned,
     budget: result.budget_checks.state,
   }, {
-    total: 32, safe: 12, review: 20, selected: 2, safeNotSelected: 10,
-    distinctVariants: 2, listingWrites: 2, observationWrites: 2, reviewWrites: 0,
+    total: 32, safe: 12, review: 20, selected: 10, safeNotSelected: 2,
+    distinctVariants: 3, listingWrites: 10, observationWrites: 10, reviewWrites: 0,
     budget: "within_budget",
   });
-  assert.deepEqual(result.selected_candidate_keys, ["11da70d6ad877fb3", "4e8ab49acab22512"]);
+  // Diversity-first order is preserved: the first two picks are unchanged from the
+  // former two-row cap, and every variant is covered before any variant repeats.
+  assert.deepEqual(result.selected_candidate_keys.slice(0, 2), ["11da70d6ad877fb3", "4e8ab49acab22512"]);
+  assert.equal(new Set(result.selected_candidate_keys.slice(0, 3).map((key) =>
+    audit.candidates.find((candidate) => candidate.candidate_key === key).target.variant_id)).size, 3);
+  assert.deepEqual(result.safe_not_selected_candidates.map((entry) => entry.candidate_key), ["c35d1977cad75d09", "d498acc8a6dbf43d"]);
   assert.ok(result.safe_not_selected_candidates.every((entry) => entry.reason === "bounded_selection_capacity"));
   const selected = audit.candidates.filter((candidate) => result.selected_candidate_keys.includes(candidate.candidate_key));
   assert.equal(selected.filter((candidate) => candidate.checks.parent_series_edition_conflict === true).length, 0);
@@ -123,11 +128,15 @@ test("Run 31930988966 cross-run replay advances to uncovered candidate and varia
     return boundedHistoryRow(candidate, index + 1);
   });
   const second = replayPlan(audit, buildMarketBoundedCoverageSnapshot(history));
-  assert.deepEqual(first.selected_candidate_keys, ["11da70d6ad877fb3", "4e8ab49acab22512"]);
-  assert.deepEqual(second.selected_candidate_keys, ["043c45ddd8687c1e", "3dc2f8eb3b051968"]);
-  assert.equal(second.selected_new_variant_count, 1);
-  assert.equal(second.selected_previously_persisted_candidate_count, 0);
-  assert.equal(second.selected_candidate_keys.filter((key) => first.selected_candidate_keys.includes(key)).length, 0);
+  assert.equal(first.selected_candidate_keys.length, 10);
+  assert.deepEqual(first.selected_candidate_keys.slice(0, 2), ["11da70d6ad877fb3", "4e8ab49acab22512"]);
+  // The next run includes both never-persisted candidates (each ranked first within
+  // its variant) and fills the rest by re-observing previously persisted listings,
+  // which keeps them inside the 30-day listing-guide window.
+  assert.equal(second.selected_candidate_keys.length, 10);
+  assert.ok(["c35d1977cad75d09", "d498acc8a6dbf43d"].every((key) => second.selected_candidate_keys.slice(0, 3).includes(key)));
+  assert.equal(second.selected_previously_persisted_candidate_count, 8);
+  assert.equal(second.selected_new_variant_count, 0);
 });
 
 function select(candidates) {

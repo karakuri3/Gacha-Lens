@@ -52,7 +52,7 @@ test("P3 v2 workflow is dispatch-only with exact bounded inputs", () => {
 });
 
 test("P3 v2 validation keeps v1 and P1 caps isolated", () => {
-  assert.equal(MARKET_BOUNDED_PERSISTENCE_HARD_CAP, 2);
+  assert.equal(MARKET_BOUNDED_PERSISTENCE_HARD_CAP, 10);
   assert.equal(P3_BOUNDED_SEED_HARD_CAP, 5); assert.deepEqual(P3_BOUNDED_SEED_V2_ALLOWED_LIMITS, [10, 25]); assert.equal(P3_BOUNDED_SEED_V2_HARD_CAP, 25);
   assert.equal(parseP3BoundedSeedLimit(5), 5); assert.throws(() => parseP3BoundedSeedLimit(10));
   for (const limit of [10, 25]) assert.equal(parseP3BoundedSeedV2Limit(limit), limit);
