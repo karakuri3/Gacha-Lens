@@ -269,14 +269,38 @@ test("review-required-only candidates remain outside rotation with zero writes",
   assert.equal(result.observation_writes_planned, 0);
   assert.equal(result.review_required_writes_planned, 0);
 });
-test("safe candidate count 21 rejects", () => {
-  const error = capturePlanError(auditWith(21));
+test("21 safe candidates stay within budget and persistence selection still caps at 10", () => {
+  const result = plan(auditWith(21));
+  assert.equal(result.budget_checks.state, "within_budget");
+  assert.equal(result.safe_candidate_count, 21);
+  assert.equal(result.selected_for_persistence_count, 10);
+  assert.equal(result.listing_writes_planned, 10);
+  assert.equal(result.observation_writes_planned, 10);
+});
+test("safe candidate count above the audit limit rejects", () => {
+  const error = capturePlanError(auditWith(201));
   assert.equal(error.reason_code, "rollout_budget_exceeded");
   assert.equal(error.plan.budget_checks.safe_candidates_within_limit, false);
   assert.equal(error.plan.selected_for_persistence_count, 10);
 });
-test("total candidate count 41 rejects even when only two are safe", () => {
-  const value = auditWith(41);
+test("run 45370025680 shape: 108 review-only candidates no longer fail closed and plan zero writes", () => {
+  const value = auditWith(108);
+  for (const entry of value.candidates) {
+    entry.assessment.accepted = false;
+    entry.assessment.review_required = true;
+    entry.assessment.reason = "not_single_item";
+  }
+  const result = plan(value);
+  assert.equal(result.budget_checks.state, "within_budget");
+  assert.equal(result.safe_candidate_count, 0);
+  assert.equal(result.review_required_candidate_count, 108);
+  assert.equal(result.selected_for_persistence_count, 0);
+  assert.equal(result.listing_writes_planned, 0);
+  assert.equal(result.observation_writes_planned, 0);
+  assert.equal(result.database_writes, 0);
+});
+test("total candidate count above the audit limit rejects even when only two are safe", () => {
+  const value = auditWith(201);
   for (const entry of value.candidates.slice(2)) {
     entry.assessment.accepted = false;
     entry.assessment.review_required = true;
@@ -286,6 +310,16 @@ test("total candidate count 41 rejects even when only two are safe", () => {
   assert.equal(error.reason_code, "rollout_budget_exceeded");
   assert.equal(error.plan.budget_checks.total_candidates_within_limit, false);
   assert.equal(error.plan.safe_candidate_count, 2);
+});
+test("review-required writes stay forbidden even inside the candidate budget", () => {
+  const error = capturePlanError(auditWith(1), { review_required: 1 });
+  assert.equal(error.reason_code, "rollout_budget_exceeded");
+  assert.equal(error.plan.budget_checks.review_required_writes_zero, false);
+});
+test("planned listing writes above 10 reject", () => {
+  const error = capturePlanError(auditWith(1), { listings: 11, observations: 1 });
+  assert.equal(error.reason_code, "rollout_budget_exceeded");
+  assert.equal(error.plan.budget_checks.listing_writes_within_limit, false);
 });
 test("selected variants six rejects", () => {
   const value = auditWith(1);

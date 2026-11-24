@@ -17,6 +17,7 @@ import {
   validateCanaryRequest,
 } from "../lib/domain/market-canary-write.js";
 import { applyMarketCandidateSafety, summarizeFetchedMarketCandidates } from "../lib/domain/market-match-safety.js";
+import { countSeriesCompleteSetEvidence } from "../lib/domain/market-series-complete-set.js";
 import { buildSanitizedMarketRequestDiagnostics } from "../lib/domain/market-request-diagnostics.js";
 import { buildMarketBoundedFetcherOptions, scheduledBoundedRotationOptions } from "../lib/domain/market-bounded-source-budget.js";
 import { loadAutomaticIngestionRolloutPolicy } from "../lib/domain/automatic-ingestion-rollout.js";
@@ -323,7 +324,12 @@ async function runCanaryWriteMode(options) {
 
 function assessFetchedRecords(fetched, plan, catalog) {
   const feedResults = fetched.feedResults ?? [];
-  const safetyResult = applyMarketCandidateSafety({ records: fetched.records, queryPlan: plan.queries, catalog });
+  const safetyResult = applyMarketCandidateSafety({
+    records: fetched.records,
+    queryPlan: plan.queries,
+    catalog,
+    excludeParentSeriesAbsent: true,
+  });
   const candidateSummary = summarizeFetchedMarketCandidates({
     records: safetyResult.records,
     rawCount: fetched.count,
@@ -337,6 +343,11 @@ function assessFetchedRecords(fetched, plan, catalog) {
     summary: {
       ...sourceSummary(fetched),
       ...candidateSummary,
+      series_complete_set_evidence: countSeriesCompleteSetEvidence({
+        records: safetyResult.records,
+        queryPlan: plan.queries,
+        catalog,
+      }),
       no_result_variants: Math.max(0, plan.selected.length - candidateSummary.variants_with_results),
     },
   };
@@ -437,7 +448,7 @@ function resolveBoundedFetcherOptions(sourcePlan) {
   const stage = process.env.AUTOMATIC_INGESTION_ROLLOUT_STAGE;
   const fixedStage = process.env.FIXED_ROLLOUT_STAGE;
   const effectiveStage = String(fixedStage || stage || "").trim();
-  if (effectiveStage !== "market-bounded") return {};
+  if (effectiveStage !== "market-bounded" && effectiveStage !== "market-shadow") return {};
 
   const { policy } = loadAutomaticIngestionRolloutPolicy("config/automatic-ingestion-rollout-policy.json");
   return buildMarketBoundedFetcherOptions({

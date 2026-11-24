@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  MARKET_BOUNDED_MAX_RESULTS_PER_REQUEST,
   buildMarketBoundedFetcherOptions,
   resolveMarketBoundedProviderResultLimit,
   scheduledBoundedRotationOptions,
@@ -45,17 +46,57 @@ test("bounded fetch options apply the same cap to Rakuten and Yahoo", () => {
   });
 });
 
-test("non-bounded stages keep provider defaults unchanged", () => {
+test("market-shadow rehearses the same provider budget as market-bounded", () => {
   assert.equal(resolveMarketBoundedProviderResultLimit({
     stage: "market-shadow",
     discoveryRequests: 14,
     maxCandidates: 40,
-  }), null);
+  }), 2);
   assert.deepEqual(buildMarketBoundedFetcherOptions({
     stage: "market-shadow",
-    discoveryRequests: 14,
-    maxCandidates: 40,
-  }), {});
+    discoveryRequests: 30,
+    maxCandidates: 200,
+  }), buildMarketBoundedFetcherOptions({
+    stage: "market-bounded",
+    discoveryRequests: 30,
+    maxCandidates: 200,
+  }));
+});
+
+test("other stages keep provider defaults unchanged", () => {
+  for (const stage of ["disabled", "", "official-bounded", "stock-shadow"]) {
+    assert.equal(resolveMarketBoundedProviderResultLimit({
+      stage,
+      discoveryRequests: 14,
+      maxCandidates: 40,
+    }), null);
+    assert.deepEqual(buildMarketBoundedFetcherOptions({
+      stage,
+      discoveryRequests: 14,
+      maxCandidates: 40,
+    }), {});
+  }
+});
+
+test("200-candidate policy budget asks for 6 results per request at the 30-request maximum", () => {
+  assert.equal(resolveMarketBoundedProviderResultLimit({
+    stage: "market-bounded",
+    discoveryRequests: 30,
+    maxCandidates: 200,
+  }), 6);
+});
+
+test("provider page size never exceeds the per-request cap", () => {
+  for (let discoveryRequests = 1; discoveryRequests <= 30; discoveryRequests += 1) {
+    const resultLimit = resolveMarketBoundedProviderResultLimit({
+      stage: "market-bounded",
+      discoveryRequests,
+      maxCandidates: 200,
+    });
+    assert.ok(resultLimit >= 1);
+    assert.ok(resultLimit <= MARKET_BOUNDED_MAX_RESULTS_PER_REQUEST);
+    assert.ok(resultLimit * discoveryRequests <= 200);
+  }
 });
 
 test("zero-request bounded collection remains a successful no-op budget", () => {
