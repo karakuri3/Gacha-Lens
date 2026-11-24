@@ -74,7 +74,7 @@ jobs:
           npm run market:backfill --
           --mode=dry-run
           --limit=5
-          --priority=1
+          --priority=all
           --release=released
           --source-scope=planner-apis
           --execute-sources
