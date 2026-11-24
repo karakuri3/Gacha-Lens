@@ -81,3 +81,37 @@ nothing do not re-query the same variants all day.
 
 Any policy edit changes the policy digest, so the approval string must be
 recomputed from the merged `main` before arming.
+
+## Matching and candidate budget (2026-11 matching change)
+
+The market-shadow dry-run on 2026-11-24 (run 45370025680, main 8c033da) reached
+Rakuten and Yahoo! Shopping without errors but selected 0 of 108 candidates and
+then failed closed with `rollout_budget_exceeded`:
+
+- 76 `not_single_item`: mostly other series' complete sets returned by the
+  franchise-only fallback (`サンリオキャラクターズ クロミ ガチャ`) and the bare
+  variant fallback (`クロミ ガチャ`).
+- 21 `explicit_variant_label_unresolved`, 3 `parent_series_evidence_missing`,
+  3 `parent_series_edition_conflict`, 3 `preorder_listing`, 2 other.
+- market-shadow used provider defaults (Rakuten 20, Yahoo 50 results per
+  request), so it audited 108 titles against the 40-candidate ceiling.
+
+Changes:
+
+| Area | Before | Now |
+|---|---|---|
+| Fallback queries | root, franchise + variant, variant-only | root (unchanged, replayable v2), full series + variant with HTML entities / decorative symbols removed and no `ガチャ` suffix, variant-only **only** when the variant name is unique in the official catalog |
+| Titles with no parent-series evidence | kept as review candidates | dropped before the audit in `market:backfill` dry-run (`parent_series_absent` in rejection counts); they could never be accepted |
+| Catalog names with entities (`MLB&trade;`) | never matched marketplace titles | decoded (and `™®©` removed) on both sides before matching |
+| Provider page size | market-bounded: `floor(40 / requests)` (1-2), market-shadow: provider default | both stages: `min(10, floor(max_candidates / requests))` (6 at the 30-request maximum) |
+| `max_candidates` / `max_accepted_candidates` | 40 / 20 | 200 / 200 (= candidate audit report limit) |
+| Persistence / listing / observation / review-required writes | 10 / 10 / 10 / 0 | unchanged |
+
+Same-series complete sets (`<series> 全N種セット`) remain review-only for the
+variant path. `market:backfill` dry-run reports a read-only
+`series_complete_set_evidence` count using the existing series complete-set
+classifier; writing them stays with the separate series complete-set canary.
+
+The policy digest changes, so the approval string must again be recomputed from
+the merged `main`, and a market-shadow dry-run should confirm the new candidate
+mix before the master gate is turned back on.

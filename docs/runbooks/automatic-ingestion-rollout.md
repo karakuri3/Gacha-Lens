@@ -48,13 +48,13 @@ Human-reviewed canary rules remain unchanged and are not reused as automatic app
 
 ## Budget
 
-The bounded policy keeps discovery, independent safety, and persistence selection as separate states. It permits at most five selected variants, 40 total audited candidates, 20 independently safe candidates, ten persistence-selected candidates, ten listing writes, ten observation writes, and zero review-required writes per run (raised from two in the 2026-11 practical-throughput change; see automatic-market-bounded-scheduling.md). Exceeding any budget rejects the whole plan.
+The bounded policy keeps discovery, independent safety, and persistence selection as separate states. It permits at most five selected variants, 200 total audited candidates, 200 independently safe candidates, ten persistence-selected candidates, ten listing writes, ten observation writes, and zero review-required writes per run (writes raised from two in the 2026-11 practical-throughput change; audited/safe candidate ceilings raised from 40/20 to the 200-row candidate audit limit in the 2026-11 matching change; see automatic-market-bounded-scheduling.md). The audited and safe ceilings only bound how much a run inspects; they never authorize writes. Exceeding any budget rejects the whole plan.
 
 The persistence selector is deterministic, diversity-first, and cross-run coverage aware. A read-only snapshot of existing bounded observations ranks never-persisted variants first, then the least-recently persisted variant. Candidate coverage within a selected variant follows the same never/oldest rule, after which the Phase 8-A.3 order remains explicit target-label evidence, exact parent evidence, required discriminator evidence, confidence descending, then candidate key ascending. It still selects one independently safe candidate per distinct variant before a second pass. Provider delivery order, candidate input order, price, and commercial configuration do not affect selection. Independently safe candidates beyond the ten-row persistence capacity remain visible as `bounded_selection_capacity`; they are not relabeled as review-required.
 
 The coverage snapshot is derived from `market_listing_observations.raw.automatic_rollout` without a schema change. Planning binds its canonical digest into the bounded plan. Preview and persistence fetch the history again and require exact snapshot and selection equality, so concurrent coverage changes fail closed before writes. Malformed markers, duplicate persistence events, candidate/listing-to-variant conflicts, and unavailable history also fail closed.
 
-The proposed `max_candidates: 40`, `max_accepted_candidates: 20`, and `max_persistence_candidates: 2` policy changes its digest. Production approval must not be rebound until the policy change is separately reviewed and approved.
+Any change to `max_candidates`, `max_accepted_candidates`, or `max_persistence_candidates` changes the policy digest. Production approval must not be rebound until the policy change is separately reviewed and approved.
 
 ## Simulation workflow
 

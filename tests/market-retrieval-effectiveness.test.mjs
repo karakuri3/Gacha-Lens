@@ -110,7 +110,10 @@ test("real-shaped benchmark exposes accepted, duplicate, set, preorder and ambig
     apiZeroResultQueries: 1,
   });
   assert.equal(benchmark.variant_count, 3);
-  assert.equal(benchmark.query_count, 9);
+  // Two attempts per variant: the v2 root query plus the sanitized full-series
+  // fallback. Variant-only fallbacks need catalog-wide name uniqueness, which
+  // this fixture does not supply, so they are omitted.
+  assert.equal(benchmark.query_count, 6);
   assert.equal(benchmark.marketplace_fixture_count, 14);
   assert.equal(benchmark.rejection_reason_counts.accepted, 4);
   assert.equal(benchmark.rejection_reason_counts.listing_type_rejected, 2);
